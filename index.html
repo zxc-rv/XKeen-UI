@@ -55,14 +55,14 @@
         align-items: center;
         padding: 10px;
         background: #171717;
-        border: 1px solid #27272a;
+        border: 1px solid #2e2f2f;
         border-radius: 8px;
         margin-bottom: 15px;
       }
 
       .panel {
         background: #171717;
-        border: 1px solid #27272a;
+        border: 1px solid #2e2f2f;
         border-radius: 8px;
         padding: 15px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
@@ -86,20 +86,73 @@
 
       .tabs-list {
         display: inline-flex;
-        height: 40px;
-        align-items: center;
+        height: 36px;
+        /* align-items: center; */
         justify-content: flex-start;
         border-radius: 10px;
         background: #262626;
-        padding: 4px;
+        padding: 3px;
         gap: 2px;
-        overflow-x: auto;
+        flex-wrap: nowrap;
         scrollbar-width: none;
         -ms-overflow-style: none;
         width: fit-content;
       }
 
+      .tabs-list.empty {
+        background: transparent;
+      }
+
+      /* Skeleton for tabs while loading */
+      .skeleton {
+        position: relative;
+        overflow: hidden;
+        background: #1f1f1f;
+      }
+      .skeleton::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        transform: translateX(-100%);
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0) 0%,
+          rgba(255, 255, 255, 0.06) 50%,
+          rgba(255, 255, 255, 0) 100%
+        );
+        animation: skeleton-shimmer 1.2s infinite;
+      }
+      @keyframes skeleton-shimmer {
+        100% {
+          transform: translateX(100%);
+        }
+      }
+      .skeleton-tab {
+        display: inline-block;
+        height: 28px;
+        width: 68px;
+        border-radius: 8px;
+        border: 1px solid #2e2f2f;
+        background: #1f1f1f;
+        margin-right: 6px;
+      }
+
       .tabs-list::-webkit-scrollbar {
+        display: none;
+      }
+
+      .tabs-scroll {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE 10+ */
+      }
+      .tabs-scroll::-webkit-scrollbar {
+        /* WebKit */
+        height: 0;
+        width: 0;
         display: none;
       }
 
@@ -115,12 +168,12 @@
         justify-content: center;
         white-space: nowrap;
         border-radius: 8px;
-        padding: 6px 12px;
+        padding: 4px 8px;
         font-size: 14px;
         font-weight: 500;
         transition: all 0.15s ease;
         background: transparent;
-        border: none;
+        border: 1px solid transparent; /* предотвращает сдвиг при смене состояния */
         color: #a1a1aa;
         cursor: pointer;
         min-width: 0;
@@ -131,7 +184,7 @@
       .tab-trigger .dirty-indicator {
         width: 6px;
         height: 6px;
-        background-color: #3b82f6;
+        background-color: #ffffff;
         border-radius: 50%;
         display: none;
       }
@@ -148,7 +201,7 @@
       .tab-trigger.active {
         background: #2f2f2f;
         color: #fafafa;
-        border: 1px solid #4e4e4e;
+        border-color: #4e4e4e;
       }
 
       .tabs-content {
@@ -167,7 +220,7 @@
       .logs-container {
         height: 150px;
         background: #09090b;
-        border: 1px solid #27272a;
+        border: 1px solid #2e2f2f;
         border-radius: 6px;
         padding: 12px;
         overflow-y: auto;
@@ -175,6 +228,13 @@
         font-size: 13px;
         line-height: 1.3;
         position: relative;
+      }
+
+      .logs-container.centered {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
       }
 
       .log-line {
@@ -230,17 +290,17 @@
         height: 35px;
         padding: 2px 12px;
         border-radius: 8px;
-        border: 1px solid #27272a;
-        background: #262626;
+        border: 1px solid #424242;
+        background: #212121;
         color: #fafafa;
         font-size: 14px;
         cursor: pointer;
         transition: border-color 0.15s ease, box-shadow 0.15s ease,
           background-color 0.15s ease;
-        min-width: 140px;
+        min-width: 100px;
       }
       .select-trigger:hover {
-        border-color: #3f3f46;
+        background-color: #282828;
       }
       .select-trigger:focus-visible {
         outline: none;
@@ -268,8 +328,8 @@
         top: calc(100% + 6px);
         left: 0;
         z-index: 50;
-        background: #18181b;
-        border: 1px solid #27272a;
+        background: #262626;
+        border: 1px solid #2e2f2f;
         border-radius: 8px;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4),
           0 4px 6px -2px rgba(0, 0, 0, 0.3);
@@ -277,10 +337,18 @@
         max-height: 260px;
         overflow: auto;
         padding: 6px;
-        display: none;
+        opacity: 0;
+        transform: translateY(4px) scale(0.98);
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.15s ease, transform 0.15s ease,
+          visibility 0.15s ease;
       }
       .select-open .select-content {
-        display: block;
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        visibility: visible;
+        pointer-events: auto;
       }
       .select-item {
         display: flex;
@@ -296,12 +364,28 @@
       }
       .select-item:hover,
       .select-item[aria-selected="true"] {
-        background: #262626;
+        background: #404040;
         color: #fafafa;
+      }
+      /* Когда меню открыто и есть hover, подсветка остаётся только на hover-элементе */
+      .select-open.select-hovering
+        .select-item[aria-selected="true"]:not(:hover) {
+        background: transparent;
+        color: #e4e4e7;
+      }
+      .select-item .check {
+        margin-left: auto;
+        color: #50587c;
+        font-size: 14px;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+      .select-item[aria-selected="true"] .check {
+        opacity: 1;
       }
       .select-separator {
         height: 1px;
-        background: #27272a;
+        background: #2e2f2f;
         margin: 6px 4px;
       }
       .kbd {
@@ -320,11 +404,12 @@
         appearance: none;
         background-color: #262626;
         color: #fafafa;
-        border: 1px solid #27272a;
+        border: 1px solid #2e2f2f;
         border-radius: 8px;
         height: 35px;
         padding: 2px 25px 4px 15px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
         font-size: 14px;
         outline: none;
         cursor: pointer;
@@ -466,7 +551,7 @@
         top: 20px;
         right: 20px;
         background: #171717;
-        border: 1px solid #27272a;
+        border: 1px solid #2e2f2f;
         border-radius: 8px;
         padding: 12px 16px;
         color: #fafafa;
@@ -535,7 +620,7 @@
       }
       .modal-content {
         background-color: #171717;
-        border: 1px solid #27272a;
+        border: 1px solid #2e2f2f;
         border-radius: 8px;
         padding: 24px;
         width: 90%;
@@ -571,9 +656,10 @@
           flex-direction: column;
           align-items: stretch;
         }
-        .tabs-list {
-          flex-wrap: wrap;
-          justify-content: flex-start;
+        .tabs-scroll {
+          overflow-x: auto;
+          overflow-y: hidden;
+          width: 100%;
         }
         .editor-controls {
           justify-content: center;
@@ -609,9 +695,11 @@
       </div>
 
       <div class="panel">
-        <h2 class="panel-title">Конфигурации XRay</h2>
+        <h2 class="panel-title">Конфигурация</h2>
         <div class="tabs-header">
-          <div class="tabs-list" id="tabsList"></div>
+          <div class="tabs-scroll">
+            <div class="tabs-list" id="tabsList"></div>
+          </div>
           <div class="editor-controls">
             <button
               class="btn btn-primary"
@@ -628,7 +716,7 @@
         <div class="tabs-content">
           <div class="editor-container" id="editorContainer">
             <div style="color: #6b7280; text-align: center; margin-top: 180px">
-              Загрузка редактора...
+              Загрузка конфигурации...
             </div>
           </div>
         </div>
@@ -640,23 +728,57 @@
 
       <div class="panel">
         <div class="panel-header">
-          <h2 class="panel-title">Логи XRay</h2>
-          <div id="logSelectRoot" class="select-root" aria-label="Выбор файла логов">
-            <button id="logSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <h2 class="panel-title">Журнал</h2>
+          <div
+            id="logSelectRoot"
+            class="select-root"
+            aria-label="Выбор файла логов"
+          >
+            <button
+              id="logSelectTrigger"
+              class="select-trigger"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
               <span class="label" id="logSelectLabel">error.log</span>
-              <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg
+                class="chevron"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M6 9l6 6 6-6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
             </button>
             <div id="logSelectContent" class="select-content">
-              <div class="select-item" role="option" data-value="error.log" aria-selected="true">error.log</div>
-              <div class="select-item" role="option" data-value="access.log" aria-selected="false">access.log</div>
+              <div
+                class="select-item"
+                role="option"
+                data-value="error.log"
+                aria-selected="true"
+              >
+                error.log <span class="check">✓</span>
+              </div>
+              <div
+                class="select-item"
+                role="option"
+                data-value="access.log"
+                aria-selected="false"
+              >
+                access.log <span class="check">✓</span>
+              </div>
             </div>
           </div>
         </div>
         <div id="logsContainer" class="logs-container">
           <div style="color: #6b7280; text-align: center; margin-top: 50px">
-            Загрузка логов...
+            Загрузка журнала...
           </div>
         </div>
       </div>
@@ -701,10 +823,11 @@
       let activeConfigIndex = -1;
       let isServiceRunning = false;
       let isActionInProgress = false;
-      let lastLogContent = "";
+      let lastLogContent = null;
       let userScrolled = false;
       let pendingSwitchIndex = -1;
       let currentLogFile = "error.log";
+      let isConfigsLoading = true;
 
       require.config({
         paths: {
@@ -873,15 +996,40 @@
               { token: "string.value.json", foreground: "#9ece6a" },
               { token: "number.json", foreground: "#ff9e64" },
               { token: "keyword.json", foreground: "#bb9af7" },
+              { token: "identifier", foreground: "#c0caf5" },
+              { token: "comment", foreground: "#565f89", fontStyle: "italic" },
+              {
+                token: "comment.line",
+                foreground: "#565f89",
+                fontStyle: "italic",
+              },
+              {
+                token: "comment.block",
+                foreground: "#565f89",
+                fontStyle: "italic",
+              },
+              { token: "operator", foreground: "#89ddff" },
+              { token: "delimiter", foreground: "#c0caf5" },
+              { token: "tag", foreground: "#f7768e" },
+              { token: "attribute.name", foreground: "#e0af68" },
+              { token: "attribute.value", foreground: "#9ece6a" },
             ],
             colors: {
               "editor.background": "#171717",
               "editor.foreground": "#c0caf5",
               "editorLineNumber.foreground": "#3b4261",
-              "editorLineNumber.activeForeground": "#c0caf5",
+              "editorLineNumber.activeForeground": "#a9b1d6",
               "editorCursor.foreground": "#c0caf5",
-              "editorIndentGuide.background": "#3b4261",
-              "editor.selectionBackground": "#33467c",
+              "editorIndentGuide.background": "#2f3549",
+              "editor.selectionBackground": "#364a82",
+              "editor.inactiveSelectionBackground": "#292e42",
+              "editorLineNumber.dimmedForeground": "#565f89",
+              "editorBracketMatch.border": "#7aa2f7",
+              "editorBracketMatch.background": "#283457",
+              "editorWhitespace.foreground": "#3b4261",
+              "editorGutter.modifiedBackground": "#7aa2f7",
+              "editorGutter.addedBackground": "#9ece6a",
+              "editorGutter.deletedBackground": "#f7768e",
             },
           });
 
@@ -908,6 +1056,7 @@
             folding: false,
             lineNumbers: "on",
             glyphMargin: false,
+            stickyScroll: { enabled: false },
             rulers: [],
             scrollbar: {
               vertical: "visible",
@@ -941,7 +1090,9 @@
           monaco.editor.onDidChangeMarkers((changedUris) => {
             const model = monacoEditor.getModel();
             if (!model) return;
-            if (changedUris.some((u) => u.toString() === model.uri.toString())) {
+            if (
+              changedUris.some((u) => u.toString() === model.uri.toString())
+            ) {
               validateCurrentJSON();
             }
           });
@@ -973,7 +1124,9 @@
 
         const allMarkers = monaco.editor.getModelMarkers({});
         const errorMarker = allMarkers.find(
-          (m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error
+          (m) =>
+            m.resource.toString() === model.uri.toString() &&
+            m.severity === monaco.MarkerSeverity.Error
         );
 
         if (!errorMarker) {
@@ -986,6 +1139,20 @@
       function renderTabs() {
         const tabsList = document.getElementById("tabsList");
         tabsList.innerHTML = "";
+
+        tabsList.classList.toggle(
+          "empty",
+          isConfigsLoading || configs.length === 0
+        );
+
+        if (isConfigsLoading) {
+          for (let i = 0; i < 6; i++) {
+            const sk = document.createElement("div");
+            sk.className = "skeleton skeleton-tab";
+            tabsList.appendChild(sk);
+          }
+          return;
+        }
 
         configs.forEach((config, index) => {
           const tabTrigger = document.createElement("button");
@@ -1077,6 +1244,10 @@
       }
 
       async function loadConfigs() {
+        const tabsList = document.getElementById("tabsList");
+        isConfigsLoading = true;
+        if (tabsList) tabsList.classList.add("empty");
+        renderTabs();
         const result = await apiCall("configs.py");
 
         if (result.success && result.configs) {
@@ -1087,13 +1258,18 @@
           }));
 
           if (configs.length > 0) {
+            isConfigsLoading = false;
+            if (tabsList) tabsList.classList.remove("empty");
             switchTab(0);
           } else {
+            isConfigsLoading = false;
             renderTabs();
             updateUIDirtyState();
           }
         } else {
+          isConfigsLoading = false;
           showToast("Ошибка загрузки конфигов", "error");
+          renderTabs();
         }
       }
 
@@ -1119,7 +1295,9 @@
         if (model) {
           const allMarkers = monaco.editor.getModelMarkers({});
           const errorMarker = allMarkers.find(
-            (m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error
+            (m) =>
+              m.resource.toString() === model.uri.toString() &&
+              m.severity === monaco.MarkerSeverity.Error
           );
           if (errorMarker) {
             showToast(`Невалидный JSON: ${errorMarker.message}`, "error");
@@ -1167,9 +1345,9 @@
         const container = document.getElementById("logsContainer");
 
         if (result.success) {
-          const newContent = result.data;
+          const newContent = result.data ?? "";
 
-          if (newContent !== lastLogContent) {
+          if (newContent !== lastLogContent || lastLogContent === null) {
             checkServiceStatusFromLogs(newContent);
 
             const wasAtBottom =
@@ -1179,9 +1357,11 @@
             const lines = newContent.split("\n").filter((line) => line.trim());
 
             if (lines.length === 0) {
+              container.classList.add("centered");
               container.innerHTML =
-                '<div style="color: #6b7280; text-align: center; margin-top: 50px;">Логи пусты</div>';
+                '<div style="color: #6b7280;">Журнал пуст</div>';
             } else {
+              container.classList.remove("centered");
               const processedLines = lines
                 .slice(-100)
                 .map((line) => {
@@ -1202,7 +1382,8 @@
             lastLogContent = newContent;
           }
         } else {
-          container.innerHTML = `<div style="color: #ef4444; text-align: center; margin-top: 100px;">Ошибка загрузки логов: ${result.error}</div>`;
+          container.classList.add("centered");
+          container.innerHTML = `<div style="color: #ef4444;">Ошибка загрузки логов: ${result.error}</div>`;
         }
       }
 
@@ -1287,6 +1468,28 @@
         const logSelectTrigger = document.getElementById("logSelectTrigger");
         const logSelectContent = document.getElementById("logSelectContent");
         const logSelectLabel = document.getElementById("logSelectLabel");
+        const tabsList = document.getElementById("tabsList");
+        if (tabsList) tabsList.classList.add("empty");
+        isConfigsLoading = true;
+        renderTabs();
+
+        // Горизонтальный скролл колесиком мыши по tabs на ПК
+        const tabsScroll = document.querySelector(".tabs-scroll");
+        if (tabsScroll) {
+          tabsScroll.addEventListener(
+            "wheel",
+            (e) => {
+              const canScroll = tabsScroll.scrollWidth > tabsScroll.clientWidth;
+              if (!canScroll) return;
+              // Только если вертикальное колесо используется
+              if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.preventDefault();
+                tabsScroll.scrollLeft += e.deltaY;
+              }
+            },
+            { passive: false }
+          );
+        }
 
         logsContainer.addEventListener("scroll", () => {
           const isAtBottom =
@@ -1306,10 +1509,10 @@
         }
 
         function setActiveItem(value) {
-          const items = logSelectContent.querySelectorAll('.select-item');
+          const items = logSelectContent.querySelectorAll(".select-item");
           items.forEach((el) => {
-            const selected = el.getAttribute('data-value') === value;
-            el.setAttribute('aria-selected', selected ? 'true' : 'false');
+            const selected = el.getAttribute("data-value") === value;
+            el.setAttribute("aria-selected", selected ? "true" : "false");
           });
         }
 
@@ -1318,15 +1521,16 @@
           currentLogFile = value;
           logSelectLabel.textContent = value;
           setActiveItem(value);
-          lastLogContent = "";
+          lastLogContent = null;
+          logsContainer.classList.add("centered");
           logsContainer.innerHTML =
-            '<div style="color: #6b7280; text-align: center; margin-top: 50px">Загрузка логов...</div>';
+            '<div style="color: #6b7280;">Загрузка журнала...</div>';
           loadLogs();
         }
 
-        logSelectTrigger.addEventListener('click', (e) => {
+        logSelectTrigger.addEventListener("click", (e) => {
           e.stopPropagation();
-          const isOpen = logSelectRoot.classList.contains('select-open');
+          const isOpen = logSelectRoot.classList.contains("select-open");
           if (isOpen) {
             closeLogMenu();
           } else {
@@ -1334,61 +1538,77 @@
           }
         });
 
-        logSelectContent.addEventListener('click', (e) => {
-          const target = e.target.closest('.select-item');
+        logSelectContent.addEventListener("click", (e) => {
+          const target = e.target.closest(".select-item");
           if (!target) return;
-          const value = target.getAttribute('data-value');
+          const value = target.getAttribute("data-value");
           applyLogSelection(value);
           closeLogMenu();
         });
 
-        document.addEventListener('click', (e) => {
+        // Подсветка только hover-элемента: отмечаем, что сейчас наведение внутри меню
+        logSelectContent.addEventListener("mouseenter", () => {
+          logSelectRoot.classList.add("select-hovering");
+        });
+        logSelectContent.addEventListener("mouseleave", () => {
+          logSelectRoot.classList.remove("select-hovering");
+        });
+
+        document.addEventListener("click", (e) => {
           if (!logSelectRoot.contains(e.target)) {
             closeLogMenu();
           }
         });
 
         // Keyboard navigation
-        logSelectTrigger.addEventListener('keydown', (e) => {
-          const items = Array.from(logSelectContent.querySelectorAll('.select-item'));
-          const currentIndex = items.findIndex(i => i.getAttribute('data-value') === currentLogFile);
-          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        logSelectTrigger.addEventListener("keydown", (e) => {
+          const items = Array.from(
+            logSelectContent.querySelectorAll(".select-item")
+          );
+          const currentIndex = items.findIndex(
+            (i) => i.getAttribute("data-value") === currentLogFile
+          );
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
             e.preventDefault();
-            if (!logSelectRoot.classList.contains('select-open')) openLogMenu();
+            if (!logSelectRoot.classList.contains("select-open")) openLogMenu();
             let nextIndex = currentIndex;
-            if (e.key === 'ArrowDown') nextIndex = Math.min(items.length - 1, currentIndex + 1);
-            if (e.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+            if (e.key === "ArrowDown")
+              nextIndex = Math.min(items.length - 1, currentIndex + 1);
+            if (e.key === "ArrowUp") nextIndex = Math.max(0, currentIndex - 1);
             const nextItem = items[nextIndex];
             if (nextItem) {
-              items.forEach(i => i.tabIndex = -1);
+              items.forEach((i) => (i.tabIndex = -1));
               nextItem.tabIndex = 0;
               nextItem.focus();
             }
-          } else if (e.key === 'Enter' || e.key === ' ') {
+          } else if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            if (logSelectRoot.classList.contains('select-open')) closeLogMenu(); else openLogMenu();
-          } else if (e.key === 'Escape') {
+            if (logSelectRoot.classList.contains("select-open")) closeLogMenu();
+            else openLogMenu();
+          } else if (e.key === "Escape") {
             closeLogMenu();
           }
         });
 
-        logSelectContent.addEventListener('keydown', (e) => {
-          const items = Array.from(logSelectContent.querySelectorAll('.select-item'));
+        logSelectContent.addEventListener("keydown", (e) => {
+          const items = Array.from(
+            logSelectContent.querySelectorAll(".select-item")
+          );
           let idx = items.indexOf(document.activeElement);
-          if (e.key === 'ArrowDown') {
+          if (e.key === "ArrowDown") {
             e.preventDefault();
             idx = Math.min(items.length - 1, idx + 1);
             items[idx].focus();
-          } else if (e.key === 'ArrowUp') {
+          } else if (e.key === "ArrowUp") {
             e.preventDefault();
             idx = Math.max(0, idx - 1);
             items[idx].focus();
-          } else if (e.key === 'Enter') {
+          } else if (e.key === "Enter") {
             e.preventDefault();
-            const value = document.activeElement.getAttribute('data-value');
+            const value = document.activeElement.getAttribute("data-value");
             if (value) applyLogSelection(value);
             closeLogMenu();
-          } else if (e.key === 'Escape') {
+          } else if (e.key === "Escape") {
             closeLogMenu();
             logSelectTrigger.focus();
           }
@@ -1400,6 +1620,10 @@
 
         initMonacoEditor();
         checkStatus();
+        // Показать загрузку по центру до первой подгрузки
+        logsContainer.classList.add("centered");
+        logsContainer.innerHTML =
+          '<div style="color: #6b7280;">Загрузка журнала...</div>';
         loadLogs();
 
         // УБРАЛ ПРОВЕРКУ 'if (!isActionInProgress)'
