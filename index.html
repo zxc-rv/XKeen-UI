@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>XKeen UI</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -207,6 +208,155 @@
         background: rgba(59, 130, 246, 0.1);
         padding: 1px 3px;
         border-radius: 3px;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      /* Custom select (shadcn-like) */
+      .select-root {
+        position: relative;
+        display: inline-block;
+      }
+      .select-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 35px;
+        padding: 2px 12px;
+        border-radius: 8px;
+        border: 1px solid #27272a;
+        background: #262626;
+        color: #fafafa;
+        font-size: 14px;
+        cursor: pointer;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease,
+          background-color 0.15s ease;
+        min-width: 140px;
+      }
+      .select-trigger:hover {
+        border-color: #3f3f46;
+      }
+      .select-trigger:focus-visible {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+      }
+      .select-trigger .label {
+        flex: 1 1 auto;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .select-trigger .chevron {
+        width: 16px;
+        height: 16px;
+        color: #a1a1aa;
+        transition: transform 0.15s ease;
+      }
+      .select-open .select-trigger .chevron {
+        transform: rotate(180deg);
+      }
+      .select-content {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 50;
+        background: #18181b;
+        border: 1px solid #27272a;
+        border-radius: 8px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4),
+          0 4px 6px -2px rgba(0, 0, 0, 0.3);
+        min-width: 100%;
+        max-height: 260px;
+        overflow: auto;
+        padding: 6px;
+        display: none;
+      }
+      .select-open .select-content {
+        display: block;
+      }
+      .select-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 6px;
+        color: #e4e4e7;
+        font-size: 13px;
+        cursor: pointer;
+        transition: background-color 0.12s ease, color 0.12s ease;
+      }
+      .select-item:hover,
+      .select-item[aria-selected="true"] {
+        background: #262626;
+        color: #fafafa;
+      }
+      .select-separator {
+        height: 1px;
+        background: #27272a;
+        margin: 6px 4px;
+      }
+      .kbd {
+        margin-left: auto;
+        background: #0b1020;
+        border: 1px solid #1f2937;
+        color: #9aa7bd;
+        border-radius: 4px;
+        padding: 2px 4px;
+        font-size: 11px;
+      }
+
+      .log-selector {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-color: #262626;
+        color: #fafafa;
+        border: 1px solid #27272a;
+        border-radius: 8px;
+        height: 35px;
+        padding: 2px 25px 4px 15px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+        outline: none;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease,
+          box-shadow 0.15s ease, color 0.15s ease;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        background-size: 16px;
+      }
+
+      .log-selector:hover {
+        border-color: #3f3f46;
+      }
+
+      .log-selector:focus {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+      }
+
+      .log-selector:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .log-selector::-ms-expand {
+        display: none;
+      }
+
+      .log-selector option {
+        background-color: #18181b;
+        color: #fafafa;
       }
 
       .btn {
@@ -489,9 +639,23 @@
       </div>
 
       <div class="panel">
-        <h2 class="panel-title">Логи XRay</h2>
+        <div class="panel-header">
+          <h2 class="panel-title">Логи XRay</h2>
+          <div id="logSelectRoot" class="select-root" aria-label="Выбор файла логов">
+            <button id="logSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="label" id="logSelectLabel">error.log</span>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div id="logSelectContent" class="select-content">
+              <div class="select-item" role="option" data-value="error.log" aria-selected="true">error.log</div>
+              <div class="select-item" role="option" data-value="access.log" aria-selected="false">access.log</div>
+            </div>
+          </div>
+        </div>
         <div id="logsContainer" class="logs-container">
-          <div style="color: #6b7280; text-align: center; margin-top: 100px">
+          <div style="color: #6b7280; text-align: center; margin-top: 50px">
             Загрузка логов...
           </div>
         </div>
@@ -529,7 +693,7 @@
         </div>
       </div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
     <script>
       let autoRefreshInterval;
       let monacoEditor;
@@ -540,10 +704,11 @@
       let lastLogContent = "";
       let userScrolled = false;
       let pendingSwitchIndex = -1;
+      let currentLogFile = "error.log";
 
       require.config({
         paths: {
-          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs",
+          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs",
         },
       });
 
@@ -696,6 +861,10 @@
 
       function initMonacoEditor() {
         require(["vs/editor/editor.main"], function () {
+          monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
+            validate: true,
+            allowComments: true,
+          });
           monaco.editor.defineTheme("tokyo-night", {
             base: "vs-dark",
             inherit: true,
@@ -763,6 +932,16 @@
                 currentConfig.isDirty = isDirty;
                 updateUIDirtyState();
               }
+              // Валидация будет обновляться по маркерам, но вызываем на всякий случай
+              validateCurrentJSON();
+            }
+          });
+
+          // Обновляем индикатор при изменении диагностических маркеров Monaco
+          monaco.editor.onDidChangeMarkers((changedUris) => {
+            const model = monacoEditor.getModel();
+            if (!model) return;
+            if (changedUris.some((u) => u.toString() === model.uri.toString())) {
               validateCurrentJSON();
             }
           });
@@ -784,19 +963,23 @@
       }
 
       function validateCurrentJSON() {
-        if (!monacoEditor) return;
+        if (!monacoEditor || typeof monaco === "undefined") return;
 
-        const content = monacoEditor.getValue().trim();
-        if (!content) {
+        const model = monacoEditor.getModel();
+        if (!model) {
           updateValidationInfo(true);
           return;
         }
 
-        try {
-          JSON.parse(content);
+        const allMarkers = monaco.editor.getModelMarkers({});
+        const errorMarker = allMarkers.find(
+          (m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error
+        );
+
+        if (!errorMarker) {
           updateValidationInfo(true);
-        } catch (e) {
-          updateValidationInfo(false, e.message);
+        } else {
+          updateValidationInfo(false, errorMarker.message);
         }
       }
 
@@ -836,7 +1019,6 @@
       async function saveAndSwitch() {
         if (pendingSwitchIndex !== -1) {
           await saveCurrentConfig();
-          // Проверяем, сохранилось ли успешно
           if (!configs[activeConfigIndex].isDirty) {
             switchTab(pendingSwitchIndex);
           }
@@ -862,7 +1044,6 @@
 
         if (monacoEditor && configs[index]) {
           monacoEditor.setValue(configs[index].content);
-          // Устанавливаем isDirty в false, т.к. мы только что загрузили сохраненное состояние
           configs[index].isDirty = false;
         }
         renderTabs();
@@ -904,11 +1085,12 @@
             savedContent: c.content,
             isDirty: false,
           }));
-          renderTabs();
-          updateUIDirtyState();
 
           if (configs.length > 0) {
             switchTab(0);
+          } else {
+            renderTabs();
+            updateUIDirtyState();
           }
         } else {
           showToast("Ошибка загрузки конфигов", "error");
@@ -916,7 +1098,12 @@
       }
 
       async function saveCurrentConfig() {
-        if (!configs[activeConfigIndex] || !monacoEditor) return;
+        if (
+          activeConfigIndex < 0 ||
+          !configs[activeConfigIndex] ||
+          !monacoEditor
+        )
+          return;
 
         const config = configs[activeConfigIndex];
         const content = monacoEditor.getValue();
@@ -926,11 +1113,18 @@
           return;
         }
 
-        try {
-          JSON.parse(content);
-        } catch (e) {
-          showToast(`Невалидный JSON: ${e.message}`, "error");
-          return;
+        // Проверяем по маркерам Monaco вместо строгого JSON.parse,
+        // чтобы логика совпадала с подсветкой редактора
+        const model = monacoEditor.getModel();
+        if (model) {
+          const allMarkers = monaco.editor.getModelMarkers({});
+          const errorMarker = allMarkers.find(
+            (m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error
+          );
+          if (errorMarker) {
+            showToast(`Невалидный JSON: ${errorMarker.message}`, "error");
+            return;
+          }
         }
 
         const result = await apiCall("configs.py", {
@@ -969,7 +1163,7 @@
       }
 
       async function loadLogs() {
-        const result = await apiCall("logs.py");
+        const result = await apiCall(`logs.py?file=${currentLogFile}`);
         const container = document.getElementById("logsContainer");
 
         if (result.success) {
@@ -1008,8 +1202,7 @@
             lastLogContent = newContent;
           }
         } else {
-          container.innerHTML =
-            '<div style="color: #ef4444; text-align: center; margin-top: 100px;">Ошибка загрузки логов</div>';
+          container.innerHTML = `<div style="color: #ef4444; text-align: center; margin-top: 100px;">Ошибка загрузки логов: ${result.error}</div>`;
         }
       }
 
@@ -1026,6 +1219,10 @@
           const result = await apiCall("control.py", { action: "start" });
           if (result.success) {
             showToast("XKeen запущен");
+            // Обновляем статус и кнопки сразу по тому же триггеру, что и toast
+            isActionInProgress = false;
+            isServiceRunning = true;
+            updateServiceStatus(true);
           } else {
             showToast(
               `Ошибка запуска: ${result.output || result.error}`,
@@ -1066,6 +1263,10 @@
           const result = await apiCall("control.py", { action: "restart" });
           if (result.success) {
             showToast("XKeen перезапущен");
+            // Обновляем статус и кнопки сразу по тому же триггеру, что и toast
+            isActionInProgress = false;
+            isServiceRunning = true;
+            updateServiceStatus(true);
           } else {
             showToast(
               `Ошибка перезапуска: ${result.output || result.error}`,
@@ -1082,6 +1283,10 @@
 
       document.addEventListener("DOMContentLoaded", () => {
         const logsContainer = document.getElementById("logsContainer");
+        const logSelectRoot = document.getElementById("logSelectRoot");
+        const logSelectTrigger = document.getElementById("logSelectTrigger");
+        const logSelectContent = document.getElementById("logSelectContent");
+        const logSelectLabel = document.getElementById("logSelectLabel");
 
         logsContainer.addEventListener("scroll", () => {
           const isAtBottom =
@@ -1090,13 +1295,117 @@
           userScrolled = !isAtBottom;
         });
 
+        function closeLogMenu() {
+          logSelectRoot.classList.remove("select-open");
+          logSelectTrigger.setAttribute("aria-expanded", "false");
+        }
+
+        function openLogMenu() {
+          logSelectRoot.classList.add("select-open");
+          logSelectTrigger.setAttribute("aria-expanded", "true");
+        }
+
+        function setActiveItem(value) {
+          const items = logSelectContent.querySelectorAll('.select-item');
+          items.forEach((el) => {
+            const selected = el.getAttribute('data-value') === value;
+            el.setAttribute('aria-selected', selected ? 'true' : 'false');
+          });
+        }
+
+        function applyLogSelection(value) {
+          if (currentLogFile === value) return;
+          currentLogFile = value;
+          logSelectLabel.textContent = value;
+          setActiveItem(value);
+          lastLogContent = "";
+          logsContainer.innerHTML =
+            '<div style="color: #6b7280; text-align: center; margin-top: 50px">Загрузка логов...</div>';
+          loadLogs();
+        }
+
+        logSelectTrigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const isOpen = logSelectRoot.classList.contains('select-open');
+          if (isOpen) {
+            closeLogMenu();
+          } else {
+            openLogMenu();
+          }
+        });
+
+        logSelectContent.addEventListener('click', (e) => {
+          const target = e.target.closest('.select-item');
+          if (!target) return;
+          const value = target.getAttribute('data-value');
+          applyLogSelection(value);
+          closeLogMenu();
+        });
+
+        document.addEventListener('click', (e) => {
+          if (!logSelectRoot.contains(e.target)) {
+            closeLogMenu();
+          }
+        });
+
+        // Keyboard navigation
+        logSelectTrigger.addEventListener('keydown', (e) => {
+          const items = Array.from(logSelectContent.querySelectorAll('.select-item'));
+          const currentIndex = items.findIndex(i => i.getAttribute('data-value') === currentLogFile);
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!logSelectRoot.classList.contains('select-open')) openLogMenu();
+            let nextIndex = currentIndex;
+            if (e.key === 'ArrowDown') nextIndex = Math.min(items.length - 1, currentIndex + 1);
+            if (e.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+            const nextItem = items[nextIndex];
+            if (nextItem) {
+              items.forEach(i => i.tabIndex = -1);
+              nextItem.tabIndex = 0;
+              nextItem.focus();
+            }
+          } else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (logSelectRoot.classList.contains('select-open')) closeLogMenu(); else openLogMenu();
+          } else if (e.key === 'Escape') {
+            closeLogMenu();
+          }
+        });
+
+        logSelectContent.addEventListener('keydown', (e) => {
+          const items = Array.from(logSelectContent.querySelectorAll('.select-item'));
+          let idx = items.indexOf(document.activeElement);
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            idx = Math.min(items.length - 1, idx + 1);
+            items[idx].focus();
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            idx = Math.max(0, idx - 1);
+            items[idx].focus();
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const value = document.activeElement.getAttribute('data-value');
+            if (value) applyLogSelection(value);
+            closeLogMenu();
+          } else if (e.key === 'Escape') {
+            closeLogMenu();
+            logSelectTrigger.focus();
+          }
+        });
+
+        // Initialize label from current value
+        logSelectLabel.textContent = currentLogFile;
+        setActiveItem(currentLogFile);
+
         initMonacoEditor();
         checkStatus();
         loadLogs();
 
+        // УБРАЛ ПРОВЕРКУ 'if (!isActionInProgress)'
         autoRefreshInterval = setInterval(() => {
           loadLogs();
-        }, 1000);
+        }, 2000);
       });
 
       document.addEventListener("keydown", (e) => {
