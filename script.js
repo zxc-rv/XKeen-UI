@@ -238,15 +238,15 @@ function initMonacoEditor() {
       formatOnPaste: true,
       formatOnType: true,
       scrollBeyondLastLine: false,
-      minimap: { enabled: true },
-      fontSize: 13,
+      minimap: { enabled: false },
+      fontSize: 14,
       fontFamily: "JetBrains Mono",
       fontWeight: "500",
       smoothScrolling: true,
-      lineHeight: 20,
+      lineHeight: 1.5,
       tabSize: 2,
       insertSpaces: true,
-      wordWrap: "on",
+      wordWrap: "off",
       folding: false,
       lineNumbers: "on",
       glyphMargin: false,
@@ -463,7 +463,7 @@ async function loadConfigs() {
   isConfigsLoading = true;
   if (tabsList) tabsList.classList.add("empty");
   renderTabs();
-  const result = await apiCall("configs.py");
+  const result = await apiCall("configs.sh");
 
   if (result.success && result.configs) {
     configs = result.configs.map((c) => ({
@@ -518,7 +518,7 @@ async function saveCurrentConfig() {
     }
   }
 
-  const result = await apiCall("configs.py", {
+  const result = await apiCall("configs.sh", {
     action: "save",
     filename: config.filename,
     content: content,
@@ -555,7 +555,7 @@ function formatCurrentConfig() {
 }
 
 async function loadLogs() {
-  const result = await apiCall(`logs.py?file=${currentLogFile}`);
+  const result = await apiCall(`logs.sh?file=${currentLogFile}`);
   const container = document.getElementById("logsContainer");
 
   if (result.success) {
@@ -607,14 +607,14 @@ async function loadLogs() {
 async function checkStatus() {
   if (isActionInProgress) return;
 
-  const result = await apiCall("status.py");
+  const result = await apiCall("status.sh");
   updateServiceStatus(result.running);
 }
 
 async function startXkeen() {
   try {
     setPendingState("Запускается...");
-    const result = await apiCall("control.py", { action: "start" });
+    const result = await apiCall("control.sh", { action: "start" });
     if (result.success) {
       showToast("XKeen запущен");
       isActionInProgress = false;
@@ -637,7 +637,7 @@ async function startXkeen() {
 async function stopXkeen() {
   try {
     setPendingState("Останавливается...");
-    const result = await apiCall("control.py", { action: "stop" });
+    const result = await apiCall("control.sh", { action: "stop" });
     if (result.success) {
       showToast("XKeen остановлен");
       isServiceRunning = false;
@@ -657,7 +657,7 @@ async function stopXkeen() {
 async function restartXkeen() {
   try {
     setPendingState("Перезапускается...");
-    const result = await apiCall("control.py", { action: "restart" });
+    const result = await apiCall("control.sh", { action: "restart" });
     if (result.success) {
       showToast("XKeen перезапущен");
       isActionInProgress = false;

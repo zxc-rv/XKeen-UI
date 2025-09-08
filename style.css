@@ -63,7 +63,7 @@ textarea {
 }
 
 .panel-title {
-  font-size: 1.125rem;
+  font-size: 16px;
   font-weight: 600;
   margin-bottom: 15px;
   color: #e4e4e7;
@@ -224,7 +224,7 @@ textarea {
 
 .logs-container {
   height: 150px;
-  background: #09090b;
+  background: #0a0a0a;
   border: 1px solid #2e2f2f;
   border-radius: 6px;
   padding: 12px;
