@@ -875,7 +875,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   autoRefreshInterval = setInterval(() => {
     loadLogs();
-  }, 2000);
+  }, 500);
 });
 
 document.addEventListener("keydown", (e) => {

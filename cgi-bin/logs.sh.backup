@@ -16,7 +16,7 @@ read_logs() {
     case "$log_file" in
         error.log) log_path="/opt/var/log/xray/error.log" ;;
         access.log) log_path="/opt/var/log/xray/access.log" ;;
-        *)
+        *) 
             echo '{"success": false, "error": "Доступ к этому файлу запрещен"}'
             return
             ;;

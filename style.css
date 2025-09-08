@@ -667,6 +667,7 @@ textarea {
 
 .log-filter .input {
   height: 35px;
+  width: 180px;
   padding: 2px 12px;
   border: 1px solid #424242; /* always visible border */
   background: #212121;
@@ -678,6 +679,7 @@ textarea {
 
 .log-filter .input::placeholder {
   color: #6b7280;
+  font-size: 14px;
 }
 
 .log-filter .input:hover {
@@ -696,10 +698,36 @@ textarea {
   margin-left: auto;
 }
 
+.controls-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 @media (max-width: 768px) {
   .controls {
     flex-direction: column;
+    align-items: center;
+    gap: 12px;
   }
+
+  .controls-skeletons {
+    display: none !important;
+  }
+
+  .controls-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: center;
+  }
+
+  .controls .btn {
+    height: 35px;
+    padding: 0 12px;
+    min-width: 100px;
+    font-size: 14px;
+  }
+
   .tabs-header {
     flex-direction: column;
     align-items: stretch;
@@ -711,5 +739,24 @@ textarea {
   }
   .editor-controls {
     justify-content: center;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .panel-actions {
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .log-filter .input {
+    width: 140px;
+  }
+
+  .select-root {
+    min-width: 120px;
   }
 }

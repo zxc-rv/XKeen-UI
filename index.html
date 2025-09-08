@@ -38,20 +38,22 @@
           <div class="skeleton skeleton-btn"></div>
         </div>
 
-        <button
-          class="btn btn-primary"
-          id="restartBtn"
-          onclick="restartXkeen()"
-          style="display: inline-flex"
-        >
-          Перезапустить
-        </button>
-        <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
-          Запустить
-        </button>
-        <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
-          Остановить
-        </button>
+        <div class="controls-buttons">
+          <button
+            class="btn btn-primary"
+            id="restartBtn"
+            onclick="restartXkeen()"
+            style="display: inline-flex"
+          >
+            Перезапустить
+          </button>
+          <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
+            Запустить
+          </button>
+          <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
+            Остановить
+          </button>
+        </div>
       </div>
 
       <div class="panel">
@@ -176,7 +178,7 @@
         <h3 class="modal-title">Несохраненные изменения</h3>
         <p class="modal-body">
           В файле есть несохраненные изменения.<br />
-          Хотите сохранить их перед выходом?
+          Сохранить их перед выходом?
         </p>
         <div class="modal-actions">
           <button
