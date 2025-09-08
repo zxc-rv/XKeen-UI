@@ -18,14 +18,15 @@ def send_response(data, status=200):
 
 def execute_command(cmd):
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        log_file = '/opt/var/log/xray/error.log'
+        open(log_file, 'w').close()
+
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
         return {
             "success": result.returncode == 0,
             "output": result.stdout + result.stderr,
             "returncode": result.returncode
         }
-    except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Command timeout"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -47,11 +48,11 @@ def main():
         action = data.get('action')
 
         if action == 'start':
-            result = execute_command('xkeen -start')
+            result = execute_command('xkeen -start >> /opt/var/log/xray/error.log 2>&1')
         elif action == 'stop':
-            result = execute_command('xkeen -stop')
+            result = execute_command('xkeen -stop >> /opt/var/log/xray/error.log 2>&1')
         elif action == 'restart':
-            result = execute_command('xkeen -restart')
+            result = execute_command('xkeen -restart >> /opt/var/log/xray/error.log 2>&1')
         else:
             send_response({"success": False, "error": "Unknown action"}, 400)
             return

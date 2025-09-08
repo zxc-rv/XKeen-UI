@@ -26,14 +26,14 @@
       }
 
       .container {
-        max-width: 1200px;
+        max-width: 1250px;
         margin: 0 auto;
-        padding: 20px;
+        padding: 10px;
       }
 
       .header {
         text-align: center;
-        margin-bottom: 30px;
+        margin-bottom: 10px;
       }
 
       .title {
@@ -46,30 +46,26 @@
         background-clip: text;
       }
 
-      .subtitle {
-        color: #a1a1aa;
-      }
-
       .controls {
         display: flex;
         gap: 12px;
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        padding: 20px;
+        padding: 10px;
         background: #171717;
         border: 1px solid #27272a;
         border-radius: 8px;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
       }
 
       .panel {
         background: #171717;
         border: 1px solid #27272a;
         border-radius: 8px;
-        padding: 20px;
+        padding: 15px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-        margin-bottom: 20px;
+        margin-bottom: 15px;
       }
 
       .panel-title {
@@ -79,12 +75,91 @@
         color: #e4e4e7;
       }
 
+      .tabs-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        gap: 20px;
+      }
+
+      .tabs-list {
+        display: inline-flex;
+        height: 40px;
+        align-items: center;
+        justify-content: flex-start;
+        border-radius: 10px;
+        background: #262626;
+        padding: 4px;
+        gap: 2px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        width: fit-content;
+      }
+
+      .tabs-list::-webkit-scrollbar {
+        display: none;
+      }
+
+      .editor-controls {
+        display: flex;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .tab-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        white-space: nowrap;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.15s ease;
+        background: transparent;
+        border: none;
+        color: #a1a1aa;
+        cursor: pointer;
+        min-width: 0;
+        flex: 0 0 auto;
+        gap: 6px;
+      }
+
+      .tab-trigger .dirty-indicator {
+        width: 6px;
+        height: 6px;
+        background-color: #3b82f6;
+        border-radius: 50%;
+        display: none;
+      }
+
+      .tab-trigger.dirty .dirty-indicator {
+        display: inline-block;
+      }
+
+      .tab-trigger:hover:not(.active) {
+        background: #3f3f46;
+        color: #e4e4e7;
+      }
+
+      .tab-trigger.active {
+        background: #2f2f2f;
+        color: #fafafa;
+        border: 1px solid #4e4e4e;
+      }
+
+      .tabs-content {
+        border: 1px solid #262626;
+        border-radius: 8px;
+        background: #0a0a0a;
+        overflow: hidden;
+      }
+
       .editor-container {
         position: relative;
-        height: 670px;
-        border: 1px solid #27272a;
-        border-radius: 6px;
-        overflow: hidden;
+        height: 700px;
         background: #1e1e1e;
       }
 
@@ -96,26 +171,42 @@
         padding: 12px;
         overflow-y: auto;
         font-family: "JetBrains Mono", monospace;
-        font-size: 12px;
+        font-size: 13px;
         line-height: 1.3;
+        position: relative;
       }
 
       .log-line {
-        margin-bottom: 4px;
+        margin-bottom: 2px;
         word-wrap: break-word;
+        white-space: pre-wrap;
+        color: #c0c0c0;
+      }
+
+      .log-info {
+        color: #3b82f6;
+      }
+
+      .log-warning {
+        color: #f59e0b;
       }
 
       .log-error {
         color: #ef4444;
       }
-      .log-warn {
-        color: #f59e0b;
+
+      .log-success {
+        color: #10b981;
       }
-      .log-info {
-        color: #3b82f6;
-      }
-      .log-debug {
+
+      .log-timestamp {
         color: #6b7280;
+      }
+
+      .log-highlight {
+        background: rgba(59, 130, 246, 0.1);
+        padding: 1px 3px;
+        border-radius: 3px;
       }
 
       .btn {
@@ -205,6 +296,11 @@
         background: #ef4444;
       }
 
+      .status-pending .status-indicator {
+        background: #f59e0b;
+        animation: pulse 1s infinite;
+      }
+
       @keyframes pulse {
         0%,
         100% {
@@ -271,9 +367,66 @@
         justify-content: center;
       }
 
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease-in-out;
+      }
+      .modal-overlay.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .modal-content {
+        background-color: #171717;
+        border: 1px solid #27272a;
+        border-radius: 8px;
+        padding: 24px;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        transform: scale(0.95);
+        transition: transform 0.2s ease-in-out;
+      }
+      .modal-overlay.show .modal-content {
+        transform: scale(1);
+      }
+      .modal-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .modal-body {
+        font-size: 0.875rem;
+        color: #a1a1aa;
+        margin-bottom: 24px;
+      }
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
       @media (max-width: 768px) {
         .controls {
           flex-direction: column;
+        }
+        .tabs-header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .tabs-list {
+          flex-wrap: wrap;
+          justify-content: flex-start;
+        }
+        .editor-controls {
+          justify-content: center;
         }
       }
     </style>
@@ -282,7 +435,6 @@
     <div class="container">
       <div class="header">
         <h1 class="title">XKeen UI</h1>
-        <p class="subtitle">Управление конфигурацией и сервисом XKeen</p>
       </div>
 
       <div class="controls">
@@ -291,34 +443,48 @@
           <span id="statusText">Проверка статуса...</span>
         </div>
 
-        <button class="btn btn-primary" onclick="saveConfig()">
-          Сохранить конфиг
-        </button>
-        <button class="btn btn-secondary" onclick="formatConfig()">
-          Форматировать JSON
-        </button>
-        <button class="btn btn-success" onclick="startXkeen()">
-          Запустить
-        </button>
-        <button class="btn btn-danger" onclick="stopXkeen()">Остановить</button>
-        <button class="btn btn-primary" onclick="restartXkeen()">
+        <button
+          class="btn btn-primary"
+          id="restartBtn"
+          onclick="restartXkeen()"
+        >
           Перезапустить
         </button>
-        <button class="btn btn-secondary" onclick="refreshLogs()">
-          Обновить логи
+        <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
+          Запустить
+        </button>
+        <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
+          Остановить
         </button>
       </div>
 
       <div class="panel">
-        <h2 class="panel-title">Конфигурация XRay</h2>
-        <div class="editor-container" id="editorContainer">
-          <div style="color: #6b7280; text-align: center; margin-top: 180px">
-            Загрузка редактора...
+        <h2 class="panel-title">Конфигурации XRay</h2>
+        <div class="tabs-header">
+          <div class="tabs-list" id="tabsList"></div>
+          <div class="editor-controls">
+            <button
+              class="btn btn-primary"
+              id="saveBtn"
+              onclick="saveCurrentConfig()"
+            >
+              Сохранить
+            </button>
+            <button class="btn btn-secondary" onclick="formatCurrentConfig()">
+              Форматировать
+            </button>
+          </div>
+        </div>
+        <div class="tabs-content">
+          <div class="editor-container" id="editorContainer">
+            <div style="color: #6b7280; text-align: center; margin-top: 180px">
+              Загрузка редактора...
+            </div>
           </div>
         </div>
         <div class="validation-info" id="validationInfo">
           <span class="validation-icon">⏳</span>
-          <span>Загрузка конфигурации...</span>
+          <span>Загрузка конфигураций...</span>
         </div>
       </div>
 
@@ -331,15 +497,50 @@
         </div>
       </div>
     </div>
-
-    <!-- Monaco Editor -->
+    <div class="modal-overlay" id="dirtyModal">
+      <div class="modal-content">
+        <h3 class="modal-title">Несохраненные изменения</h3>
+        <p class="modal-body">
+          В файле есть несохраненные изменения. Хотите сохранить их перед
+          выходом?
+        </p>
+        <div class="modal-actions">
+          <button
+            class="btn btn-primary"
+            id="saveAndSwitchBtn"
+            onclick="saveAndSwitch()"
+          >
+            Сохранить
+          </button>
+          <button
+            class="btn btn-danger"
+            id="discardChangesBtn"
+            onclick="discardAndSwitch()"
+          >
+            Не сохранять
+          </button>
+          <button
+            class="btn btn-secondary"
+            id="cancelSwitchBtn"
+            onclick="closeDirtyModal()"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
-
     <script>
       let autoRefreshInterval;
       let monacoEditor;
+      let configs = [];
+      let activeConfigIndex = -1;
+      let isServiceRunning = false;
+      let isActionInProgress = false;
+      let lastLogContent = "";
+      let userScrolled = false;
+      let pendingSwitchIndex = -1;
 
-      // Загрузка Monaco Editor
       require.config({
         paths: {
           vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs",
@@ -363,22 +564,138 @@
         const validationInfo = document.getElementById("validationInfo");
         if (isValid) {
           validationInfo.innerHTML = `
-                    <span class="validation-icon validation-success">✓</span>
-                    <span class="validation-success">JSON валидный</span>
-                `;
+                      <span class="validation-icon validation-success">✓</span>
+                      <span class="validation-success">JSON валидный</span>
+                  `;
         } else {
           validationInfo.innerHTML = `
-                    <span class="validation-icon validation-error">✗</span>
-                    <span class="validation-error">${
-                      error || "Ошибка в JSON"
-                    }</span>
-                `;
+                      <span class="validation-icon validation-error">✗</span>
+                      <span class="validation-error">${
+                        error || "Ошибка в JSON"
+                      }</span>
+                  `;
         }
+      }
+
+      function updateControlButtons() {
+        const startBtn = document.getElementById("startBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const restartBtn = document.getElementById("restartBtn");
+
+        if (isActionInProgress) {
+          startBtn.disabled = true;
+          stopBtn.disabled = true;
+          restartBtn.disabled = true;
+          return;
+        }
+
+        startBtn.style.display = isServiceRunning ? "none" : "inline-flex";
+        stopBtn.style.display = isServiceRunning ? "inline-flex" : "none";
+        restartBtn.style.display = isServiceRunning ? "inline-flex" : "none";
+
+        startBtn.disabled = false;
+        stopBtn.disabled = false;
+        restartBtn.disabled = false;
+      }
+
+      function setPendingState(actionText) {
+        isActionInProgress = true;
+        const indicator = document.getElementById("statusIndicator");
+        const text = document.getElementById("statusText");
+
+        indicator.className = "status status-pending";
+        text.textContent = actionText;
+        updateControlButtons();
+      }
+
+      function parseLogLine(line) {
+        if (!line.trim()) return null;
+
+        let processedLine = line;
+        let className = "log-line";
+
+        processedLine = processedLine
+          .replace(
+            /\u001b\[32m(.*?)\u001b\[0m/g,
+            '<span style="color: #10b981;">$1</span>'
+          )
+          .replace(
+            /\u001b\[33m(.*?)\u001b\[0m/g,
+            '<span style="color: #f59e0b;">$1</span>'
+          )
+          .replace(
+            /\u001b\[31m(.*?)\u001b\[0m/g,
+            '<span style="color: #ef4444;">$1</span>'
+          )
+          .replace(
+            /\u001b\[36m(.*?)\u001b\[0m/g,
+            '<span style="color: #06b6d4;">$1</span>'
+          )
+          .replace(/\u001b\[\d+m/g, "");
+
+        processedLine = processedLine
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/&lt;span style="color: #[\w\d]+;"&gt;/g, (match) =>
+            match.replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+          )
+          .replace(/&lt;\/span&gt;/g, "</span>");
+
+        processedLine = processedLine
+          .replace(/\[Info\]/g, '<span style="color: #3b82f6;">[Info]</span>')
+          .replace(
+            /\[Warning\]/g,
+            '<span style="color: #f59e0b;">[Warning]</span>'
+          )
+          .replace(
+            /\[Error\]/g,
+            '<span style="color: #ef4444;">[Error]</span>'
+          );
+
+        return { className, content: processedLine };
+      }
+
+      function checkServiceStatusFromLogs(newLogContent) {
+        if (isActionInProgress && newLogContent !== lastLogContent) {
+          const lines = newLogContent.split("\n");
+
+          for (const line of lines.slice(-10)) {
+            const cleanLine = line.replace(/\u001b\[\d+m/g, "");
+
+            if (
+              cleanLine.includes("Прокси-клиент") &&
+              cleanLine.includes("запущен")
+            ) {
+              console.log("Found startup line in logs!");
+              isServiceRunning = true;
+              isActionInProgress = false;
+              updateServiceStatus(true);
+              break;
+            }
+          }
+        }
+      }
+
+      function updateServiceStatus(running) {
+        const indicator = document.getElementById("statusIndicator");
+        const text = document.getElementById("statusText");
+
+        isServiceRunning = running;
+
+        if (running) {
+          indicator.className = "status status-running";
+          text.textContent = "Сервис запущен";
+        } else {
+          indicator.className = "status status-stopped";
+          text.textContent = "Сервис остановлен";
+        }
+
+        updateControlButtons();
       }
 
       function initMonacoEditor() {
         require(["vs/editor/editor.main"], function () {
-          // Настройка темной темы
           monaco.editor.defineTheme("tokyo-night", {
             base: "vs-dark",
             inherit: true,
@@ -399,9 +716,8 @@
             },
           });
 
-          // Очищаем контейнер перед инициализацией
           const editorContainer = document.getElementById("editorContainer");
-          editorContainer.innerHTML = ""; // <--- ДОБАВЛЕНА ОЧИСТКА
+          editorContainer.innerHTML = "";
 
           monacoEditor = monaco.editor.create(editorContainer, {
             value: "",
@@ -412,8 +728,9 @@
             formatOnType: true,
             scrollBeyondLastLine: false,
             minimap: { enabled: true },
-            fontSize: 14,
+            fontSize: 13,
             fontFamily: "JetBrains Mono",
+            fontWeight: "500",
             smoothScrolling: true,
             lineHeight: 20,
             tabSize: 2,
@@ -421,7 +738,7 @@
             wordWrap: "on",
             folding: false,
             lineNumbers: "on",
-            glyphMargin: true,
+            glyphMargin: false,
             rulers: [],
             scrollbar: {
               vertical: "visible",
@@ -437,14 +754,33 @@
             },
           });
 
-          // Валидация при изменении содержимого
           monacoEditor.onDidChangeModelContent(() => {
-            validateCurrentJSON();
+            const currentConfig = configs[activeConfigIndex];
+            if (currentConfig) {
+              const currentContent = monacoEditor.getValue();
+              const isDirty = currentContent !== currentConfig.savedContent;
+              if (currentConfig.isDirty !== isDirty) {
+                currentConfig.isDirty = isDirty;
+                updateUIDirtyState();
+              }
+              validateCurrentJSON();
+            }
           });
 
-          // Загружаем конфиг после инициализации редактора
-          loadConfig();
+          loadConfigs();
         });
+      }
+
+      function updateUIDirtyState() {
+        const saveBtn = document.getElementById("saveBtn");
+        const currentConfig = configs[activeConfigIndex];
+
+        if (currentConfig) {
+          saveBtn.disabled = !currentConfig.isDirty;
+        } else {
+          saveBtn.disabled = true;
+        }
+        renderTabs();
       }
 
       function validateCurrentJSON() {
@@ -462,6 +798,76 @@
         } catch (e) {
           updateValidationInfo(false, e.message);
         }
+      }
+
+      function renderTabs() {
+        const tabsList = document.getElementById("tabsList");
+        tabsList.innerHTML = "";
+
+        configs.forEach((config, index) => {
+          const tabTrigger = document.createElement("button");
+          tabTrigger.className = `tab-trigger ${
+            index === activeConfigIndex ? "active" : ""
+          } ${config.isDirty ? "dirty" : ""}`;
+          tabTrigger.innerHTML = `
+                      ${config.name}
+                      <span class="dirty-indicator"></span>
+                  `;
+          tabTrigger.onclick = () => attemptSwitchTab(index);
+          tabsList.appendChild(tabTrigger);
+        });
+      }
+
+      function attemptSwitchTab(index) {
+        if (index === activeConfigIndex) return;
+
+        const currentConfig = configs[activeConfigIndex];
+        if (currentConfig && currentConfig.isDirty) {
+          pendingSwitchIndex = index;
+          document.getElementById("dirtyModal").classList.add("show");
+        } else {
+          switchTab(index);
+        }
+      }
+      function closeDirtyModal() {
+        pendingSwitchIndex = -1;
+        document.getElementById("dirtyModal").classList.remove("show");
+      }
+      async function saveAndSwitch() {
+        if (pendingSwitchIndex !== -1) {
+          await saveCurrentConfig();
+          // Проверяем, сохранилось ли успешно
+          if (!configs[activeConfigIndex].isDirty) {
+            switchTab(pendingSwitchIndex);
+          }
+          closeDirtyModal();
+        }
+      }
+      function discardAndSwitch() {
+        if (pendingSwitchIndex !== -1) {
+          const config = configs[activeConfigIndex];
+          monacoEditor.setValue(config.savedContent);
+          config.isDirty = false;
+          updateUIDirtyState();
+          switchTab(pendingSwitchIndex);
+          closeDirtyModal();
+        }
+      }
+
+      function switchTab(index) {
+        if (index < 0 || index >= configs.length || index === activeConfigIndex)
+          return;
+
+        activeConfigIndex = index;
+
+        if (monacoEditor && configs[index]) {
+          monacoEditor.setValue(configs[index].content);
+          // Устанавливаем isDirty в false, т.к. мы только что загрузили сохраненное состояние
+          configs[index].isDirty = false;
+        }
+        renderTabs();
+        updateUIDirtyState();
+        validateCurrentJSON();
       }
 
       async function apiCall(endpoint, data = null) {
@@ -489,81 +895,74 @@
         }
       }
 
-      async function loadConfig() {
-        if (!monacoEditor) return;
+      async function loadConfigs() {
+        const result = await apiCall("configs.py");
 
-        const result = await apiCall("config.py");
+        if (result.success && result.configs) {
+          configs = result.configs.map((c) => ({
+            ...c,
+            savedContent: c.content,
+            isDirty: false,
+          }));
+          renderTabs();
+          updateUIDirtyState();
 
-        if (result.success && result.data && result.data.trim()) {
-          try {
-            // Пытаемся отформатировать если это валидный JSON
-            const parsed = JSON.parse(result.data);
-            monacoEditor.setValue(JSON.stringify(parsed, null, 2));
-          } catch {
-            // Если не удалось распарсить, просто вставляем как есть
-            monacoEditor.setValue(result.data);
+          if (configs.length > 0) {
+            switchTab(0);
           }
         } else {
-          // Создаем базовый конфиг
-          const defaultConfig = {
-            log: {
-              loglevel: "warning",
-            },
-            inbounds: [],
-            outbounds: [],
-          };
-          monacoEditor.setValue(JSON.stringify(defaultConfig, null, 2));
-          showToast("Конфиг не найден, создан базовый шаблон", "error");
+          showToast("Ошибка загрузки конфигов", "error");
         }
-
-        validateCurrentJSON();
       }
 
-      async function saveConfig() {
-        if (!monacoEditor) return;
+      async function saveCurrentConfig() {
+        if (!configs[activeConfigIndex] || !monacoEditor) return;
 
-        const config = monacoEditor.getValue().trim();
+        const config = configs[activeConfigIndex];
+        const content = monacoEditor.getValue();
 
-        if (!config) {
+        if (!content.trim()) {
           showToast("Конфиг пустой", "error");
           return;
         }
 
         try {
-          JSON.parse(config);
+          JSON.parse(content);
         } catch (e) {
-          showToast(`Неверный JSON: ${e.message}`, "error");
+          showToast(`Невалидный JSON: ${e.message}`, "error");
           return;
         }
 
-        const result = await apiCall("config.py", {
+        const result = await apiCall("configs.py", {
           action: "save",
-          data: config,
+          filename: config.filename,
+          content: content,
         });
+
         if (result.success) {
-          showToast("Конфиг сохранен успешно");
+          config.content = content;
+          config.savedContent = content;
+          config.isDirty = false;
+          updateUIDirtyState();
+          showToast(`Конфиг "${config.name}" сохранен`);
         } else {
-          showToast(
-            `Ошибка сохранения: ${result.error || "Неизвестная ошибка"}`,
-            "error"
-          );
+          showToast(`Ошибка сохранения: ${result.error}`, "error");
         }
       }
 
-      function formatConfig() {
+      function formatCurrentConfig() {
         if (!monacoEditor) return;
 
-        const config = monacoEditor.getValue().trim();
-
-        if (!config) {
+        const content = monacoEditor.getValue().trim();
+        if (!content) {
           showToast("Конфиг пустой", "error");
           return;
         }
 
         try {
-          const parsed = JSON.parse(config);
-          monacoEditor.setValue(JSON.stringify(parsed, null, 2));
-          showToast("JSON отформатирован");
+          const parsed = JSON.parse(content);
+          const formatted = JSON.stringify(parsed, null, 2);
+          monacoEditor.setValue(formatted);
         } catch (e) {
           showToast(`Ошибка форматирования: ${e.message}`, "error");
         }
@@ -574,33 +973,40 @@
         const container = document.getElementById("logsContainer");
 
         if (result.success) {
-          const lines = result.data
-            .split("\n")
-            .slice(-50)
-            .filter((line) => line.trim());
-          if (lines.length === 0) {
-            container.innerHTML =
-              '<div style="color: #6b7280; text-align: center; margin-top: 100px;">Логи пусты</div>';
-          } else {
-            container.innerHTML = lines
-              .map((line) => {
-                let className = "log-line";
-                if (line.includes("[ERROR]") || line.includes("error"))
-                  className += " log-error";
-                else if (line.includes("[WARN]") || line.includes("warning"))
-                  className += " log-warn";
-                else if (line.includes("[INFO]") || line.includes("info"))
-                  className += " log-info";
-                else if (line.includes("[DEBUG]") || line.includes("debug"))
-                  className += " log-debug";
+          const newContent = result.data;
 
-                return `<div class="${className}">${line
-                  .replace(/</g, "&lt;")
-                  .replace(/>/g, "&gt;")}</div>`;
-              })
-              .join("");
+          if (newContent !== lastLogContent) {
+            checkServiceStatusFromLogs(newContent);
+
+            const wasAtBottom =
+              container.scrollTop + container.clientHeight >=
+              container.scrollHeight - 5;
+
+            const lines = newContent.split("\n").filter((line) => line.trim());
+
+            if (lines.length === 0) {
+              container.innerHTML =
+                '<div style="color: #6b7280; text-align: center; margin-top: 50px;">Логи пусты</div>';
+            } else {
+              const processedLines = lines
+                .slice(-100)
+                .map((line) => {
+                  const parsed = parseLogLine(line);
+                  return parsed
+                    ? `<div class="${parsed.className}">${parsed.content}</div>`
+                    : "";
+                })
+                .filter(Boolean);
+
+              container.innerHTML = processedLines.join("");
+            }
+
+            if (wasAtBottom && !userScrolled) {
+              container.scrollTop = container.scrollHeight;
+            }
+
+            lastLogContent = newContent;
           }
-          container.scrollTop = container.scrollHeight;
         } else {
           container.innerHTML =
             '<div style="color: #ef4444; text-align: center; margin-top: 100px;">Ошибка загрузки логов</div>';
@@ -608,78 +1014,102 @@
       }
 
       async function checkStatus() {
-        const result = await apiCall("status.py");
-        const indicator = document.getElementById("statusIndicator");
-        const text = document.getElementById("statusText");
+        if (isActionInProgress) return;
 
-        if (result.running) {
-          indicator.className = "status status-running";
-          text.textContent = "XKeen запущен";
-        } else {
-          indicator.className = "status status-stopped";
-          text.textContent = "XKeen остановлен";
-        }
+        const result = await apiCall("status.py");
+        updateServiceStatus(result.running);
       }
 
       async function startXkeen() {
-        const result = await apiCall("control.py", { action: "start" });
-        if (result.success) {
-          showToast("XKeen запущен");
-          setTimeout(checkStatus, 1000);
-        } else {
-          showToast("Ошибка запуска", "error");
+        try {
+          setPendingState("Запускается...");
+          const result = await apiCall("control.py", { action: "start" });
+          if (result.success) {
+            showToast("XKeen запущен");
+          } else {
+            showToast(
+              `Ошибка запуска: ${result.output || result.error}`,
+              "error"
+            );
+            isActionInProgress = false;
+            checkStatus();
+          }
+        } catch (e) {
+          isActionInProgress = false;
+          checkStatus();
         }
       }
 
       async function stopXkeen() {
-        const result = await apiCall("control.py", { action: "stop" });
-        if (result.success) {
-          showToast("XKeen остановлен");
-          setTimeout(checkStatus, 1000);
-        } else {
-          showToast("Ошибка остановки", "error");
+        try {
+          setPendingState("Останавливается...");
+          const result = await apiCall("control.py", { action: "stop" });
+          if (result.success) {
+            showToast("XKeen остановлен");
+            isServiceRunning = false;
+            updateServiceStatus(false);
+          } else {
+            showToast(
+              `Ошибка остановки: ${result.output || result.error}`,
+              "error"
+            );
+          }
+        } finally {
+          isActionInProgress = false;
+          checkStatus();
         }
       }
 
       async function restartXkeen() {
-        const result = await apiCall("control.py", { action: "restart" });
-        if (result.success) {
-          showToast("XKeen перезапущен");
-          setTimeout(checkStatus, 1000);
-        } else {
-          showToast("Ошибка перезапуска", "error");
+        try {
+          setPendingState("Перезапускается...");
+          const result = await apiCall("control.py", { action: "restart" });
+          if (result.success) {
+            showToast("XKeen перезапущен");
+          } else {
+            showToast(
+              `Ошибка перезапуска: ${result.output || result.error}`,
+              "error"
+            );
+            isActionInProgress = false;
+            checkStatus();
+          }
+        } catch (e) {
+          isActionInProgress = false;
+          checkStatus();
         }
       }
 
-      function refreshLogs() {
-        loadLogs();
-        showToast("Логи обновлены");
-      }
-
-      // Инициализация
       document.addEventListener("DOMContentLoaded", () => {
-        // Инициализируем Monaco Editor
+        const logsContainer = document.getElementById("logsContainer");
+
+        logsContainer.addEventListener("scroll", () => {
+          const isAtBottom =
+            logsContainer.scrollTop + logsContainer.clientHeight >=
+            logsContainer.scrollHeight - 5;
+          userScrolled = !isAtBottom;
+        });
+
         initMonacoEditor();
-
-        loadLogs();
         checkStatus();
+        loadLogs();
 
-        // Автообновление логов каждые 10 секунд
         autoRefreshInterval = setInterval(() => {
           loadLogs();
-          checkStatus();
-        }, 10000);
+        }, 1000);
       });
 
-      // Горячие клавиши
       document.addEventListener("keydown", (e) => {
         if (e.ctrlKey && e.key === "s") {
           e.preventDefault();
-          saveConfig();
+          const saveBtn = document.getElementById("saveBtn");
+          if (!saveBtn.disabled) {
+            saveCurrentConfig();
+          }
         }
         if (e.ctrlKey && e.shiftKey && e.key === "F") {
           e.preventDefault();
-          formatConfig();
+          formatCurrentConfig();
         }
       });
     </script>

@@ -1,6 +1,7 @@
 #!/opt/bin/python
 import json
 import subprocess
+import re
 
 def send_response(data, status=200):
     print(f"Status: {status}")
@@ -11,8 +12,14 @@ def send_response(data, status=200):
 
 def check_xray_status():
     try:
-        result = subprocess.run(['pgrep', '-f', 'xray'], capture_output=True, text=True)
-        return result.returncode == 0
+        result = subprocess.run(['xkeen', '-status'], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            output = result.stdout + result.stderr
+            # Убираем ANSI коды
+            clean_output = re.sub(r'\x1b\[[0-9;]*m', '', output)
+
+            return 'запущен' in clean_output and 'не запущен' not in clean_output
+        return False
     except:
         return False
 
