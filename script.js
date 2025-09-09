@@ -422,13 +422,10 @@ function updateActiveTabIndicator() {
   const tabs = Array.from(tabsList.querySelectorAll(".tab-trigger"));
   const active = tabs[activeConfigIndex];
   if (!active) return;
-  const listRect = tabsList.getBoundingClientRect();
-  const rect = active.getBoundingClientRect();
-  const scrollContainer = tabsList.parentElement; // .tabs-scroll
-  const scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
   const paddingLeft = parseFloat(getComputedStyle(tabsList).paddingLeft) || 0;
-  const offsetLeft = rect.left - listRect.left + scrollLeft - paddingLeft;
-  indicator.style.width = `${rect.width}px`;
+  const offsetLeft = active.offsetLeft - paddingLeft;
+  const width = active.offsetWidth;
+  indicator.style.width = `${width}px`;
   indicator.style.transform = `translateX(${offsetLeft}px)`;
 }
 
