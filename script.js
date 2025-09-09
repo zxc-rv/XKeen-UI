@@ -21,7 +21,32 @@ require.config({
 function showToast(message, type = "success") {
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
-  toast.textContent = message;
+
+  // Иконки для разных типов уведомлений
+  const icons = {
+    success: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon success"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>`,
+    error: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon error"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>`
+  };
+
+  // Поддержка структурированных сообщений
+  if (typeof message === 'object' && message.title && message.body) {
+    toast.innerHTML = `
+      <div class="toast-header">
+        ${icons[type] || icons.success}
+        <div class="toast-title">${message.title}</div>
+      </div>
+      <div class="toast-body">${message.body}</div>
+    `;
+  } else {
+    toast.innerHTML = `
+      <div class="toast-header">
+        ${icons[type] || icons.success}
+        <div class="toast-title">${type === 'error' ? 'Ошибка' : 'Успех'}</div>
+      </div>
+      <div class="toast-body">${message}</div>
+    `;
+  }
+
   document.body.appendChild(toast);
 
   setTimeout(() => toast.classList.add("show"), 100);
@@ -36,13 +61,13 @@ function updateValidationInfo(isValid, error = null) {
   if (isValid) {
     validationInfo.innerHTML = `
                     <span class="validation-icon validation-success">✓</span>
-                    <span class="validation-success">JSON валиден</span>
+                    <span class="validation-success">JSON is valid</span>
                 `;
   } else {
     validationInfo.innerHTML = `
                     <span class="validation-icon validation-error">✗</span>
-                    <span class="validation-error">${
-                      error || "Ошибка в JSON"
+                    <span class="validation-error"> Invalid JSON: ${
+                      error || "JSON is invalid"
                     }</span>
                 `;
   }
@@ -513,7 +538,10 @@ async function saveCurrentConfig() {
         m.severity === monaco.MarkerSeverity.Error
     );
     if (errorMarker) {
-      showToast(`Невалидный JSON: ${errorMarker.message}`, "error");
+      showToast({
+        title: "Ошибка сохранения",
+        body: `Invalid JSON: ${errorMarker.message}`
+      }, "error");
       return;
     }
   }
