@@ -223,7 +223,7 @@ textarea {
 .editor-container {
   position: relative;
   height: 700px;
-  background: #1e1e1e;
+  background: #020817;
 }
 
 .logs-container {
@@ -864,6 +864,17 @@ textarea {
 .tabs-list .tab-trigger {
   position: relative;
   z-index: 1;
+}
+
+.editor-loading {
+  color: #6b7280;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 @media (max-width: 768px) {
