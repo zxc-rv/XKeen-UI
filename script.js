@@ -25,11 +25,11 @@ function showToast(message, type = "success") {
   // Иконки для разных типов уведомлений
   const icons = {
     success: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon success"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>`,
-    error: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon error"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>`
+    error: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon error"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>`,
   };
 
   // Поддержка структурированных сообщений
-  if (typeof message === 'object' && message.title && message.body) {
+  if (typeof message === "object" && message.title && message.body) {
     toast.innerHTML = `
       <div class="toast-header">
         ${icons[type] || icons.success}
@@ -41,7 +41,7 @@ function showToast(message, type = "success") {
     toast.innerHTML = `
       <div class="toast-header">
         ${icons[type] || icons.success}
-        <div class="toast-title">${type === 'error' ? 'Ошибка' : 'Успех'}</div>
+        <div class="toast-title">${type === "error" ? "Ошибка" : "Успех"}</div>
       </div>
       <div class="toast-body">${message}</div>
     `;
@@ -150,14 +150,8 @@ function parseLogLine(line) {
 
   processedLine = processedLine
     .replace(/\[Info\]/g, '<span style="color: #3b82f6;">[Info]</span>')
-    .replace(
-      /\[Warning\]/g,
-      '<span style="color: #f59e0b;">[Warning]</span>'
-    )
-    .replace(
-      /\[Error\]/g,
-      '<span style="color: #ef4444;">[Error]</span>'
-    );
+    .replace(/\[Warning\]/g, '<span style="color: #f59e0b;">[Warning]</span>')
+    .replace(/\[Error\]/g, '<span style="color: #ef4444;">[Error]</span>');
 
   return { className, content: processedLine };
 }
@@ -204,7 +198,6 @@ function updateServiceStatus(running) {
 function initMonacoEditor() {
   require(["vs/editor/editor.main"], function () {
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-      validate: true,
       allowComments: true,
     });
     monaco.editor.defineTheme("tokyo-night", {
@@ -234,7 +227,7 @@ function initMonacoEditor() {
         { token: "attribute.value", foreground: "#9ece6a" },
       ],
       colors: {
-        "editor.background": "#171717",
+        "editor.background": "#020817",
         "editor.foreground": "#c0caf5",
         "editorLineNumber.foreground": "#3b4261",
         "editorLineNumber.activeForeground": "#a9b1d6",
@@ -266,9 +259,10 @@ function initMonacoEditor() {
       minimap: { enabled: false },
       fontSize: 14,
       fontFamily: "JetBrains Mono",
-      fontWeight: "500",
+      fontWeight: "400",
       smoothScrolling: true,
       lineHeight: 1.5,
+      renderLineHighlight: "none",
       tabSize: 2,
       insertSpaces: true,
       wordWrap: "off",
@@ -277,12 +271,12 @@ function initMonacoEditor() {
       glyphMargin: false,
       stickyScroll: { enabled: false },
       rulers: [],
+      overviewRulerLanes: 0,
       scrollbar: {
-        vertical: "visible",
-        horizontal: "visible",
+        vertical: "auto",
+        horizontal: "auto",
         useShadows: false,
-        verticalHasArrows: true,
-        horizontalHasArrows: true,
+        alwaysConsumeMouseWheel: false,
       },
       find: {
         addExtraSpaceOnTop: false,
@@ -307,9 +301,7 @@ function initMonacoEditor() {
     monaco.editor.onDidChangeMarkers((changedUris) => {
       const model = monacoEditor.getModel();
       if (!model) return;
-      if (
-        changedUris.some((u) => u.toString() === model.uri.toString())
-      ) {
+      if (changedUris.some((u) => u.toString() === model.uri.toString())) {
         validateCurrentJSON();
       }
     });
@@ -355,21 +347,28 @@ function validateCurrentJSON() {
 
 function renderTabs() {
   const tabsList = document.getElementById("tabsList");
+  // Preserve previous indicator transform before re-render
+  const existingIndicator = tabsList
+    ? tabsList.querySelector(".tab-active-indicator")
+    : null;
+  const previousTransform = existingIndicator
+    ? existingIndicator.style.transform
+    : null;
   tabsList.innerHTML = "";
 
-  tabsList.classList.toggle(
-    "empty",
-    isConfigsLoading || configs.length === 0
-  );
+  tabsList.classList.toggle("empty", isConfigsLoading || configs.length === 0);
 
-  const editorControlsSkeletons = document.getElementById("editorControlsSkeletons");
+  const editorControlsSkeletons = document.getElementById(
+    "editorControlsSkeletons"
+  );
   const saveBtn = document.getElementById("saveBtn");
   const formatBtn = document.getElementById("formatBtn");
   const validationSkeleton = document.getElementById("validationSkeleton");
   const validationInfo = document.getElementById("validationInfo");
 
   if (isConfigsLoading) {
-    if (editorControlsSkeletons) editorControlsSkeletons.style.display = "inline-flex";
+    if (editorControlsSkeletons)
+      editorControlsSkeletons.style.display = "inline-flex";
     if (saveBtn) saveBtn.style.display = "none";
     if (formatBtn) formatBtn.style.display = "none";
     if (validationSkeleton) validationSkeleton.style.display = "block";
@@ -391,6 +390,14 @@ function renderTabs() {
     return;
   }
 
+  // Добавляем индикатор активной вкладки и восстанавливаем его прошлую позицию
+  const indicator = document.createElement("div");
+  indicator.className = "tab-active-indicator";
+  if (previousTransform) {
+    indicator.style.transform = previousTransform;
+  }
+  tabsList.appendChild(indicator);
+
   configs.forEach((config, index) => {
     const tabTrigger = document.createElement("button");
     tabTrigger.className = `tab-trigger ${
@@ -403,6 +410,26 @@ function renderTabs() {
     tabTrigger.onclick = () => attemptSwitchTab(index);
     tabsList.appendChild(tabTrigger);
   });
+
+  requestAnimationFrame(() => updateActiveTabIndicator());
+}
+
+function updateActiveTabIndicator() {
+  const tabsList = document.getElementById("tabsList");
+  if (!tabsList) return;
+  const indicator = tabsList.querySelector(".tab-active-indicator");
+  if (!indicator) return;
+  const tabs = Array.from(tabsList.querySelectorAll(".tab-trigger"));
+  const active = tabs[activeConfigIndex];
+  if (!active) return;
+  const listRect = tabsList.getBoundingClientRect();
+  const rect = active.getBoundingClientRect();
+  const scrollContainer = tabsList.parentElement; // .tabs-scroll
+  const scrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
+  const paddingLeft = parseFloat(getComputedStyle(tabsList).paddingLeft) || 0;
+  const offsetLeft = rect.left - listRect.left + scrollLeft - paddingLeft;
+  indicator.style.width = `${rect.width}px`;
+  indicator.style.transform = `translateX(${offsetLeft}px)`;
 }
 
 function attemptSwitchTab(index) {
@@ -456,6 +483,7 @@ function switchTab(index) {
   renderTabs();
   updateUIDirtyState();
   validateCurrentJSON();
+  requestAnimationFrame(updateActiveTabIndicator);
 }
 
 async function apiCall(endpoint, data = null) {
@@ -514,11 +542,7 @@ async function loadConfigs() {
 }
 
 async function saveCurrentConfig() {
-  if (
-    activeConfigIndex < 0 ||
-    !configs[activeConfigIndex] ||
-    !monacoEditor
-  )
+  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor)
     return;
 
   const config = configs[activeConfigIndex];
@@ -538,10 +562,13 @@ async function saveCurrentConfig() {
         m.severity === monaco.MarkerSeverity.Error
     );
     if (errorMarker) {
-      showToast({
-        title: "Ошибка сохранения",
-        body: `Invalid JSON: ${errorMarker.message}`
-      }, "error");
+      showToast(
+        {
+          title: "Ошибка сохранения",
+          body: `Invalid JSON: ${errorMarker.message}`,
+        },
+        "error"
+      );
       return;
     }
   }
@@ -575,7 +602,10 @@ function formatCurrentConfig() {
   const formatAction = monacoEditor.getAction("editor.action.formatDocument");
   if (formatAction) {
     formatAction.run().catch((e) => {
-      showToast(`Ошибка форматирования: ${e?.message || "неизвестная ошибка"}`, "error");
+      showToast(
+        `Ошибка форматирования: ${e?.message || "неизвестная ошибка"}`,
+        "error"
+      );
     });
   } else {
     showToast("Форматирование недоступно", "error");
@@ -603,8 +633,9 @@ async function loadLogs() {
 
       if (filteredLines.length === 0) {
         container.classList.add("centered");
-        container.innerHTML =
-          `<div style="color: #6b7280;">${lines.length === 0 ? "Журнал пуст" : "Нет совпадений"}</div>`;
+        container.innerHTML = `<div style="color: #6b7280;">${
+          lines.length === 0 ? "Журнал пуст" : "Нет совпадений"
+        }</div>`;
       } else {
         container.classList.remove("centered");
         const processedLines = filteredLines
@@ -649,10 +680,7 @@ async function startXkeen() {
       isServiceRunning = true;
       updateServiceStatus(true);
     } else {
-      showToast(
-        `Ошибка запуска: ${result.output || result.error}`,
-        "error"
-      );
+      showToast(`Ошибка запуска: ${result.output || result.error}`, "error");
       isActionInProgress = false;
       checkStatus();
     }
@@ -671,10 +699,7 @@ async function stopXkeen() {
       isServiceRunning = false;
       updateServiceStatus(false);
     } else {
-      showToast(
-        `Ошибка остановки: ${result.output || result.error}`,
-        "error"
-      );
+      showToast(`Ошибка остановки: ${result.output || result.error}`, "error");
     }
   } finally {
     isActionInProgress = false;
@@ -732,8 +757,9 @@ document.addEventListener("DOMContentLoaded", () => {
           : lines;
         if (filteredLines.length === 0) {
           logsContainer.classList.add("centered");
-          logsContainer.innerHTML =
-            `<div style=\"color: #6b7280;\">${lines.length === 0 ? "Журнал пуст" : "Нет совпадений"}</div>`;
+          logsContainer.innerHTML = `<div style=\"color: #6b7280;\">${
+            lines.length === 0 ? "Журнал пуст" : "Нет совпадений"
+          }</div>`;
         } else {
           logsContainer.classList.remove("centered");
           const processedLines = filteredLines
@@ -767,6 +793,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       },
       { passive: false }
+    );
+
+    tabsScroll.addEventListener(
+      "scroll",
+      () => {
+        requestAnimationFrame(
+          () => updateActiveTabIndicator && updateActiveTabIndicator()
+        );
+      },
+      { passive: true }
     );
   }
 
@@ -839,9 +875,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   logSelectTrigger.addEventListener("keydown", (e) => {
-    const items = Array.from(
-      logSelectContent.querySelectorAll(".select-item")
-    );
+    const items = Array.from(logSelectContent.querySelectorAll(".select-item"));
     const currentIndex = items.findIndex(
       (i) => i.getAttribute("data-value") === currentLogFile
     );
@@ -868,9 +902,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   logSelectContent.addEventListener("keydown", (e) => {
-    const items = Array.from(
-      logSelectContent.querySelectorAll(".select-item")
-    );
+    const items = Array.from(logSelectContent.querySelectorAll(".select-item"));
     let idx = items.indexOf(document.activeElement);
     if (e.key === "ArrowDown") {
       e.preventDefault();
