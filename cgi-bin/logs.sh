@@ -23,7 +23,7 @@ read_logs() {
     esac
 
     if [ -f "$log_path" ]; then
-        content=$(tail -n 100 "$log_path" 2>/dev/null)
+        content=$(tail -n +1 "$log_path" 2>/dev/null)
         if [ $? -eq 0 ]; then
             echo "$content" | jq -Rs '{"success": true, "data": .}'
         else

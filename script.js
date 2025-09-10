@@ -273,16 +273,58 @@ function initMonacoEditor() {
       rulers: [],
       overviewRulerLanes: 0,
       scrollbar: {
-        vertical: "auto",
-        horizontal: "auto",
+        vertical: "visible",
+        horizontal: "visible",
         useShadows: false,
-        alwaysConsumeMouseWheel: false,
+        verticalHasArrows: false,
+        horizontalHasArrows: false,
       },
       find: {
         addExtraSpaceOnTop: false,
         autoFindInSelection: "never",
         seedSearchStringFromSelection: "never",
       },
+    });
+
+    function isMobileViewport() {
+      return (
+        window.matchMedia && window.matchMedia("(max-width: 768px)").matches
+      );
+    }
+
+    function applyDynamicEditorHeight() {
+      const container = document.getElementById("editorContainer");
+      if (!container || !monacoEditor) return;
+      if (isMobileViewport()) {
+        const contentHeight = Math.max(
+          monacoEditor.getContentHeight ? monacoEditor.getContentHeight() : 0,
+          200
+        );
+        container.style.height = contentHeight + "px";
+        monacoEditor.layout();
+      } else {
+        container.style.height = "650px";
+        monacoEditor.layout();
+      }
+    }
+
+    monaco.editor.onDidChangeMarkers((uris) => {
+      const model = monacoEditor.getModel();
+      if (!model) return;
+
+      // Проверяем что события для нашей модели
+      if (uris.some((uri) => uri.toString() === model.uri.toString())) {
+        const markers = monaco.editor.getModelMarkers({ resource: model.uri });
+        const errorMarker = markers.find(
+          (m) => m.severity === monaco.MarkerSeverity.Error
+        );
+
+        if (!errorMarker) {
+          updateValidationInfo(true);
+        } else {
+          updateValidationInfo(false, errorMarker.message);
+        }
+      }
     });
 
     monacoEditor.onDidChangeModelContent(() => {
@@ -294,19 +336,27 @@ function initMonacoEditor() {
           currentConfig.isDirty = isDirty;
           updateUIDirtyState();
         }
-        validateCurrentJSON();
       }
     });
 
-    monaco.editor.onDidChangeMarkers((changedUris) => {
-      const model = monacoEditor.getModel();
-      if (!model) return;
-      if (changedUris.some((u) => u.toString() === model.uri.toString())) {
-        validateCurrentJSON();
-      }
-    });
+    if (monacoEditor.onDidContentSizeChange) {
+      monacoEditor.onDidContentSizeChange(() => {
+        applyDynamicEditorHeight();
+      });
+    }
+
+    window.addEventListener(
+      "resize",
+      () => {
+        applyDynamicEditorHeight();
+      },
+      { passive: true }
+    );
 
     loadConfigs();
+
+    // Ensure initial sizing
+    requestAnimationFrame(() => applyDynamicEditorHeight());
   });
 }
 
@@ -331,11 +381,13 @@ function validateCurrentJSON() {
     return;
   }
 
-  const allMarkers = monaco.editor.getModelMarkers({});
-  const errorMarker = allMarkers.find(
-    (m) =>
-      m.resource.toString() === model.uri.toString() &&
-      m.severity === monaco.MarkerSeverity.Error
+  const markers = monaco.editor.getModelMarkers({ owner: "json" });
+  const currentModelMarkers = markers.filter(
+    (marker) => marker.resource.toString() === model.uri.toString()
+  );
+
+  const errorMarker = currentModelMarkers.find(
+    (m) => m.severity === monaco.MarkerSeverity.Error
   );
 
   if (!errorMarker) {

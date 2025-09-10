@@ -99,7 +99,7 @@ textarea {
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: #1f1f1f;
+  background: #1e293b;
 }
 .skeleton::after {
   content: "";
@@ -124,8 +124,7 @@ textarea {
   height: 28px;
   width: 68px;
   border-radius: 8px;
-  border: 1px solid #1e293b;
-  background: #1f1f1f;
+  background: #1e293b;
   margin-right: 6px;
 }
 
@@ -133,14 +132,12 @@ textarea {
   height: 35px;
   width: 120px;
   border-radius: 6px;
-  border: 1px solid #1e293b;
 }
 
 .skeleton-line {
   margin-top: 14px;
   border-radius: 6px;
-  border: 1px solid #1e293b;
-  background: #1f1f1f;
+  background: #1e293b;
   max-width: 130px;
 }
 
@@ -222,12 +219,12 @@ textarea {
 
 .editor-container {
   position: relative;
-  height: 700px;
+  height: 650px;
   background: #020817;
 }
 
 .logs-container {
-  height: 150px;
+  height: 200px;
   background: #020817;
   border: 1px solid #1e293b;
   border-radius: 6px;
@@ -459,6 +456,7 @@ textarea {
   cursor: pointer;
   padding: 8px 16px;
   min-width: 100px;
+  height: 35px;
 }
 
 .btn:disabled {
@@ -549,8 +547,8 @@ textarea {
 
 .toast {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  bottom: 35px;
+  right: 35px;
   background: #020817;
   border: 1px solid #1e293b;
   border-radius: 8px;
@@ -558,15 +556,17 @@ textarea {
   color: #fafafa;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
     0 4px 6px -2px rgba(0, 0, 0, 0.1);
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
+  transform: translateX(100%) scale(0.95);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
   z-index: 1000;
-  max-width: 320px;
-  min-width: 280px;
+  max-width: 400px;
+  min-width: 350px;
 }
 
 .toast.show {
-  transform: translateX(0);
+  transform: translateX(0) scale(1);
+  opacity: 1;
 }
 
 .toast.success {
@@ -715,7 +715,7 @@ textarea {
   border-radius: 8px;
   outline: none;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
-  font-size: 16px; /* prevent iOS zoom on focus */
+  font-size: 14px; /* prevent iOS zoom on focus */
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239aa7bd' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4h18l-7 8v6l-4 2v-8L3 4z'/></svg>");
   background-repeat: no-repeat;
   background-position: 10px calc(50% + 2px);
@@ -934,5 +934,9 @@ textarea {
 
   .select-root {
     min-width: 120px;
+  }
+  .monaco-editor .iPadShowKeyboard,
+  .monaco-editor .showKeyboard {
+    display: none !important;
   }
 }
