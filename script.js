@@ -1,4 +1,3 @@
-let autoRefreshInterval;
 let monacoEditor;
 let configs = [];
 let activeConfigIndex = -1;
@@ -11,6 +10,10 @@ let currentLogFile = "error.log";
 let isConfigsLoading = true;
 let logFilter = "";
 let isStatusLoading = true;
+let ws = null;
+let pingInterval = null;
+let allLogLines = []; // Все строки лога (для фильтрации)
+let displayLines = []; // Что показываем (последние 1К или результат фильтра)
 
 require.config({
   paths: {
@@ -22,13 +25,11 @@ function showToast(message, type = "success") {
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
 
-  // Иконки для разных типов уведомлений
   const icons = {
     success: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon success"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>`,
     error: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon error"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>`,
   };
 
-  // Поддержка структурированных сообщений
   if (typeof message === "object" && message.title && message.body) {
     toast.innerHTML = `
       <div class="toast-header">
@@ -177,6 +178,77 @@ function checkServiceStatusFromLogs(newLogContent) {
   }
 }
 
+function handleNewLogContent(data) {
+  const container = document.getElementById("logsContainer");
+  const wasAtBottom =
+    container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
+
+  if (data.type === "initial") {
+    // Загрузка последних 1К строк
+    allLogLines = data.allLines || []; // Все строки файла
+    displayLines = data.displayLines || []; // Последние 1К
+  } else if (data.type === "append") {
+    // Новые строки
+    const newLines = data.content.split("\n").filter((line) => line.trim());
+    allLogLines.push(...newLines);
+    if (!logFilter) {
+      displayLines.push(...newLines);
+      displayLines = displayLines.slice(-1000); // Обрезаем до 1К
+    }
+  } else if (data.type === "filtered") {
+    // Результат фильтрации по всему файлу
+    displayLines = data.lines || [];
+  }
+
+  renderLines(container, displayLines);
+
+  if (wasAtBottom && !userScrolled) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function applyFilter() {
+  if (!logFilter || logFilter.trim() === "") {
+    // Без фильтра - показываем последние 1К из всех строк
+    displayLines = allLogLines.slice(-1000);
+    renderLines(document.getElementById("logsContainer"), displayLines);
+  } else {
+    // С фильтром - отправляем запрос на сервер
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "filter",
+          query: logFilter,
+        })
+      );
+    }
+  }
+}
+
+function renderFilteredLines(container) {
+  if (filteredIndices.length === 0) {
+    container.classList.add("centered");
+    container.innerHTML = `<div style="color: #6b7280;">${
+      logLines.length === 0 ? "Журнал пуст" : "Нет совпадений"
+    }</div>`;
+    return;
+  }
+
+  container.classList.remove("centered");
+  const visibleIndices = filteredIndices.slice(-100);
+  const html = visibleIndices
+    .map((i) => {
+      const parsed = parseLogLine(logLines[i]);
+      return parsed
+        ? `<div class="${parsed.className}">${parsed.content}</div>`
+        : "";
+    })
+    .filter(Boolean)
+    .join("");
+
+  container.innerHTML = html;
+}
+
 function updateServiceStatus(running) {
   const indicator = document.getElementById("statusIndicator");
   const text = document.getElementById("statusText");
@@ -195,6 +267,162 @@ function updateServiceStatus(running) {
   updateControlButtons();
 }
 
+function renderLines(container, lines) {
+  const wasAtBottom =
+    container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
+
+  if (lines.length === 0) {
+    container.classList.add("centered");
+    container.innerHTML = '<div style="color: #6b7280;">Журнал пуст</div>';
+    return;
+  }
+
+  container.classList.remove("centered");
+  const processedLines = lines
+    .map((line) => {
+      const parsed = parseLogLine(line);
+      return parsed
+        ? `<div class="${parsed.className}">${parsed.content}</div>`
+        : "";
+    })
+    .filter(Boolean);
+
+  container.innerHTML = processedLines.join("");
+
+  if (wasAtBottom && !userScrolled) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function connectWebSocket() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  }
+
+  // Чистим старый интервал, если он был
+  if (pingInterval) {
+    clearInterval(pingInterval);
+  }
+
+  ws = new WebSocket(`ws://192.168.1.1:8080/ws?file=${currentLogFile}`);
+
+  ws.onopen = () => {
+    console.log("WebSocket connected");
+    // Запускаем пинговалку каждые 30 секунд
+    pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        // Стандартный способ - использовать ping-фрейм, но его нельзя создать из JS.
+        // Поэтому отправляем специальное сообщение, которое сервер проигнорирует,
+        // но сам факт отправки данных не даст прокси закрыть соединение.
+        // Или, если бэкенд поддерживает, можно слать реальный ping.
+        // В нашем случае, с PongHandler'ом на бэке, нам нужно слать именно ping,
+        // но из JS это невозможно. Однако, gorilla/websocket отвечает на контрольные фреймы браузера.
+        // Поэтому нам просто нужно добавить логику переподключения.
+        // Для надежности против прокси, можно слать кастомное сообщение.
+        ws.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 30000);
+  };
+
+  // Вот это КРИТИЧЕСКИ ВАЖНО!
+  ws.onclose = (event) => {
+    console.warn(
+      `WebSocket disconnected: ${event.code}. Reconnecting in 3 seconds...`
+    );
+    clearInterval(pingInterval); // Останавливаем пинги
+    setTimeout(connectWebSocket, 3000); // Пытаемся переподключиться через 3 секунды
+  };
+
+  ws.onerror = (error) => {
+    console.error("WebSocket error:", error);
+    ws.close(); // Закрываем соединение при ошибке, чтобы сработал onclose и реконнект
+  };
+
+  ws.onmessage = (event) => {
+    // Твой код обработки сообщений остается здесь
+    const data = JSON.parse(event.data);
+
+    // Игнорируем ответ на наш пинг, если он будет
+    if (data.type === "pong") {
+      return;
+    }
+
+    if (data.error) {
+      console.error("WebSocket error:", data.error);
+      const container = document.getElementById("logsContainer");
+      container.classList.add("centered");
+      container.innerHTML =
+        '<div style="color: #ef4444;">Ошибка WebSocket: ' +
+        data.error +
+        "</div>";
+      return;
+    }
+
+    if (data.type === "initial") {
+      allLogLines = data.allLines || [];
+      displayLines = data.displayLines || [];
+      renderLines(document.getElementById("logsContainer"), displayLines);
+      return;
+    }
+
+    if (data.type === "clear") {
+      allLogLines = [];
+      displayLines = [];
+      const container = document.getElementById("logsContainer");
+      container.classList.add("centered");
+      container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>';
+      lastLogContent = "";
+      return;
+    }
+
+    if (data.type === "append") {
+      const newLines = data.content.split("\n").filter((line) => line.trim());
+      allLogLines.push(...newLines);
+
+      // Новая, исправленная логика
+      if (!logFilter) {
+        // Если фильтра нет, работаем как раньше
+        displayLines.push(...newLines);
+        displayLines = displayLines.slice(-1000); // Ограничиваем кол-во строк для отображения
+        renderLines(document.getElementById("logsContainer"), displayLines);
+      } else {
+        // А если фильтр есть, проверяем новые строки на совпадение
+        const matchedNewLines = newLines.filter((line) =>
+          line.includes(logFilter)
+        );
+
+        // Если среди новых строк нашлись совпадения, добавляем их и отрисовываем
+        if (matchedNewLines.length > 0) {
+          displayLines.push(...matchedNewLines);
+          renderLines(document.getElementById("logsContainer"), displayLines);
+        }
+      }
+      return;
+    }
+
+    if (data.type === "filtered") {
+      displayLines = data.lines || [];
+      renderLines(document.getElementById("logsContainer"), displayLines);
+      return;
+    }
+  };
+}
+
+function switchLogFile(newLogFile) {
+  if (currentLogFile === newLogFile) return;
+
+  currentLogFile = newLogFile;
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(
+      JSON.stringify({
+        type: "switchFile",
+        file: newLogFile,
+      })
+    );
+  }
+}
+
 function initMonacoEditor() {
   require(["vs/editor/editor.main"], function () {
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
@@ -209,16 +437,14 @@ function initMonacoEditor() {
         { token: "number.json", foreground: "#ff9e64" },
         { token: "keyword.json", foreground: "#bb9af7" },
         { token: "identifier", foreground: "#c0caf5" },
-        { token: "comment", foreground: "#565f89", fontStyle: "italic" },
+        { token: "comment", foreground: "#565f89" },
         {
           token: "comment.line",
           foreground: "#565f89",
-          fontStyle: "italic",
         },
         {
           token: "comment.block",
           foreground: "#565f89",
-          fontStyle: "italic",
         },
         { token: "operator", foreground: "#89ddff" },
         { token: "delimiter", foreground: "#c0caf5" },
@@ -258,7 +484,7 @@ function initMonacoEditor() {
       scrollBeyondLastLine: false,
       minimap: { enabled: false },
       fontSize: 14,
-      fontFamily: "JetBrains Mono",
+      fontFamily: "JetBrains Mono, monospace",
       fontWeight: "400",
       smoothScrolling: true,
       lineHeight: 1.5,
@@ -312,7 +538,6 @@ function initMonacoEditor() {
       const model = monacoEditor.getModel();
       if (!model) return;
 
-      // Проверяем что события для нашей модели
       if (uris.some((uri) => uri.toString() === model.uri.toString())) {
         const markers = monaco.editor.getModelMarkers({ resource: model.uri });
         const errorMarker = markers.find(
@@ -355,7 +580,6 @@ function initMonacoEditor() {
 
     loadConfigs();
 
-    // Ensure initial sizing
     requestAnimationFrame(() => applyDynamicEditorHeight());
   });
 }
@@ -399,7 +623,6 @@ function validateCurrentJSON() {
 
 function renderTabs() {
   const tabsList = document.getElementById("tabsList");
-  // Preserve previous indicator transform before re-render
   const existingIndicator = tabsList
     ? tabsList.querySelector(".tab-active-indicator")
     : null;
@@ -442,7 +665,6 @@ function renderTabs() {
     return;
   }
 
-  // Добавляем индикатор активной вкладки и восстанавливаем его прошлую позицию
   const indicator = document.createElement("div");
   indicator.className = "tab-active-indicator";
   if (previousTransform) {
@@ -544,16 +766,16 @@ async function apiCall(endpoint, data = null) {
     if (data) options.body = JSON.stringify(data);
 
     const response = await fetch(
-      `http://192.168.1.1:91/cgi-bin/${endpoint}`,
+      `http://192.168.1.1:1000/cgi/${endpoint}`,
       options
     );
-    const result = await response.text();
 
-    try {
-      return JSON.parse(result);
-    } catch {
-      return { success: response.ok, output: result };
+    if (!response.ok) {
+      return { success: false, error: `HTTP ${response.status}` };
     }
+
+    const result = await response.json();
+    return result;
   } catch (error) {
     console.error("API Error:", error);
     return { success: false, error: error.message };
@@ -565,7 +787,7 @@ async function loadConfigs() {
   isConfigsLoading = true;
   if (tabsList) tabsList.classList.add("empty");
   renderTabs();
-  const result = await apiCall("configs.sh");
+  const result = await apiCall("configs");
 
   if (result.success && result.configs) {
     configs = result.configs.map((c) => ({
@@ -622,7 +844,7 @@ async function saveCurrentConfig() {
     }
   }
 
-  const result = await apiCall("configs.sh", {
+  const result = await apiCall("configs", {
     action: "save",
     filename: config.filename,
     content: content,
@@ -661,68 +883,17 @@ function formatCurrentConfig() {
   }
 }
 
-async function loadLogs() {
-  const result = await apiCall(`logs.sh?file=${currentLogFile}`);
-  const container = document.getElementById("logsContainer");
-
-  if (result.success) {
-    const newContent = result.data ?? "";
-
-    if (newContent !== lastLogContent || lastLogContent === null) {
-      checkServiceStatusFromLogs(newContent);
-
-      const wasAtBottom =
-        container.scrollTop + container.clientHeight >=
-        container.scrollHeight - 5;
-
-      const lines = newContent.split("\n").filter((line) => line.trim());
-      const filteredLines = logFilter
-        ? lines.filter((line) => line.includes(logFilter))
-        : lines;
-
-      if (filteredLines.length === 0) {
-        container.classList.add("centered");
-        container.innerHTML = `<div style="color: #6b7280;">${
-          lines.length === 0 ? "Журнал пуст" : "Нет совпадений"
-        }</div>`;
-      } else {
-        container.classList.remove("centered");
-        const processedLines = filteredLines
-          .slice(-100)
-          .map((line) => {
-            const parsed = parseLogLine(line);
-            return parsed
-              ? `<div class="${parsed.className}">${parsed.content}</div>`
-              : "";
-          })
-          .filter(Boolean);
-
-        container.innerHTML = processedLines.join("");
-      }
-
-      if (wasAtBottom && !userScrolled) {
-        container.scrollTop = container.scrollHeight;
-      }
-
-      lastLogContent = newContent;
-    }
-  } else {
-    container.classList.add("centered");
-    container.innerHTML = `<div style="color: #ef4444;">Ошибка загрузки логов: ${result.error}</div>`;
-  }
-}
-
 async function checkStatus() {
   if (isActionInProgress) return;
 
-  const result = await apiCall("status.sh");
+  const result = await apiCall("status");
   updateServiceStatus(result.running);
 }
 
 async function startXkeen() {
   try {
     setPendingState("Запускается...");
-    const result = await apiCall("control.sh", { action: "start" });
+    const result = await apiCall("control", { action: "start" });
     if (result.success) {
       showToast("XKeen запущен");
       isActionInProgress = false;
@@ -742,7 +913,7 @@ async function startXkeen() {
 async function stopXkeen() {
   try {
     setPendingState("Останавливается...");
-    const result = await apiCall("control.sh", { action: "stop" });
+    const result = await apiCall("control", { action: "stop" });
     if (result.success) {
       showToast("XKeen остановлен");
       isServiceRunning = false;
@@ -759,7 +930,7 @@ async function stopXkeen() {
 async function restartXkeen() {
   try {
     setPendingState("Перезапускается...");
-    const result = await apiCall("control.sh", { action: "restart" });
+    const result = await apiCall("control", { action: "restart" });
     if (result.success) {
       showToast("XKeen перезапущен");
       isActionInProgress = false;
@@ -794,38 +965,13 @@ document.addEventListener("DOMContentLoaded", () => {
   renderTabs();
 
   if (logFilterInput) {
+    let filterTimeout;
     logFilterInput.addEventListener("input", () => {
-      logFilter = logFilterInput.value || "";
-      const wantStickToBottom =
-        logsContainer.scrollTop + logsContainer.clientHeight >=
-        logsContainer.scrollHeight - 5;
-      if (lastLogContent !== null) {
-        const lines = lastLogContent.split("\n").filter((line) => line.trim());
-        const filteredLines = logFilter
-          ? lines.filter((line) => line.includes(logFilter))
-          : lines;
-        if (filteredLines.length === 0) {
-          logsContainer.classList.add("centered");
-          logsContainer.innerHTML = `<div style=\"color: #6b7280;\">${
-            lines.length === 0 ? "Журнал пуст" : "Нет совпадений"
-          }</div>`;
-        } else {
-          logsContainer.classList.remove("centered");
-          const processedLines = filteredLines
-            .slice(-100)
-            .map((line) => {
-              const parsed = parseLogLine(line);
-              return parsed
-                ? `<div class=\"${parsed.className}\">${parsed.content}</div>`
-                : "";
-            })
-            .filter(Boolean);
-          logsContainer.innerHTML = processedLines.join("");
-        }
-        if (wantStickToBottom) {
-          logsContainer.scrollTop = logsContainer.scrollHeight;
-        }
-      }
+      clearTimeout(filterTimeout);
+      filterTimeout = setTimeout(() => {
+        logFilter = logFilterInput.value || "";
+        applyFilter();
+      }, 100);
     });
   }
 
@@ -882,14 +1028,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function applyLogSelection(value) {
     if (currentLogFile === value) return;
-    currentLogFile = value;
+    switchLogFile(value);
     logSelectLabel.textContent = value;
     setActiveItem(value);
-    lastLogContent = null;
-    logsContainer.classList.add("centered");
-    logsContainer.innerHTML =
-      '<div style="color: #6b7280;">Загрузка журнала...</div>';
-    loadLogs();
   }
 
   logSelectTrigger.addEventListener("click", (e) => {
@@ -977,14 +1118,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   initMonacoEditor();
   checkStatus();
+
   logsContainer.classList.add("centered");
   logsContainer.innerHTML =
-    '<div style="color: #6b7280;">Загрузка журнала...</div>';
-  loadLogs();
+    '<div style="color: #6b7280;">Подключение к WebSocket...</div>';
 
-  autoRefreshInterval = setInterval(() => {
-    loadLogs();
-  }, 500);
+  connectWebSocket();
 });
 
 document.addEventListener("keydown", (e) => {

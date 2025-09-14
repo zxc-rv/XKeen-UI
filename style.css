@@ -5,8 +5,8 @@
 }
 
 body {
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif,
+    Roboto, sans-serif;
   background: #020817;
   color: #fafafa;
   min-height: 100vh;
