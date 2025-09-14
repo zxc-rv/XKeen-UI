@@ -13,10 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch:
-          - { GOARCH: arm64, name: aarch64 }
-          - { GOARCH: mips, GOMIPS: softfloat, name: mips }
-          - { GOARCH: mipsle, GOMIPS: softfloat, name: mipsel }
+        include:
+          - GOARCH: arm64
+            name: aarch64
+          - GOARCH: mips
+            GOMIPS: softfloat
+            name: mips
+          - GOARCH: mipsle
+            GOMIPS: softfloat
+            name: mipsel
     
     steps:
     - uses: actions/checkout@v4
@@ -29,20 +34,20 @@ jobs:
     - name: Build binary
       env:
         GOOS: linux
-        GOARCH: ${{ matrix.arch.GOARCH }}
-        GOMIPS: ${{ matrix.arch.GOMIPS }}
+        GOARCH: ${{ matrix.GOARCH }}
+        GOMIPS: ${{ matrix.GOMIPS }}
         CGO_ENABLED: 0
       run: |
-        go build -ldflags="-s -w" -o xkeen-ui-${{ matrix.arch.name }} main.go
+        go build -ldflags="-s -w" -o xkeen-ui-${{ matrix.name }} main.go
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: xkeen-ui-${{ matrix.arch.name }}
-        path: xkeen-ui-${{ matrix.arch.name }}
+        name: xkeen-ui-${{ matrix.name }}
+        path: xkeen-ui-${{ matrix.name }}
     
     - name: Upload to release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
-        files: xkeen-ui-${{ matrix.arch.name }}
+        files: xkeen-ui-${{ matrix.name }}
