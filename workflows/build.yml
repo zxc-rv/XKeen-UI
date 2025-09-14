@@ -1,0 +1,53 @@
+name: Build Go binaries
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - { GOARCH: arm64, name: aarch64 }
+          - { GOARCH: mips, GOMIPS: softfloat, name: mips }
+          - { GOARCH: mipsle, GOMIPS: softfloat, name: mipsel }
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.1'
+    
+    - name: Build binary
+      env:
+        GOOS: linux
+        GOARCH: ${{ matrix.arch.GOARCH }}
+        GOMIPS: ${{ matrix.arch.GOMIPS }}
+        CGO_ENABLED: 0
+      run: |
+        go build -ldflags="-s -w" -o xkeen-ui-${{ matrix.arch.name }} main.go
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: xkeen-ui-${{ matrix.arch.name }}
+        path: xkeen-ui-${{ matrix.arch.name }}
+    
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: xkeen-ui-${{ matrix.arch.name }}
+        asset_name: xkeen-ui-${{ matrix.arch.name }}
+        asset_content_type: application/octet-stream
