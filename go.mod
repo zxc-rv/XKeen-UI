@@ -1,5 +1,5 @@
 module xkeen-ui
 
-go 1.24.2
+go 1.25.1
 
-require github.com/gorilla/websocket v1.5.3 // indirect
+require github.com/gorilla/websocket v1.5.3
