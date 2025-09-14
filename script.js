@@ -12,8 +12,8 @@ let logFilter = "";
 let isStatusLoading = true;
 let ws = null;
 let pingInterval = null;
-let allLogLines = []; // Все строки лога (для фильтрации)
-let displayLines = []; // Что показываем (последние 1К или результат фильтра)
+let allLogLines = [];
+let displayLines = [];
 
 require.config({
   paths: {
