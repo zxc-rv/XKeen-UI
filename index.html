@@ -1,207 +1,149 @@
 <!DOCTYPE html>
 <html lang="ru" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>XKeen UI</title>
-    <link rel="icon" type="image/png" href="favicon.png" />
-    <link rel="apple-touch-icon" href="favicon.png" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h1 class="title">XKeen UI</h1>
-      </div>
-      <div class="controls">
-        <div class="status" id="statusIndicator">
-          <span class="status-indicator"></span>
-          <span id="statusText">Проверка статуса...</span>
-        </div>
 
-        <div
-          id="controlsSkeletons"
-          class="controls-skeletons"
-          style="display: inline-flex; gap: 12px"
-        >
-          <div class="skeleton skeleton-btn"></div>
-          <div class="skeleton skeleton-btn"></div>
-        </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XKeen UI</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="apple-touch-icon" href="favicon.png" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
 
-        <div class="controls-buttons">
-          <button
-            class="btn btn-primary"
-            id="restartBtn"
-            onclick="restartXkeen()"
-            style="display: inline-flex"
-          >
-            Перезапустить
-          </button>
-          <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
-            Запустить
-          </button>
-          <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
-            Остановить
-          </button>
-        </div>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">XKeen UI</h1>
+    </div>
+    <div class="controls">
+      <div class="status" id="statusIndicator">
+        <span class="status-indicator"></span>
+        <span id="statusText">Проверка статуса...</span>
       </div>
 
-      <div class="panel">
-        <h2 class="panel-title">Конфигурация</h2>
-        <div class="tabs-header">
-          <div class="tabs-scroll">
-            <div class="tabs-list" id="tabsList"></div>
+      <div id="controlsSkeletons" class="controls-skeletons" style="display: inline-flex; gap: 12px">
+        <div class="skeleton skeleton-btn"></div>
+        <div class="skeleton skeleton-btn"></div>
+      </div>
+
+      <div class="controls-buttons">
+        <button class="btn btn-primary" id="restartBtn" onclick="restartXkeen()" style="display: inline-flex">
+          Перезапустить
+        </button>
+        <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
+          Запустить
+        </button>
+        <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
+          Остановить
+        </button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">Конфигурация</h2>
+      <div class="tabs-header">
+        <div class="tabs-scroll">
+          <div class="tabs-list" id="tabsList"></div>
+        </div>
+        <div class="editor-controls">
+          <div id="editorControlsSkeletons" class="controls-skeletons" style="display: inline-flex; gap: 8px">
+            <div class="skeleton skeleton-btn" style="width: 120px"></div>
+            <div class="skeleton skeleton-btn" style="width: 130px"></div>
           </div>
-          <div class="editor-controls">
-            <div
-              id="editorControlsSkeletons"
-              class="controls-skeletons"
-              style="display: inline-flex; gap: 8px"
-            >
-              <div class="skeleton skeleton-btn" style="width: 120px"></div>
-              <div class="skeleton skeleton-btn" style="width: 130px"></div>
-            </div>
-            <button
-              class="btn btn-primary"
-              id="saveBtn"
-              onclick="saveCurrentConfig()"
-            >
-              Сохранить
+          <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()">
+            Сохранить
+          </button>
+          <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">
+            Форматировать
+          </button>
+        </div>
+      </div>
+      <div class="tabs-content">
+        <div class="editor-container" id="editorContainer">
+          <div class="editor-loading">Загрузка конфигураций...</div>
+        </div>
+      </div>
+      <div id="validationSkeleton" class="skeleton skeleton-line" style="width: 220px; height: 18px"></div>
+      <div class="validation-info" id="validationInfo" style="display: none">
+        <span class="validation-icon">⳿</span>
+        <span>Загрузка конфигураций...</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Журнал</h2>
+        <div class="panel-actions">
+          <div class="log-filter">
+            <input id="logFilterInput" class="input" type="text" placeholder="Фильтр"
+              aria-label="Фильтр строк журнала" />
+          </div>
+          <button id="clearLogBtn" class="clear-log-btn" onclick="clearCurrentLog()" title="Очистить текущий лог-файл"
+            aria-label="Очистить текущий лог-файл">
+            <svg class="clear-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M8 6V4c0-1 1-2 2-2h4c0 1 1 2 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+              <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+              <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+            <span class="clear-text">Очистить</span>
+          </button>
+
+          <div id="logSelectRoot" class="select-root" aria-label="Выбор файла логов">
+            <button id="logSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="label" id="logSelectLabel">error.log</span>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
             </button>
-            <button
-              id="formatBtn"
-              class="btn btn-secondary"
-              onclick="formatCurrentConfig()"
-            >
-              Форматировать
-            </button>
-          </div>
-        </div>
-        <div class="tabs-content">
-          <div class="editor-container" id="editorContainer">
-            <div class="editor-loading">Загрузка конфигураций...</div>
-          </div>
-        </div>
-        <div
-          id="validationSkeleton"
-          class="skeleton skeleton-line"
-          style="width: 220px; height: 18px"
-        ></div>
-        <div class="validation-info" id="validationInfo" style="display: none">
-          <span class="validation-icon">⳿</span>
-          <span>Загрузка конфигураций...</span>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title">Журнал</h2>
-          <div class="panel-actions">
-            <div class="log-filter">
-              <input
-                id="logFilterInput"
-                class="input"
-                type="text"
-                placeholder="Фильтр"
-                aria-label="Фильтр строк журнала"
-              />
-            </div>
-            <div
-              id="logSelectRoot"
-              class="select-root"
-              aria-label="Выбор файла логов"
-            >
-              <button
-                id="logSelectTrigger"
-                class="select-trigger"
-                aria-haspopup="listbox"
-                aria-expanded="false"
-              >
-                <span class="label" id="logSelectLabel">error.log</span>
-                <svg
-                  class="chevron"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M6 9l6 6 6-6"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-              </button>
-              <div id="logSelectContent" class="select-content">
-                <div
-                  class="select-item"
-                  role="option"
-                  data-value="error.log"
-                  aria-selected="true"
-                >
-                  error.log <span class="check">✓</span>
-                </div>
-                <div
-                  class="select-item"
-                  role="option"
-                  data-value="access.log"
-                  aria-selected="false"
-                >
-                  access.log <span class="check">✓</span>
-                </div>
+            <div id="logSelectContent" class="select-content">
+              <div class="select-item" role="option" data-value="error.log" aria-selected="true">
+                error.log <span class="check">✓</span>
+              </div>
+              <div class="select-item" role="option" data-value="access.log" aria-selected="false">
+                access.log <span class="check">✓</span>
               </div>
             </div>
           </div>
         </div>
-        <div id="logsContainer" class="logs-container">
-          <div style="color: #6b7280; text-align: center; margin-top: 50px">
-            Загрузка журнала...
-          </div>
+      </div>
+      <div id="logsContainer" class="logs-container">
+        <div style="color: #6b7280; text-align: center; margin-top: 50px">
+          Загрузка журнала...
         </div>
       </div>
     </div>
-    <div class="modal-overlay" id="dirtyModal">
-      <div class="modal-content">
-        <h3 class="modal-title">Несохраненные изменения</h3>
-        <p class="modal-body">
-          В файле есть несохраненные изменения.<br />
-          Сохранить их перед выходом?
-        </p>
-        <div class="modal-actions">
-          <button
-            class="btn btn-primary"
-            id="saveAndSwitchBtn"
-            onclick="saveAndSwitch()"
-          >
-            Сохранить
-          </button>
-          <button
-            class="btn btn-danger"
-            id="discardChangesBtn"
-            onclick="discardAndSwitch()"
-          >
-            Не сохранять
-          </button>
-          <button
-            class="btn btn-secondary"
-            id="cancelSwitchBtn"
-            onclick="closeDirtyModal()"
-          >
-            Отмена
-          </button>
-        </div>
+  </div>
+  <div class="modal-overlay" id="dirtyModal">
+    <div class="modal-content">
+      <h3 class="modal-title">Несохраненные изменения</h3>
+      <p class="modal-body">
+        В файле есть несохраненные изменения.<br />
+        Сохранить их перед выходом?
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="saveAndSwitchBtn" onclick="saveAndSwitch()">
+          Сохранить
+        </button>
+        <button class="btn btn-danger" id="discardChangesBtn" onclick="discardAndSwitch()">
+          Не сохранять
+        </button>
+        <button class="btn btn-secondary" id="cancelSwitchBtn" onclick="closeDirtyModal()">
+          Отмена
+        </button>
       </div>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
-    <script src="script.js"></script>
-  </body>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
+  <script src="script.js"></script>
+</body>
+
 </html>

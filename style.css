@@ -940,3 +940,46 @@ textarea {
     display: none !important;
   }
 }
+
+.clear-log-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 35px;
+  padding: 0 12px;
+  border: 1px solid #1e293b;
+  background-color: #020817;
+  border-radius: 8px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.clear-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.clear-log-btn:hover {
+  background-color: #1e293b;
+  color: #e85c61;
+}
+
+.clear-log-btn:focus-visible {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+.clear-log-btn:active {
+  background-color: #0f172a;
+  transform: scale(0.95);
+}
+
+.clear-icon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+}

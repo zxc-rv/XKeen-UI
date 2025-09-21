@@ -334,36 +334,82 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func logsHandler(w http.ResponseWriter, r *http.Request) {
-	logFile := r.URL.Query().Get("file")
-	if logFile == "" {
-		logFile = "error.log"
-	}
+	switch r.Method {
+	case "GET":
+		logFile := r.URL.Query().Get("file")
+		if logFile == "" {
+			logFile = "error.log"
+		}
 
-	var logPath string
-	switch logFile {
-	case "error.log":
-		logPath = "/opt/var/log/xray/error.log"
-	case "access.log":
-		logPath = "/opt/var/log/xray/access.log"
-	default:
-		jsonResponse(w, Response{Success: false, Error: "Доступ к этому файлу запрещен"}, 400)
-		return
-	}
-
-	content := ""
-	if _, err := os.Stat(logPath); err == nil {
-		data, err := os.ReadFile(logPath)
-		if err == nil {
-			content = adjustTimezone(string(data))
-		} else {
-			jsonResponse(w, Response{Success: false, Error: "Ошибка чтения файла"}, 500)
+		var logPath string
+		switch logFile {
+		case "error.log":
+			logPath = "/opt/var/log/xray/error.log"
+		case "access.log":
+			logPath = "/opt/var/log/xray/access.log"
+		default:
+			jsonResponse(w, Response{Success: false, Error: "Доступ к этому файлу запрещен"}, 400)
 			return
 		}
-	} else {
-		content = fmt.Sprintf("Лог файл '%s' не найден", logFile)
-	}
 
-	jsonResponse(w, Response{Success: true, Data: content}, 200)
+		content := ""
+		if _, err := os.Stat(logPath); err == nil {
+			data, err := os.ReadFile(logPath)
+			if err == nil {
+				content = adjustTimezone(string(data))
+			} else {
+				jsonResponse(w, Response{Success: false, Error: "Ошибка чтения файла"}, 500)
+				return
+			}
+		} else {
+			content = fmt.Sprintf("Лог файл '%s' не найден", logFile)
+		}
+
+		jsonResponse(w, Response{Success: true, Data: content}, 200)
+
+	case "POST":
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Cannot read request body"}, 400)
+			return
+		}
+
+		var req struct {
+			Action string `json:"action"`
+			File   string `json:"file"`
+		}
+
+		if err := json.Unmarshal(body, &req); err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Invalid JSON"}, 400)
+			return
+		}
+
+		if req.Action == "clear" {
+			var logPath string
+			switch req.File {
+			case "error.log":
+				logPath = "/opt/var/log/xray/error.log"
+			case "access.log":
+				logPath = "/opt/var/log/xray/access.log"
+			default:
+				jsonResponse(w, Response{Success: false, Error: "Недопустимый файл лога"}, 400)
+				return
+			}
+
+			if err := os.Truncate(logPath, 0); err != nil {
+				jsonResponse(w, Response{Success: false, Error: "Ошибка очистки файла лога"}, 500)
+				return
+			}
+
+			delete(logCache, logPath)
+			jsonResponse(w, Response{Success: true, Data: "Лог очищен"}, 200)
+		} else {
+			jsonResponse(w, Response{Success: false, Error: "Unknown action"}, 400)
+		}
+
+	default:
+		jsonResponse(w, Response{Success: false, Error: "Method not allowed"}, 405)
+	}
 }
 
 func configsHandler(w http.ResponseWriter, r *http.Request) {

@@ -321,16 +321,16 @@ function connectWebSocket() {
         // Для надежности против прокси, можно слать кастомное сообщение.
         ws.send(JSON.stringify({ type: "ping" }));
       }
-    }, 30000);
+    }, 15000);
   };
 
   // Вот это КРИТИЧЕСКИ ВАЖНО!
   ws.onclose = (event) => {
     console.warn(
-      `WebSocket disconnected: ${event.code}. Reconnecting in 3 seconds...`
+      `WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`
     );
     clearInterval(pingInterval); // Останавливаем пинги
-    setTimeout(connectWebSocket, 3000); // Пытаемся переподключиться через 3 секунды
+    setTimeout(connectWebSocket, 1000); // Пытаемся переподключиться через 1 секунды
   };
 
   ws.onerror = (error) => {
@@ -338,74 +338,73 @@ function connectWebSocket() {
     ws.close(); // Закрываем соединение при ошибке, чтобы сработал onclose и реконнект
   };
 
-  ws.onmessage = (event) => {
-    // Твой код обработки сообщений остается здесь
-    const data = JSON.parse(event.data);
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
 
-    // Игнорируем ответ на наш пинг, если он будет
-    if (data.type === "pong") {
-      return;
+  if (data.type === "pong") {
+    return;
+  }
+
+  if (data.error) {
+    console.error("WebSocket error:", data.error);
+    const container = document.getElementById("logsContainer");
+    container.classList.add("centered");
+    container.innerHTML =
+      '<div style="color: #ef4444;">Ошибка WebSocket: ' +
+      data.error +
+      "</div>";
+    return;
+  }
+
+  if (data.type === "initial") {
+    allLogLines = data.allLines || [];
+    displayLines = data.displayLines || [];
+    renderLines(document.getElementById("logsContainer"), displayLines);
+
+    // Применить фильтр если он активен
+    if (logFilter && logFilter.trim() !== "") {
+      applyFilter();
     }
+    return;
+  }
 
-    if (data.error) {
-      console.error("WebSocket error:", data.error);
-      const container = document.getElementById("logsContainer");
-      container.classList.add("centered");
-      container.innerHTML =
-        '<div style="color: #ef4444;">Ошибка WebSocket: ' +
-        data.error +
-        "</div>";
-      return;
-    }
+  if (data.type === "clear") {
+    allLogLines = [];
+    displayLines = [];
+    const container = document.getElementById("logsContainer");
+    container.classList.add("centered");
+    container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>';
+    lastLogContent = "";
+    return;
+  }
 
-    if (data.type === "initial") {
-      allLogLines = data.allLines || [];
-      displayLines = data.displayLines || [];
+  if (data.type === "append") {
+    const newLines = data.content.split("\n").filter((line) => line.trim());
+    allLogLines.push(...newLines);
+
+    if (!logFilter) {
+      displayLines.push(...newLines);
+      displayLines = displayLines.slice(-1000);
       renderLines(document.getElementById("logsContainer"), displayLines);
-      return;
-    }
+    } else {
+      const matchedNewLines = newLines.filter((line) =>
+        line.includes(logFilter)
+      );
 
-    if (data.type === "clear") {
-      allLogLines = [];
-      displayLines = [];
-      const container = document.getElementById("logsContainer");
-      container.classList.add("centered");
-      container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>';
-      lastLogContent = "";
-      return;
-    }
-
-    if (data.type === "append") {
-      const newLines = data.content.split("\n").filter((line) => line.trim());
-      allLogLines.push(...newLines);
-
-      // Новая, исправленная логика
-      if (!logFilter) {
-        // Если фильтра нет, работаем как раньше
-        displayLines.push(...newLines);
-        displayLines = displayLines.slice(-1000); // Ограничиваем кол-во строк для отображения
+      if (matchedNewLines.length > 0) {
+        displayLines.push(...matchedNewLines);
         renderLines(document.getElementById("logsContainer"), displayLines);
-      } else {
-        // А если фильтр есть, проверяем новые строки на совпадение
-        const matchedNewLines = newLines.filter((line) =>
-          line.includes(logFilter)
-        );
-
-        // Если среди новых строк нашлись совпадения, добавляем их и отрисовываем
-        if (matchedNewLines.length > 0) {
-          displayLines.push(...matchedNewLines);
-          renderLines(document.getElementById("logsContainer"), displayLines);
-        }
       }
-      return;
     }
+    return;
+  }
 
-    if (data.type === "filtered") {
-      displayLines = data.lines || [];
-      renderLines(document.getElementById("logsContainer"), displayLines);
-      return;
-    }
-  };
+  if (data.type === "filtered") {
+    displayLines = data.lines || [];
+    renderLines(document.getElementById("logsContainer"), displayLines);
+    return;
+  }
+};
 }
 
 function switchLogFile(newLogFile) {
@@ -1135,3 +1134,34 @@ document.addEventListener("keydown", (e) => {
     }
   }
 });
+
+async function clearCurrentLog() {
+  if (!currentLogFile) {
+    showToast("Не выбран файл лога", "error");
+    return;
+  }
+
+  try {
+    const result = await apiCall("logs", {
+      action: "clear",
+      file: currentLogFile
+    });
+
+    if (result.success) {
+      // Очищаем локальное состояние
+      allLogLines = [];
+      displayLines = [];
+
+      // Очищаем контейнер
+      const container = document.getElementById("logsContainer");
+      container.classList.add("centered");
+      container.innerHTML = '<div style="color: #6b7280;">Лог очищен</div>';
+
+      showToast(`Лог ${currentLogFile} очищен`);
+    } else {
+      showToast(`Ошибка очистки лога: ${result.error}`, "error");
+    }
+  } catch (error) {
+    showToast(`Ошибка: ${error.message}`, "error");
+  }
+}
