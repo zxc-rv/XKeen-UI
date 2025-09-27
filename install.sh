@@ -101,7 +101,11 @@ echo -e "\n${BLUE}Установка прав на бинарник...${NC}"
 chmod +x /opt/sbin/xkeen-ui
 
 echo -e "\n${BLUE}Запуск lighttpd...${NC}"
-/opt/etc/init.d/S80lighttpd start
+/opt/etc/init.d/S80lighttpd start || true
+if ! /opt/etc/init.d/S80lighttpd status >/dev/null 2>&1; then
+    echo -e "${RED}Не удалось запустить lighttpd${NC}"
+    exit 1
+fi
 
 router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
 clear
