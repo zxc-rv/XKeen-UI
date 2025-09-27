@@ -58,11 +58,12 @@ mkdir -p /opt/share/www/XKeen-UI
 curl -Lfo /opt/share/www/XKeen-UI/index.html https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/index.html
 curl -Lfo /opt/share/www/XKeen-UI/script.js https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/script.js
 curl -Lfo /opt/share/www/XKeen-UI/style.css https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/style.css
+curl -Lfo /opt/share/www/XKeen-UI/favicon.png https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/favicon.png
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
+    /opt/etc/init.d/S80lighttpd stop
     sed -i -E "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
     /opt/etc/init.d/S80lighttpd start
-    /opt/etc/init.d/S80lighttpd reconfigure
 fi
 
 router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
