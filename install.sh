@@ -42,6 +42,10 @@ opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv ||
     exit 1
 }
 
+if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
+  sed -i -E "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
+fi
+
 if [ -f "/opt/etc/init.d/S80lighttpd" ]; then
     /opt/etc/init.d/S80lighttpd status >/dev/null 2>&1
     if [ $? -eq 0 ]; then
@@ -93,10 +97,6 @@ if ! curl -Lsfo /opt/sbin/xkeen-ui "$download_url/$bin"; then
 fi
 
 chmod +x /opt/sbin/xkeen-ui
-
-if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
-  sed -i -E "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
-fi
 
 /opt/etc/init.d/S80lighttpd start
 
