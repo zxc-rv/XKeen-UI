@@ -43,7 +43,7 @@ opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv ||
 }
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ]; then
-    /opt/etc/init.d/S80lighttpd status
+    /opt/etc/init.d/S80lighttpd status >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         /opt/etc/init.d/S80lighttpd stop
     fi
