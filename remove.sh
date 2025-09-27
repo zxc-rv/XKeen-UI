@@ -9,7 +9,7 @@ NC='\033[0m'
 echo -e "Данный скрипт ${RED}удалит${NC} веб-сервер lighttpd, его зависимости и конфигурации, а также файлы XKeen-UI."
 echo -e "Продолжить? y/N"
 
-read response
+read response < /dev/tty
 
 case "$response" in
     [Yy]) 
