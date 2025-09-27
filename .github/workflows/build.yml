@@ -43,14 +43,40 @@ jobs:
       run: |
         go build -ldflags="-s -w" -o xkeen-ui-${{ matrix.name }} main.go
     
-    - name: Upload artifacts
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: xkeen-ui-${{ matrix.name }}
         path: xkeen-ui-${{ matrix.name }}
+
+  static:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Pack static files
+      run: |
+        tar -czf xkeen-ui-static.tar.gz script.js style.css index.html favicon.png
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: xkeen-ui-static
+        path: xkeen-ui-static.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, static]
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: List files
+      run: ls -R artifacts
     
     - name: Upload to release
-      if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
-        files: xkeen-ui-${{ matrix.name }}
+        files: artifacts/**
