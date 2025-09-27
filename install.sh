@@ -9,7 +9,6 @@ PURPLE='\033[38;2;120;93;200m'
 architecture=$(uname -m | tr '[:upper:]' '[:lower:]')
 download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
 
-echo -e "${BLUE}Проверка архитектуры...${NC}"
 case $architecture in
 *'armv8'* | *'aarch64'* | *'cortex-a'*)
   bin="xkeen-ui-arm64-v8a"
@@ -30,7 +29,7 @@ case $architecture in
   bin="xkeen-ui-mips64le"
   ;;
 *)
-  echo -e "${RED}Неизвестная архитектура: $architecture${NC}"
+  echo -e "\n${RED}Неизвестная архитектура: $architecture${NC}"
   exit 1
   ;;
 esac
@@ -38,13 +37,13 @@ esac
 set -e
 clear
 
-echo -e "${BLUE}Установка lighttpd...${NC}"
+echo -e "\n${BLUE}Установка lighttpd...${NC}"
 opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv || {
     echo -e "${RED}Ошибка установки пакетов${NC}"
     exit 1
 }
 
-echo -e "${BLUE}Настройка init скрипта...${NC}"
+echo -e "\n${BLUE}Настройка init скрипта...${NC}"
 if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
   sed -iE "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
 fi
@@ -55,7 +54,7 @@ if [ -f "/opt/etc/init.d/S80lighttpd" ]; then
     fi
 fi
 
-echo -e "${BLUE}Создание конфига lighttpd...${NC}"
+echo -e "\n${BLUE}Создание конфига lighttpd...${NC}"
 cat <<'EOF' >/opt/etc/lighttpd/conf.d/90-xkeenui.conf
 server.port := 1000
 server.username := ""
@@ -77,42 +76,35 @@ $SERVER["socket"] == ":1000" {
 }
 EOF
 
-echo -e "${BLUE}Создание директории для статики...${NC}"
-if ! mkdir -p /opt/share/www/XKeen-UI; then
-    echo -e "${RED}Не удалось создать директорию${NC}"
-    exit 1
-fi
-
-echo -e "${BLUE}Загрузка статики...${NC}"
+echo -e "\n${BLUE}Загрузка статики...${NC}"
 tmp_static="/tmp/xkeen-ui-static.tar.gz"
 if ! curl -Lsfo "$tmp_static" "$download_url/xkeen-ui-static.tar.gz"; then
     echo -e "${RED}Не удалось скачать архив статики${NC}"
     exit 1
 fi
 
-echo -e "${BLUE}Распаковка архива...${NC}"
+echo -e "\n${BLUE}Распаковка архива...${NC}"
+mkdir -p /opt/share/www/XKeen-UI
 if ! tar -xzf "$tmp_static" -C /opt/share/www/XKeen-UI; then
     echo -e "${RED}Не удалось распаковать архив статики${NC}"
     exit 1
 fi
 rm -f "$tmp_static"
 
-echo -e "${BLUE}Загрузка бинарника...${NC}"
+echo -e "\n${BLUE}Загрузка бинарника...${NC}"
 if ! curl -Lsfo /opt/sbin/xkeen-ui "$download_url/$bin"; then
     echo -e "${RED}Не удалось скачать бинарный файл${NC}"
     exit 1
 fi
 
-echo -e "${BLUE}Установка прав на бинарник...${NC}"
+echo -e "\n${BLUE}Установка прав на бинарник...${NC}"
 chmod +x /opt/sbin/xkeen-ui
 
-echo -e "${BLUE}Запуск lighttpd...${NC}"
+echo -e "\n${BLUE}Запуск lighttpd...${NC}"
 /opt/etc/init.d/S80lighttpd start
 
 router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
 clear
 
-echo ""
-echo -e "${GREEN}XKeen UI успешно установлен!${NC}"
-echo -e "Панель доступна по адресу: ${GREEN}http://$router_ip:1000${NC}"
-echo ""
+echo -e "\n${GREEN}XKeen UI успешно установлен!${NC}\n"
+echo -e "Панель доступна по адресу: ${GREEN}http://$router_ip:1000${NC}\n"
