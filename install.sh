@@ -75,14 +75,19 @@ if ! mkdir -p /opt/share/www/XKeen-UI; then
     exit 1
 fi
 
-for file in index.html script.js style.css favicon.png; do
-    if ! curl -Lsfo /opt/share/www/XKeen-UI/$file https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/$file; then
-        echo -e "${RED}Не удалось скачать $file${NC}"
-        exit 1
-    fi
-done
+tmp_static="/tmp/xkeen-ui-static.tar.gz"
+if ! curl -Lsfo "$tmp_static" "$download_url/xkeen-ui-static.tar.gz"; then
+    echo -e "${RED}Не удалось скачать архив статики${NC}"
+    exit 1
+fi
 
-if ! curl -Lsfo /opt/sbin/xkeen-ui $download_url/$bin; then
+if ! tar -xzf "$tmp_static" -C /opt/share/www/XKeen-UI; then
+    echo -e "${RED}Не удалось распаковать архив статики${NC}"
+    exit 1
+fi
+rm -f "$tmp_static"
+
+if ! curl -Lsfo /opt/sbin/xkeen-ui "$download_url/$bin"; then
     echo -e "${RED}Не удалось скачать бинарный файл${NC}"
     exit 1
 fi
