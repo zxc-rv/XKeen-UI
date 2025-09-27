@@ -17,7 +17,7 @@
   
 &nbsp;
 
-Установка:
+Установка/обновление:
 
 ```
 opkg update && opkg install curl
@@ -25,7 +25,11 @@ opkg update && opkg install curl
 ```
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/install.sh | sh
 ```
-  
+Удаление:
+```
+curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/remove.sh | sh
+```
+
 ---
 Благодарности:
 
