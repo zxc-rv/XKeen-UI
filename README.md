@@ -6,8 +6,9 @@
   3. Просмотр логов с автообновлением и фильтрацией
 
 >[!WARNING]
->Панель в очень ранней стадии разработки и тестировалась только на ARM роутере Keenetic KN-3811.  
->Ставить на свой страх и риск!
+>Панель на ранней стадии разработки и тестировалась только на ARM64 роутере Keenetic KN-3811.  
+>Ставить на свой страх и риск!  
+>Если ваш роутер взорвется после установки, автор данного репозитория ответственности нести не будет.
 
 Установка:
 
@@ -17,3 +18,10 @@ opkg update && opkg install curl
 ```
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/install.sh | sh
 ```
+  
+  
+Благодарности:
+
+https://github.com/Skrill0/XKeen  
+https://github.com/jameszeroX/XKeen  
+https://github.com/Anonym-tsk/nfqws-keenetic
