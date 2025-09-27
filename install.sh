@@ -56,9 +56,9 @@ $SERVER["socket"] == ":1000" {
 EOF
 
 mkdir -p /opt/share/www/XKeen-UI
-curl -Lfo /opt/share/www/XKeen-UI https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/index.html
-curl -Lfo /opt/share/www/XKeen-UI https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/script.js
-curl -Lfo /opt/share/www/XKeen-UI https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/style.css
+curl -Lfo /opt/share/www/XKeen-UI/index.html https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/index.html
+curl -Lfo /opt/share/www/XKeen-UI/script.js https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/script.js
+curl -Lfo /opt/share/www/XKeen-UI/style.css https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/style.css
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
     sed -i -E "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
