@@ -78,7 +78,7 @@ EOF
 
 echo -e "\n${BLUE}Загрузка статики...${NC}"
 tmp_static="/tmp/xkeen-ui-static.tar.gz"
-if ! curl -Lsfo "$tmp_static" "$download_url/xkeen-ui-static.tar.gz"; then
+if ! curl --progress-bar -Lfo "$tmp_static" "$download_url/xkeen-ui-static.tar.gz"; then
     echo -e "${RED}Не удалось скачать архив статики${NC}"
     exit 1
 fi
@@ -92,7 +92,7 @@ fi
 rm -f "$tmp_static"
 
 echo -e "\n${BLUE}Загрузка бинарника...${NC}"
-if ! curl -Lsfo /opt/sbin/xkeen-ui "$download_url/$bin"; then
+if ! curl --progress-bar -Lfo /opt/sbin/xkeen-ui "$download_url/$bin"; then
     echo -e "${RED}Не удалось скачать бинарный файл${NC}"
     exit 1
 fi
