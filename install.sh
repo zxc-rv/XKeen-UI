@@ -34,9 +34,13 @@ case $architecture in
   ;;
 esac
 
+set -e
 clear
 
-opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv
+opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv || {
+    echo -e "${RED}Ошибка установки пакетов${NC}"
+    exit 1
+}
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ]; then
     /opt/etc/init.d/S80lighttpd status
@@ -66,12 +70,24 @@ $SERVER["socket"] == ":1000" {
 }
 EOF
 
-mkdir -p /opt/share/www/XKeen-UI
+if ! mkdir -p /opt/share/www/XKeen-UI; then
+    echo -e "${RED}Не удалось создать директорию${NC}"
+    exit 1
+fi
+
 for file in index.html script.js style.css favicon.png; do
-  curl -Lsfo /opt/share/www/XKeen-UI/$file https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/$file
+    if ! curl -Lsfo /opt/share/www/XKeen-UI/$file https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/$file; then
+        echo -e "${RED}Не удалось скачать $file${NC}"
+        exit 1
+    fi
 done
 
-curl -Lsfo /opt/sbin/xkeen-ui $download_url/$bin && chmod +x /opt/sbin/xkeen-ui
+if ! curl -Lsfo /opt/sbin/xkeen-ui $download_url/$bin; then
+    echo -e "${RED}Не удалось скачать бинарный файл${NC}"
+    exit 1
+fi
+
+chmod +x /opt/sbin/xkeen-ui
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
   sed -i -E "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
@@ -80,6 +96,7 @@ fi
 /opt/etc/init.d/S80lighttpd start
 
 router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
+clear
 
 echo ""
 echo -e "${GREEN}XKeen UI успешно установлен!${NC}"
