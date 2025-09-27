@@ -82,6 +82,6 @@ fi
 router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
 
 echo ""
-echo -e "${GREEN}Успех!${NC}"
-echo -e "XKeen-UI доступен по адресу: ${GREEN}http://$router_ip:1000${NC}"
+echo -e "${GREEN}XKeen UI успешно установлен!${NC}"
+echo -e "Панель доступна по адресу: ${GREEN}http://$router_ip:1000${NC}"
 echo ""
