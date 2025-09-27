@@ -6,11 +6,14 @@
   3. Просмотр логов с автообновлением и фильтрацией
 
 >[!WARNING]
->Панель в очень ранней стадии разработки и тестировалась только на ARM роутере KN-3811.  
+>Панель в очень ранней стадии разработки и тестировалась только на ARM роутере Keenetic KN-3811.  
 >Ставить на свой страх и риск!
 
 Установка:
 
+```
+opkg update && opkg install curl
+```
 ```
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/install.sh | sh
 ```
