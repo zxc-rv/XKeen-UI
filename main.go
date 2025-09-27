@@ -16,9 +16,34 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"gopkg.in/yaml.v2"
 )
 
-const CONFIGS_DIR = "/opt/etc/xray/configs"
+type ClientType struct {
+	Name       string
+	ConfigDir  string
+	ConfigExt  string
+	IsJSON     bool
+}
+
+var (
+	clientTypes = map[string]ClientType{
+		"xray": {
+			Name:      "xray",
+			ConfigDir: "/opt/etc/xray/configs",
+			ConfigExt: "*.json",
+			IsJSON:    true,
+		},
+		"mihomo": {
+			Name:      "mihomo",
+			ConfigDir: "/opt/etc/mihomo",
+			ConfigExt: "config.yaml",
+			IsJSON:    false,
+		},
+	}
+
+	currentClient ClientType
+)
 
 type Response struct {
 	Success bool        `json:"success"`
@@ -65,6 +90,51 @@ var upgrader = websocket.Upgrader{
 }
 
 var logCache = make(map[string]*LogCache)
+
+func detectClientType() ClientType {
+	initFiles := []string{"/opt/etc/init.d/S24xray", "/opt/etc/init.d/S99xkeen"}
+
+	for _, initFile := range initFiles {
+		log.Printf("Checking init file: %s", initFile)
+		if _, err := os.Stat(initFile); err == nil {
+			log.Printf("Init file exists: %s", initFile)
+			content, err := os.ReadFile(initFile)
+			if err != nil {
+				log.Printf("Error reading %s: %v", initFile, err)
+				continue
+			}
+
+			contentStr := string(content)
+			log.Printf("Content preview: %s", contentStr[:min(len(contentStr), 200)])
+
+			if strings.Contains(contentStr, `name_client="xray"`) {
+				log.Printf("Found xray client in %s", initFile)
+				if client, exists := clientTypes["xray"]; exists {
+					return client
+				}
+			}
+
+			if strings.Contains(contentStr, `name_client="mihomo"`) {
+				log.Printf("Found mihomo client in %s", initFile)
+				if client, exists := clientTypes["mihomo"]; exists {
+					return client
+				}
+			}
+		} else {
+			log.Printf("Init file not found: %s", initFile)
+		}
+	}
+
+	log.Printf("No client found, defaulting to xray")
+	return clientTypes["xray"]
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 func setCORSHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -423,33 +493,39 @@ func configsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func isValidJSON(content string) bool {
+	var js json.RawMessage
+	return json.Unmarshal([]byte(content), &js) == nil
+}
+
+func isValidYAML(content string) bool {
+	var data interface{}
+	return yaml.Unmarshal([]byte(content), &data) == nil
+}
+
 func getConfigs(w http.ResponseWriter, r *http.Request) {
-	if _, err := os.Stat(CONFIGS_DIR); os.IsNotExist(err) {
-		os.MkdirAll(CONFIGS_DIR, 0755)
+	// Обновляем тип клиента при каждом запросе
+	currentClient = detectClientType()
+
+	if _, err := os.Stat(currentClient.ConfigDir); os.IsNotExist(err) {
+		jsonResponse(w, ConfigsResponse{Success: false, Error: "Директория конфигов не найдена"}, 404)
+		return
 	}
 
 	var configs []Config
 
-	files, err := filepath.Glob(filepath.Join(CONFIGS_DIR, "*.json"))
-	if err != nil {
-		jsonResponse(w, ConfigsResponse{Success: false, Error: "Cannot read configs directory"}, 500)
-		return
-	}
+	if currentClient.IsJSON {
+		files, err := filepath.Glob(filepath.Join(currentClient.ConfigDir, currentClient.ConfigExt))
+		if err != nil {
+			jsonResponse(w, ConfigsResponse{Success: false, Error: "Ошибка чтения директории конфигов"}, 500)
+			return
+		}
 
-	if len(files) == 0 {
-		defaultConfig := `{
-  "log": {"loglevel": "warning"},
-  "inbounds": [],
-  "outbounds": []
-}`
-		configPath := filepath.Join(CONFIGS_DIR, "config.json")
-		os.WriteFile(configPath, []byte(defaultConfig), 0644)
-		configs = append(configs, Config{
-			Name:     "config",
-			Filename: "config.json",
-			Content:  defaultConfig,
-		})
-	} else {
+		if len(files) == 0 {
+			jsonResponse(w, ConfigsResponse{Success: false, Error: "JSON конфиги не найдены"}, 404)
+			return
+		}
+
 		for _, file := range files {
 			content, err := os.ReadFile(file)
 			if err != nil {
@@ -464,6 +540,48 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 				Filename: filename,
 				Content:  string(content),
 			})
+		}
+	} else {
+		configPath := filepath.Join(currentClient.ConfigDir, currentClient.ConfigExt)
+
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			jsonResponse(w, ConfigsResponse{Success: false, Error: "YAML конфиг не найден"}, 404)
+			return
+		}
+
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			jsonResponse(w, ConfigsResponse{Success: false, Error: "Ошибка чтения конфига"}, 500)
+			return
+		}
+
+		configs = append(configs, Config{
+			Name:     "config",
+			Filename: currentClient.ConfigExt,
+			Content:  string(content),
+		})
+	}
+
+	// Добавляем .lst файлы из /opt/etc/xkeen
+	xkeenDir := "/opt/etc/xkeen"
+	if _, err := os.Stat(xkeenDir); err == nil {
+		lstFiles, err := filepath.Glob(filepath.Join(xkeenDir, "*.lst"))
+		if err == nil {
+			for _, file := range lstFiles {
+				content, err := os.ReadFile(file)
+				if err != nil {
+					continue
+				}
+
+				filename := filepath.Base(file)
+				name := strings.TrimSuffix(filename, ".lst")
+
+				configs = append(configs, Config{
+					Name:     name,
+					Filename: filename,
+					Content:  string(content),
+				})
+			}
 		}
 	}
 
@@ -486,11 +604,29 @@ func postConfigs(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "save":
 		filename := req.Filename
-		if !strings.HasSuffix(filename, ".json") {
-			filename += ".json"
+		var filePath string
+
+		if strings.HasSuffix(filename, ".lst") {
+			filePath = filepath.Join("/opt/etc/xkeen", filename)
+		} else {
+			if currentClient.IsJSON {
+				if !strings.HasSuffix(filename, ".json") {
+					filename += ".json"
+				}
+
+				if !isValidJSON(req.Content) {
+					jsonResponse(w, Response{Success: false, Error: "Невалидный JSON"}, 400)
+					return
+				}
+			} else {
+				if !isValidYAML(req.Content) {
+					jsonResponse(w, Response{Success: false, Error: "Невалидный YAML"}, 400)
+					return
+				}
+			}
+			filePath = filepath.Join(currentClient.ConfigDir, filename)
 		}
 
-		filePath := filepath.Join(CONFIGS_DIR, filename)
 		if err := os.WriteFile(filePath, []byte(req.Content), 0644); err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Ошибка записи файла"}, 500)
 		} else {
@@ -499,11 +635,17 @@ func postConfigs(w http.ResponseWriter, r *http.Request) {
 
 	case "delete":
 		filename := req.Filename
-		if !strings.HasSuffix(filename, ".json") {
-			filename += ".json"
+		var filePath string
+
+		if strings.HasSuffix(filename, ".lst") {
+			filePath = filepath.Join("/opt/etc/xkeen", filename)
+		} else {
+			if currentClient.IsJSON && !strings.HasSuffix(filename, ".json") {
+				filename += ".json"
+			}
+			filePath = filepath.Join(currentClient.ConfigDir, filename)
 		}
 
-		filePath := filepath.Join(CONFIGS_DIR, filename)
 		if err := os.Remove(filePath); err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Ошибка удаления файла"}, 500)
 		} else {
@@ -567,6 +709,9 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	currentClient = detectClientType()
+	log.Printf("Detected client: %s, config dir: %s", currentClient.Name, currentClient.ConfigDir)
+
 	go func() {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/cgi/status", statusHandler)

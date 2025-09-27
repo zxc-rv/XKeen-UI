@@ -21,6 +21,13 @@ require.config({
   },
 });
 
+function getFileLanguage(filename) {
+  if (filename.endsWith('.json')) return 'json';
+  if (filename.endsWith('.yaml') || filename.endsWith('.yml')) return 'yaml';
+  if (filename.endsWith('.lst')) return 'plaintext';
+  return 'json';
+}
+
 function showToast(message, type = "success") {
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
@@ -62,13 +69,13 @@ function updateValidationInfo(isValid, error = null) {
   if (isValid) {
     validationInfo.innerHTML = `
                     <span class="validation-icon validation-success">✓</span>
-                    <span class="validation-success">JSON is valid</span>
+                    <span class="validation-success">Файл валиден</span>
                 `;
   } else {
     validationInfo.innerHTML = `
                     <span class="validation-icon validation-error">✗</span>
-                    <span class="validation-error"> Invalid JSON: ${
-                      error || "JSON is invalid"
+                    <span class="validation-error"> Ошибка валидации: ${
+                      error || "Файл невалиден"
                     }</span>
                 `;
   }
@@ -184,19 +191,16 @@ function handleNewLogContent(data) {
     container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
 
   if (data.type === "initial") {
-    // Загрузка последних 1К строк
-    allLogLines = data.allLines || []; // Все строки файла
-    displayLines = data.displayLines || []; // Последние 1К
+    allLogLines = data.allLines || [];
+    displayLines = data.displayLines || [];
   } else if (data.type === "append") {
-    // Новые строки
     const newLines = data.content.split("\n").filter((line) => line.trim());
     allLogLines.push(...newLines);
     if (!logFilter) {
       displayLines.push(...newLines);
-      displayLines = displayLines.slice(-1000); // Обрезаем до 1К
+      displayLines = displayLines.slice(-1000);
     }
   } else if (data.type === "filtered") {
-    // Результат фильтрации по всему файлу
     displayLines = data.lines || [];
   }
 
@@ -209,11 +213,9 @@ function handleNewLogContent(data) {
 
 function applyFilter() {
   if (!logFilter || logFilter.trim() === "") {
-    // Без фильтра - показываем последние 1К из всех строк
     displayLines = allLogLines.slice(-1000);
     renderLines(document.getElementById("logsContainer"), displayLines);
   } else {
-    // С фильтром - отправляем запрос на сервер
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(
         JSON.stringify({
@@ -299,7 +301,6 @@ function connectWebSocket() {
     ws.close();
   }
 
-  // Чистим старый интервал, если он был
   if (pingInterval) {
     clearInterval(pingInterval);
   }
@@ -308,34 +309,24 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     console.log("WebSocket connected");
-    // Запускаем пинговалку каждые 30 секунд
     pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        // Стандартный способ - использовать ping-фрейм, но его нельзя создать из JS.
-        // Поэтому отправляем специальное сообщение, которое сервер проигнорирует,
-        // но сам факт отправки данных не даст прокси закрыть соединение.
-        // Или, если бэкенд поддерживает, можно слать реальный ping.
-        // В нашем случае, с PongHandler'ом на бэке, нам нужно слать именно ping,
-        // но из JS это невозможно. Однако, gorilla/websocket отвечает на контрольные фреймы браузера.
-        // Поэтому нам просто нужно добавить логику переподключения.
-        // Для надежности против прокси, можно слать кастомное сообщение.
         ws.send(JSON.stringify({ type: "ping" }));
       }
     }, 15000);
   };
 
-  // Вот это КРИТИЧЕСКИ ВАЖНО!
   ws.onclose = (event) => {
     console.warn(
       `WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`
     );
-    clearInterval(pingInterval); // Останавливаем пинги
-    setTimeout(connectWebSocket, 1000); // Пытаемся переподключиться через 1 секунды
+    clearInterval(pingInterval);
+    setTimeout(connectWebSocket, 1000);
   };
 
   ws.onerror = (error) => {
     console.error("WebSocket error:", error);
-    ws.close(); // Закрываем соединение при ошибке, чтобы сработал onclose и реконнект
+    ws.close();
   };
 
 ws.onmessage = (event) => {
@@ -361,7 +352,6 @@ ws.onmessage = (event) => {
     displayLines = data.displayLines || [];
     renderLines(document.getElementById("logsContainer"), displayLines);
 
-    // Применить фильтр если он активен
     if (logFilter && logFilter.trim() !== "") {
       applyFilter();
     }
@@ -604,19 +594,36 @@ function validateCurrentJSON() {
     return;
   }
 
-  const markers = monaco.editor.getModelMarkers({ owner: "json" });
-  const currentModelMarkers = markers.filter(
-    (marker) => marker.resource.toString() === model.uri.toString()
-  );
-
-  const errorMarker = currentModelMarkers.find(
-    (m) => m.severity === monaco.MarkerSeverity.Error
-  );
-
-  if (!errorMarker) {
+  const currentConfig = configs[activeConfigIndex];
+  if (!currentConfig) {
     updateValidationInfo(true);
-  } else {
-    updateValidationInfo(false, errorMarker.message);
+    return;
+  }
+
+  const language = getFileLanguage(currentConfig.filename);
+
+  if (language === 'plaintext') {
+    updateValidationInfo(true);
+    return;
+  }
+
+  if (language === 'json') {
+    const markers = monaco.editor.getModelMarkers({ owner: "json" });
+    const currentModelMarkers = markers.filter(
+      (marker) => marker.resource.toString() === model.uri.toString()
+    );
+
+    const errorMarker = currentModelMarkers.find(
+      (m) => m.severity === monaco.MarkerSeverity.Error
+    );
+
+    if (!errorMarker) {
+      updateValidationInfo(true);
+    } else {
+      updateValidationInfo(false, errorMarker.message);
+    }
+  } else if (language === 'yaml') {
+    updateValidationInfo(true);
   }
 }
 
@@ -747,8 +754,12 @@ function switchTab(index) {
   activeConfigIndex = index;
 
   if (monacoEditor && configs[index]) {
-    monacoEditor.setValue(configs[index].content);
-    configs[index].isDirty = false;
+    const config = configs[index];
+    const language = getFileLanguage(config.filename);
+
+    monaco.editor.setModelLanguage(monacoEditor.getModel(), language);
+    monacoEditor.setValue(config.content);
+    config.isDirty = false;
   }
   renderTabs();
   updateUIDirtyState();
@@ -823,23 +834,27 @@ async function saveCurrentConfig() {
     return;
   }
 
-  const model = monacoEditor.getModel();
-  if (model) {
-    const allMarkers = monaco.editor.getModelMarkers({});
-    const errorMarker = allMarkers.find(
-      (m) =>
-        m.resource.toString() === model.uri.toString() &&
-        m.severity === monaco.MarkerSeverity.Error
-    );
-    if (errorMarker) {
-      showToast(
-        {
-          title: "Ошибка сохранения",
-          body: `Invalid JSON: ${errorMarker.message}`,
-        },
-        "error"
+  const language = getFileLanguage(config.filename);
+
+  if (language === 'json') {
+    const model = monacoEditor.getModel();
+    if (model) {
+      const allMarkers = monaco.editor.getModelMarkers({});
+      const errorMarker = allMarkers.find(
+        (m) =>
+          m.resource.toString() === model.uri.toString() &&
+          m.severity === monaco.MarkerSeverity.Error
       );
-      return;
+      if (errorMarker) {
+        showToast(
+          {
+            title: "Ошибка сохранения",
+            body: `Invalid JSON: ${errorMarker.message}`,
+          },
+          "error"
+        );
+        return;
+      }
     }
   }
 
@@ -866,6 +881,14 @@ function formatCurrentConfig() {
   const content = monacoEditor.getValue().trim();
   if (!content) {
     showToast("Конфиг пустой", "error");
+    return;
+  }
+
+  const currentConfig = configs[activeConfigIndex];
+  const language = getFileLanguage(currentConfig.filename);
+
+  if (language !== 'json') {
+    showToast("Форматирование доступно только для JSON файлов", "error");
     return;
   }
 
@@ -1148,11 +1171,9 @@ async function clearCurrentLog() {
     });
 
     if (result.success) {
-      // Очищаем локальное состояние
       allLogLines = [];
       displayLines = [];
 
-      // Очищаем контейнер
       const container = document.getElementById("logsContainer");
       container.classList.add("centered");
       container.innerHTML = '<div style="color: #6b7280;">Лог очищен</div>';
