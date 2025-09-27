@@ -25,12 +25,13 @@ case "$response" in
 esac
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ]; then
-    /opt/etc/init.d/S80lighttpd status
+    /opt/etc/init.d/S80lighttpd status >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         /opt/etc/init.d/S80lighttpd stop
     fi
 fi
 
+echo ""
 opkg remove --autoremove lighttpd-mod-fastcgi lighttpd-mod-setenv lighttpd
 rm -rf /opt/share/www/XKeen-UI
 rm -rf /opt/etc/lighttpd/
