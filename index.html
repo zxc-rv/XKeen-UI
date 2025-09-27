@@ -18,26 +18,47 @@
       <h1 class="title">XKeen UI</h1>
     </div>
     <div class="controls">
-      <div class="status" id="statusIndicator">
-        <span class="status-indicator"></span>
-        <span id="statusText">Проверка статуса...</span>
+      <div class="controls-main">
+        <div class="status" id="statusIndicator">
+          <span class="status-indicator"></span>
+          <span id="statusText">Проверка статуса...</span>
+        </div>
+
+        <div id="controlsSkeletons" class="controls-skeletons" style="display: inline-flex; gap: 12px">
+          <div class="skeleton skeleton-btn"></div>
+          <div class="skeleton skeleton-btn"></div>
+        </div>
+
+        <div class="controls-buttons">
+          <button class="btn btn-primary" id="restartBtn" onclick="restartXkeen()" style="display: inline-flex">
+            Перезапустить
+          </button>
+          <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
+            Запустить
+          </button>
+          <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
+            Остановить
+          </button>
+        </div>
       </div>
 
-      <div id="controlsSkeletons" class="controls-skeletons" style="display: inline-flex; gap: 12px">
-        <div class="skeleton skeleton-btn"></div>
-        <div class="skeleton skeleton-btn"></div>
-      </div>
-
-      <div class="controls-buttons">
-        <button class="btn btn-primary" id="restartBtn" onclick="restartXkeen()" style="display: inline-flex">
-          Перезапустить
+      <div id="coreSelectRoot" class="select-root core-select" style="display: none;" aria-label="Выбор ядра">
+        <button id="coreSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
+          <span class="core-prefix">Ядро: </span>
+          <span class="label" id="coreSelectLabel">xray</span>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
         </button>
-        <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
-          Запустить
-        </button>
-        <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
-          Остановить
-        </button>
+        <div id="coreSelectContent" class="select-content">
+          <div class="select-item" role="option" data-value="xray" aria-selected="false">
+            xray <span class="check">✓</span>
+          </div>
+          <div class="select-item" role="option" data-value="mihomo" aria-selected="false">
+            mihomo <span class="check">✓</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -67,7 +88,7 @@
       </div>
       <div id="validationSkeleton" class="skeleton skeleton-line" style="width: 220px; height: 18px"></div>
       <div class="validation-info" id="validationInfo" style="display: none">
-        <span class="validation-icon">⳿</span>
+        <span class="validation-icon">⏳</span>
         <span>Загрузка конфигураций...</span>
       </div>
     </div>
@@ -133,10 +154,23 @@
         <button class="btn btn-primary" id="saveAndSwitchBtn" onclick="saveAndSwitch()">
           Сохранить
         </button>
-        <button class="btn btn-danger" id="discardChangesBtn" onclick="discardAndSwitch()">
-          Не сохранять
-        </button>
         <button class="btn btn-secondary" id="cancelSwitchBtn" onclick="closeDirtyModal()">
+          Отмена
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="coreModal">
+    <div class="modal-content">
+      <h3 class="modal-title">Смена ядра</h3>
+      <p class="modal-body">
+        Поменять ядро на <span id="selectedCore">xray</span>?
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="confirmCoreBtn" onclick="confirmCoreChange()">
+          Да
+        </button>
+        <button class="btn btn-secondary" id="cancelCoreBtn" onclick="closeCoreModal()">
           Отмена
         </button>
       </div>

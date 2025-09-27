@@ -42,16 +42,34 @@ textarea {
 
 .controls {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
   padding: 10px;
   background: #020817;
   border: 1px solid #1e293b;
   border-radius: 8px;
   margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 12px;
+  position: relative; /* Для абсолютного позиционирования */
 }
+
+.controls-main {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  /* Абсолютное центрирование */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.core-select {
+  margin-left: auto; /* Прижимаем к правому краю */
+  flex-shrink: 0;
+}
+
 
 .panel {
   background: #020817;
@@ -198,16 +216,9 @@ textarea {
   display: inline-block;
 }
 
-/* .tab-trigger:hover:not(.active) {
-  background: #3f3f46;
-  color: #e4e4e7;
-} */
-
-/* Активная вкладка оставляем без фона, чтобы фон давал индикатор */
 .tab-trigger.active {
   background: transparent;
   color: #fafafa;
-  /* border-color: #475061; */
 }
 
 .tabs-content {
@@ -502,7 +513,6 @@ textarea {
 .btn-secondary:hover:not(:disabled) {
   background: #1e293b;
   color: #f8fafc;
-  /* border-color: #6b7280; */
 }
 
 .status {
@@ -663,6 +673,7 @@ textarea {
   border-radius: 8px;
   padding: 24px;
   width: fit-content;
+  min-width: 400px;
   max-width: 90vw;
   display: inline-block;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
@@ -679,43 +690,39 @@ textarea {
   text-align: left;
 }
 .modal-body {
-  font-size: 13px;
+  font-size: 14px;
   color: #a1a1aa;
   margin-bottom: 24px;
+  line-height: 1.3;
 }
 .modal-actions {
   display: flex;
-  justify-content: center;
+  justify-content: right;
   gap: 8px;
-  width: fit-content;
-  margin-left: auto;
-  margin-right: auto;
 }
 .modal-actions .btn {
   padding: 6px 12px;
   min-width: 100px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
-/* Log filter (shadcn-like) */
 .log-filter {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-/* Log filter input: add funnel icon on the left */
 .log-filter .input {
   height: 35px;
   width: 180px;
   padding: 2px 12px 2px 32px;
-  border: 1px solid #1e293b; /* always visible border */
+  border: 1px solid #1e293b;
   background-color: #020817;
   color: #e5e7eb;
   border-radius: 8px;
   outline: none;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
-  font-size: 14px; /* prevent iOS zoom on focus */
+  font-size: 14px;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239aa7bd' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4h18l-7 8v6l-4 2v-8L3 4z'/></svg>");
   background-repeat: no-repeat;
   background-position: 10px calc(50% + 2px);
@@ -728,7 +735,7 @@ textarea {
 }
 
 .log-filter .input:hover {
-  background-color: #1e293b; /* brighten background only */
+  background-color: #1e293b;
 }
 
 .log-filter .input:focus {
@@ -778,15 +785,14 @@ textarea {
 }
 
 #restartBtn::before {
-  /* user-requested outline restart icon */
   width: 22px;
   height: 22px;
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4.8 -4.8 33.6 33.6' fill='none'><path d='M18.364 8.05026L17.6569 7.34315C14.5327 4.21896 9.46734 4.21896 6.34315 7.34315C3.21895 10.4673 3.21895 15.5327 6.34315 18.6569C9.46734 21.7811 14.5327 21.7811 17.6569 18.6569C19.4737 16.84 20.234 14.3668 19.9377 12.0005M18.364 8.05026H14.1213M18.364 8.05026V3.80762' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4.8 -4.8 33.6 33.6' fill='none'><path d='M18.364 8.05026L17.6569 7.34315C14.5327 4.21896 9.46734 4.21896 6.34315 7.34315C3.21895 10.4673 3.21895 15.5327 6.34315 18.6569C9.46734 21.7811 14.5327 21.7811 17.6569 18.6569C19.4737 16.84 20.234 14.3668 19.9377 12.0005M18.364 8.05026H14.1213M18.364 8.05026V3.80762' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4.8 -4.8 33.6 33.6' fill='none'><path d='M18.364 8.05026L17.6569 7.34315C14.5327 4.21896 9.46734 4.21896 6.34315 7.34315C3.21895 10.4673 3.21895 15.5327 6.34315 18.6569C9.46734 21.7811 14.5327 21.7811 17.6569 18.6569C19.4737 16.84 20.234 14.3668 19.9377 12.0005M18.364 8.05026H14.1213M18.364 8.05026V3.80762' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 }
 
 #stopBtn::before {
-  /* make stop icon larger */
   width: 18px;
   height: 18px;
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect x='6' y='6' width='12' height='12' rx='2' fill='black'/></svg>");
@@ -808,7 +814,6 @@ textarea {
   transform: translateY(calc(-50% + 1px));
 }
 
-/* Balance left spacing for restart and stop buttons */
 #restartBtn,
 #stopBtn {
   padding-left: 32px;
@@ -823,7 +828,6 @@ textarea {
   left: 8px;
 }
 
-/* Start button with play icon */
 #startBtn {
   position: relative;
   padding-left: 30px;
@@ -882,6 +886,18 @@ textarea {
     flex-direction: column;
     align-items: center;
     gap: 12px;
+  }
+
+  .controls-main {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .core-select {
+    margin-left: 0;
+    align-self: center;
   }
 
   .controls-skeletons {

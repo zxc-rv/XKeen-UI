@@ -3,7 +3,6 @@ let configs = [];
 let activeConfigIndex = -1;
 let isServiceRunning = false;
 let isActionInProgress = false;
-let lastLogContent = null;
 let userScrolled = false;
 let pendingSwitchIndex = -1;
 let currentLogFile = "error.log";
@@ -14,6 +13,9 @@ let ws = null;
 let pingInterval = null;
 let allLogLines = [];
 let displayLines = [];
+let availableCores = [];
+let currentCore = "";
+let pendingCoreChange = "";
 
 require.config({
   paths: {
@@ -68,16 +70,14 @@ function updateValidationInfo(isValid, error = null) {
   const validationInfo = document.getElementById("validationInfo");
   if (isValid) {
     validationInfo.innerHTML = `
-                    <span class="validation-icon validation-success">✓</span>
-                    <span class="validation-success">Файл валиден</span>
-                `;
+      <span class="validation-icon validation-success">✓</span>
+      <span class="validation-success">Файл валиден</span>
+    `;
   } else {
     validationInfo.innerHTML = `
-                    <span class="validation-icon validation-error">✗</span>
-                    <span class="validation-error"> Ошибка валидации: ${
-                      error || "Файл невалиден"
-                    }</span>
-                `;
+      <span class="validation-icon validation-error">✗</span>
+      <span class="validation-error"> Ошибка валидации: ${error || "Файл невалиден"}</span>
+    `;
   }
 }
 
@@ -129,22 +129,10 @@ function parseLogLine(line) {
   let className = "log-line";
 
   processedLine = processedLine
-    .replace(
-      /\u001b\[32m(.*?)\u001b\[0m/g,
-      '<span style="color: #10b981;">$1</span>'
-    )
-    .replace(
-      /\u001b\[33m(.*?)\u001b\[0m/g,
-      '<span style="color: #f59e0b;">$1</span>'
-    )
-    .replace(
-      /\u001b\[31m(.*?)\u001b\[0m/g,
-      '<span style="color: #ef4444;">$1</span>'
-    )
-    .replace(
-      /\u001b\[36m(.*?)\u001b\[0m/g,
-      '<span style="color: #06b6d4;">$1</span>'
-    )
+    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, '<span style="color: #10b981;">$1</span>')
+    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, '<span style="color: #f59e0b;">$1</span>')
+    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, '<span style="color: #ef4444;">$1</span>')
+    .replace(/\u001b\[36m(.*?)\u001b\[0m/g, '<span style="color: #06b6d4;">$1</span>')
     .replace(/\u001b\[\d+m/g, "");
 
   processedLine = processedLine
@@ -162,93 +150,6 @@ function parseLogLine(line) {
     .replace(/\[Error\]/g, '<span style="color: #ef4444;">[Error]</span>');
 
   return { className, content: processedLine };
-}
-
-function checkServiceStatusFromLogs(newLogContent) {
-  if (isActionInProgress && newLogContent !== lastLogContent) {
-    const lines = newLogContent.split("\n");
-
-    for (const line of lines.slice(-10)) {
-      const cleanLine = line.replace(/\u001b\[\d+m/g, "");
-
-      if (
-        cleanLine.includes("Прокси-клиент") &&
-        cleanLine.includes("запущен")
-      ) {
-        console.log("Found startup line in logs!");
-        isServiceRunning = true;
-        isActionInProgress = false;
-        updateServiceStatus(true);
-        break;
-      }
-    }
-  }
-}
-
-function handleNewLogContent(data) {
-  const container = document.getElementById("logsContainer");
-  const wasAtBottom =
-    container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
-
-  if (data.type === "initial") {
-    allLogLines = data.allLines || [];
-    displayLines = data.displayLines || [];
-  } else if (data.type === "append") {
-    const newLines = data.content.split("\n").filter((line) => line.trim());
-    allLogLines.push(...newLines);
-    if (!logFilter) {
-      displayLines.push(...newLines);
-      displayLines = displayLines.slice(-1000);
-    }
-  } else if (data.type === "filtered") {
-    displayLines = data.lines || [];
-  }
-
-  renderLines(container, displayLines);
-
-  if (wasAtBottom && !userScrolled) {
-    container.scrollTop = container.scrollHeight;
-  }
-}
-
-function applyFilter() {
-  if (!logFilter || logFilter.trim() === "") {
-    displayLines = allLogLines.slice(-1000);
-    renderLines(document.getElementById("logsContainer"), displayLines);
-  } else {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "filter",
-          query: logFilter,
-        })
-      );
-    }
-  }
-}
-
-function renderFilteredLines(container) {
-  if (filteredIndices.length === 0) {
-    container.classList.add("centered");
-    container.innerHTML = `<div style="color: #6b7280;">${
-      logLines.length === 0 ? "Журнал пуст" : "Нет совпадений"
-    }</div>`;
-    return;
-  }
-
-  container.classList.remove("centered");
-  const visibleIndices = filteredIndices.slice(-100);
-  const html = visibleIndices
-    .map((i) => {
-      const parsed = parseLogLine(logLines[i]);
-      return parsed
-        ? `<div class="${parsed.className}">${parsed.content}</div>`
-        : "";
-    })
-    .filter(Boolean)
-    .join("");
-
-  container.innerHTML = html;
 }
 
 function updateServiceStatus(running) {
@@ -270,8 +171,7 @@ function updateServiceStatus(running) {
 }
 
 function renderLines(container, lines) {
-  const wasAtBottom =
-    container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
+  const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
 
   if (lines.length === 0) {
     container.classList.add("centered");
@@ -283,9 +183,7 @@ function renderLines(container, lines) {
   const processedLines = lines
     .map((line) => {
       const parsed = parseLogLine(line);
-      return parsed
-        ? `<div class="${parsed.className}">${parsed.content}</div>`
-        : "";
+      return parsed ? `<div class="${parsed.className}">${parsed.content}</div>` : "";
     })
     .filter(Boolean);
 
@@ -293,6 +191,20 @@ function renderLines(container, lines) {
 
   if (wasAtBottom && !userScrolled) {
     container.scrollTop = container.scrollHeight;
+  }
+}
+
+function applyFilter() {
+  if (!logFilter || logFilter.trim() === "") {
+    displayLines = allLogLines.slice(-1000);
+    renderLines(document.getElementById("logsContainer"), displayLines);
+  } else {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "filter",
+        query: logFilter,
+      }));
+    }
   }
 }
 
@@ -317,9 +229,7 @@ function connectWebSocket() {
   };
 
   ws.onclose = (event) => {
-    console.warn(
-      `WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`
-    );
+    console.warn(`WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`);
     clearInterval(pingInterval);
     setTimeout(connectWebSocket, 1000);
   };
@@ -329,72 +239,63 @@ function connectWebSocket() {
     ws.close();
   };
 
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
 
-  if (data.type === "pong") {
-    return;
-  }
+    if (data.type === "pong") return;
 
-  if (data.error) {
-    console.error("WebSocket error:", data.error);
-    const container = document.getElementById("logsContainer");
-    container.classList.add("centered");
-    container.innerHTML =
-      '<div style="color: #ef4444;">Ошибка WebSocket: ' +
-      data.error +
-      "</div>";
-    return;
-  }
-
-  if (data.type === "initial") {
-    allLogLines = data.allLines || [];
-    displayLines = data.displayLines || [];
-    renderLines(document.getElementById("logsContainer"), displayLines);
-
-    if (logFilter && logFilter.trim() !== "") {
-      applyFilter();
+    if (data.error) {
+      console.error("WebSocket error:", data.error);
+      const container = document.getElementById("logsContainer");
+      container.classList.add("centered");
+      container.innerHTML = `<div style="color: #ef4444;">Ошибка WebSocket: ${data.error}</div>`;
+      return;
     }
-    return;
-  }
 
-  if (data.type === "clear") {
-    allLogLines = [];
-    displayLines = [];
-    const container = document.getElementById("logsContainer");
-    container.classList.add("centered");
-    container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>';
-    lastLogContent = "";
-    return;
-  }
-
-  if (data.type === "append") {
-    const newLines = data.content.split("\n").filter((line) => line.trim());
-    allLogLines.push(...newLines);
-
-    if (!logFilter) {
-      displayLines.push(...newLines);
-      displayLines = displayLines.slice(-1000);
+    if (data.type === "initial") {
+      allLogLines = data.allLines || [];
+      displayLines = data.displayLines || [];
       renderLines(document.getElementById("logsContainer"), displayLines);
-    } else {
-      const matchedNewLines = newLines.filter((line) =>
-        line.includes(logFilter)
-      );
 
-      if (matchedNewLines.length > 0) {
-        displayLines.push(...matchedNewLines);
-        renderLines(document.getElementById("logsContainer"), displayLines);
+      if (logFilter && logFilter.trim() !== "") {
+        applyFilter();
       }
+      return;
     }
-    return;
-  }
 
-  if (data.type === "filtered") {
-    displayLines = data.lines || [];
-    renderLines(document.getElementById("logsContainer"), displayLines);
-    return;
-  }
-};
+    if (data.type === "clear") {
+      allLogLines = [];
+      displayLines = [];
+      const container = document.getElementById("logsContainer");
+      container.classList.add("centered");
+      container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>';
+      return;
+    }
+
+    if (data.type === "append") {
+      const newLines = data.content.split("\n").filter((line) => line.trim());
+      allLogLines.push(...newLines);
+
+      if (!logFilter) {
+        displayLines.push(...newLines);
+        displayLines = displayLines.slice(-1000);
+        renderLines(document.getElementById("logsContainer"), displayLines);
+      } else {
+        const matchedNewLines = newLines.filter((line) => line.includes(logFilter));
+        if (matchedNewLines.length > 0) {
+          displayLines.push(...matchedNewLines);
+          renderLines(document.getElementById("logsContainer"), displayLines);
+        }
+      }
+      return;
+    }
+
+    if (data.type === "filtered") {
+      displayLines = data.lines || [];
+      renderLines(document.getElementById("logsContainer"), displayLines);
+      return;
+    }
+  };
 }
 
 function switchLogFile(newLogFile) {
@@ -403,12 +304,10 @@ function switchLogFile(newLogFile) {
   currentLogFile = newLogFile;
 
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(
-      JSON.stringify({
-        type: "switchFile",
-        file: newLogFile,
-      })
-    );
+    ws.send(JSON.stringify({
+      type: "switchFile",
+      file: newLogFile,
+    }));
   }
 }
 
@@ -585,7 +484,19 @@ function updateUIDirtyState() {
   renderTabs();
 }
 
-function validateCurrentJSON() {
+function updateUIDirtyState() {
+  const saveBtn = document.getElementById("saveBtn");
+  const currentConfig = configs[activeConfigIndex];
+
+  if (currentConfig) {
+    saveBtn.disabled = !currentConfig.isDirty;
+  } else {
+    saveBtn.disabled = true;
+  }
+  renderTabs();
+}
+
+function validateCurrentFile() {
   if (!monacoEditor || typeof monaco === "undefined") return;
 
   const model = monacoEditor.getModel();
@@ -623,33 +534,59 @@ function validateCurrentJSON() {
       updateValidationInfo(false, errorMarker.message);
     }
   } else if (language === 'yaml') {
-    updateValidationInfo(true);
+    try {
+      const content = monacoEditor.getValue();
+      const lines = content.split('\n');
+      let hasError = false;
+      let errorMsg = '';
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.trim() === '' || line.trim().startsWith('#')) continue;
+
+        if (line.match(/^\s*-\s*$/)) {
+          hasError = true;
+          errorMsg = `Строка ${i + 1}: пустой список`;
+          break;
+        }
+
+        if (line.includes(':') && !line.match(/^\s*[\w\-\"\']+\s*:\s*.*/)) {
+          const colonCount = (line.match(/:/g) || []).length;
+          if (colonCount > 1 && !line.match(/^\s*[\w\-\"\']+\s*:\s*[^:]*$/)) {
+            hasError = true;
+            errorMsg = `Строка ${i + 1}: неправильное использование двоеточия`;
+            break;
+          }
+        }
+      }
+
+      if (hasError) {
+        updateValidationInfo(false, errorMsg);
+      } else {
+        updateValidationInfo(true);
+      }
+    } catch (e) {
+      updateValidationInfo(false, "Ошибка парсинга YAML");
+    }
   }
 }
 
 function renderTabs() {
   const tabsList = document.getElementById("tabsList");
-  const existingIndicator = tabsList
-    ? tabsList.querySelector(".tab-active-indicator")
-    : null;
-  const previousTransform = existingIndicator
-    ? existingIndicator.style.transform
-    : null;
+  const existingIndicator = tabsList ? tabsList.querySelector(".tab-active-indicator") : null;
+  const previousTransform = existingIndicator ? existingIndicator.style.transform : null;
   tabsList.innerHTML = "";
 
   tabsList.classList.toggle("empty", isConfigsLoading || configs.length === 0);
 
-  const editorControlsSkeletons = document.getElementById(
-    "editorControlsSkeletons"
-  );
+  const editorControlsSkeletons = document.getElementById("editorControlsSkeletons");
   const saveBtn = document.getElementById("saveBtn");
   const formatBtn = document.getElementById("formatBtn");
   const validationSkeleton = document.getElementById("validationSkeleton");
   const validationInfo = document.getElementById("validationInfo");
 
   if (isConfigsLoading) {
-    if (editorControlsSkeletons)
-      editorControlsSkeletons.style.display = "inline-flex";
+    if (editorControlsSkeletons) editorControlsSkeletons.style.display = "inline-flex";
     if (saveBtn) saveBtn.style.display = "none";
     if (formatBtn) formatBtn.style.display = "none";
     if (validationSkeleton) validationSkeleton.style.display = "block";
@@ -680,13 +617,8 @@ function renderTabs() {
 
   configs.forEach((config, index) => {
     const tabTrigger = document.createElement("button");
-    tabTrigger.className = `tab-trigger ${
-      index === activeConfigIndex ? "active" : ""
-    } ${config.isDirty ? "dirty" : ""}`;
-    tabTrigger.innerHTML = `
-                    ${config.name}
-                    <span class="dirty-indicator"></span>
-                `;
+    tabTrigger.className = `tab-trigger ${index === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`;
+    tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`;
     tabTrigger.onclick = () => attemptSwitchTab(index);
     tabsList.appendChild(tabTrigger);
   });
@@ -748,8 +680,7 @@ function discardAndSwitch() {
 }
 
 function switchTab(index) {
-  if (index < 0 || index >= configs.length || index === activeConfigIndex)
-    return;
+  if (index < 0 || index >= configs.length || index === activeConfigIndex) return;
 
   activeConfigIndex = index;
 
@@ -763,7 +694,7 @@ function switchTab(index) {
   }
   renderTabs();
   updateUIDirtyState();
-  validateCurrentJSON();
+  validateCurrentFile();
   requestAnimationFrame(updateActiveTabIndicator);
 }
 
@@ -775,10 +706,7 @@ async function apiCall(endpoint, data = null) {
     };
     if (data) options.body = JSON.stringify(data);
 
-    const response = await fetch(
-      `http://192.168.1.1:1000/cgi/${endpoint}`,
-      options
-    );
+    const response = await fetch(`http://192.168.1.1:1000/cgi/${endpoint}`, options);
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` };
@@ -823,8 +751,7 @@ async function loadConfigs() {
 }
 
 async function saveCurrentConfig() {
-  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor)
-    return;
+  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return;
 
   const config = configs[activeConfigIndex];
   const content = monacoEditor.getValue();
@@ -846,13 +773,10 @@ async function saveCurrentConfig() {
           m.severity === monaco.MarkerSeverity.Error
       );
       if (errorMarker) {
-        showToast(
-          {
-            title: "Ошибка сохранения",
-            body: `Invalid JSON: ${errorMarker.message}`,
-          },
-          "error"
-        );
+        showToast({
+          title: "Ошибка сохранения",
+          body: `Invalid JSON: ${errorMarker.message}`,
+        }, "error");
         return;
       }
     }
@@ -887,27 +811,22 @@ function formatCurrentConfig() {
   const currentConfig = configs[activeConfigIndex];
   const language = getFileLanguage(currentConfig.filename);
 
-  if (language !== 'json') {
-    showToast("Форматирование доступно только для JSON файлов", "error");
-    return;
-  }
-
-  const formatAction = monacoEditor.getAction("editor.action.formatDocument");
-  if (formatAction) {
-    formatAction.run().catch((e) => {
-      showToast(
-        `Ошибка форматирования: ${e?.message || "неизвестная ошибка"}`,
-        "error"
-      );
-    });
+  if (language === 'json') {
+    const formatAction = monacoEditor.getAction("editor.action.formatDocument");
+    if (formatAction) {
+      formatAction.run().catch((e) => {
+        showToast(`Ошибка форматирования: ${e?.message || "неизвестная ошибка"}`, "error");
+      });
+    } else {
+      showToast("Форматирование недоступно", "error");
+    }
   } else {
-    showToast("Форматирование недоступно", "error");
+    showToast("Форматирование доступно только для JSON файлов", "error");
   }
 }
 
 async function checkStatus() {
   if (isActionInProgress) return;
-
   const result = await apiCall("status");
   updateServiceStatus(result.running);
 }
@@ -959,14 +878,136 @@ async function restartXkeen() {
       isServiceRunning = true;
       updateServiceStatus(true);
     } else {
-      showToast(
-        `Ошибка перезапуска: ${result.output || result.error}`,
-        "error"
-      );
+      showToast(`Ошибка перезапуска: ${result.output || result.error}`, "error");
       isActionInProgress = false;
       checkStatus();
     }
   } catch (e) {
+    isActionInProgress = false;
+    checkStatus();
+  }
+}
+
+async function clearCurrentLog() {
+  if (!currentLogFile) {
+    showToast("Не выбран файл лога", "error");
+    return;
+  }
+
+  try {
+    const result = await apiCall("logs", {
+      action: "clear",
+      file: currentLogFile
+    });
+
+    if (result.success) {
+      allLogLines = [];
+      displayLines = [];
+
+      const container = document.getElementById("logsContainer");
+      container.classList.add("centered");
+      container.innerHTML = '<div style="color: #6b7280;">Лог очищен</div>';
+
+      showToast(`Лог ${currentLogFile} очищен`);
+    } else {
+      showToast(`Ошибка очистки лога: ${result.error}`, "error");
+    }
+  } catch (error) {
+    showToast(`Ошибка: ${error.message}`, "error");
+  }
+}
+
+async function loadCores() {
+  try {
+    const result = await apiCall("core");
+    if (result.success) {
+      availableCores = result.cores || [];
+      currentCore = result.currentCore || "xray"; // Добавляем значение по умолчанию
+
+      const coreSelectRoot = document.getElementById("coreSelectRoot");
+      const coreSelectLabel = document.getElementById("coreSelectLabel");
+
+      if (availableCores.length >= 2) {
+        coreSelectRoot.style.display = "inline-block";
+        coreSelectLabel.textContent = currentCore;
+
+        const items = document.querySelectorAll("#coreSelectContent .select-item");
+        items.forEach((item) => {
+          const value = item.getAttribute("data-value");
+          item.setAttribute("aria-selected", value === currentCore ? "true" : "false");
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Error loading cores:", error);
+  }
+}
+
+function closeCoreModal() {
+  pendingCoreChange = "";
+  document.getElementById("coreModal").classList.remove("show");
+}
+
+async function confirmCoreChange() {
+  console.log("confirmCoreChange called");
+
+  // Получаем значение напрямую из модального окна
+  const selectedCoreElement = document.getElementById("selectedCore");
+  const selectedCore = selectedCoreElement ? selectedCoreElement.textContent : "";
+
+  console.log("Selected core from DOM:", selectedCore);
+
+  if (!selectedCore || (selectedCore !== "xray" && selectedCore !== "mihomo")) {
+    showToast("Ошибка: не выбрано ядро", "error");
+    return;
+  }
+
+  closeCoreModal();
+  setPendingState("Меняется ядро...");
+
+  try {
+    console.log("Sending API request with core:", selectedCore);
+    const result = await apiCall("core", { core: selectedCore });
+
+    console.log("API response:", result);
+
+    if (result.success) {
+      showToast(`Ядро изменено на ${selectedCore}`);
+      currentCore = selectedCore;
+
+      // Обновляем интерфейс выбора ядра
+      const coreSelectLabel = document.getElementById("coreSelectLabel");
+      if (coreSelectLabel) {
+        coreSelectLabel.textContent = currentCore;
+      }
+
+      const items = document.querySelectorAll("#coreSelectContent .select-item");
+      items.forEach((item) => {
+        const value = item.getAttribute("data-value");
+        if (item && value) {
+          item.setAttribute("aria-selected", value === currentCore ? "true" : "false");
+        }
+      });
+
+      // Сбрасываем статус действия
+      isActionInProgress = false;
+
+      // Ждем немного перед проверкой статуса
+      setTimeout(() => {
+        checkStatus().then(() => {
+          console.log("Status checked after core change");
+          forceReloadConfigs();
+        });
+      }, 100);
+
+    } else {
+      showToast(`Ошибка смены ядра: ${result.error}`, "error");
+      isActionInProgress = false;
+      checkStatus();
+    }
+  } catch (error) {
+    console.error("Core change error:", error);
+    showToast(`Ошибка: ${error.message}`, "error");
     isActionInProgress = false;
     checkStatus();
   }
@@ -980,6 +1021,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const logSelectLabel = document.getElementById("logSelectLabel");
   const logFilterInput = document.getElementById("logFilterInput");
   const tabsList = document.getElementById("tabsList");
+
+  const coreSelectRoot = document.getElementById("coreSelectRoot");
+  const coreSelectTrigger = document.getElementById("coreSelectTrigger");
+  const coreSelectContent = document.getElementById("coreSelectContent");
+
   if (tabsList) tabsList.classList.add("empty");
   isConfigsLoading = true;
   isStatusLoading = true;
@@ -999,34 +1045,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const tabsScroll = document.querySelector(".tabs-scroll");
   if (tabsScroll) {
-    tabsScroll.addEventListener(
-      "wheel",
-      (e) => {
-        const canScroll = tabsScroll.scrollWidth > tabsScroll.clientWidth;
-        if (!canScroll) return;
-        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-          e.preventDefault();
-          tabsScroll.scrollLeft += e.deltaY;
-        }
-      },
-      { passive: false }
-    );
+    tabsScroll.addEventListener("wheel", (e) => {
+      const canScroll = tabsScroll.scrollWidth > tabsScroll.clientWidth;
+      if (!canScroll) return;
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        tabsScroll.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
 
-    tabsScroll.addEventListener(
-      "scroll",
-      () => {
-        requestAnimationFrame(
-          () => updateActiveTabIndicator && updateActiveTabIndicator()
-        );
-      },
-      { passive: true }
-    );
+    tabsScroll.addEventListener("scroll", () => {
+      requestAnimationFrame(() => updateActiveTabIndicator && updateActiveTabIndicator());
+    }, { passive: true });
   }
 
   logsContainer.addEventListener("scroll", () => {
-    const isAtBottom =
-      logsContainer.scrollTop + logsContainer.clientHeight >=
-      logsContainer.scrollHeight - 5;
+    const isAtBottom = logsContainer.scrollTop + logsContainer.clientHeight >= logsContainer.scrollHeight - 5;
     userScrolled = !isAtBottom;
   });
 
@@ -1040,7 +1074,7 @@ document.addEventListener("DOMContentLoaded", () => {
     logSelectTrigger.setAttribute("aria-expanded", "true");
   }
 
-  function setActiveItem(value) {
+  function setActiveLogItem(value) {
     const items = logSelectContent.querySelectorAll(".select-item");
     items.forEach((el) => {
       const selected = el.getAttribute("data-value") === value;
@@ -1052,7 +1086,36 @@ document.addEventListener("DOMContentLoaded", () => {
     if (currentLogFile === value) return;
     switchLogFile(value);
     logSelectLabel.textContent = value;
-    setActiveItem(value);
+    setActiveLogItem(value);
+  }
+
+  function closeCoreMenu() {
+    coreSelectRoot.classList.remove("select-open");
+    coreSelectTrigger.setAttribute("aria-expanded", "false");
+  }
+
+  function openCoreMenu() {
+    coreSelectRoot.classList.add("select-open");
+    coreSelectTrigger.setAttribute("aria-expanded", "true");
+  }
+
+  function applyCoreSelection(value) {
+    console.log("applyCoreSelection called with:", value);
+    if (!value) {
+      console.error("Empty value provided to applyCoreSelection");
+      return;
+    }
+
+    if (value === currentCore) {
+      console.log("Same core selected, ignoring");
+      return;
+    }
+
+    pendingCoreChange = value;
+    console.log("pendingCoreChange set to:", pendingCoreChange);
+
+    document.getElementById("selectedCore").textContent = value;
+    document.getElementById("coreModal").classList.add("show");
   }
 
   logSelectTrigger.addEventListener("click", (e) => {
@@ -1080,23 +1143,51 @@ document.addEventListener("DOMContentLoaded", () => {
     logSelectRoot.classList.remove("select-hovering");
   });
 
+  coreSelectTrigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = coreSelectRoot.classList.contains("select-open");
+    if (isOpen) {
+      closeCoreMenu();
+    } else {
+      openCoreMenu();
+    }
+  });
+
+  coreSelectContent.addEventListener("click", (e) => {
+    const target = e.target.closest(".select-item");
+    if (!target) return;
+
+    const value = target.getAttribute("data-value");
+    console.log("Core selected:", value);
+
+    applyCoreSelection(value);
+    closeCoreMenu();
+  });
+
+  coreSelectContent.addEventListener("mouseenter", () => {
+    coreSelectRoot.classList.add("select-hovering");
+  });
+  coreSelectContent.addEventListener("mouseleave", () => {
+    coreSelectRoot.classList.remove("select-hovering");
+  });
+
   document.addEventListener("click", (e) => {
     if (!logSelectRoot.contains(e.target)) {
       closeLogMenu();
+    }
+    if (!coreSelectRoot.contains(e.target)) {
+      closeCoreMenu();
     }
   });
 
   logSelectTrigger.addEventListener("keydown", (e) => {
     const items = Array.from(logSelectContent.querySelectorAll(".select-item"));
-    const currentIndex = items.findIndex(
-      (i) => i.getAttribute("data-value") === currentLogFile
-    );
+    const currentIndex = items.findIndex((i) => i.getAttribute("data-value") === currentLogFile);
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!logSelectRoot.classList.contains("select-open")) openLogMenu();
       let nextIndex = currentIndex;
-      if (e.key === "ArrowDown")
-        nextIndex = Math.min(items.length - 1, currentIndex + 1);
+      if (e.key === "ArrowDown") nextIndex = Math.min(items.length - 1, currentIndex + 1);
       if (e.key === "ArrowUp") nextIndex = Math.max(0, currentIndex - 1);
       const nextItem = items[nextIndex];
       if (nextItem) {
@@ -1136,14 +1227,14 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   logSelectLabel.textContent = currentLogFile;
-  setActiveItem(currentLogFile);
+  setActiveLogItem(currentLogFile);
 
   initMonacoEditor();
   checkStatus();
+  loadCores();
 
   logsContainer.classList.add("centered");
-  logsContainer.innerHTML =
-    '<div style="color: #6b7280;">Подключение к WebSocket...</div>';
+  logsContainer.innerHTML = '<div style="color: #6b7280;">Подключение к WebSocket...</div>';
 
   connectWebSocket();
 });
@@ -1158,31 +1249,45 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-async function clearCurrentLog() {
-  if (!currentLogFile) {
-    showToast("Не выбран файл лога", "error");
-    return;
-  }
+async function forceReloadConfigs() {
+  console.log("Force reloading configs...");
 
-  try {
-    const result = await apiCall("logs", {
-      action: "clear",
-      file: currentLogFile
-    });
+  isConfigsLoading = true;
+  const tabsList = document.getElementById("tabsList");
+  if (tabsList) tabsList.classList.add("empty");
+  renderTabs();
 
-    if (result.success) {
-      allLogLines = [];
-      displayLines = [];
+  configs = [];
+  activeConfigIndex = -1;
 
-      const container = document.getElementById("logsContainer");
-      container.classList.add("centered");
-      container.innerHTML = '<div style="color: #6b7280;">Лог очищен</div>';
+  await new Promise(resolve => setTimeout(resolve, 500));
 
-      showToast(`Лог ${currentLogFile} очищен`);
+  const result = await apiCall("configs");
+
+  if (result.success && result.configs) {
+    configs = result.configs.map((c) => ({
+      ...c,
+      savedContent: c.content,
+      isDirty: false,
+    }));
+
+    if (configs.length > 0) {
+      isConfigsLoading = false;
+      if (tabsList) tabsList.classList.remove("empty");
+      switchTab(0);
+      console.log("Configs reloaded successfully, count:", configs.length);
     } else {
-      showToast(`Ошибка очистки лога: ${result.error}`, "error");
+      isConfigsLoading = false;
+      renderTabs();
+      updateUIDirtyState();
+      console.log("No configs found after reload");
     }
-  } catch (error) {
-    showToast(`Ошибка: ${error.message}`, "error");
+  } else {
+    isConfigsLoading = false;
+    showToast("Ошибка загрузки конфигов после смены ядра", "error");
+    renderTabs();
+    console.error("Failed to reload configs:", result.error);
   }
+
+  updateUIDirtyState();
 }

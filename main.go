@@ -20,10 +20,10 @@ import (
 )
 
 type ClientType struct {
-	Name       string
-	ConfigDir  string
-	ConfigExt  string
-	IsJSON     bool
+	Name      string
+	ConfigDir string
+	ConfigExt string
+	IsJSON    bool
 }
 
 var (
@@ -493,11 +493,6 @@ func configsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func isValidJSON(content string) bool {
-	var js json.RawMessage
-	return json.Unmarshal([]byte(content), &js) == nil
-}
-
 func isValidYAML(content string) bool {
 	var data interface{}
 	return yaml.Unmarshal([]byte(content), &data) == nil
@@ -613,11 +608,6 @@ func postConfigs(w http.ResponseWriter, r *http.Request) {
 				if !strings.HasSuffix(filename, ".json") {
 					filename += ".json"
 				}
-
-				if !isValidJSON(req.Content) {
-					jsonResponse(w, Response{Success: false, Error: "Невалидный JSON"}, 400)
-					return
-				}
 			} else {
 				if !isValidYAML(req.Content) {
 					jsonResponse(w, Response{Success: false, Error: "Невалидный YAML"}, 400)
@@ -708,6 +698,96 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func coreHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		cores := []string{}
+		if _, err := os.Stat("/opt/sbin/xray"); err == nil {
+			cores = append(cores, "xray")
+		}
+		if _, err := os.Stat("/opt/sbin/mihomo"); err == nil {
+			cores = append(cores, "mihomo")
+		}
+
+		currentCore := detectClientType().Name
+
+		jsonResponse(w, map[string]interface{}{
+			"success":     true,
+			"cores":       cores,
+			"currentCore": currentCore,
+		}, 200)
+
+	case "POST":
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Cannot read request body"}, 400)
+			return
+		}
+
+		var req struct {
+			Core string `json:"core"`
+		}
+
+		if err := json.Unmarshal(body, &req); err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Invalid JSON"}, 400)
+			return
+		}
+
+		if req.Core != "xray" && req.Core != "mihomo" {
+			jsonResponse(w, Response{Success: false, Error: "Недопустимое ядро"}, 400)
+			return
+		}
+
+		// Получаем текущее ядро
+		currentCore := detectClientType().Name
+
+		// Очищаем логи только при переходе с Xray на Mihomo
+		logFile := "/opt/var/log/xray/error.log"
+		if currentCore == "xray" && req.Core == "mihomo" {
+			os.Truncate(logFile, 0)
+		}
+
+		// Открываем лог-файл для записи
+		logFileHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Cannot open log file"}, 500)
+			return
+		}
+		defer logFileHandle.Close()
+
+		var cmd1, cmd2 *exec.Cmd
+		if req.Core == "mihomo" {
+			cmd1 = exec.Command("xkeen", "-mihomo")
+		} else {
+			cmd1 = exec.Command("xkeen", "-xray")
+		}
+		cmd2 = exec.Command("xkeen", "-start")
+
+		// Перенаправляем вывод обеих команд в лог-файл
+		cmd1.Stdout = logFileHandle
+		cmd1.Stderr = logFileHandle
+		cmd2.Stdout = logFileHandle
+		cmd2.Stderr = logFileHandle
+
+		// Выполняем первую команду (смена ядра)
+		if err := cmd1.Run(); err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Ошибка смены ядра"}, 500)
+			return
+		}
+
+		// Выполняем вторую команду (запуск ядра)
+		if err := cmd2.Run(); err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Ошибка запуска ядра"}, 500)
+			return
+		}
+
+		jsonResponse(w, Response{Success: true, Data: "Ядро изменено и запущено"}, 200)
+
+	default:
+		jsonResponse(w, Response{Success: false, Error: "Method not allowed"}, 405)
+	}
+}
+
 func main() {
 	currentClient = detectClientType()
 	log.Printf("Detected client: %s, config dir: %s", currentClient.Name, currentClient.ConfigDir)
@@ -718,6 +798,7 @@ func main() {
 		mux.HandleFunc("/cgi/logs", logsHandler)
 		mux.HandleFunc("/cgi/configs", configsHandler)
 		mux.HandleFunc("/cgi/control", controlHandler)
+		mux.HandleFunc("/cgi/core", coreHandler)
 
 		if err := fcgi.Serve(nil, mux); err != nil {
 			log.Println("Error from fcgi.Serve:", err)
