@@ -30,7 +30,6 @@ esac
 
 curl -Lo /opt/sbin/xkeen-ui $download_url/$bin
 chmod +x /opt/sbin/xkeen-ui
-echo $architecture
 
 opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv
 
