@@ -4,32 +4,29 @@ architecture=$(uname -m | tr '[:upper:]' '[:lower:]')
 download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
 
 case $architecture in
-    *'armv8'* | *'aarch64'* | *'cortex-a'* )
-        bin="xkeen-ui-arm64-v8a"
-        ;;
-    *'armv5tel'* | *'armv6l'* | *'armv7'* )
-        bin="xkeen-ui-arm32-v5"
-        ;;
-    *'mips'* )
-        bin="xkeen-ui-mips32"
-        ;;
-    *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* )
-        bin="xkeen-ui-mips32le"
-        ;;
-    *'mips64'* )
-        bin="xkeen-ui-mips64"
-        ;;
-    *'mips64le'* )
-        bin="xkeen-ui-mips64le"
-        ;;
-    *)
-        echo "Неизвестная архитектура: $architecture"
-        exit 1
-        ;;
+*'armv8'* | *'aarch64'* | *'cortex-a'*)
+  bin="xkeen-ui-arm64-v8a"
+  ;;
+*'armv5tel'* | *'armv6l'* | *'armv7'*)
+  bin="xkeen-ui-arm32-v5"
+  ;;
+*'mips'*)
+  bin="xkeen-ui-mips32"
+  ;;
+*'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'*)
+  bin="xkeen-ui-mips32le"
+  ;;
+*'mips64'*)
+  bin="xkeen-ui-mips64"
+  ;;
+*'mips64le'*)
+  bin="xkeen-ui-mips64le"
+  ;;
+*)
+  echo "Неизвестная архитектура: $architecture"
+  exit 1
+  ;;
 esac
-
-curl -Lo /opt/sbin/xkeen-ui $download_url/$bin
-chmod +x /opt/sbin/xkeen-ui
 
 opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv
 
@@ -55,17 +52,20 @@ $SERVER["socket"] == ":1000" {
 EOF
 
 mkdir -p /opt/share/www/XKeen-UI
-curl -Lfo /opt/share/www/XKeen-UI/index.html https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/index.html
-curl -Lfo /opt/share/www/XKeen-UI/script.js https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/script.js
-curl -Lfo /opt/share/www/XKeen-UI/style.css https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/style.css
-curl -Lfo /opt/share/www/XKeen-UI/favicon.png https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/favicon.png
+for file in index.html script.js style.css favicon.png; do
+  curl -Lfo /opt/share/www/XKeen-UI/$file https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/$file
+done
+
+curl -Lfo /opt/sbin/xkeen-ui $download_url/$bin && chmod +x /opt/sbin/xkeen-ui
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
-    /opt/etc/init.d/S80lighttpd stop
-    sed -i -E "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
-    /opt/etc/init.d/S80lighttpd start
+  /opt/etc/init.d/S80lighttpd stop
+  sed -i -E "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
+  /opt/etc/init.d/S80lighttpd start
 fi
 
 router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
+
+echo ""
 echo "Успех!"
 echo "XKeen-UI доступен по адресу: http://$router_ip:1000"
