@@ -16,6 +16,7 @@ let displayLines = [];
 let availableCores = [];
 let currentCore = "";
 let pendingCoreChange = "";
+let isCurrentFileJson = false;
 
 require.config({
   paths: {
@@ -68,6 +69,18 @@ function showToast(message, type = "success") {
 
 function updateValidationInfo(isValid, error = null) {
   const validationInfo = document.getElementById("validationInfo");
+  const currentConfig = configs[activeConfigIndex];
+
+  // Всегда проверяем тип файла перед отображением
+  const shouldShow = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
+
+  if (!shouldShow) {
+    validationInfo.style.display = 'none';
+    return;
+  }
+
+  validationInfo.style.display = 'flex';
+
   if (isValid) {
     validationInfo.innerHTML = `
       <span class="validation-icon validation-success">✓</span>
@@ -423,6 +436,12 @@ function initMonacoEditor() {
     }
 
     monaco.editor.onDidChangeMarkers((uris) => {
+      const currentConfig = configs[activeConfigIndex];
+      if (!currentConfig || getFileLanguage(currentConfig.filename) !== 'json') {
+        updateValidationInfo(false);
+        return;
+      }
+
       const model = monacoEditor.getModel();
       if (!model) return;
 
@@ -448,6 +467,10 @@ function initMonacoEditor() {
         if (currentConfig.isDirty !== isDirty) {
           currentConfig.isDirty = isDirty;
           updateUIDirtyState();
+        }
+
+        if (getFileLanguage(currentConfig.filename) !== 'json') {
+          updateValidationInfo(false);
         }
       }
     });
@@ -484,20 +507,15 @@ function updateUIDirtyState() {
   renderTabs();
 }
 
-function updateUIDirtyState() {
-  const saveBtn = document.getElementById("saveBtn");
-  const currentConfig = configs[activeConfigIndex];
-
-  if (currentConfig) {
-    saveBtn.disabled = !currentConfig.isDirty;
-  } else {
-    saveBtn.disabled = true;
-  }
-  renderTabs();
-}
-
 function validateCurrentFile() {
   if (!monacoEditor || typeof monaco === "undefined") return;
+
+  const currentConfig = configs[activeConfigIndex];
+
+  if (!currentConfig || getFileLanguage(currentConfig.filename) !== 'json') {
+    updateValidationInfo(false);
+    return;
+  }
 
   const model = monacoEditor.getModel();
   if (!model) {
@@ -505,69 +523,19 @@ function validateCurrentFile() {
     return;
   }
 
-  const currentConfig = configs[activeConfigIndex];
-  if (!currentConfig) {
+  const markers = monaco.editor.getModelMarkers({ owner: "json" });
+  const currentModelMarkers = markers.filter(
+    (marker) => marker.resource.toString() === model.uri.toString()
+  );
+
+  const errorMarker = currentModelMarkers.find(
+    (m) => m.severity === monaco.MarkerSeverity.Error
+  );
+
+  if (!errorMarker) {
     updateValidationInfo(true);
-    return;
-  }
-
-  const language = getFileLanguage(currentConfig.filename);
-
-  if (language === 'plaintext') {
-    updateValidationInfo(true);
-    return;
-  }
-
-  if (language === 'json') {
-    const markers = monaco.editor.getModelMarkers({ owner: "json" });
-    const currentModelMarkers = markers.filter(
-      (marker) => marker.resource.toString() === model.uri.toString()
-    );
-
-    const errorMarker = currentModelMarkers.find(
-      (m) => m.severity === monaco.MarkerSeverity.Error
-    );
-
-    if (!errorMarker) {
-      updateValidationInfo(true);
-    } else {
-      updateValidationInfo(false, errorMarker.message);
-    }
-  } else if (language === 'yaml') {
-    try {
-      const content = monacoEditor.getValue();
-      const lines = content.split('\n');
-      let hasError = false;
-      let errorMsg = '';
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (line.trim() === '' || line.trim().startsWith('#')) continue;
-
-        if (line.match(/^\s*-\s*$/)) {
-          hasError = true;
-          errorMsg = `Строка ${i + 1}: пустой список`;
-          break;
-        }
-
-        if (line.includes(':') && !line.match(/^\s*[\w\-\"\']+\s*:\s*.*/)) {
-          const colonCount = (line.match(/:/g) || []).length;
-          if (colonCount > 1 && !line.match(/^\s*[\w\-\"\']+\s*:\s*[^:]*$/)) {
-            hasError = true;
-            errorMsg = `Строка ${i + 1}: неправильное использование двоеточия`;
-            break;
-          }
-        }
-      }
-
-      if (hasError) {
-        updateValidationInfo(false, errorMsg);
-      } else {
-        updateValidationInfo(true);
-      }
-    } catch (e) {
-      updateValidationInfo(false, "Ошибка парсинга YAML");
-    }
+  } else {
+    updateValidationInfo(false, errorMarker.message);
   }
 }
 
@@ -613,7 +581,11 @@ function renderTabs() {
   if (saveBtn) saveBtn.style.display = "inline-flex";
   if (formatBtn) formatBtn.style.display = "inline-flex";
   if (validationSkeleton) validationSkeleton.style.display = "none";
-  if (validationInfo) validationInfo.style.display = "flex";
+  if (validationInfo) {
+    const currentConfig = configs[activeConfigIndex];
+    const shouldShowValidation = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
+    validationInfo.style.display = shouldShowValidation ? "flex" : "none";
+  }
 
   // Разделяем конфиги
   const coreConfigs = configs.filter(config => !config.filename.endsWith('.lst'));
@@ -757,17 +729,26 @@ function switchTab(index) {
 
   activeConfigIndex = index;
 
-  if (monacoEditor && configs[index]) {
-    const config = configs[index];
+  const config = configs[index];
+  const formatBtn = document.getElementById('formatBtn');
+
+  if (config) {
+    const language = getFileLanguage(config.filename);
+    isCurrentFileJson = (language === 'json');
+    if (formatBtn) formatBtn.disabled = !isCurrentFileJson;
+  }
+
+  if (monacoEditor && config) {
     const language = getFileLanguage(config.filename);
 
-    monaco.editor.setModelLanguage(monacoEditor.getModel(), language);
     monacoEditor.setValue(config.content);
+    monaco.editor.setModelLanguage(monacoEditor.getModel(), language);
     config.isDirty = false;
   }
   renderTabs();
   updateUIDirtyState();
   validateCurrentFile();
+
   requestAnimationFrame(updateActiveTabIndicator);
 }
 
@@ -1036,7 +1017,7 @@ async function confirmCoreChange() {
   }
 
   closeCoreModal();
-  setPendingState("Меняется ядро...");
+  setPendingState("Выполняется смена ядра...");
 
   try {
     console.log("Sending API request with core:", selectedCore);

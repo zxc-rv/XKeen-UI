@@ -52,7 +52,8 @@ textarea {
   flex-wrap: wrap;
   gap: 12px;
   min-height: 57px;
-  position: relative; /* Для абсолютного позиционирования */
+  position: relative;
+  /* Для абсолютного позиционирования */
 }
 
 .controls-main {
@@ -67,7 +68,8 @@ textarea {
 }
 
 .core-select {
-  margin-left: auto; /* Прижимаем к правому краю */
+  margin-left: auto;
+  /* Прижимаем к правому краю */
   flex-shrink: 0;
 }
 
@@ -97,27 +99,27 @@ textarea {
 }
 
 .tabs-list {
-    display: inline-flex;
-    height: 36px;
-    justify-content: flex-start;
-    border-radius: 10px;
-    background: #1e293b;
-    padding: 3px;
-    gap: 2px;
-    flex-wrap: nowrap;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    width: fit-content;
-    position: relative;
+  display: inline-flex;
+  height: 36px;
+  justify-content: flex-start;
+  border-radius: 10px;
+  background: #1e293b;
+  padding: 3px;
+  gap: 2px;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  width: fit-content;
+  position: relative;
 }
 
 /* Стиль для разделителя между группами вкладок */
 .tab-separator {
-    width: 1px;
-    height: 24px;
-    background: #374151;
-    margin: 0 8px;
-    align-self: center;
+  width: 1px;
+  height: 24px;
+  background: #374151;
+  margin: 0 8px;
+  align-self: center;
 }
 
 
@@ -130,24 +132,25 @@ textarea {
   overflow: hidden;
   background: #1e293b;
 }
+
 .skeleton::after {
   content: "";
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.06) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0) 100%);
   animation: skeleton-shimmer 1.2s infinite;
 }
+
 @keyframes skeleton-shimmer {
   100% {
     transform: translateX(100%);
   }
 }
+
 .skeleton-tab {
   display: inline-block;
   height: 28px;
@@ -182,6 +185,7 @@ textarea {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .tabs-scroll::-webkit-scrollbar {
   height: 0;
   width: 0;
@@ -195,10 +199,10 @@ textarea {
 }
 
 .tab-group {
-    display: inline-flex;
-    gap: 2px;
-    border-radius: 8px;
-    padding: 3px;
+  display: inline-flex;
+  gap: 2px;
+  border-radius: 8px;
+  padding: 3px;
 }
 
 .tab-trigger {
@@ -316,6 +320,7 @@ textarea {
   position: relative;
   display: inline-block;
 }
+
 .select-trigger {
   display: inline-flex;
   align-items: center;
@@ -333,14 +338,17 @@ textarea {
     background-color 0.15s ease;
   min-width: 120px;
 }
+
 .select-trigger:hover {
   background-color: #1e293b;
 }
+
 .select-trigger:focus-visible {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
 }
+
 .select-trigger .label {
   flex: 1 1 auto;
   text-align: left;
@@ -348,15 +356,18 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .select-trigger .chevron {
   width: 16px;
   height: 16px;
   color: #a1a1aa;
   transition: transform 0.15s ease;
 }
+
 .select-open .select-trigger .chevron {
   transform: rotate(180deg);
 }
+
 .select-content {
   position: absolute;
   top: calc(100% + 6px);
@@ -376,12 +387,14 @@ textarea {
   pointer-events: none;
   transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
 }
+
 .select-open .select-content {
   opacity: 1;
   transform: translateY(0) scale(1);
   visibility: visible;
   pointer-events: auto;
 }
+
 .select-item {
   display: flex;
   align-items: center;
@@ -394,15 +407,18 @@ textarea {
   cursor: pointer;
   transition: background-color 0.12s ease, color 0.12s ease;
 }
+
 .select-item:hover,
 .select-item[aria-selected="true"] {
   background: #1e293b;
   color: #fafafa;
 }
+
 .select-open.select-hovering .select-item[aria-selected="true"]:not(:hover) {
   background: transparent;
   color: #e4e4e7;
 }
+
 .select-item .check {
   margin-left: auto;
   color: #a1a1aa;
@@ -410,14 +426,17 @@ textarea {
   opacity: 0;
   transition: opacity 0.12s ease;
 }
+
 .select-item[aria-selected="true"] .check {
   opacity: 1;
 }
+
 .select-separator {
   height: 1px;
   background: #1e293b;
   margin: 6px 4px;
 }
+
 .kbd {
   margin-left: auto;
   background: #0b1020;
@@ -564,10 +583,12 @@ textarea {
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -681,10 +702,12 @@ textarea {
   pointer-events: none;
   transition: opacity 0.2s ease-in-out;
 }
+
 .modal-overlay.show {
   opacity: 1;
   pointer-events: auto;
 }
+
 .modal-content {
   background-color: #020817;
   border: 1px solid #1e293b;
@@ -698,26 +721,31 @@ textarea {
   transform: scale(0.95);
   transition: transform 0.2s ease-in-out;
 }
+
 .modal-overlay.show .modal-content {
   transform: scale(1);
 }
+
 .modal-title {
   font-size: 1.135rem;
   font-weight: 600;
   margin-bottom: 12px;
   text-align: left;
 }
+
 .modal-body {
   font-size: 14px;
   color: #a1a1aa;
   margin-bottom: 24px;
   line-height: 1.3;
 }
+
 .modal-actions {
   display: flex;
   justify-content: right;
   gap: 8px;
 }
+
 .modal-actions .btn {
   padding: 6px 12px;
   min-width: 100px;
@@ -764,7 +792,7 @@ textarea {
 .panel-actions {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   margin-left: auto;
 }
 
@@ -850,6 +878,7 @@ textarea {
   position: relative;
   padding-left: 30px;
 }
+
 #startBtn::before {
   content: "";
   position: absolute;
@@ -903,14 +932,24 @@ textarea {
   .controls {
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 12px;
+    min-height: auto;
+    text-align: center;
   }
 
   .controls-main {
+    position: static;
+    transform: none;
+    display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     width: 100%;
+  }
+
+  .status {
+    align-self: center;
   }
 
   .core-select {
@@ -918,33 +957,58 @@ textarea {
     align-self: center;
   }
 
+  .controls-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    width: 100%;
+    align-self: center;
+  }
+
   .controls-skeletons {
     display: none !important;
   }
 
-  .controls-buttons {
-    display: flex;
-    gap: 8px;
-    flex-wrap: nowrap;
-    justify-content: center;
-  }
-
   .controls .btn {
     height: 35px;
-    padding: 0 12px;
-    min-width: 100px;
-    font-size: 14px;
+    padding: 0 8px;
+    min-width: 80px;
+    font-size: 12px;
   }
 
   .tabs-header {
     flex-direction: column;
     align-items: stretch;
   }
+
   .tabs-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .tab-group {
     overflow-x: auto;
     overflow-y: hidden;
-    width: 100%;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
   }
+
+  .xkeen-group {
+    align-self: center;
+    justify-self: center;
+  }
+
+  .tab-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabs-list {
+    min-width: max-content;
+  }
+
   .editor-controls {
     justify-content: center;
   }
@@ -961,7 +1025,7 @@ textarea {
   }
 
   .log-filter .input {
-    width: 140px;
+    width: 260px;
     padding: 2px 12px 2px 32px;
     background-position: 10px calc(50% + 2px);
   }
@@ -969,10 +1033,21 @@ textarea {
   .select-root {
     min-width: 120px;
   }
+
   .monaco-editor .iPadShowKeyboard,
   .monaco-editor .showKeyboard {
     display: none !important;
   }
+
+  .log-filter .input {
+    width: 160px;
+  }
+}
+
+.log-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .clear-log-btn {
@@ -981,7 +1056,8 @@ textarea {
   justify-content: center;
   gap: 6px;
   height: 35px;
-  padding: 0 12px;
+  width: 35px;
+  padding: 0 8px;
   border: 1px solid #1e293b;
   background-color: #020817;
   border-radius: 8px;
@@ -989,11 +1065,6 @@ textarea {
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
-}
-
-.clear-text {
-  font-size: 13px;
-  font-weight: 500;
 }
 
 .clear-log-btn:hover {
@@ -1019,6 +1090,5 @@ textarea {
 }
 
 .tab-group:empty {
-    display: none;
+  display: none;
 }
-

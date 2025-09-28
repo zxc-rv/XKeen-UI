@@ -109,38 +109,41 @@
             <input id="logFilterInput" class="input" type="text" placeholder="Фильтр"
               aria-label="Фильтр строк журнала" />
           </div>
-          <button id="clearLogBtn" class="clear-log-btn" onclick="clearCurrentLog()" title="Очистить текущий лог-файл"
-            aria-label="Очистить текущий лог-файл">
-            <svg class="clear-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M8 6V4c0-1 1-2 2-2h4c0 1 1 2 2 2v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" />
-              <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" />
-              <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                stroke-linejoin="round" />
-            </svg>
-            <span class="clear-text">Очистить</span>
-          </button>
 
-          <div id="logSelectRoot" class="select-root" aria-label="Выбор файла логов">
-            <button id="logSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
-              <span class="label" id="logSelectLabel">error.log</span>
-              <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          <div class="log-controls">
+            <div id="logSelectRoot" class="select-root" aria-label="Выбор файла логов">
+              <button id="logSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
+                <span class="label" id="logSelectLabel">error.log</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" />
+                </svg>
+              </button>
+              <div id="logSelectContent" class="select-content">
+                <div class="select-item" role="option" data-value="error.log" aria-selected="true">
+                  error.log <span class="check">✓</span>
+                </div>
+                <div class="select-item" role="option" data-value="access.log" aria-selected="false">
+                  access.log <span class="check">✓</span>
+                </div>
+              </div>
+            </div>
+
+            <button id="clearLogBtn" class="clear-log-btn" onclick="clearCurrentLog()" title="Очистить текущий лог-файл"
+              aria-label="Очистить текущий лог-файл">
+              <svg class="clear-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M8 6V4c0-1 1-2 2-2h4c0 1 1 2 2 2v2" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+                <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                   stroke-linejoin="round" />
               </svg>
             </button>
-            <div id="logSelectContent" class="select-content">
-              <div class="select-item" role="option" data-value="error.log" aria-selected="true">
-                error.log <span class="check">✓</span>
-              </div>
-              <div class="select-item" role="option" data-value="access.log" aria-selected="false">
-                access.log <span class="check">✓</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
