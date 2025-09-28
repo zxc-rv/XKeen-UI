@@ -572,12 +572,14 @@ function validateCurrentFile() {
 }
 
 function renderTabs() {
-  const tabsList = document.getElementById("tabsList");
-  const existingIndicator = tabsList ? tabsList.querySelector(".tab-active-indicator") : null;
-  const previousTransform = existingIndicator ? existingIndicator.style.transform : null;
-  tabsList.innerHTML = "";
+  const coreTabsList = document.getElementById("coreTabsList");
+  const xkeenTabsList = document.getElementById("xkeenTabsList");
 
-  tabsList.classList.toggle("empty", isConfigsLoading || configs.length === 0);
+  // Сохраняем позиции индикаторов перед очисткой
+  const coreIndicator = coreTabsList?.querySelector(".tab-active-indicator");
+  const xkeenIndicator = xkeenTabsList?.querySelector(".tab-active-indicator");
+  const coreTransform = coreIndicator?.style.transform || '';
+  const xkeenTransform = xkeenIndicator?.style.transform || '';
 
   const editorControlsSkeletons = document.getElementById("editorControlsSkeletons");
   const saveBtn = document.getElementById("saveBtn");
@@ -591,54 +593,125 @@ function renderTabs() {
     if (formatBtn) formatBtn.style.display = "none";
     if (validationSkeleton) validationSkeleton.style.display = "block";
     if (validationInfo) validationInfo.style.display = "none";
-  } else {
-    if (editorControlsSkeletons) editorControlsSkeletons.style.display = "none";
-    if (saveBtn) saveBtn.style.display = "inline-flex";
-    if (formatBtn) formatBtn.style.display = "inline-flex";
-    if (validationSkeleton) validationSkeleton.style.display = "none";
-    if (validationInfo) validationInfo.style.display = "flex";
-  }
 
-  if (isConfigsLoading) {
-    for (let i = 0; i < 6; i++) {
+    coreTabsList.innerHTML = '';
+    xkeenTabsList.innerHTML = '';
+    for (let i = 0; i < 3; i++) {
       const sk = document.createElement("div");
       sk.className = "skeleton skeleton-tab";
-      tabsList.appendChild(sk);
+      coreTabsList.appendChild(sk);
+    }
+    for (let i = 0; i < 2; i++) {
+      const sk = document.createElement("div");
+      sk.className = "skeleton skeleton-tab";
+      xkeenTabsList.appendChild(sk);
     }
     return;
   }
 
-  const indicator = document.createElement("div");
-  indicator.className = "tab-active-indicator";
-  if (previousTransform) {
-    indicator.style.transform = previousTransform;
-  }
-  tabsList.appendChild(indicator);
+  if (editorControlsSkeletons) editorControlsSkeletons.style.display = "none";
+  if (saveBtn) saveBtn.style.display = "inline-flex";
+  if (formatBtn) formatBtn.style.display = "inline-flex";
+  if (validationSkeleton) validationSkeleton.style.display = "none";
+  if (validationInfo) validationInfo.style.display = "flex";
 
-  configs.forEach((config, index) => {
+  // Разделяем конфиги
+  const coreConfigs = configs.filter(config => !config.filename.endsWith('.lst'));
+  const xkeenConfigs = configs.filter(config => config.filename.endsWith('.lst'));
+
+  // Рендерим Core вкладки
+  coreTabsList.innerHTML = '';
+  const newCoreIndicator = document.createElement("div");
+  newCoreIndicator.className = "tab-active-indicator";
+  newCoreIndicator.style.transform = coreTransform;
+  coreTabsList.appendChild(newCoreIndicator);
+
+  coreConfigs.forEach((config, index) => {
+    const globalIndex = configs.indexOf(config);
     const tabTrigger = document.createElement("button");
-    tabTrigger.className = `tab-trigger ${index === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`;
+    tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`;
     tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`;
-    tabTrigger.onclick = () => attemptSwitchTab(index);
-    tabsList.appendChild(tabTrigger);
+    tabTrigger.onclick = () => attemptSwitchTab(globalIndex);
+    coreTabsList.appendChild(tabTrigger);
   });
 
-  requestAnimationFrame(() => updateActiveTabIndicator());
+  // Рендерим Xkeen вкладки только если они есть
+  xkeenTabsList.innerHTML = '';
+  if (xkeenConfigs.length > 0) {
+    const newXkeenIndicator = document.createElement("div");
+    newXkeenIndicator.className = "tab-active-indicator";
+    newXkeenIndicator.style.transform = xkeenTransform;
+    xkeenTabsList.appendChild(newXkeenIndicator);
+
+    xkeenConfigs.forEach((config, index) => {
+      const globalIndex = configs.indexOf(config);
+      const tabTrigger = document.createElement("button");
+      tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`;
+      tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`;
+      tabTrigger.onclick = () => attemptSwitchTab(globalIndex);
+      xkeenTabsList.appendChild(tabTrigger);
+    });
+
+    // Показываем xkeen группу
+    xkeenTabsList.parentElement.style.display = 'inline-block';
+  } else {
+    // Скрываем xkeen группу если нет конфигов
+    xkeenTabsList.parentElement.style.display = 'none';
+  }
+
+  // Обновляем индикатор после рендера
+  setTimeout(() => updateActiveTabIndicator(), 0);
 }
 
 function updateActiveTabIndicator() {
-  const tabsList = document.getElementById("tabsList");
-  if (!tabsList) return;
-  const indicator = tabsList.querySelector(".tab-active-indicator");
+  const coreTabsList = document.getElementById("coreTabsList");
+  const xkeenTabsList = document.getElementById("xkeenTabsList");
+
+  // Скрываем все индикаторы
+  [coreTabsList, xkeenTabsList].forEach(container => {
+    if (!container) return;
+    const indicator = container.querySelector(".tab-active-indicator");
+    if (indicator) {
+      indicator.style.opacity = '0';
+    }
+  });
+
+  const activeConfig = configs[activeConfigIndex];
+  if (!activeConfig) return;
+
+  const isXkeen = activeConfig.filename.endsWith('.lst');
+  const activeContainer = isXkeen ? xkeenTabsList : coreTabsList;
+  if (!activeContainer) return;
+
+  const indicator = activeContainer.querySelector(".tab-active-indicator");
   if (!indicator) return;
-  const tabs = Array.from(tabsList.querySelectorAll(".tab-trigger"));
-  const active = tabs[activeConfigIndex];
-  if (!active) return;
-  const paddingLeft = parseFloat(getComputedStyle(tabsList).paddingLeft) || 0;
-  const offsetLeft = active.offsetLeft - paddingLeft;
-  const width = active.offsetWidth;
+
+  const tabs = Array.from(activeContainer.querySelectorAll(".tab-trigger"));
+  const groupConfigs = isXkeen
+    ? configs.filter(c => c.filename.endsWith('.lst'))
+    : configs.filter(c => !c.filename.endsWith('.lst'));
+
+  const groupIndex = groupConfigs.indexOf(activeConfig);
+  if (groupIndex === -1) return;
+
+  const activeTab = tabs[groupIndex];
+  if (!activeTab) return;
+
+  const offsetLeft = activeTab.offsetLeft;
+  const width = activeTab.offsetWidth;
+
   indicator.style.width = `${width}px`;
   indicator.style.transform = `translateX(${offsetLeft}px)`;
+  indicator.style.opacity = '1';
+
+  // Анимация перехода между группами
+  if (window.lastActiveGroup !== (isXkeen ? 'xkeen' : 'core')) {
+    indicator.style.transition = 'none';
+    setTimeout(() => {
+      indicator.style.transition = '';
+    }, 10);
+  }
+  window.lastActiveGroup = isXkeen ? 'xkeen' : 'core';
 }
 
 function attemptSwitchTab(index) {

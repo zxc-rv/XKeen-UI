@@ -96,19 +96,29 @@ textarea {
 }
 
 .tabs-list {
-  display: inline-flex;
-  height: 36px;
-  justify-content: flex-start;
-  border-radius: 10px;
-  background: #1e293b;
-  padding: 3px;
-  gap: 2px;
-  flex-wrap: nowrap;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  width: fit-content;
-  position: relative;
+    display: inline-flex;
+    height: 36px;
+    justify-content: flex-start;
+    border-radius: 10px;
+    background: #1e293b;
+    padding: 3px;
+    gap: 2px;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    width: fit-content;
+    position: relative;
 }
+
+/* Стиль для разделителя между группами вкладок */
+.tab-separator {
+    width: 1px;
+    height: 24px;
+    background: #374151;
+    margin: 0 8px;
+    align-self: center;
+}
+
 
 .tabs-list.empty {
   background: transparent;
@@ -181,6 +191,13 @@ textarea {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.tab-group {
+    display: inline-flex;
+    gap: 2px;
+    border-radius: 8px;
+    padding: 3px;
 }
 
 .tab-trigger {
@@ -854,7 +871,7 @@ textarea {
 .tab-active-indicator {
   position: absolute;
   top: 3px;
-  left: 3px;
+  left: 0px;
   height: calc(100% - 6px);
   border-radius: 8px;
   background: #020817;
@@ -999,3 +1016,8 @@ textarea {
   height: 16px;
   stroke-width: 2;
 }
+
+.tab-group:empty {
+    display: none;
+}
+
