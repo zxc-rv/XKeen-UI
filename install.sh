@@ -45,7 +45,7 @@ opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv ||
 
 echo -e "\n${BLUE}Настройка init скрипта...${NC}"
 if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
-  sed -iE "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
+  sed -Ei "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
 fi
 
 if [ -f "/opt/etc/init.d/S80lighttpd" ]; then
