@@ -51,6 +51,7 @@ textarea {
   margin-bottom: 15px;
   flex-wrap: wrap;
   gap: 12px;
+  min-height: 57px;
   position: relative; /* Для абсолютного позиционирования */
 }
 
