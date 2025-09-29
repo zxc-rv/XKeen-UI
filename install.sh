@@ -6,9 +6,14 @@ NC='\033[0m'
 BLUE='\033[1;34m'
 PURPLE='\033[38;2;120;93;200m'
 
-architecture=$(uname -m | tr '[:upper:]' '[:lower:]')
-download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
+VERSION="$1"
+if [ -n "$VERSION" ]; then
+  download_url="https://github.com/zxc-rv/XKeen-UI/releases/download/${VERSION}"
+else
+  download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
+fi
 
+architecture=$(uname -m | tr '[:upper:]' '[:lower:]')
 case $architecture in
 *'armv8'* | *'aarch64'* | *'cortex-a'*)
   bin="xkeen-ui-arm64-v8a"
