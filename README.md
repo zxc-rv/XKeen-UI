@@ -27,7 +27,7 @@ opkg update && opkg install curl
 ```SH
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/install.sh | sh
 ```
-Для установки конкретной версии добавьте "-s v1.2.3" в конце команды.
+Для установки конкретной версии добавьте **"-s v1.2.3"** в конец команды.
   
 <br>
   
