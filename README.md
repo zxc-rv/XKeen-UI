@@ -19,16 +19,20 @@
   
 &nbsp;
 
-Установка/обновление:
+## Установка/обновление:
 
-```
+```SH
 opkg update && opkg install curl
 ```
-```
+```SH
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/install.sh | sh
 ```
-Удаление:
-```
+Для установки конкретной версии добавьте "-s v1.2.3" в конце команды.
+  
+<br>
+  
+## Удаление:
+```SH
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/remove.sh | sh
 ```
 &nbsp;
