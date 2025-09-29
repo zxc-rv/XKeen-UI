@@ -35,9 +35,8 @@ curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/insta
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/refs/heads/main/remove.sh | sh
 ```
 &nbsp;
-
----
-Благодарности:
+  
+## Благодарности:
 
 https://github.com/Skrill0/XKeen  
 https://github.com/jameszeroX/XKeen  
