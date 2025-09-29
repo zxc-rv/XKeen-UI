@@ -14,12 +14,10 @@ read response < /dev/tty
 case "$response" in
     [Yy]) 
         clear
-        echo -e "${GREEN}Начинаем удаление...${NC}"
-        echo ""
+        echo -e "${GREEN}Начинаем удаление...${NC}\n"
         ;;
     *)
-        echo -e "${RED}Отмена операции.${NC}"
-        echo ""
+        echo -e "${RED}Отмена операции.${NC}\n"
         exit 1
         ;;
 esac
@@ -37,6 +35,4 @@ rm -rf /opt/share/www/XKeen-UI
 rm -rf /opt/etc/lighttpd/
 rm /opt/sbin/xkeen-ui
 
-echo ""
-echo -e "${GREEN}Удаление XKeen-UI завершено${NC}"
-echo ""
+echo -e "\n${GREEN}Удаление XKeen-UI завершено${NC}\n"
