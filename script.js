@@ -84,7 +84,7 @@ function updateValidationInfo(isValid, error = null) {
   if (isValid) {
     validationInfo.innerHTML = `
       <span class="validation-icon validation-success">✓</span>
-      <span class="validation-success">Файл валиден</span>
+      <span class="validation-success">JSON валиден</span>
     `;
   } else {
     validationInfo.innerHTML = `

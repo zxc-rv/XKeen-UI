@@ -44,11 +44,33 @@
 
       <div id="coreSelectRoot" class="select-root core-select" style="display: none;" aria-label="Выбор ядра">
         <button id="coreSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
-          <span class="core-prefix">Ядро: </span>
+          <span class="core-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="core-icon" aria-hidden="true"
+              focusable="false">
+              <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
+              <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+              <path d="M12 2v2" />
+              <path d="M12 22v-2" />
+              <path d="m17 20.66-1-1.73" />
+              <path d="M11 10.27 7 3.34" />
+              <path d="m20.66 17-1.73-1" />
+              <path d="m3.34 7 1.73 1" />
+              <path d="M14 12h8" />
+              <path d="M2 12h2" />
+              <path d="m20.66 7-1.73 1" />
+              <path d="m3.34 17 1.73-1" />
+              <path d="m17 3.34-1 1.73" />
+              <path d="m11 13.73-4 6.93" />
+            </svg>
+          </span>
+
+
           <span class="label" id="coreSelectLabel">xray</span>
-          <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-              stroke-linejoin="round" />
+          <svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            class="lucide lucide-chevrons-up-down ml-2 h-4 w-4 shrink-0 opacity-50" aria-hidden="true">
+            <path d="m7 15 5 5 5-5"></path>
+            <path d="m7 9 5-5 5 5"></path>
           </svg>
         </button>
         <div id="coreSelectContent" class="select-content">
@@ -128,20 +150,11 @@
                 </div>
               </div>
             </div>
-
             <button id="clearLogBtn" class="clear-log-btn" onclick="clearCurrentLog()" title="Очистить текущий лог-файл"
               aria-label="Очистить текущий лог-файл">
-              <svg class="clear-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                  stroke-linejoin="round" />
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M8 6V4c0-1 1-2 2-2h4c0 1 1 2 2 2v2" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                  stroke-linejoin="round" />
-                <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                  stroke-linejoin="round" />
+              <svg class="clear-icon" xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24">
+                <path fill="#94A3B8"
+                  d="m14.031 1.888l9.657 9.657l-8.345 8.345l-.27.272H20v2H6.748L.253 15.667zM5.788 12.96l-2.707 2.707l4.495 4.495h4.68l.365-.37z" />
               </svg>
             </button>
           </div>
