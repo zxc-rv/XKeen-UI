@@ -24,7 +24,7 @@
 opkg update && opkg install curl
 ```
 ```SH
-curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/install.sh | sh
+curl -s https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/install.sh | sh
 ```
 По умолчанию ставится последняя версия, для установки конкретной версии добавьте **"-s v1.2.3"** в конец команды.
   
@@ -32,7 +32,7 @@ curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/install.sh | sh
   
 ## Удаление:
 ```SH
-curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/remove.sh | sh
+curl -s https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/remove.sh | sh
 ```
 &nbsp;
   
