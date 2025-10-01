@@ -12,10 +12,10 @@ read -p "Продолжить? [y/N] " response < /dev/tty
 case "$response" in
     [Yy]) 
         clear
-        echo -e "${GREEN}Начинаем удаление...${NC}\n"
+        echo -e "\n${GREEN}Начинаем удаление...${NC}\n"
         ;;
     *)
-        echo -e "${RED}Отмена операции.${NC}\n"
+        echo -e "\n${RED}Отмена операции.${NC}\n"
         exit 1
         ;;
 esac
