@@ -230,7 +230,7 @@ function connectWebSocket() {
     clearInterval(pingInterval);
   }
 
-  ws = new WebSocket(`ws://192.168.1.1:8080/ws?file=${currentLogFile}`);
+  ws = new WebSocket(`ws://${window.location.hostname}:8080/ws?file=${currentLogFile}`);
 
   ws.onopen = () => {
     console.log("WebSocket connected");
@@ -760,7 +760,7 @@ async function apiCall(endpoint, data = null) {
     };
     if (data) options.body = JSON.stringify(data);
 
-    const response = await fetch(`http://192.168.1.1:1000/cgi/${endpoint}`, options);
+    const response = await fetch(`http://${window.location.hostname}:1000/cgi/${endpoint}`, options);
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` };
