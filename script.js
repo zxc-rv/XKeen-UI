@@ -393,7 +393,7 @@ function initMonacoEditor() {
       tabSize: 2,
       insertSpaces: true,
       wordWrap: "off",
-      folding: false,
+      folding: true,
       lineNumbers: "on",
       glyphMargin: false,
       stickyScroll: { enabled: false },
