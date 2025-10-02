@@ -45,6 +45,9 @@ case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
             arch='mips32le'
         elif echo "${cpuinfo}" | grep -q 'mips'; then
             arch='mips32'
+        else
+            echo -e "\n${RED}Не удалось определить архитектуру${NC}\n" >&2 >&2
+            exit 1
         fi
         ;;
 esac
@@ -59,15 +62,6 @@ if [ "${arch}" = 'mips64' ] || [ "${arch}" = 'mips32' ]; then
         arch="${arch}le"
     fi
 fi
-
-case "${arch}" in
-    arm32-v5|arm64-v8a|mips32|mips32le|mips64|mips64le)
-        ;;
-    *)
-        echo -e "\n${RED}Не удалось определить архитектуру${NC}\n" >&2
-        exit 1
-        ;;
-esac
 
 set -e
 clear
