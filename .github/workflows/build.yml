@@ -13,10 +13,10 @@ jobs:
           - GOARCH: arm64
             name: arm64-v8a
           - GOARCH: mipsle
-            GOMIPS: hardfloat
+            GOMIPS: softfloat
             name: mips32le
           - GOARCH: mips
-            GOMIPS: hardfloat
+            GOMIPS: softfloat
             name: mips32
           - GOARCH: mips64
             name: mips64
