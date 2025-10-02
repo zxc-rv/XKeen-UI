@@ -74,7 +74,7 @@ clear
 
 echo -e "\n${BLUE}Установка lighttpd...${NC}"
 opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv || {
-    echo -e "${RED}Ошибка установки пакетов${NC}"
+    echo -e "\n${RED}Ошибка установки пакетов${NC}\n"
     exit 1
 }
 
@@ -114,14 +114,14 @@ EOF
 echo -e "\n${BLUE}Загрузка статики...${NC}"
 tmp_static="/tmp/xkeen-ui-static.tar.gz"
 if ! curl --progress-bar -Lfo "$tmp_static" "$download_url/xkeen-ui-static.tar.gz"; then
-    echo -e "${RED}Не удалось скачать архив статики${NC}"
+    echo -e "\n${RED}Не удалось скачать архив статики${NC}\n"
     exit 1
 fi
 
 echo -e "\n${BLUE}Распаковка архива...${NC}"
 mkdir -p /opt/share/www/XKeen-UI
 if ! tar -xzf "$tmp_static" -C /opt/share/www/XKeen-UI; then
-    echo -e "${RED}Не удалось распаковать архив статики${NC}"
+    echo -e "\n${RED}Не удалось распаковать архив статики${NC}\n"
     exit 1
 fi
 rm -f "$tmp_static"
@@ -129,7 +129,7 @@ rm -f "$tmp_static"
 echo -e "\n${BLUE}Загрузка бинарника...${NC}"
 bin=xkeen-ui-$arch
 if ! curl --progress-bar -Lfo /opt/sbin/xkeen-ui "$download_url/$bin"; then
-    echo -e "${RED}Не удалось скачать бинарный файл${NC}"
+    echo -e "\n${RED}Не удалось скачать бинарный файл${NC}\n"
     exit 1
 fi
 
@@ -139,7 +139,7 @@ chmod +x /opt/sbin/xkeen-ui
 echo -e "\n${BLUE}Запуск lighttpd...${NC}"
 /opt/etc/init.d/S80lighttpd start || true
 if ! /opt/etc/init.d/S80lighttpd status >/dev/null 2>&1; then
-    echo -e "${RED}Не удалось запустить lighttpd${NC}"
+    echo -e "\n${RED}Не удалось запустить lighttpd${NC}\n"
     exit 1
 fi
 
