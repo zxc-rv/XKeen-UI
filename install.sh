@@ -41,7 +41,7 @@ case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
             arch='mips64le'
         elif echo "${cpuinfo}" | grep -q 'mips64'; then
             arch='mips64'
-        elif echo "${cpuinfo}" | grep -q -e 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
+        elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
             arch='mips32le'
         elif echo "${cpuinfo}" | grep -q 'mips'; then
             arch='mips32'
