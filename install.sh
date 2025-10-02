@@ -35,7 +35,7 @@ case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
         arch='mips32'
         ;;
     *)
-        if echo "${cpuinfo}" | grep -q -e 'armv8' -e 'aarch64' -e 'cortex-a'; then
+        if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
             arch='arm64-v8a'
         elif echo "${cpuinfo}" | grep -q 'mips64le'; then
             arch='mips64le'
@@ -46,7 +46,7 @@ case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
         elif echo "${cpuinfo}" | grep -q 'mips'; then
             arch='mips32'
         else
-            echo -e "\n${RED}Не удалось определить архитектуру${NC}\n" >&2 >&2
+            echo -e "\n${RED}Не удалось определить архитектуру${NC}\n" >&2
             exit 1
         fi
         ;;
