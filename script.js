@@ -760,7 +760,7 @@ async function apiCall(endpoint, data = null) {
     };
     if (data) options.body = JSON.stringify(data);
 
-    const response = await fetch(`http://${window.location.hostname}:1000/cgi/${endpoint}`, options);
+    const response = await fetch(`http://${window.location.host}/cgi/${endpoint}`, options);
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` };
