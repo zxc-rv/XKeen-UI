@@ -64,6 +64,12 @@ if [ "${arch}" = 'mips64' ] || [ "${arch}" = 'mips32' ]; then
     fi
 fi
 
+bin_name=xkeen-ui-$arch
+bin_path=/opt/sbin/xkeen-ui
+static_name=xkeen-ui-static.tar.gz
+static_path=/opt/share/www/XKeen-UI
+init_path=/opt/etc/init.d/S80lighttpd
+
 clear
 
 echo -e "\n${BLUE}Установка lighttpd...${NC}"
@@ -73,17 +79,17 @@ opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv ||
 }
 
 echo -e "\n${BLUE}Настройка init скрипта...${NC}"
-if [ -f "/opt/etc/init.d/S80lighttpd" ] && grep -q "PROCS=lighttpd" /opt/etc/init.d/S80lighttpd; then
-  sed -Ei "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" /opt/etc/init.d/S80lighttpd
+if [ -f $init_path ] && grep -q "PROCS=lighttpd" $init_path; then
+  sed -Ei "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" $init_path
 fi
 
-if [ -f "/opt/etc/init.d/S80lighttpd" ]; then
-    if /opt/etc/init.d/S80lighttpd status >/dev/null 2>&1; then
-        /opt/etc/init.d/S80lighttpd stop
+if [ -f $init_path ]; then
+    if $init_path status >/dev/null 2>&1; then
+        $init_path stop
     fi
 fi
 
-echo -e "\n${BLUE}Создание конфига lighttpd...${NC}"
+echo -e "\n${BLUE}Создание конфигурации lighttpd...${NC}"
 cat <<'EOF' >/opt/etc/lighttpd/conf.d/90-xkeenui.conf
 server.port := 1000
 server.username := ""
@@ -106,33 +112,30 @@ $SERVER["socket"] == ":1000" {
 EOF
 
 echo -e "\n${BLUE}Загрузка статики...${NC}"
-tmp_static="/tmp/xkeen-ui-static.tar.gz"
-if ! curl --progress-bar -Lfo "$tmp_static" "$download_url/xkeen-ui-static.tar.gz"; then
+static_tmp_path=/opt/tmp/$static_name
+if ! curl --progress-bar -Lfo $static_tmp_path $download_url/xkeen-ui-static.tar.gz; then
     echo -e "\n${RED}Не удалось скачать архив статики${NC}\n"
     exit 1
 fi
 
-echo -e "\n${BLUE}Распаковка архива...${NC}"
-mkdir -p /opt/share/www/XKeen-UI
-if ! tar -xzf "$tmp_static" -C /opt/share/www/XKeen-UI; then
+echo -e "\n${BLUE}Распаковка...${NC}"
+mkdir -p $static_path
+if ! tar -xzf $static_tmp_path -C $static_path; then
     echo -e "\n${RED}Не удалось распаковать архив статики${NC}\n"
+    rm -f $static_tmp_path
     exit 1
 fi
-rm -f "$tmp_static"
+rm -f $static_tmp_path
 
-echo -e "\n${BLUE}Загрузка бинарника...${NC}"
-bin=xkeen-ui-$arch
-if ! curl --progress-bar -Lfo /opt/sbin/xkeen-ui "$download_url/$bin"; then
+echo -e "\n${BLUE}Загрузка бинарного файла...${NC}"
+if ! (curl --progress-bar -Lfo $bin_path $download_url/$bin_name && chmod +x $bin_path); then
     echo -e "\n${RED}Не удалось скачать бинарный файл${NC}\n"
     exit 1
 fi
 
-echo -e "\n${BLUE}Установка прав на бинарник...${NC}"
-chmod +x /opt/sbin/xkeen-ui
-
 echo -e "\n${BLUE}Запуск lighttpd...${NC}"
-/opt/etc/init.d/S80lighttpd start || true
-if ! /opt/etc/init.d/S80lighttpd status >/dev/null 2>&1; then
+$init_path start || true
+if ! $init_path status >/dev/null 2>&1; then
     echo -e "\n${RED}Не удалось запустить lighttpd${NC}\n"
     exit 1
 fi
