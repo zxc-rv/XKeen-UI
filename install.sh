@@ -134,8 +134,8 @@ if ! (curl --progress-bar -Lfo $bin_path $download_url/$bin_name && chmod +x $bi
 fi
 
 echo -e "\n${BLUE}Запуск lighttpd...${NC}"
-$init_path start || true
-if ! $init_path status >/dev/null 2>&1; then
+$init_path start >/dev/null 2>&1 || true
+if ! $init_path status; then
     echo -e "\n${RED}Не удалось запустить lighttpd${NC}\n"
     exit 1
 fi
