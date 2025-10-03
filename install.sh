@@ -97,7 +97,7 @@ $SERVER["socket"] == ":1000" {
     fastcgi.server = (
         "/cgi/" => ((
             "bin-path" => "/opt/sbin/xkeen-ui",
-            "socket"   => "/tmp/xkeen-ui.sock",
+            "socket"   => "/opt/var/run/xkeen-ui.sock",
             "check-local" => "disable",
             "max-procs" => 1
         ))
