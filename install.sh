@@ -64,11 +64,11 @@ if [ "${arch}" = 'mips64' ] || [ "${arch}" = 'mips32' ]; then
     fi
 fi
 
-bin_name=xkeen-ui-$arch
-bin_path=/opt/sbin/xkeen-ui
-static_name=xkeen-ui-static.tar.gz
-static_path=/opt/share/www/XKeen-UI
-init_path=/opt/etc/init.d/S80lighttpd
+bin_name="xkeen-ui-$arch"
+bin_path="/opt/sbin/xkeen-ui"
+static_name="xkeen-ui-static.tar.gz"
+static_path="/opt/share/www/XKeen-UI"
+init_path="/opt/etc/init.d/S80lighttpd"
 
 clear
 
