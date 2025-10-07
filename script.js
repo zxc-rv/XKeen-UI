@@ -69,28 +69,37 @@ function showToast(message, type = "success") {
 
 function updateValidationInfo(isValid, error = null) {
   const validationInfo = document.getElementById("validationInfo");
+  const messageContainer = document.getElementById("validationMessageContainer");
   const currentConfig = configs[activeConfigIndex];
 
-  // Всегда проверяем тип файла перед отображением
-  const shouldShow = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
+  // Показываем/скрываем только контейнер с сообщением, а не весь блок
+  const shouldShowMessage = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
 
-  if (!shouldShow) {
-    validationInfo.style.display = 'none';
-    return;
-  }
+  if (!shouldShowMessage) {
+    // Скрываем только контейнер с сообщением
+    messageContainer.style.display = 'none';
 
-  validationInfo.style.display = 'flex';
-
-  if (isValid) {
-    validationInfo.innerHTML = `
-      <span class="validation-icon validation-success">✓</span>
-      <span class="validation-success">JSON валиден</span>
-    `;
+    // Показываем кнопки управления редактором
+    const editorControls = document.querySelector('.editor-controls');
+    if (editorControls) {
+      editorControls.style.display = 'flex';
+    }
   } else {
-    validationInfo.innerHTML = `
-      <span class="validation-icon validation-error">✗</span>
-      <span class="validation-error"> Ошибка валидации: ${error || "Файл невалиден"}</span>
-    `;
+    // Показываем контейнер с сообщением
+    messageContainer.style.display = 'flex';
+
+    // Обновляем содержимое сообщения
+    if (isValid) {
+      messageContainer.innerHTML = `
+        <span class="validation-icon validation-success">✓</span>
+        <span class="validation-success">JSON валиден</span>
+      `;
+    } else {
+      messageContainer.innerHTML = `
+        <span class="validation-icon validation-error">✗</span>
+        <span class="validation-error"> Ошибка валидации: ${error || "Файл невалиден"}</span>
+      `;
+    }
   }
 }
 
@@ -430,7 +439,7 @@ function initMonacoEditor() {
         container.style.height = contentHeight + "px";
         monacoEditor.layout();
       } else {
-        container.style.height = "650px";
+        container.style.height = "700px";
         monacoEditor.layout();
       }
     }
@@ -497,12 +506,29 @@ function initMonacoEditor() {
 
 function updateUIDirtyState() {
   const saveBtn = document.getElementById("saveBtn");
+  const saveRestartBtn = document.getElementById("saveRestartBtn");
   const currentConfig = configs[activeConfigIndex];
 
   if (currentConfig) {
     saveBtn.disabled = !currentConfig.isDirty;
+
+    const fileLanguage = getFileLanguage(currentConfig.filename);
+    const hasChanges = currentConfig.isDirty;
+
+    if (fileLanguage === 'json') {
+      const isXray = currentCore === "xray";
+      saveRestartBtn.disabled = !(isXray && hasChanges && isServiceRunning);
+    } else if (fileLanguage === 'yaml') {
+      const isMihomo = currentCore === "mihomo";
+      saveRestartBtn.disabled = !(isMihomo && hasChanges && isServiceRunning);
+    } else if (fileLanguage === 'plaintext') {
+      saveRestartBtn.disabled = !(hasChanges && isServiceRunning);
+    } else {
+      saveRestartBtn.disabled = true;
+    }
   } else {
     saveBtn.disabled = true;
+    saveRestartBtn.disabled = true;
   }
   renderTabs();
 }
@@ -551,16 +577,18 @@ function renderTabs() {
 
   const editorControlsSkeletons = document.getElementById("editorControlsSkeletons");
   const saveBtn = document.getElementById("saveBtn");
+  const saveRestartBtn = document.getElementById("saveRestartBtn");
   const formatBtn = document.getElementById("formatBtn");
   const validationSkeleton = document.getElementById("validationSkeleton");
   const validationInfo = document.getElementById("validationInfo");
 
   if (isConfigsLoading) {
+    if (validationInfo) validationInfo.style.display = "flex";
     if (editorControlsSkeletons) editorControlsSkeletons.style.display = "inline-flex";
     if (saveBtn) saveBtn.style.display = "none";
+    if (saveRestartBtn) saveRestartBtn.style.display = "none";
     if (formatBtn) formatBtn.style.display = "none";
     if (validationSkeleton) validationSkeleton.style.display = "block";
-    if (validationInfo) validationInfo.style.display = "none";
 
     coreTabsList.innerHTML = '';
     xkeenTabsList.innerHTML = '';
@@ -579,12 +607,22 @@ function renderTabs() {
 
   if (editorControlsSkeletons) editorControlsSkeletons.style.display = "none";
   if (saveBtn) saveBtn.style.display = "inline-flex";
+  if (saveRestartBtn) saveRestartBtn.style.display = "inline-flex";
   if (formatBtn) formatBtn.style.display = "inline-flex";
   if (validationSkeleton) validationSkeleton.style.display = "none";
   if (validationInfo) {
+    // Всегда показываем validationInfo (контейнер с кнопками)
+    validationInfo.style.display = "flex";
+
+    // Но управляем видимостью только messageContainer
+    const messageContainer = document.getElementById("validationMessageContainer");
+    if (messageContainer) messageContainer.style.display = "none";
     const currentConfig = configs[activeConfigIndex];
-    const shouldShowValidation = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
-    validationInfo.style.display = shouldShowValidation ? "flex" : "none";
+    const shouldShowMessage = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
+
+    if (messageContainer) {
+      messageContainer.style.display = shouldShowMessage ? "flex" : "none";
+    }
   }
 
   // Разделяем конфиги
@@ -746,6 +784,10 @@ function switchTab(index) {
     config.isDirty = false;
   }
   renderTabs();
+  const validationInfo = document.getElementById("validationInfo");
+  if (validationInfo) {
+    validationInfo.style.display = "flex";
+  }
   updateUIDirtyState();
   validateCurrentFile();
 
@@ -885,7 +927,7 @@ async function checkStatus() {
   updateServiceStatus(result.running);
 }
 
-async function startXkeen() {
+async function startXKeen() {
   try {
     setPendingState("Запускается...");
     const result = await apiCall("control", { action: "start" });
@@ -905,7 +947,7 @@ async function startXkeen() {
   }
 }
 
-async function stopXkeen() {
+async function stopXKeen() {
   try {
     setPendingState("Останавливается...");
     const result = await apiCall("control", { action: "stop" });
@@ -922,7 +964,7 @@ async function stopXkeen() {
   }
 }
 
-async function restartXkeen() {
+async function restartXKeen() {
   try {
     setPendingState("Перезапускается...");
     const result = await apiCall("control", { action: "restart" });
@@ -1344,4 +1386,82 @@ async function forceReloadConfigs() {
   }
 
   updateUIDirtyState();
+}
+
+async function saveAndRestart() {
+  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return;
+
+  const config = configs[activeConfigIndex];
+  const content = monacoEditor.getValue();
+
+  if (!content.trim()) {
+    showToast("Конфиг пустой", "error");
+    return;
+  }
+
+  const language = getFileLanguage(config.filename);
+
+  if (language === 'json') {
+    const model = monacoEditor.getModel();
+    if (model) {
+      const allMarkers = monaco.editor.getModelMarkers({});
+      const errorMarker = allMarkers.find(
+        (m) =>
+          m.resource.toString() === model.uri.toString() &&
+          m.severity === monaco.MarkerSeverity.Error
+      );
+      if (errorMarker) {
+        showToast({
+          title: "Ошибка сохранения",
+          body: `Invalid JSON: ${errorMarker.message}`,
+        }, "error");
+        return;
+      }
+    }
+  }
+
+  const result = await apiCall("configs", {
+    action: "save",
+    filename: config.filename,
+    content: content,
+  });
+
+  if (result.success) {
+    config.content = content;
+    config.savedContent = content;
+    config.isDirty = false;
+    updateUIDirtyState();
+    showToast(`Конфиг "${config.name}" сохранен`);
+
+    setPendingState("Перезапускается...");
+
+    try {
+      let restartResult;
+
+      if (language === 'json' || language === 'yaml') {
+        restartResult = await apiCall("control", {
+          action: "restartCore",
+          core: currentCore
+        });
+      } else if (language === 'plaintext') {
+        restartResult = await apiCall("control", { action: "restart" });
+      }
+
+      if (restartResult && restartResult.success) {
+        showToast("Сервис перезапущен");
+        isActionInProgress = false;
+        isServiceRunning = true;
+        updateServiceStatus(true);
+      } else {
+        showToast(`Ошибка перезапуска: ${restartResult?.error || 'unknown'}`, "error");
+        isActionInProgress = false;
+        checkStatus();
+      }
+    } catch (e) {
+      isActionInProgress = false;
+      checkStatus();
+    }
+  } else {
+    showToast(`Ошибка сохранения: ${result.error}`, "error");
+  }
 }

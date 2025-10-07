@@ -659,9 +659,66 @@ func controlHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req ActionRequest
+	var req struct {
+		Action string `json:"action"`
+		Core   string `json:"core,omitempty"`
+	}
+
 	if err := json.Unmarshal(body, &req); err != nil {
 		jsonResponse(w, Response{Success: false, Error: "Invalid JSON"}, 400)
+		return
+	}
+
+	if req.Action == "restartCore" {
+		if req.Core != "xray" && req.Core != "mihomo" {
+			jsonResponse(w, Response{Success: false, Error: "Invalid core"}, 400)
+			return
+		}
+
+		script := fmt.Sprintf(`
+		. "/opt/sbin/.xkeen/01_info/03_info_cpu.sh"
+		status_file="/opt/lib/opkg/status"
+		info_cpu
+		name_client="%s"
+		killall -q -9 $name_client
+		case "$name_client" in
+				xray)
+						export XRAY_LOCATION_CONFDIR="/opt/etc/xray/configs"
+						export XRAY_LOCATION_ASSET="/opt/etc/xray/dat"
+						if [ "$architecture" = "arm64-v8a" ]; then
+								ulimit -SHn "40000" && su -c "xray run" "xkeen" >/dev/null 2>&1 &
+						else
+								ulimit -SHn "10000" && su -c "xray run" "xkeen" >/dev/null 2>&1 &
+						fi
+				;;
+				mihomo)
+						if [ "$architecture" = "arm64-v8a" ]; then
+								ulimit -SHn "40000" && su -c "mihomo -d /opt/etc/mihomo" "xkeen" >>/opt/var/log/xray/error.log 2>&1 &
+						else
+								ulimit -SHn "10000" && su -c "mihomo -d /opt/etc/mihomo" "xkeen" >>/opt/var/log/xray/error.log 2>&1 &
+						fi
+				;;
+		esac
+		`, req.Core)
+
+		cmd := exec.Command("sh", "-c", script)
+
+		logFile := "/opt/var/log/xray/error.log"
+		logFileHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Cannot open log file"}, 500)
+			return
+		}
+		defer logFileHandle.Close()
+
+		cmd.Stdout = logFileHandle
+		cmd.Stderr = logFileHandle
+
+		if err := cmd.Run(); err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Command failed"}, 500)
+		} else {
+			jsonResponse(w, Response{Success: true, Data: "Core restarted"}, 200)
+		}
 		return
 	}
 

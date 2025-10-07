@@ -44,16 +44,15 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  padding: 16px;
   background: #020817;
   border: 1px solid #1e293b;
   border-radius: 8px;
   margin-bottom: 15px;
   flex-wrap: wrap;
   gap: 12px;
-  min-height: 57px;
+  min-height: 69px;
   position: relative;
-  /* Для абсолютного позиционирования */
 }
 
 .controls-main {
@@ -61,7 +60,6 @@ textarea {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-  /* Абсолютное центрирование */
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -90,11 +88,7 @@ textarea {
 }
 
 .tabs-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 20px;
-  gap: 20px;
 }
 
 .tabs-list {
@@ -166,10 +160,10 @@ textarea {
 }
 
 .skeleton-line {
-  margin-top: 14px;
+  margin-top: 4px;
   border-radius: 6px;
   background: #1e293b;
-  max-width: 130px;
+  max-width: 120px;
 }
 
 .tabs-list::-webkit-scrollbar {
@@ -177,12 +171,17 @@ textarea {
 }
 
 .tabs-scroll {
-  width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  display: flex;
+  gap: 8px;
+  flex-grow: 1;
+  /* Заставляем блок растянуться на всю доступную ширину */
+  justify-content: flex-end;
+  /* Выравниваем его содержимое (группы вкладок) по правому краю */
 }
 
 .tabs-scroll::-webkit-scrollbar {
@@ -201,7 +200,6 @@ textarea {
   display: inline-flex;
   gap: 2px;
   border-radius: 8px;
-  padding: 3px;
 }
 
 .tab-trigger {
@@ -251,7 +249,7 @@ textarea {
 
 .editor-container {
   position: relative;
-  height: 650px;
+  height: 700px;
   background: #020817;
 }
 
@@ -312,7 +310,8 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 16px;
+  height: 35px;
 }
 
 .select-root {
@@ -664,9 +663,9 @@ textarea {
 
 .validation-info {
   display: flex;
-  align-items: center;
+  align-items: left;
   gap: 4px;
-  margin-top: 12px;
+  margin-top: 16px;
   font-size: 13px;
   min-height: 20px;
 }
@@ -844,15 +843,16 @@ textarea {
 
 #saveBtn::before {
   margin-left: 2px;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill-rule='evenodd' clip-rule='evenodd' d='M18.1716 1C18.702 1 19.2107 1.21071 19.5858 1.58579L22.4142 4.41421C22.7893 4.78929 23 5.29799 23 5.82843V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1H18.1716ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21L5 21L5 15C5 13.3431 6.34315 12 8 12L16 12C17.6569 12 19 13.3431 19 15V21H20C20.5523 21 21 20.5523 21 20V6.82843C21 6.29799 20.7893 5.78929 20.4142 5.41421L18.5858 3.58579C18.2107 3.21071 17.702 3 17.1716 3H17V5C17 6.65685 15.6569 8 14 8H10C8.34315 8 7 6.65685 7 5V3H4ZM17 21V15C17 14.4477 16.5523 14 16 14L8 14C7.44772 14 7 14.4477 7 15L7 21L17 21ZM9 3H15V5C15 5.55228 14.5523 6 14 6H10C9.44772 6 9 5.55228 9 5V3Z' fill='black'/></svg>");
-  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill-rule='evenodd' clip-rule='evenodd' d='M18.1716 1C18.702 1 19.2107 1.21071 19.5858 1.58579L22.4142 4.41421C22.7893 4.78929 23 5.29799 23 5.82843V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1H18.1716ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21L5 21L5 15C5 13.3431 6.34315 12 8 12L16 12C17.6569 12 19 13.3431 19 15V21H20C20.5523 21 21 20.5523 21 20V6.82843C21 6.29799 20.7893 5.78929 20.4142 5.41421L18.5858 3.58579C18.2107 3.21071 17.702 3 17.1716 3H17V5C17 6.65685 15.6569 8 14 8H10C8.34315 8 7 6.65685 7 5V3H4ZM17 21V15C17 14.4477 16.5523 14 16 14L8 14C7.44772 14 7 14.4477 7 15L7 21L17 21ZM9 3H15V5C15 5.55228 14.5523 6 14 6H10C9.44772 6 9 5.55228 9 5V3Z' fill='black'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 27 27'><path fill-rule='evenodd' clip-rule='evenodd' d='M18.1716 1C18.702 1 19.2107 1.21071 19.5858 1.58579L22.4142 4.41421C22.7893 4.78929 23 5.29799 23 5.82843V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1H18.1716ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21L5 21L5 15C5 13.3431 6.34315 12 8 12L16 12C17.6569 12 19 13.3431 19 15V21H20C20.5523 21 21 20.5523 21 20V6.82843C21 6.29799 20.7893 5.78929 20.4142 5.41421L18.5858 3.58579C18.2107 3.21071 17.702 3 17.1716 3H17V5C17 6.65685 15.6569 8 14 8H10C8.34315 8 7 6.65685 7 5V3H4ZM17 21V15C17 14.4477 16.5523 14 16 14L8 14C7.44772 14 7 14.4477 7 15L7 21L17 21ZM9 3H15V5C15 5.55228 14.5523 6 14 6H10C9.44772 6 9 5.55228 9 5V3Z' fill='black'/></svg>");
 }
 
 #formatBtn::before {
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path stroke='black' stroke-width='2' fill='none' d='M18 16l4-4-4-4'/><path stroke='black' stroke-width='2' fill='none' d='M6 8l-4 4 4 4'/><path stroke='black' stroke-width='2' fill='none' d='M14.5 4l-5 16'/></svg>");
-  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path stroke='black' stroke-width='2' fill='none' d='M18 16l4-4-4-4'/><path stroke='black' stroke-width='2' fill='none' d='M6 8l-4 4 4 4'/><path stroke='black' stroke-width='2' fill='none' d='M14.5 4l-5 16'/></svg>");
+
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 1 24 24'><path stroke='black' stroke-width='2' fill='none' d='M18 16l4-4-4-4'/><path stroke='black' stroke-width='2' fill='none' d='M6 8l-4 4 4 4'/><path stroke='black' stroke-width='2' fill='none' d='M14.5 4l-5 16'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 1 24 24'><path stroke='black' stroke-width='2' fill='none' d='M18 16l4-4-4-4'/><path stroke='black' stroke-width='2' fill='none' d='M6 8l-4 4 4 4'/><path stroke='black' stroke-width='2' fill='none' d='M14.5 4l-5 16'/></svg>");
 }
 
 #saveBtn::before,
@@ -929,6 +929,24 @@ textarea {
 }
 
 @media (max-width: 768px) {
+  .panel-title {
+    width: 100%;
+    text-align: left;
+    margin-bottom: unset;
+  }
+
+  .validation-info {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  #validationMessageContainer {
+    margin-right: 0;
+    justify-content: center;
+    text-align: center;
+  }
+
   .controls {
     flex-direction: column;
     align-items: center;
@@ -975,18 +993,17 @@ textarea {
   }
 
   .tabs-scroll {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    overflow: visible;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+    /* Выравниваем вкладки по левому краю */
   }
 
   .tab-group {
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    -webkit-overflow-scrolling: touch;
+    min-width: max-content;
+    /* Чтобы вкладки не переносились */
+    flex-shrink: 0;
   }
 
   .xkeen-group {
@@ -1003,13 +1020,31 @@ textarea {
   }
 
   .editor-controls {
+    width: 100%;
     justify-content: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .editor-controls .btn {
+    min-width: auto;
+    flex: 1;
+    max-width: 120px;
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+
+  .panel-header-config {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
 
   .panel-header {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+    height: auto;
   }
 
   .panel-actions {
@@ -1105,4 +1140,83 @@ textarea {
   stroke: currentColor;
   fill: none;
   margin-bottom: 1px;
+}
+
+.panel-header-config {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 20px;
+}
+
+#saveRestartBtn {
+  position: relative;
+  padding-left: 32px;
+}
+
+#saveRestartBtn::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(calc(-50% + 1px));
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 2 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8'/><path d='M21 3v5h-5'/><path d='M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16'/><path d='M8 16H3v5'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 2 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8'/><path d='M21 3v5h-5'/><path d='M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16'/><path d='M8 16H3v5'/></svg>");
+}
+
+.panel-header-config .tabs-scroll {
+  margin-left: auto;
+}
+
+.validation-info {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+}
+
+#validationMessageContainer {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.editor-controls {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+#validationInfo {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+#editorControlsContainer {
+  margin-left: auto;
+}
+
+#validationSkeleton {
+  position: absolute;
+  left: 0;
+  width: 220px;
+  height: 18px;
+  align-items: flex-start;
+}
+
+#editorControlsSkeletons {
+  gap: 8px;
 }

@@ -30,13 +30,13 @@
         </div>
 
         <div class="controls-buttons">
-          <button class="btn btn-primary" id="restartBtn" onclick="restartXkeen()" style="display: inline-flex">
+          <button class="btn btn-primary" id="restartBtn" onclick="restartXKeen()" style="display: inline-flex">
             Перезапустить
           </button>
-          <button class="btn btn-success" id="startBtn" onclick="startXkeen()">
+          <button class="btn btn-success" id="startBtn" onclick="startXKeen()">
             Запустить
           </button>
-          <button class="btn btn-danger" id="stopBtn" onclick="stopXkeen()">
+          <button class="btn btn-danger" id="stopBtn" onclick="stopXKeen()">
             Остановить
           </button>
         </div>
@@ -64,7 +64,6 @@
             </svg>
           </span>
 
-
           <span class="label" id="coreSelectLabel">xray</span>
           <svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -85,41 +84,43 @@
     </div>
 
     <div class="panel">
-      <h2 class="panel-title">Конфигурация</h2>
-      <div class="tabs-header">
+      <div class="panel-header-config">
+        <h2 class="panel-title">Конфигурация</h2>
         <div class="tabs-scroll">
-          <!-- Core группа -->
           <div class="tab-group core-group">
             <div class="tabs-list" id="coreTabsList"></div>
           </div>
-
-          <!-- Xkeen группа -->
           <div class="tab-group xkeen-group">
             <div class="tabs-list" id="xkeenTabsList"></div>
           </div>
         </div>
-        <div class="editor-controls">
-          <div id="editorControlsSkeletons" class="controls-skeletons" style="display: inline-flex; gap: 8px">
-            <div class="skeleton skeleton-btn" style="width: 120px"></div>
-            <div class="skeleton skeleton-btn" style="width: 130px"></div>
-          </div>
-          <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()">
-            Сохранить
-          </button>
-          <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">
-            Форматировать
-          </button>
-        </div>
       </div>
+
       <div class="tabs-content">
         <div class="editor-container" id="editorContainer">
           <div class="editor-loading">Загрузка конфигураций...</div>
         </div>
       </div>
-      <div id="validationSkeleton" class="skeleton skeleton-line" style="width: 220px; height: 18px"></div>
+
       <div class="validation-info" id="validationInfo" style="display: none">
-        <span class="validation-icon">⏳</span>
-        <span>Загрузка конфигураций...</span>
+        <div id="validationMessageContainer"></div>
+        <div id="validationSkeleton" class="skeleton skeleton-line"></div>
+        <div class="editor-controls" id="editorControlsContainer">
+          <div id="editorControlsSkeletons" class="controls-skeletons">
+            <div id="saveRestartBtn-skeleton" class="skeleton skeleton-btn" style="width: 164px;"></div>
+            <div id="saveBtn-skeleton" class="skeleton skeleton-btn" style="width: 125px;"></div>
+            <div id="formatBtn-skeleton" class="skeleton skeleton-btn" style="width: 106px;"></div>
+          </div>
+          <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>
+            Сохр. и перезап.
+          </button>
+          <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()">
+            Сохранить
+          </button>
+          <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">
+            Формат
+          </button>
+        </div>
       </div>
     </div>
 
@@ -166,7 +167,8 @@
         </div>
       </div>
       <div id="logsContainer" class="logs-container">
-        <div style="color: #6b7280; text-align: center; margin-top: 50px">
+        <div
+          style="color: #6b7280; text-align: center; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%;">
           Загрузка журнала...
         </div>
       </div>
