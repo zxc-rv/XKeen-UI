@@ -17,18 +17,19 @@ let availableCores = [];
 let currentCore = "";
 let pendingCoreChange = "";
 let isCurrentFileJson = false;
+let dashboardPort = null;
 
 require.config({
   paths: {
-    vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs",
+    vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs",
   },
 });
 
 function getFileLanguage(filename) {
-  if (filename.endsWith('.json')) return 'json';
-  if (filename.endsWith('.yaml') || filename.endsWith('.yml')) return 'yaml';
-  if (filename.endsWith('.lst')) return 'plaintext';
-  return 'json';
+  if (filename.endsWith(".json")) return "json";
+  if (filename.endsWith(".yaml") || filename.endsWith(".yml")) return "yaml";
+  if (filename.endsWith(".lst")) return "plaintext";
+  return "json";
 }
 
 function showToast(message, type = "success") {
@@ -69,24 +70,27 @@ function showToast(message, type = "success") {
 
 function updateValidationInfo(isValid, error = null) {
   const validationInfo = document.getElementById("validationInfo");
-  const messageContainer = document.getElementById("validationMessageContainer");
+  const messageContainer = document.getElementById(
+    "validationMessageContainer"
+  );
   const currentConfig = configs[activeConfigIndex];
 
   // Показываем/скрываем только контейнер с сообщением, а не весь блок
-  const shouldShowMessage = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
+  const shouldShowMessage =
+    currentConfig && getFileLanguage(currentConfig.filename) === "json";
 
   if (!shouldShowMessage) {
     // Скрываем только контейнер с сообщением
-    messageContainer.style.display = 'none';
+    messageContainer.style.display = "none";
 
     // Показываем кнопки управления редактором
-    const editorControls = document.querySelector('.editor-controls');
+    const editorControls = document.querySelector(".editor-controls");
     if (editorControls) {
-      editorControls.style.display = 'flex';
+      editorControls.style.display = "flex";
     }
   } else {
     // Показываем контейнер с сообщением
-    messageContainer.style.display = 'flex';
+    messageContainer.style.display = "flex";
 
     // Обновляем содержимое сообщения
     if (isValid) {
@@ -97,7 +101,9 @@ function updateValidationInfo(isValid, error = null) {
     } else {
       messageContainer.innerHTML = `
         <span class="validation-icon validation-error">✗</span>
-        <span class="validation-error"> Ошибка валидации: ${error || "Файл невалиден"}</span>
+        <span class="validation-error"> Ошибка валидации: ${
+          error || "Файл невалиден"
+        }</span>
       `;
     }
   }
@@ -151,10 +157,22 @@ function parseLogLine(line) {
   let className = "log-line";
 
   processedLine = processedLine
-    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, '<span style="color: #10b981;">$1</span>')
-    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, '<span style="color: #f59e0b;">$1</span>')
-    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, '<span style="color: #ef4444;">$1</span>')
-    .replace(/\u001b\[36m(.*?)\u001b\[0m/g, '<span style="color: #06b6d4;">$1</span>')
+    .replace(
+      /\u001b\[32m(.*?)\u001b\[0m/g,
+      '<span style="color: #10b981;">$1</span>'
+    )
+    .replace(
+      /\u001b\[33m(.*?)\u001b\[0m/g,
+      '<span style="color: #f59e0b;">$1</span>'
+    )
+    .replace(
+      /\u001b\[31m(.*?)\u001b\[0m/g,
+      '<span style="color: #ef4444;">$1</span>'
+    )
+    .replace(
+      /\u001b\[36m(.*?)\u001b\[0m/g,
+      '<span style="color: #06b6d4;">$1</span>'
+    )
     .replace(/\u001b\[\d+m/g, "");
 
   processedLine = processedLine
@@ -193,7 +211,8 @@ function updateServiceStatus(running) {
 }
 
 function renderLines(container, lines) {
-  const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
+  const wasAtBottom =
+    container.scrollTop + container.clientHeight >= container.scrollHeight - 5;
 
   if (lines.length === 0) {
     container.classList.add("centered");
@@ -205,7 +224,9 @@ function renderLines(container, lines) {
   const processedLines = lines
     .map((line) => {
       const parsed = parseLogLine(line);
-      return parsed ? `<div class="${parsed.className}">${parsed.content}</div>` : "";
+      return parsed
+        ? `<div class="${parsed.className}">${parsed.content}</div>`
+        : "";
     })
     .filter(Boolean);
 
@@ -222,10 +243,12 @@ function applyFilter() {
     renderLines(document.getElementById("logsContainer"), displayLines);
   } else {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "filter",
-        query: logFilter,
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "filter",
+          query: logFilter,
+        })
+      );
     }
   }
 }
@@ -239,7 +262,9 @@ function connectWebSocket() {
     clearInterval(pingInterval);
   }
 
-  ws = new WebSocket(`ws://${window.location.hostname}:8080/ws?file=${currentLogFile}`);
+  ws = new WebSocket(
+    `ws://${window.location.hostname}:8080/ws?file=${currentLogFile}`
+  );
 
   ws.onopen = () => {
     console.log("WebSocket connected");
@@ -251,7 +276,9 @@ function connectWebSocket() {
   };
 
   ws.onclose = (event) => {
-    console.warn(`WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`);
+    console.warn(
+      `WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`
+    );
     clearInterval(pingInterval);
     setTimeout(connectWebSocket, 1000);
   };
@@ -303,7 +330,9 @@ function connectWebSocket() {
         displayLines = displayLines.slice(-1000);
         renderLines(document.getElementById("logsContainer"), displayLines);
       } else {
-        const matchedNewLines = newLines.filter((line) => line.includes(logFilter));
+        const matchedNewLines = newLines.filter((line) =>
+          line.includes(logFilter)
+        );
         if (matchedNewLines.length > 0) {
           displayLines.push(...matchedNewLines);
           renderLines(document.getElementById("logsContainer"), displayLines);
@@ -326,10 +355,12 @@ function switchLogFile(newLogFile) {
   currentLogFile = newLogFile;
 
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: "switchFile",
-      file: newLogFile,
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "switchFile",
+        file: newLogFile,
+      })
+    );
   }
 }
 
@@ -338,6 +369,70 @@ function initMonacoEditor() {
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
       allowComments: true,
     });
+    monaco.languages.json.jsonDefaults.setModeConfiguration({
+      ...monaco.languages.json.jsonDefaults.modeConfiguration,
+      documentFormattingEdits: false,
+    });
+
+    // Регистрируем кастомный форматтер для JSON
+    monaco.languages.registerDocumentFormattingEditProvider("json", {
+      async provideDocumentFormattingEdits(model, options, token) {
+        try {
+          console.log("Using Prettier for JSON formatting...");
+          const text = await window.prettier.format(model.getValue(), {
+            parser: "json",
+            plugins: [window.prettierPlugins.babel],
+            semi: false,
+            singleQuote: false,
+            trailingComma: "none",
+            printWidth: 80,
+            endOfLine: "lf",
+          });
+          const cleanedText = text
+            .replace(/\n{3,}/g, "\n\n")
+            .replace(/\s+$/gm, "")
+            .replace(/\n$/, "");
+          return [
+            {
+              range: model.getFullModelRange(),
+              text: cleanedText,
+            },
+          ];
+        } catch (error) {
+          console.error("Prettier formatting error:", error);
+          showToast(`Ошибка форматирования: ${error.message}`, "error");
+          return [];
+        }
+      },
+    });
+
+    // Регистрируем форматтер для YAML
+    monaco.languages.registerDocumentFormattingEditProvider("yaml", {
+      async provideDocumentFormattingEdits(model, options, token) {
+        try {
+          console.log("Using Prettier for YAML formatting...");
+          const text = await window.prettier.format(model.getValue(), {
+            parser: "yaml",
+            plugins: [window.prettierPlugins.yaml],
+            singleQuote: true,
+            proseWrap: "preserve",
+          });
+
+          return [
+            {
+              range: model.getFullModelRange(),
+              text: text,
+            },
+          ];
+        } catch (error) {
+          console.error("Prettier YAML formatting error:", error);
+          showToast(`Ошибка форматирования YAML: ${error.message}`, "error");
+          return [];
+        }
+      },
+    });
+
+    // Остальной код без изменений...
     monaco.editor.defineTheme("tokyo-night", {
       base: "vs-dark",
       inherit: true,
@@ -389,8 +484,8 @@ function initMonacoEditor() {
       language: "json",
       theme: "tokyo-night",
       automaticLayout: true,
-      formatOnPaste: true,
-      formatOnType: true,
+      formatOnPaste: false,
+      formatOnType: false,
       scrollBeyondLastLine: false,
       minimap: { enabled: false },
       fontSize: 14,
@@ -446,7 +541,10 @@ function initMonacoEditor() {
 
     monaco.editor.onDidChangeMarkers((uris) => {
       const currentConfig = configs[activeConfigIndex];
-      if (!currentConfig || getFileLanguage(currentConfig.filename) !== 'json') {
+      if (
+        !currentConfig ||
+        getFileLanguage(currentConfig.filename) !== "json"
+      ) {
         updateValidationInfo(false);
         return;
       }
@@ -478,7 +576,7 @@ function initMonacoEditor() {
           updateUIDirtyState();
         }
 
-        if (getFileLanguage(currentConfig.filename) !== 'json') {
+        if (getFileLanguage(currentConfig.filename) !== "json") {
           updateValidationInfo(false);
         }
       }
@@ -515,13 +613,13 @@ function updateUIDirtyState() {
     const fileLanguage = getFileLanguage(currentConfig.filename);
     const hasChanges = currentConfig.isDirty;
 
-    if (fileLanguage === 'json') {
+    if (fileLanguage === "json") {
       const isXray = currentCore === "xray";
       saveRestartBtn.disabled = !(isXray && hasChanges && isServiceRunning);
-    } else if (fileLanguage === 'yaml') {
+    } else if (fileLanguage === "yaml") {
       const isMihomo = currentCore === "mihomo";
       saveRestartBtn.disabled = !(isMihomo && hasChanges && isServiceRunning);
-    } else if (fileLanguage === 'plaintext') {
+    } else if (fileLanguage === "plaintext") {
       saveRestartBtn.disabled = !(hasChanges && isServiceRunning);
     } else {
       saveRestartBtn.disabled = true;
@@ -538,7 +636,7 @@ function validateCurrentFile() {
 
   const currentConfig = configs[activeConfigIndex];
 
-  if (!currentConfig || getFileLanguage(currentConfig.filename) !== 'json') {
+  if (!currentConfig || getFileLanguage(currentConfig.filename) !== "json") {
     updateValidationInfo(false);
     return;
   }
@@ -572,10 +670,12 @@ function renderTabs() {
   // Сохраняем позиции индикаторов перед очисткой
   const coreIndicator = coreTabsList?.querySelector(".tab-active-indicator");
   const xkeenIndicator = xkeenTabsList?.querySelector(".tab-active-indicator");
-  const coreTransform = coreIndicator?.style.transform || '';
-  const xkeenTransform = xkeenIndicator?.style.transform || '';
+  const coreTransform = coreIndicator?.style.transform || "";
+  const xkeenTransform = xkeenIndicator?.style.transform || "";
 
-  const editorControlsSkeletons = document.getElementById("editorControlsSkeletons");
+  const editorControlsSkeletons = document.getElementById(
+    "editorControlsSkeletons"
+  );
   const saveBtn = document.getElementById("saveBtn");
   const saveRestartBtn = document.getElementById("saveRestartBtn");
   const formatBtn = document.getElementById("formatBtn");
@@ -584,14 +684,15 @@ function renderTabs() {
 
   if (isConfigsLoading) {
     if (validationInfo) validationInfo.style.display = "flex";
-    if (editorControlsSkeletons) editorControlsSkeletons.style.display = "inline-flex";
+    if (editorControlsSkeletons)
+      editorControlsSkeletons.style.display = "inline-flex";
     if (saveBtn) saveBtn.style.display = "none";
     if (saveRestartBtn) saveRestartBtn.style.display = "none";
     if (formatBtn) formatBtn.style.display = "none";
     if (validationSkeleton) validationSkeleton.style.display = "block";
 
-    coreTabsList.innerHTML = '';
-    xkeenTabsList.innerHTML = '';
+    coreTabsList.innerHTML = "";
+    xkeenTabsList.innerHTML = "";
     for (let i = 0; i < 3; i++) {
       const sk = document.createElement("div");
       sk.className = "skeleton skeleton-tab";
@@ -615,10 +716,13 @@ function renderTabs() {
     validationInfo.style.display = "flex";
 
     // Но управляем видимостью только messageContainer
-    const messageContainer = document.getElementById("validationMessageContainer");
+    const messageContainer = document.getElementById(
+      "validationMessageContainer"
+    );
     if (messageContainer) messageContainer.style.display = "none";
     const currentConfig = configs[activeConfigIndex];
-    const shouldShowMessage = currentConfig && getFileLanguage(currentConfig.filename) === 'json';
+    const shouldShowMessage =
+      currentConfig && getFileLanguage(currentConfig.filename) === "json";
 
     if (messageContainer) {
       messageContainer.style.display = shouldShowMessage ? "flex" : "none";
@@ -626,11 +730,15 @@ function renderTabs() {
   }
 
   // Разделяем конфиги
-  const coreConfigs = configs.filter(config => !config.filename.endsWith('.lst'));
-  const xkeenConfigs = configs.filter(config => config.filename.endsWith('.lst'));
+  const coreConfigs = configs.filter(
+    (config) => !config.filename.endsWith(".lst")
+  );
+  const xkeenConfigs = configs.filter((config) =>
+    config.filename.endsWith(".lst")
+  );
 
   // Рендерим Core вкладки
-  coreTabsList.innerHTML = '';
+  coreTabsList.innerHTML = "";
   const newCoreIndicator = document.createElement("div");
   newCoreIndicator.className = "tab-active-indicator";
   newCoreIndicator.style.transform = coreTransform;
@@ -639,14 +747,16 @@ function renderTabs() {
   coreConfigs.forEach((config, index) => {
     const globalIndex = configs.indexOf(config);
     const tabTrigger = document.createElement("button");
-    tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`;
+    tabTrigger.className = `tab-trigger ${
+      globalIndex === activeConfigIndex ? "active" : ""
+    } ${config.isDirty ? "dirty" : ""}`;
     tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`;
     tabTrigger.onclick = () => attemptSwitchTab(globalIndex);
     coreTabsList.appendChild(tabTrigger);
   });
 
   // Рендерим Xkeen вкладки только если они есть
-  xkeenTabsList.innerHTML = '';
+  xkeenTabsList.innerHTML = "";
   if (xkeenConfigs.length > 0) {
     const newXkeenIndicator = document.createElement("div");
     newXkeenIndicator.className = "tab-active-indicator";
@@ -656,17 +766,19 @@ function renderTabs() {
     xkeenConfigs.forEach((config, index) => {
       const globalIndex = configs.indexOf(config);
       const tabTrigger = document.createElement("button");
-      tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`;
+      tabTrigger.className = `tab-trigger ${
+        globalIndex === activeConfigIndex ? "active" : ""
+      } ${config.isDirty ? "dirty" : ""}`;
       tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`;
       tabTrigger.onclick = () => attemptSwitchTab(globalIndex);
       xkeenTabsList.appendChild(tabTrigger);
     });
 
     // Показываем xkeen группу
-    xkeenTabsList.parentElement.style.display = 'inline-block';
+    xkeenTabsList.parentElement.style.display = "inline-block";
   } else {
     // Скрываем xkeen группу если нет конфигов
-    xkeenTabsList.parentElement.style.display = 'none';
+    xkeenTabsList.parentElement.style.display = "none";
   }
 
   // Обновляем индикатор после рендера
@@ -678,18 +790,18 @@ function updateActiveTabIndicator() {
   const xkeenTabsList = document.getElementById("xkeenTabsList");
 
   // Скрываем все индикаторы
-  [coreTabsList, xkeenTabsList].forEach(container => {
+  [coreTabsList, xkeenTabsList].forEach((container) => {
     if (!container) return;
     const indicator = container.querySelector(".tab-active-indicator");
     if (indicator) {
-      indicator.style.opacity = '0';
+      indicator.style.opacity = "0";
     }
   });
 
   const activeConfig = configs[activeConfigIndex];
   if (!activeConfig) return;
 
-  const isXkeen = activeConfig.filename.endsWith('.lst');
+  const isXkeen = activeConfig.filename.endsWith(".lst");
   const activeContainer = isXkeen ? xkeenTabsList : coreTabsList;
   if (!activeContainer) return;
 
@@ -698,8 +810,8 @@ function updateActiveTabIndicator() {
 
   const tabs = Array.from(activeContainer.querySelectorAll(".tab-trigger"));
   const groupConfigs = isXkeen
-    ? configs.filter(c => c.filename.endsWith('.lst'))
-    : configs.filter(c => !c.filename.endsWith('.lst'));
+    ? configs.filter((c) => c.filename.endsWith(".lst"))
+    : configs.filter((c) => !c.filename.endsWith(".lst"));
 
   const groupIndex = groupConfigs.indexOf(activeConfig);
   if (groupIndex === -1) return;
@@ -712,16 +824,16 @@ function updateActiveTabIndicator() {
 
   indicator.style.width = `${width}px`;
   indicator.style.transform = `translateX(${offsetLeft}px)`;
-  indicator.style.opacity = '1';
+  indicator.style.opacity = "1";
 
   // Анимация перехода между группами
-  if (window.lastActiveGroup !== (isXkeen ? 'xkeen' : 'core')) {
-    indicator.style.transition = 'none';
+  if (window.lastActiveGroup !== (isXkeen ? "xkeen" : "core")) {
+    indicator.style.transition = "none";
     setTimeout(() => {
-      indicator.style.transition = '';
+      indicator.style.transition = "";
     }, 10);
   }
-  window.lastActiveGroup = isXkeen ? 'xkeen' : 'core';
+  window.lastActiveGroup = isXkeen ? "xkeen" : "core";
 }
 
 function attemptSwitchTab(index) {
@@ -763,17 +875,19 @@ function discardAndSwitch() {
 }
 
 function switchTab(index) {
-  if (index < 0 || index >= configs.length || index === activeConfigIndex) return;
+  if (index < 0 || index >= configs.length || index === activeConfigIndex)
+    return;
 
   activeConfigIndex = index;
 
   const config = configs[index];
-  const formatBtn = document.getElementById('formatBtn');
+  const formatBtn = document.getElementById("formatBtn");
 
   if (config) {
     const language = getFileLanguage(config.filename);
-    isCurrentFileJson = (language === 'json');
-    if (formatBtn) formatBtn.disabled = !isCurrentFileJson;
+    isCurrentFileJson = language === "json";
+    if (formatBtn)
+      formatBtn.disabled = !(language === "json" || language === "yaml");
   }
 
   if (monacoEditor && config) {
@@ -790,7 +904,6 @@ function switchTab(index) {
   }
   updateUIDirtyState();
   validateCurrentFile();
-
   requestAnimationFrame(updateActiveTabIndicator);
 }
 
@@ -802,7 +915,10 @@ async function apiCall(endpoint, data = null) {
     };
     if (data) options.body = JSON.stringify(data);
 
-    const response = await fetch(`http://${window.location.host}/cgi/${endpoint}`, options);
+    const response = await fetch(
+      `http://${window.location.host}/cgi/${endpoint}`,
+      options
+    );
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` };
@@ -844,10 +960,12 @@ async function loadConfigs() {
     showToast("Ошибка загрузки конфигов", "error");
     renderTabs();
   }
+  updateDashboardLink();
 }
 
 async function saveCurrentConfig() {
-  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return;
+  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor)
+    return;
 
   const config = configs[activeConfigIndex];
   const content = monacoEditor.getValue();
@@ -859,7 +977,7 @@ async function saveCurrentConfig() {
 
   const language = getFileLanguage(config.filename);
 
-  if (language === 'json') {
+  if (language === "json") {
     const model = monacoEditor.getModel();
     if (model) {
       const allMarkers = monaco.editor.getModelMarkers({});
@@ -869,10 +987,13 @@ async function saveCurrentConfig() {
           m.severity === monaco.MarkerSeverity.Error
       );
       if (errorMarker) {
-        showToast({
-          title: "Ошибка сохранения",
-          body: `Invalid JSON: ${errorMarker.message}`,
-        }, "error");
+        showToast(
+          {
+            title: "Ошибка сохранения",
+            body: `Invalid JSON: ${errorMarker.message}`,
+          },
+          "error"
+        );
         return;
       }
     }
@@ -907,17 +1028,20 @@ function formatCurrentConfig() {
   const currentConfig = configs[activeConfigIndex];
   const language = getFileLanguage(currentConfig.filename);
 
-  if (language === 'json') {
+  if (language === "json" || language === "yaml") {
     const formatAction = monacoEditor.getAction("editor.action.formatDocument");
     if (formatAction) {
       formatAction.run().catch((e) => {
-        showToast(`Ошибка форматирования: ${e?.message || "неизвестная ошибка"}`, "error");
+        showToast(
+          `Ошибка форматирования: ${e?.message || "неизвестная ошибка"}`,
+          "error"
+        );
       });
     } else {
       showToast("Форматирование недоступно", "error");
     }
   } else {
-    showToast("Форматирование доступно только для JSON файлов", "error");
+    showToast("Форматирование доступно только для JSON и YAML", "error");
   }
 }
 
@@ -973,8 +1097,12 @@ async function restartXKeen() {
       isActionInProgress = false;
       isServiceRunning = true;
       updateServiceStatus(true);
+      updateDashboardLink();
     } else {
-      showToast(`Ошибка перезапуска: ${result.output || result.error}`, "error");
+      showToast(
+        `Ошибка перезапуска: ${result.output || result.error}`,
+        "error"
+      );
       isActionInProgress = false;
       checkStatus();
     }
@@ -993,7 +1121,7 @@ async function clearCurrentLog() {
   try {
     const result = await apiCall("logs", {
       action: "clear",
-      file: currentLogFile
+      file: currentLogFile,
     });
 
     if (result.success) {
@@ -1027,10 +1155,15 @@ async function loadCores() {
         coreSelectRoot.style.display = "inline-block";
         coreSelectLabel.textContent = currentCore;
 
-        const items = document.querySelectorAll("#coreSelectContent .select-item");
+        const items = document.querySelectorAll(
+          "#coreSelectContent .select-item"
+        );
         items.forEach((item) => {
           const value = item.getAttribute("data-value");
-          item.setAttribute("aria-selected", value === currentCore ? "true" : "false");
+          item.setAttribute(
+            "aria-selected",
+            value === currentCore ? "true" : "false"
+          );
         });
       }
     }
@@ -1049,7 +1182,9 @@ async function confirmCoreChange() {
 
   // Получаем значение напрямую из модального окна
   const selectedCoreElement = document.getElementById("selectedCore");
-  const selectedCore = selectedCoreElement ? selectedCoreElement.textContent : "";
+  const selectedCore = selectedCoreElement
+    ? selectedCoreElement.textContent
+    : "";
 
   console.log("Selected core from DOM:", selectedCore);
 
@@ -1077,11 +1212,16 @@ async function confirmCoreChange() {
         coreSelectLabel.textContent = currentCore;
       }
 
-      const items = document.querySelectorAll("#coreSelectContent .select-item");
+      const items = document.querySelectorAll(
+        "#coreSelectContent .select-item"
+      );
       items.forEach((item) => {
         const value = item.getAttribute("data-value");
         if (item && value) {
-          item.setAttribute("aria-selected", value === currentCore ? "true" : "false");
+          item.setAttribute(
+            "aria-selected",
+            value === currentCore ? "true" : "false"
+          );
         }
       });
 
@@ -1095,7 +1235,6 @@ async function confirmCoreChange() {
           forceReloadConfigs();
         });
       }, 100);
-
     } else {
       showToast(`Ошибка смены ядра: ${result.error}`, "error");
       isActionInProgress = false;
@@ -1107,6 +1246,28 @@ async function confirmCoreChange() {
     isActionInProgress = false;
     checkStatus();
   }
+}
+
+function parseDashboardPort(yamlContent) {
+  const match = yamlContent.match(/external-controller:\s*0\.0\.0\.0:(\d+)/);
+  return match ? match[1] : null;
+}
+
+function updateDashboardLink() {
+  const dashboardLink = document.getElementById("dashboardLink");
+  if (currentCore === "mihomo") {
+    const mihomoConfig = configs.find((c) => c.filename === "config.yaml");
+    if (mihomoConfig) {
+      const port = parseDashboardPort(mihomoConfig.content);
+      if (port) {
+        dashboardPort = port;
+        dashboardLink.style.display = "inline-flex";
+        dashboardLink.href = `http://${window.location.hostname}:${port}/ui`;
+        return;
+      }
+    }
+  }
+  dashboardLink.style.display = "none";
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1141,22 +1302,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const tabsScroll = document.querySelector(".tabs-scroll");
   if (tabsScroll) {
-    tabsScroll.addEventListener("wheel", (e) => {
-      const canScroll = tabsScroll.scrollWidth > tabsScroll.clientWidth;
-      if (!canScroll) return;
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault();
-        tabsScroll.scrollLeft += e.deltaY;
-      }
-    }, { passive: false });
+    tabsScroll.addEventListener(
+      "wheel",
+      (e) => {
+        const canScroll = tabsScroll.scrollWidth > tabsScroll.clientWidth;
+        if (!canScroll) return;
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          e.preventDefault();
+          tabsScroll.scrollLeft += e.deltaY;
+        }
+      },
+      { passive: false }
+    );
 
-    tabsScroll.addEventListener("scroll", () => {
-      requestAnimationFrame(() => updateActiveTabIndicator && updateActiveTabIndicator());
-    }, { passive: true });
+    tabsScroll.addEventListener(
+      "scroll",
+      () => {
+        requestAnimationFrame(
+          () => updateActiveTabIndicator && updateActiveTabIndicator()
+        );
+      },
+      { passive: true }
+    );
   }
 
   logsContainer.addEventListener("scroll", () => {
-    const isAtBottom = logsContainer.scrollTop + logsContainer.clientHeight >= logsContainer.scrollHeight - 5;
+    const isAtBottom =
+      logsContainer.scrollTop + logsContainer.clientHeight >=
+      logsContainer.scrollHeight - 5;
     userScrolled = !isAtBottom;
   });
 
@@ -1278,12 +1451,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   logSelectTrigger.addEventListener("keydown", (e) => {
     const items = Array.from(logSelectContent.querySelectorAll(".select-item"));
-    const currentIndex = items.findIndex((i) => i.getAttribute("data-value") === currentLogFile);
+    const currentIndex = items.findIndex(
+      (i) => i.getAttribute("data-value") === currentLogFile
+    );
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (!logSelectRoot.classList.contains("select-open")) openLogMenu();
       let nextIndex = currentIndex;
-      if (e.key === "ArrowDown") nextIndex = Math.min(items.length - 1, currentIndex + 1);
+      if (e.key === "ArrowDown")
+        nextIndex = Math.min(items.length - 1, currentIndex + 1);
       if (e.key === "ArrowUp") nextIndex = Math.max(0, currentIndex - 1);
       const nextItem = items[nextIndex];
       if (nextItem) {
@@ -1330,7 +1506,8 @@ document.addEventListener("DOMContentLoaded", () => {
   loadCores();
 
   logsContainer.classList.add("centered");
-  logsContainer.innerHTML = '<div style="color: #6b7280;">Подключение к WebSocket...</div>';
+  logsContainer.innerHTML =
+    '<div style="color: #6b7280;">Подключение к WebSocket...</div>';
 
   connectWebSocket();
 });
@@ -1356,7 +1533,7 @@ async function forceReloadConfigs() {
   configs = [];
   activeConfigIndex = -1;
 
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await new Promise((resolve) => setTimeout(resolve, 500));
 
   const result = await apiCall("configs");
 
@@ -1384,12 +1561,13 @@ async function forceReloadConfigs() {
     renderTabs();
     console.error("Failed to reload configs:", result.error);
   }
-
   updateUIDirtyState();
+  updateDashboardLink();
 }
 
 async function saveAndRestart() {
-  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return;
+  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor)
+    return;
 
   const config = configs[activeConfigIndex];
   const content = monacoEditor.getValue();
@@ -1401,7 +1579,7 @@ async function saveAndRestart() {
 
   const language = getFileLanguage(config.filename);
 
-  if (language === 'json') {
+  if (language === "json") {
     const model = monacoEditor.getModel();
     if (model) {
       const allMarkers = monaco.editor.getModelMarkers({});
@@ -1411,10 +1589,13 @@ async function saveAndRestart() {
           m.severity === monaco.MarkerSeverity.Error
       );
       if (errorMarker) {
-        showToast({
-          title: "Ошибка сохранения",
-          body: `Invalid JSON: ${errorMarker.message}`,
-        }, "error");
+        showToast(
+          {
+            title: "Ошибка сохранения",
+            body: `Invalid JSON: ${errorMarker.message}`,
+          },
+          "error"
+        );
         return;
       }
     }
@@ -1431,6 +1612,7 @@ async function saveAndRestart() {
     config.savedContent = content;
     config.isDirty = false;
     updateUIDirtyState();
+    updateDashboardLink();
     showToast(`Конфиг "${config.name}" сохранен`);
 
     setPendingState("Перезапускается...");
@@ -1438,12 +1620,12 @@ async function saveAndRestart() {
     try {
       let restartResult;
 
-      if (language === 'json' || language === 'yaml') {
+      if (language === "json" || language === "yaml") {
         restartResult = await apiCall("control", {
           action: "restartCore",
-          core: currentCore
+          core: currentCore,
         });
-      } else if (language === 'plaintext') {
+      } else if (language === "plaintext") {
         restartResult = await apiCall("control", { action: "restart" });
       }
 
@@ -1453,7 +1635,10 @@ async function saveAndRestart() {
         isServiceRunning = true;
         updateServiceStatus(true);
       } else {
-        showToast(`Ошибка перезапуска: ${restartResult?.error || 'unknown'}`, "error");
+        showToast(
+          `Ошибка перезапуска: ${restartResult?.error || "unknown"}`,
+          "error"
+        );
         isActionInProgress = false;
         checkStatus();
       }
