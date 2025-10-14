@@ -1249,7 +1249,7 @@ async function confirmCoreChange() {
 }
 
 function parseDashboardPort(yamlContent) {
-  const match = yamlContent.match(/external-controller:\s*([\w\.-]+):(\d+)/);
+  const match = yamlContent.match(/^external-controller:\s*([\w\.-]+):(\d+)/m);
   return match ? match[2] : null;
 }
 
