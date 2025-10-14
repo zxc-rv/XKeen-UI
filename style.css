@@ -1047,26 +1047,23 @@ textarea {
 #dashboardLink {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   color: white;
   font-weight: 500;
-  text-decoration: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
   cursor: pointer;
   transition: color 0.2s;
-  padding-left: 0px;
+  padding-left: 4px;
   margin-bottom: 15px;
+  font-size: 12px;
 }
 
-#dashboardLink .text {
-  text-decoration: none;
-  transition: text-decoration-color 0.2s;
-  font-size: 13px;
-  text-decoration: underline dotted;
+#dashboardLink svg {
+  margin-top: 2px;
 }
 
-#dashboardLink:hover .text {
+#dashboardLink:hover {
   text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .panel-header-config {
@@ -1085,8 +1082,9 @@ textarea {
 }
 
 @media (max-width: 768px) {
-  #dashboardLink .text {
+  #dashboardLink {
     text-decoration: underline;
+    margin-bottom: 14px;
   }
 
   .validation-info {

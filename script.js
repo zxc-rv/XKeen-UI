@@ -957,7 +957,7 @@ async function loadConfigs() {
     }
   } else {
     isConfigsLoading = false;
-    showToast("Ошибка загрузки конфигов", "error");
+    showToast("Ошибка загрузки конфигураций", "error");
     renderTabs();
   }
   updateDashboardLink();
@@ -971,7 +971,7 @@ async function saveCurrentConfig() {
   const content = monacoEditor.getValue();
 
   if (!content.trim()) {
-    showToast("Конфиг пустой", "error");
+    showToast("Конфиграция пустая", "error");
     return;
   }
 
@@ -1010,7 +1010,7 @@ async function saveCurrentConfig() {
     config.savedContent = content;
     config.isDirty = false;
     updateUIDirtyState();
-    showToast(`Конфиг "${config.name}" сохранен`);
+    showToast(`Конфигурация "${config.name}" сохранена`);
   } else {
     showToast(`Ошибка сохранения: ${result.error}`, "error");
   }
@@ -1021,7 +1021,7 @@ function formatCurrentConfig() {
 
   const content = monacoEditor.getValue().trim();
   if (!content) {
-    showToast("Конфиг пустой", "error");
+    showToast("Конфигурация пустая", "error");
     return;
   }
 
@@ -1249,8 +1249,8 @@ async function confirmCoreChange() {
 }
 
 function parseDashboardPort(yamlContent) {
-  const match = yamlContent.match(/external-controller:\s*0\.0\.0\.0:(\d+)/);
-  return match ? match[1] : null;
+  const match = yamlContent.match(/external-controller:\s*([\w\.-]+):(\d+)/);
+  return match ? match[2] : null;
 }
 
 function updateDashboardLink() {
