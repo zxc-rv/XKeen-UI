@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/gorilla/websocket"
 	"gopkg.in/yaml.v2"
 )
@@ -150,10 +149,9 @@ func jsonResponse(w http.ResponseWriter, data interface{}, status int) {
 }
 
 func adjustTimezone(content string) string {
-	re := regexp.MustCompile(`(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2})`)
-
-	return re.ReplaceAllStringFunc(content, func(match string) string {
-		parts := re.FindStringSubmatch(match)
+	reXray := regexp.MustCompile(`(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2})`)
+	content = reXray.ReplaceAllStringFunc(content, func(match string) string {
+		parts := reXray.FindStringSubmatch(match)
 		if len(parts) != 7 {
 			return match
 		}
@@ -170,6 +168,29 @@ func adjustTimezone(content string) string {
 
 		return t.Format("2006/01/02 15:04:05")
 	})
+
+	reMihomo := regexp.MustCompile(`time="(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d+)Z"`)
+	content = reMihomo.ReplaceAllStringFunc(content, func(match string) string {
+		parts := reMihomo.FindStringSubmatch(match)
+		if len(parts) != 8 {
+			return match
+		}
+
+		year, _ := strconv.Atoi(parts[1])
+		month, _ := strconv.Atoi(parts[2])
+		day, _ := strconv.Atoi(parts[3])
+		hour, _ := strconv.Atoi(parts[4])
+		min, _ := strconv.Atoi(parts[5])
+		sec, _ := strconv.Atoi(parts[6])
+		nsec, _ := strconv.Atoi(parts[7])
+
+		t := time.Date(year, time.Month(month), day, hour, min, sec, nsec, time.UTC)
+		t = t.Add(3 * time.Hour)
+
+		return fmt.Sprintf(`time="%s"`, t.Format("2006-01-02T15:04:05.000000000Z"))
+	})
+
+	return content
 }
 
 func getLogLines(logPath string) []string {

@@ -187,7 +187,17 @@ function parseLogLine(line) {
   processedLine = processedLine
     .replace(/\[Info\]/g, '<span style="color: #3b82f6;">[Info]</span>')
     .replace(/\[Warning\]/g, '<span style="color: #f59e0b;">[Warning]</span>')
-    .replace(/\[Error\]/g, '<span style="color: #ef4444;">[Error]</span>');
+    .replace(/\[Error\]/g, '<span style="color: #ef4444;">[Error]</span>')
+    .replace(/level=(info)/gi, 'level=<span style="color: #3b82f6;">$1</span>')
+    .replace(
+      /level=(warning)/gi,
+      'level=<span style="color: #f59e0b;">$1</span>'
+    )
+    .replace(/level=(error)/gi, 'level=<span style="color: #ef4444;">$1</span>')
+    .replace(
+      /level=(fatal)/gi,
+      'level=<span style="color: #dc2626;">$1</span>'
+    );
 
   return { className, content: processedLine };
 }
