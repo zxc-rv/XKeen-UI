@@ -750,6 +750,7 @@ textarea {
 }
 
 .log-filter {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -758,7 +759,7 @@ textarea {
 .log-filter .input {
   height: 35px;
   width: 180px;
-  padding: 2px 12px 2px 32px;
+  padding: 2px 32px 2px 32px;
   border: 1px solid #1e293b;
   background-color: #020817;
   color: #e5e7eb;
@@ -784,6 +785,46 @@ textarea {
 .log-filter .input:focus {
   background-color: #020817;
   box-shadow: 0 0 0 2px #363c4d;
+}
+
+.log-filter-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1e293b;
+  border: none;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.log-filter-clear:hover {
+  background: #374151;
+}
+
+.log-filter-clear::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background-color: #94a3b8;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.log-filter-clear.show {
+  display: inline-flex;
 }
 
 .panel-actions {

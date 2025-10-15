@@ -1288,10 +1288,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const logSelectLabel = document.getElementById("logSelectLabel");
   const logFilterInput = document.getElementById("logFilterInput");
   const tabsList = document.getElementById("tabsList");
-
   const coreSelectRoot = document.getElementById("coreSelectRoot");
   const coreSelectTrigger = document.getElementById("coreSelectTrigger");
   const coreSelectContent = document.getElementById("coreSelectContent");
+  const logFilterClear = document.getElementById("logFilterClear");
 
   if (tabsList) tabsList.classList.add("empty");
   isConfigsLoading = true;
@@ -1299,14 +1299,24 @@ document.addEventListener("DOMContentLoaded", () => {
   updateControlButtons();
   renderTabs();
 
-  if (logFilterInput) {
+  if (logFilterInput && logFilterClear) {
     let filterTimeout;
+
     logFilterInput.addEventListener("input", () => {
+      logFilterClear.classList.toggle("show", logFilterInput.value.length > 0);
+
       clearTimeout(filterTimeout);
       filterTimeout = setTimeout(() => {
         logFilter = logFilterInput.value || "";
         applyFilter();
       }, 100);
+    });
+
+    logFilterClear.addEventListener("click", () => {
+      logFilterInput.value = "";
+      logFilter = "";
+      logFilterClear.classList.remove("show");
+      applyFilter();
     });
   }
 
