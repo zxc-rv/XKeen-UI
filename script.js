@@ -71,7 +71,7 @@ function showToast(message, type = "success") {
 function updateValidationInfo(isValid, error = null) {
   const validationInfo = document.getElementById("validationInfo");
   const messageContainer = document.getElementById(
-    "validationMessageContainer"
+    "validationMessageContainer",
   );
   const currentConfig = configs[activeConfigIndex];
 
@@ -159,19 +159,19 @@ function parseLogLine(line) {
   processedLine = processedLine
     .replace(
       /\u001b\[32m(.*?)\u001b\[0m/g,
-      '<span style="color: #10b981;">$1</span>'
+      '<span style="color: #10b981;">$1</span>',
     )
     .replace(
       /\u001b\[33m(.*?)\u001b\[0m/g,
-      '<span style="color: #f59e0b;">$1</span>'
+      '<span style="color: #f59e0b;">$1</span>',
     )
     .replace(
       /\u001b\[31m(.*?)\u001b\[0m/g,
-      '<span style="color: #ef4444;">$1</span>'
+      '<span style="color: #ef4444;">$1</span>',
     )
     .replace(
       /\u001b\[36m(.*?)\u001b\[0m/g,
-      '<span style="color: #06b6d4;">$1</span>'
+      '<span style="color: #06b6d4;">$1</span>',
     )
     .replace(/\u001b\[\d+m/g, "");
 
@@ -180,7 +180,7 @@ function parseLogLine(line) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/&lt;span style="color: #[\w\d]+;"&gt;/g, (match) =>
-      match.replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      match.replace(/&lt;/g, "<").replace(/&gt;/g, ">"),
     )
     .replace(/&lt;\/span&gt;/g, "</span>");
 
@@ -191,12 +191,12 @@ function parseLogLine(line) {
     .replace(/level=(info)/gi, 'level=<span style="color: #3b82f6;">$1</span>')
     .replace(
       /level=(warning)/gi,
-      'level=<span style="color: #f59e0b;">$1</span>'
+      'level=<span style="color: #f59e0b;">$1</span>',
     )
     .replace(/level=(error)/gi, 'level=<span style="color: #ef4444;">$1</span>')
     .replace(
       /level=(fatal)/gi,
-      'level=<span style="color: #dc2626;">$1</span>'
+      'level=<span style="color: #dc2626;">$1</span>',
     );
 
   return { className, content: processedLine };
@@ -257,7 +257,7 @@ function applyFilter() {
         JSON.stringify({
           type: "filter",
           query: logFilter,
-        })
+        }),
       );
     }
   }
@@ -273,7 +273,7 @@ function connectWebSocket() {
   }
 
   ws = new WebSocket(
-    `ws://${window.location.hostname}:8080/ws?file=${currentLogFile}`
+    `ws://${window.location.hostname}:8080/ws?file=${currentLogFile}`,
   );
 
   ws.onopen = () => {
@@ -287,7 +287,7 @@ function connectWebSocket() {
 
   ws.onclose = (event) => {
     console.warn(
-      `WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`
+      `WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`,
     );
     clearInterval(pingInterval);
     setTimeout(connectWebSocket, 1000);
@@ -341,7 +341,7 @@ function connectWebSocket() {
         renderLines(document.getElementById("logsContainer"), displayLines);
       } else {
         const matchedNewLines = newLines.filter((line) =>
-          line.includes(logFilter)
+          line.includes(logFilter),
         );
         if (matchedNewLines.length > 0) {
           displayLines.push(...matchedNewLines);
@@ -369,7 +369,7 @@ function switchLogFile(newLogFile) {
       JSON.stringify({
         type: "switchFile",
         file: newLogFile,
-      })
+      }),
     );
   }
 }
@@ -539,7 +539,7 @@ function initMonacoEditor() {
       if (isMobileViewport()) {
         const contentHeight = Math.max(
           monacoEditor.getContentHeight ? monacoEditor.getContentHeight() : 0,
-          200
+          200,
         );
         container.style.height = contentHeight + "px";
         monacoEditor.layout();
@@ -565,7 +565,7 @@ function initMonacoEditor() {
       if (uris.some((uri) => uri.toString() === model.uri.toString())) {
         const markers = monaco.editor.getModelMarkers({ resource: model.uri });
         const errorMarker = markers.find(
-          (m) => m.severity === monaco.MarkerSeverity.Error
+          (m) => m.severity === monaco.MarkerSeverity.Error,
         );
 
         if (!errorMarker) {
@@ -603,7 +603,7 @@ function initMonacoEditor() {
       () => {
         applyDynamicEditorHeight();
       },
-      { passive: true }
+      { passive: true },
     );
 
     loadConfigs();
@@ -659,11 +659,11 @@ function validateCurrentFile() {
 
   const markers = monaco.editor.getModelMarkers({ owner: "json" });
   const currentModelMarkers = markers.filter(
-    (marker) => marker.resource.toString() === model.uri.toString()
+    (marker) => marker.resource.toString() === model.uri.toString(),
   );
 
   const errorMarker = currentModelMarkers.find(
-    (m) => m.severity === monaco.MarkerSeverity.Error
+    (m) => m.severity === monaco.MarkerSeverity.Error,
   );
 
   if (!errorMarker) {
@@ -684,7 +684,7 @@ function renderTabs() {
   const xkeenTransform = xkeenIndicator?.style.transform || "";
 
   const editorControlsSkeletons = document.getElementById(
-    "editorControlsSkeletons"
+    "editorControlsSkeletons",
   );
   const saveBtn = document.getElementById("saveBtn");
   const saveRestartBtn = document.getElementById("saveRestartBtn");
@@ -727,7 +727,7 @@ function renderTabs() {
 
     // Но управляем видимостью только messageContainer
     const messageContainer = document.getElementById(
-      "validationMessageContainer"
+      "validationMessageContainer",
     );
     if (messageContainer) messageContainer.style.display = "none";
     const currentConfig = configs[activeConfigIndex];
@@ -741,10 +741,10 @@ function renderTabs() {
 
   // Разделяем конфиги
   const coreConfigs = configs.filter(
-    (config) => !config.filename.endsWith(".lst")
+    (config) => !config.filename.endsWith(".lst"),
   );
   const xkeenConfigs = configs.filter((config) =>
-    config.filename.endsWith(".lst")
+    config.filename.endsWith(".lst"),
   );
 
   // Рендерим Core вкладки
@@ -927,7 +927,7 @@ async function apiCall(endpoint, data = null) {
 
     const response = await fetch(
       `http://${window.location.host}/cgi/${endpoint}`,
-      options
+      options,
     );
 
     if (!response.ok) {
@@ -994,7 +994,7 @@ async function saveCurrentConfig() {
       const errorMarker = allMarkers.find(
         (m) =>
           m.resource.toString() === model.uri.toString() &&
-          m.severity === monaco.MarkerSeverity.Error
+          m.severity === monaco.MarkerSeverity.Error,
       );
       if (errorMarker) {
         showToast(
@@ -1002,7 +1002,7 @@ async function saveCurrentConfig() {
             title: "Ошибка сохранения",
             body: `Invalid JSON: ${errorMarker.message}`,
           },
-          "error"
+          "error",
         );
         return;
       }
@@ -1044,7 +1044,7 @@ function formatCurrentConfig() {
       formatAction.run().catch((e) => {
         showToast(
           `Ошибка форматирования: ${e?.message || "неизвестная ошибка"}`,
-          "error"
+          "error",
         );
       });
     } else {
@@ -1111,7 +1111,7 @@ async function restartXKeen() {
     } else {
       showToast(
         `Ошибка перезапуска: ${result.output || result.error}`,
-        "error"
+        "error",
       );
       isActionInProgress = false;
       checkStatus();
@@ -1124,7 +1124,7 @@ async function restartXKeen() {
 
 async function clearCurrentLog() {
   if (!currentLogFile) {
-    showToast("Не выбран файл лога", "error");
+    showToast("Не выбран файл журнала", "error");
     return;
   }
 
@@ -1166,13 +1166,13 @@ async function loadCores() {
         coreSelectLabel.textContent = currentCore;
 
         const items = document.querySelectorAll(
-          "#coreSelectContent .select-item"
+          "#coreSelectContent .select-item",
         );
         items.forEach((item) => {
           const value = item.getAttribute("data-value");
           item.setAttribute(
             "aria-selected",
-            value === currentCore ? "true" : "false"
+            value === currentCore ? "true" : "false",
           );
         });
       }
@@ -1223,14 +1223,14 @@ async function confirmCoreChange() {
       }
 
       const items = document.querySelectorAll(
-        "#coreSelectContent .select-item"
+        "#coreSelectContent .select-item",
       );
       items.forEach((item) => {
         const value = item.getAttribute("data-value");
         if (item && value) {
           item.setAttribute(
             "aria-selected",
-            value === currentCore ? "true" : "false"
+            value === currentCore ? "true" : "false",
           );
         }
       });
@@ -1332,17 +1332,17 @@ document.addEventListener("DOMContentLoaded", () => {
           tabsScroll.scrollLeft += e.deltaY;
         }
       },
-      { passive: false }
+      { passive: false },
     );
 
     tabsScroll.addEventListener(
       "scroll",
       () => {
         requestAnimationFrame(
-          () => updateActiveTabIndicator && updateActiveTabIndicator()
+          () => updateActiveTabIndicator && updateActiveTabIndicator(),
         );
       },
-      { passive: true }
+      { passive: true },
     );
   }
 
@@ -1472,7 +1472,7 @@ document.addEventListener("DOMContentLoaded", () => {
   logSelectTrigger.addEventListener("keydown", (e) => {
     const items = Array.from(logSelectContent.querySelectorAll(".select-item"));
     const currentIndex = items.findIndex(
-      (i) => i.getAttribute("data-value") === currentLogFile
+      (i) => i.getAttribute("data-value") === currentLogFile,
     );
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -1606,7 +1606,7 @@ async function saveAndRestart() {
       const errorMarker = allMarkers.find(
         (m) =>
           m.resource.toString() === model.uri.toString() &&
-          m.severity === monaco.MarkerSeverity.Error
+          m.severity === monaco.MarkerSeverity.Error,
       );
       if (errorMarker) {
         showToast(
@@ -1614,7 +1614,7 @@ async function saveAndRestart() {
             title: "Ошибка сохранения",
             body: `Invalid JSON: ${errorMarker.message}`,
           },
-          "error"
+          "error",
         );
         return;
       }
@@ -1657,7 +1657,7 @@ async function saveAndRestart() {
       } else {
         showToast(
           `Ошибка перезапуска: ${restartResult?.error || "unknown"}`,
-          "error"
+          "error",
         );
         isActionInProgress = false;
         checkStatus();
