@@ -5,8 +5,14 @@
 }
 
 body {
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif,
-    Roboto, sans-serif;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif,
+    Roboto,
+    sans-serif;
   background: #020817;
   color: #fafafa;
   min-height: 100vh;
@@ -333,7 +339,9 @@ textarea {
   color: #fafafa;
   font-size: 14px;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease,
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
     background-color 0.15s ease;
 }
 
@@ -375,7 +383,8 @@ textarea {
   background: #020817;
   border: 1px solid #1e293b;
   border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4),
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.4),
     0 4px 6px -2px rgba(0, 0, 0, 0.3);
   overflow: auto;
   padding: 6px;
@@ -383,7 +392,10 @@ textarea {
   transform: translateY(4px) scale(0.98);
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    visibility 0.15s ease;
 }
 
 .select-open .select-content {
@@ -403,7 +415,9 @@ textarea {
   color: #e4e4e7;
   font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .select-item:hover,
@@ -459,8 +473,11 @@ textarea {
   font-size: 14px;
   outline: none;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease,
-    box-shadow 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -600,7 +617,8 @@ textarea {
   border-radius: 8px;
   padding: 16px;
   color: #fafafa;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3),
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.3),
     0 4px 6px -2px rgba(0, 0, 0, 0.1);
   transform: translateX(100%) scale(0.95);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -765,7 +783,9 @@ textarea {
   color: #e5e7eb;
   border-radius: 8px;
   outline: none;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
   font-size: 14px;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 3 24 24' fill='none' stroke='%239aa7bd' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4h18l-7 8v6l-4 2v-8L3 4z'/></svg>");
   background-repeat: no-repeat;
@@ -947,7 +967,9 @@ textarea {
   border-radius: 8px;
   background: #020817;
   border: 1px solid #1e293b;
-  transition: transform 0.2s ease, width 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    width 0.2s ease;
   will-change: transform, width;
   z-index: 0;
   pointer-events: none;
@@ -1100,7 +1122,8 @@ textarea {
 }
 
 #dashboardLink svg {
-  margin-top: 2px;
+  margin-top: 1px;
+  margin-left: 3px;
 }
 
 #dashboardLink:hover {
