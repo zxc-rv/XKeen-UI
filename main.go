@@ -816,16 +816,13 @@ func coreHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Получаем текущее ядро
 		currentCore := detectClientType().Name
 
-		// Очищаем логи только при переходе с Xray на Mihomo
 		logFile := "/opt/var/log/xray/error.log"
 		if currentCore == "xray" && req.Core == "mihomo" {
 			os.Truncate(logFile, 0)
 		}
 
-		// Открываем лог-файл для записи
 		logFileHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Cannot open log file"}, 500)
@@ -841,19 +838,16 @@ func coreHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		cmd2 = exec.Command("xkeen", "-start")
 
-		// Перенаправляем вывод обеих команд в лог-файл
 		cmd1.Stdout = logFileHandle
 		cmd1.Stderr = logFileHandle
 		cmd2.Stdout = logFileHandle
 		cmd2.Stderr = logFileHandle
 
-		// Выполняем первую команду (смена ядра)
 		if err := cmd1.Run(); err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Ошибка смены ядра"}, 500)
 			return
 		}
 
-		// Выполняем вторую команду (запуск ядра)
 		if err := cmd2.Run(); err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Ошибка запуска ядра"}, 500)
 			return
