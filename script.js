@@ -384,7 +384,6 @@ function initMonacoEditor() {
       documentFormattingEdits: false,
     });
 
-    // Регистрируем кастомный форматтер для JSON
     monaco.languages.registerDocumentFormattingEditProvider("json", {
       async provideDocumentFormattingEdits(model, options, token) {
         try {
@@ -416,7 +415,6 @@ function initMonacoEditor() {
       },
     });
 
-    // Регистрируем форматтер для YAML
     monaco.languages.registerDocumentFormattingEditProvider("yaml", {
       async provideDocumentFormattingEdits(model, options, token) {
         try {
@@ -442,7 +440,6 @@ function initMonacoEditor() {
       },
     });
 
-    // Остальной код без изменений...
     monaco.editor.defineTheme("tokyo-night", {
       base: "vs-dark",
       inherit: true,
