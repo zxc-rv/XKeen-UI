@@ -69,16 +69,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build, static]
     steps:
+    - uses: actions/checkout@v4
+
+    - uses: mikepenz/release-changelog-builder-action@v3
+      id: changelog
+      with:
+        configuration: ".github/changelog.json"
+
     - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
         path: artifacts
 
-    - name: List files
-      run: ls -R artifacts
-    
     - name: Upload to release
       uses: softprops/action-gh-release@v2
       with:
         files: artifacts/**
-        generate_release_notes: true
+        body: ${{ steps.changelog.outputs.changelog }}
