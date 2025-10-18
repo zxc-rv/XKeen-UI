@@ -1,4 +1,4 @@
-module xkeen-ui
+module XKeen-UI
 
 go 1.25.3
 
