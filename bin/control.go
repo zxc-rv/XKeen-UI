@@ -8,7 +8,7 @@ import (
 	"os/exec"
 )
 
-func СontrolHandler(w http.ResponseWriter, r *http.Request) {
+func ControlHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		jsonResponse(w, Response{Success: false, Error: "Only POST allowed"}, 405)
 		return
