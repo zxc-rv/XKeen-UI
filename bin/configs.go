@@ -110,6 +110,7 @@ func postConfigs(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasSuffix(filename, ".lst") {
 		filePath = filepath.Join("/opt/etc/xkeen", filename)
+		req.Content = strings.ReplaceAll(req.Content, "\r\n", "\n")
 	} else {
 		if client.IsJSON {
 			if !strings.HasSuffix(filename, ".json") {
