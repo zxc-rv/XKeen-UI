@@ -141,6 +141,7 @@ if ! $init_path status; then
 fi
 
 router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
+router_ip=${router_ip:-"IP_Роутера"}
 clear
 
 echo -e "\n${GREEN}XKeen UI успешно установлен!${NC}\n"
