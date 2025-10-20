@@ -1,4 +1,4 @@
 {
-  "template": "# Changelog\n\n{{#commits}}\n- {{message}}\n{{/commits}}\n",
+  "template_path": ".github/changelog.hbs",
   "categories": []
 }
