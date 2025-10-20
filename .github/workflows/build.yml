@@ -74,9 +74,9 @@ jobs:
       run: |
         PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^${GITHUB_REF_NAME}$" | head -n1)
         if [ -z "$PREVIOUS_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${GITHUB_REF_NAME})
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${GITHUB_REF_NAME} -- script.js index.html style.css main.go bin/)
         else
-          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..${GITHUB_REF_NAME})
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..${GITHUB_REF_NAME} -- script.js index.html style.css main.go bin/)
         fi
         echo "changelog<<EOF" >> $GITHUB_OUTPUT
         echo "$CHANGELOG" >> $GITHUB_OUTPUT
@@ -92,5 +92,5 @@ jobs:
       with:
         files: artifacts/**
         body: |
-          ## Changes
+          ## Изменения:
           ${{ steps.changelog.outputs.changelog }}
