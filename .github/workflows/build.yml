@@ -1,10 +1,8 @@
 name: Build Go binaries
-
 on:
   push:
     tags:
       - 'v*'
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -49,7 +47,6 @@ jobs:
       with:
         name: xkeen-ui-${{ matrix.name }}
         path: xkeen-ui-${{ matrix.name }}
-
   static:
     runs-on: ubuntu-latest
     steps:
@@ -64,26 +61,36 @@ jobs:
       with:
         name: xkeen-ui-static
         path: xkeen-ui-static.tar.gz
-
   release:
     runs-on: ubuntu-latest
     needs: [build, static]
     steps:
     - uses: actions/checkout@v4
-
-    - uses: mikepenz/release-changelog-builder-action@v3
-      id: changelog
       with:
-        configuration: ".github/changelog.json"
-        commitMode: true
-
+        fetch-depth: 0
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        PREVIOUS_TAG=$(git tag --sort=-version:refname | grep -v "^${GITHUB_REF_NAME}$" | head -n1)
+        if [ -z "$PREVIOUS_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${GITHUB_REF_NAME})
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..${GITHUB_REF_NAME})
+        fi
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
     - name: Download all artifacts
       uses: actions/download-artifact@v4
       with:
         path: artifacts
-
+    
     - name: Upload to release
       uses: softprops/action-gh-release@v2
       with:
         files: artifacts/**
-        body: ${{ steps.changelog.outputs.changelog }}
+        body: |
+          ## Changes
+          ${{ steps.changelog.outputs.changelog }}
