@@ -1521,6 +1521,9 @@ document.addEventListener("DOMContentLoaded", () => {
   initMonacoEditor();
   checkStatus();
   loadCores();
+  setInterval(() => {
+    if (!isActionInProgress) checkStatus();
+  }, 15000);
 
   logsContainer.classList.add("centered");
   logsContainer.innerHTML =
