@@ -28,6 +28,8 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		updateCurrentClient()
+
 		ClientMutex.Lock()
 		currentClientType := CurrentClient
 		ClientMutex.Unlock()
