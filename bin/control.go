@@ -28,6 +28,16 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		ClientMutex.Lock()
+		currentClientType := CurrentClient
+		ClientMutex.Unlock()
+
+		requestedClientType, exists := clientTypes[req.Core]
+		if !exists || currentClientType != requestedClientType {
+			jsonResponse(w, Response{Success: false, Error: "Core mismatch"}, 400)
+			return
+		}
+
 		script := fmt.Sprintf(`
 		. "/opt/sbin/.xkeen/01_info/03_info_cpu.sh"
 		status_file="/opt/lib/opkg/status"
@@ -69,11 +79,6 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		if err := cmd.Run(); err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Command failed"}, 500)
 		} else {
-			ClientMutex.Lock()
-			if client, exists := clientTypes[req.Core]; exists {
-				CurrentClient = client
-			}
-			ClientMutex.Unlock()
 			jsonResponse(w, Response{Success: true, Data: "Core restarted"}, 200)
 		}
 		return
