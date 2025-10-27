@@ -132,7 +132,7 @@ change_paths_to_local() {
 
 
 install_xkeenui() {
-  if [ -f /opt/sbin/lighttpd ]; then
+  if [ -f $lighttpd_bin_path ]; then
     echo -e "${YELLOW}\nПредупреждение: обнаружен установленный инстанс lighttpd."
     echo -e "Перед продолжением требуется его полная деинсталляция.${NC}\n"
     read -p "Продолжить? [y/N]: " response < /dev/tty
@@ -202,7 +202,7 @@ EOF
   fi
 
   echo -e "\n${BLUE}:: Запуск веб-сервера lighttpd...${NC}"
-  if ! /opt/sbin/lighttpd -f /opt/etc/lighttpd/lighttpd.conf; then
+  if ! $lighttpd_bin_path -f /opt/etc/lighttpd/lighttpd.conf; then
       echo -e "\n${RED} Не удалось запустить lighttpd.${NC}\n"
       exit 1
   fi
@@ -240,7 +240,7 @@ update_xkeenui() {
   fi
 
   echo -e "\n${BLUE}:: Запуск веб-сервера lighttpd...${NC}"
-  if ! /opt/sbin/lighttpd -f /opt/etc/lighttpd/lighttpd.conf; then
+  if ! $lighttpd_bin_path -f /opt/etc/lighttpd/lighttpd.conf; then
       echo -e "\n${RED} Не удалось запустить lighttpd.${NC}\n"
       exit 1
   fi
