@@ -127,17 +127,15 @@ if ! tar -xzf $static_tmp_path -C $static_path; then
 fi
 rm -f $static_tmp_path
 
-echo -e "\n${BLUE}Загрузка бинарного файла...${NC}"
+echo -e "\n${BLUE}Загрузка бинарного файла xkeen-ui...${NC}"
 if ! (curl --progress-bar -Lfo $bin_path $download_url/$bin_name && chmod +x $bin_path); then
     echo -e "\n${RED}Не удалось скачать бинарный файл${NC}\n"
     exit 1
 fi
 
-echo -e "\n${BLUE}Запуск lighttpd...${NC}"
-$init_path start >/dev/null 2>&1 || true
-sleep 3
-if ! $init_path status; then
-    echo -e "\n${RED}Не удалось запустить lighttpd${NC}\n"
+echo -e "\n${BLUE}Запуск веб-сервера lighttpd...${NC}"
+if ! lighttpd -f /opt/etc/lighttpd/lighttpd.conf >/dev/null 2>&1; then
+    echo -e "\n${RED}Не удалось запустить lighttpd\nПроверьте файл логов /opt/var/log/lighttpd/error.log ${NC}\n"
     exit 1
 fi
 
