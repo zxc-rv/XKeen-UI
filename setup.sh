@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 
 static_path="/opt/share/www/XKeen-UI"
 xkeenui_bin_path="/opt/sbin/xkeen-ui"
-xkeenui_config_path="$static_path/xkeen-ui.conf"
+xkeenui_conf_path="$static_path/xkeen-ui.conf"
 lighttpd_init_path="/opt/etc/init.d/S80lighttpd"
 lighttpd_bin_path="/opt/sbin/lighttpd"
 lighttpd_conf_path="/opt/etc/lighttpd/lighttpd.conf"
@@ -106,15 +106,15 @@ setup_local_editor() {
   opkg update && opkg install wget
 
   echo -e "\n${BLUE}:: Загрузка Monaco Editor...${NC}\n"
-  mkdir -p /opt/share/www/XKeen-UI/monaco-editor
-  wget -q --show-progress -r -nH --cut-dirs=3 -P /opt/share/www/XKeen-UI/monaco-editor -np -R "index.html*" https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/
-  curl -Lso /opt/share/www/XKeen-UI/monaco-editor/loader.min.js https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.min.js
+  mkdir -p $static_path/monaco-editor
+  wget -q --show-progress -r -nH --cut-dirs=3 -P $static_path/monaco-editor -np -R "index.html*" https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/
+  curl -Lso $static_path/monaco-editor/loader.min.js https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.min.js
 
   echo -e "\n${BLUE}:: Загрузка Prettier...${NC}\n"
-  mkdir -p /opt/share/www/XKeen-UI/prettier
-  curl -Lso /opt/share/www/XKeen-UI/prettier/babel.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js
-  curl -Lso /opt/share/www/XKeen-UI/prettier/yaml.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js
-  curl -Lso /opt/share/www/XKeen-UI/prettier/standalone.min.js https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js
+  mkdir -p $static_path/prettier
+  curl -Lso $static_path/prettier/babel.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js
+  curl -Lso $static_path/prettier/yaml.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js
+  curl -Lso $static_path/prettier/standalone.min.js https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js
 
   change_paths_to_local
 }
@@ -156,8 +156,8 @@ install_xkeenui() {
   read -p "Выбор: " editor_choice < /dev/tty
 
   if [ "$editor_choice" = "2" ]; then
-      mkdir -p $(dirname $xkeenui_config_path)
-      echo "local=true" > $xkeenui_config_path
+      mkdir -p $(dirname $xkeenui_conf_path)
+      echo "local=true" > $xkeenui_conf_path
   fi
   
   clear
@@ -175,19 +175,19 @@ install_xkeenui() {
   fi
 
   echo -e "\n${BLUE}:: Создание конфигурации lighttpd...${NC}"
-  cat << 'EOF' >/opt/etc/lighttpd/conf.d/90-xkeenui.conf
+  cat << EOF >/opt/etc/lighttpd/conf.d/90-xkeenui.conf
 server.port := 1000
 server.username := ""
 server.groupname := ""
 
-$SERVER["socket"] == ":1000" {
-    server.document-root = "/opt/share/www/XKeen-UI"
+\$SERVER["socket"] == ":1000" {
+    server.document-root = "$static_path"
     setenv.add-environment = (
         "PATH" => "/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin"
     )
     fastcgi.server = (
         "/cgi/" => ((
-            "bin-path" => "/opt/sbin/xkeen-ui",
+            "bin-path" => "$xkeenui_bin_path",
             "socket"   => "/opt/var/run/xkeen-ui.sock",
             "check-local" => "disable",
             "max-procs" => 1
@@ -199,7 +199,7 @@ EOF
   detect_arch
   download_files "$VERSION"
 
-  if [ -f $xkeenui_config_path ] && grep -q "local=true" $xkeenui_config_path; then
+  if [ -f $xkeenui_conf_path ] && grep -q "local=true" $xkeenui_conf_path; then
       setup_local_editor
   fi
 
@@ -233,7 +233,7 @@ update_xkeenui() {
 
   download_files
 
-  if [ -f $xkeenui_config_path ] && grep -q "local=true" $xkeenui_config_path; then
+  if [ -f $xkeenui_conf_path ] && grep -q "local=true" $xkeenui_conf_path; then
       if [ ! -d "$static_path/monaco-editor" ] && [ ! -d "$static_path/prettier" ]; then
           setup_local_editor
       else
