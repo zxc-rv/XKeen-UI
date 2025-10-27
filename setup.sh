@@ -148,11 +148,11 @@ install_xkeenui() {
   fi
 
   echo -ne "\n${YELLOW}Выберите версию (enter для latest):${NC} "
-  read VERSION
+  read VERSION < /dev/tty
   echo -e "\n${YELLOW}Вариант установки редактора:${NC}\n"
   echo -e "1. CDN (удаленно)"
   echo -e "2. Локально (требует дополнительно ~25МБ места)\n"
-  read -p "Выбор: " editor_choice
+  read -p "Выбор: " editor_choice < /dev/tty
 
   if [ "$editor_choice" = "2" ]; then
       mkdir -p $(dirname $config_path)
