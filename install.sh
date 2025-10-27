@@ -135,6 +135,7 @@ fi
 
 echo -e "\n${BLUE}Запуск lighttpd...${NC}"
 $init_path start >/dev/null 2>&1 || true
+sleep 3
 if ! $init_path status; then
     echo -e "\n${RED}Не удалось запустить lighttpd${NC}\n"
     exit 1
