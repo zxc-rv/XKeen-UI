@@ -21,27 +21,15 @@
   
 &nbsp;
 
-## 📥 Установка / обновление
+## 📥 Быстрый старт
 
 ```SH
 opkg update && opkg install curl
 ```
 ```SH
-curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/install.sh | sh
+curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh
 ```
 <br>
-  
->[!TIP]
->По умолчанию ставится **последняя версия.**  
->Для установки конкретной версии добавьте `-s v1.2.3` **в конец команды.**  
-  
-<br>
-  
-## 🗑 Удаление
-```SH
-curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/remove.sh | sh
-```
-&nbsp;
   
 ## 🙏 Благодарности
 
