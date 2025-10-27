@@ -8,11 +8,12 @@ NC='\033[0m'
 BLUE='\033[1;34m'
 YELLOW='\033[1;33m'
 
-config_path="/opt/share/www/XKeen-UI/xkeen-ui.conf"
-bin_path="/opt/sbin/xkeen-ui"
 static_path="/opt/share/www/XKeen-UI"
-init_path="/opt/etc/init.d/S80lighttpd"
+xkeenui_bin_path="/opt/sbin/xkeen-ui"
+xkeenui_config_path="$static_path/xkeen-ui.conf"
+lighttpd_init_path="/opt/etc/init.d/S80lighttpd"
 lighttpd_bin_path="/opt/sbin/lighttpd"
+lighttpd_conf_path="/opt/etc/lighttpd/lighttpd.conf"
 
 detect_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
@@ -94,7 +95,7 @@ download_files() {
   rm -f $static_tmp_path
 
   echo -e "\n${BLUE}:: Загрузка бинарного файла xkeen-ui...${NC}"
-  if ! (curl --progress-bar -Lfo $bin_path $download_url/$bin_name && chmod +x $bin_path); then
+  if ! (curl --progress-bar -Lfo $xkeenui_bin_path $download_url/$bin_name && chmod +x $xkeenui_bin_path); then
       echo -e "\n${RED} Не удалось скачать бинарный файл.${NC}\n"
       exit 1
   fi
@@ -150,25 +151,26 @@ install_xkeenui() {
   echo -ne "\n${YELLOW}Выберите версию (enter для latest):${NC} "
   read VERSION < /dev/tty
   echo -e "\n${YELLOW}Вариант установки редактора:${NC}\n"
-  echo -e "1. CDN (удаленно)"
-  echo -e "2. Локально (требует дополнительно ~25МБ места)\n"
+  echo -e "1. CDN (требуется доступность Cloudflare)"
+  echo -e "2. Локально (требуется дополнительно ~25МБ места)\n"
   read -p "Выбор: " editor_choice < /dev/tty
 
   if [ "$editor_choice" = "2" ]; then
-      mkdir -p $(dirname $config_path)
-      echo "local=true" > $config_path
+      mkdir -p $(dirname $xkeenui_config_path)
+      echo "local=true" > $xkeenui_config_path
   fi
+  
   clear
 
   echo -e "\n${BLUE}:: Установка lighttpd...${NC}"
-  opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv && sed -i "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" $init_path || {
+  opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv && sed -i "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" $lighttpd_init_path || {
       echo -e "\n${RED} Ошибка установки пакетов.${NC}\n"
       exit 1
   }
 
-  if [ -f $init_path ]; then
-      if $init_path status >/dev/null 2>&1; then
-          $init_path stop
+  if [ -f $lighttpd_init_path ]; then
+      if $lighttpd_init_path status >/dev/null 2>&1; then
+          $lighttpd_init_path stop
       fi
   fi
 
@@ -197,12 +199,12 @@ EOF
   detect_arch
   download_files "$VERSION"
 
-  if [ -f $config_path ] && grep -q "local=true" $config_path; then
+  if [ -f $xkeenui_config_path ] && grep -q "local=true" $xkeenui_config_path; then
       setup_local_editor
   fi
 
   echo -e "\n${BLUE}:: Запуск веб-сервера lighttpd...${NC}"
-  if ! $lighttpd_bin_path -f /opt/etc/lighttpd/lighttpd.conf; then
+  if ! $lighttpd_bin_path -f $lighttpd_conf_path; then
       echo -e "\n${RED} Не удалось запустить lighttpd.${NC}\n"
       exit 1
   fi
@@ -216,23 +218,23 @@ EOF
 }
 
 update_xkeenui() {
-  if ! [ -f $bin_path ]; then
+  if ! [ -f $xkeenui_bin_path ]; then
     echo -e "${RED}\n Ошибка: XKeen-UI не установлен!\n${NC}"
     exit 1
   fi
 
   detect_arch
 
-  if [ -f $init_path ]; then
-      if $init_path status >/dev/null 2>&1; then
-          $init_path stop
+  if [ -f $lighttpd_init_path ]; then
+      if $lighttpd_init_path status >/dev/null 2>&1; then
+          $lighttpd_init_path stop
       fi
   fi
 
   download_files
 
-  if [ -f $config_path ] && grep -q "local=true" $config_path; then
-      if [ ! -d "/opt/share/www/XKeen-UI/monaco-editor" ] && [ ! -d "/opt/share/www/XKeen-UI/prettier" ]; then
+  if [ -f $xkeenui_config_path ] && grep -q "local=true" $xkeenui_config_path; then
+      if [ ! -d "$static_path/monaco-editor" ] && [ ! -d "$static_path/prettier" ]; then
           setup_local_editor
       else
           change_paths_to_local
@@ -240,7 +242,7 @@ update_xkeenui() {
   fi
 
   echo -e "\n${BLUE}:: Запуск веб-сервера lighttpd...${NC}"
-  if ! $lighttpd_bin_path -f /opt/etc/lighttpd/lighttpd.conf; then
+  if ! $lighttpd_bin_path -f $lighttpd_conf_path; then
       echo -e "\n${RED} Не удалось запустить lighttpd.${NC}\n"
       exit 1
   fi
@@ -263,25 +265,24 @@ uninstall_xkeenui() {
         ;;
   esac
 
-  if [ -f $init_path ]; then
-    if $init_path status >/dev/null 2>&1; then
-        $init_path stop
+  if [ -f $lighttpd_init_path ]; then
+    if $lighttpd_init_path status >/dev/null 2>&1; then
+        $lighttpd_init_path stop
     fi
   fi
 
   echo ""
   opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
-  rm -rf $static_path
   rm -rf /opt/etc/lighttpd/
-  rm -f $bin_path
-  rm -f $config_path
+  rm -rf $static_path
+  rm -f $xkeenui_bin_path
   echo -e "\n${GREEN}Удаление XKeen-UI завершено${NC}\n"
 }
 
 clear
 echo -e "${BLUE}\nДобро пожаловать! Выберите действие:\n${NC}"
-echo "1. Установить"
-echo "2. Обновить"
+echo -e "1. Установить"
+echo -e "2. Обновить"
 echo -e "3. Удалить\n"
 read -p "Выбор: " response < /dev/tty
 
