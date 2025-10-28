@@ -112,7 +112,7 @@ setup_local_editor() {
 
   echo -e "${BLUE}\n:: Распаковка...${NC}"
   if ! tar xf $editor_tmp_path --strip-components=2 -C $static_path/monaco-editor package/min/vs; then
-    echo -e "${RED}\n Не удалось распаковать архив статики.\n${NC}"
+    echo -e "${RED}\n Не удалось распаковать архив редактора.\n${NC}"
     rm -f $editor_tmp_path
     exit 1
   fi
