@@ -117,6 +117,7 @@ setup_local_editor() {
     rm -f $editor_tmp_path
     exit 1
   fi
+  rm -f $editor_tmp_path
 
   echo -e "${BLUE}\n:: Загрузка Prettier...${NC}"
   mkdir -p $static_path/prettier
