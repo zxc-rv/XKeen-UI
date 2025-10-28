@@ -10,7 +10,6 @@ YELLOW='\033[1;33m'
 
 static_path="/opt/share/www/XKeen-UI"
 xkeenui_bin_path="/opt/sbin/xkeen-ui"
-xkeenui_conf_path="$static_path/xkeen-ui.conf"
 local_mode_path="$static_path/local_mode.js"
 lighttpd_init_path="/opt/etc/init.d/S80lighttpd"
 lighttpd_bin_path="/opt/sbin/lighttpd"
