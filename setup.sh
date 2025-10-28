@@ -221,6 +221,10 @@ update_xkeenui() {
 
   download_files
 
+  if ! [ -f $local_mode_path ]; then
+    echo "const LOCAL = false;" > $local_mode_path
+  fi
+
   if grep -q "LOCAL = true" "$local_mode_path"; then
     if [ ! -d "$static_path/monaco-editor" ] || [ -z "$(ls "$static_path/monaco-editor" 2>/dev/null)" ] || [ ! -d "$static_path/prettier" ] || [ -z "$(ls "$static_path/prettier" 2>/dev/null)" ]; then
       setup_local_editor
