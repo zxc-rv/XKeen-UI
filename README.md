@@ -24,7 +24,7 @@
 ## 📥 Быстрый старт
 
 ```SH
-opkg update && opkg install curl
+opkg update && opkg install curl tar
 ```
 ```SH
 curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh
