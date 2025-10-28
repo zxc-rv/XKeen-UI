@@ -11,6 +11,7 @@ YELLOW='\033[1;33m'
 static_path="/opt/share/www/XKeen-UI"
 xkeenui_bin_path="/opt/sbin/xkeen-ui"
 xkeenui_conf_path="$static_path/xkeen-ui.conf"
+local_mode_path="$static_path/local_mode.js"
 lighttpd_init_path="/opt/etc/init.d/S80lighttpd"
 lighttpd_bin_path="/opt/sbin/lighttpd"
 lighttpd_conf_path="/opt/etc/lighttpd/lighttpd.conf"
@@ -123,20 +124,7 @@ setup_local_editor() {
   curl --progress-bar -Lfo $static_path/prettier/yaml.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js
   curl --progress-bar -Lfo $static_path/prettier/standalone.min.js https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js
 
-  set_local_paths
 }
-
-set_local_paths() {
-  echo -e "${BLUE}\n:: Установка локальных путей...${NC}"
-  sed -Ei \
-    -e 's|https://cdn.jsdelivr.net/npm/prettier@[0-9.]+/standalone.min.js|/prettier/standalone.min.js|g' \
-    -e 's|https://cdn.jsdelivr.net/npm/prettier@[0-9.]+/plugins/babel.min.js|/prettier/babel.min.js|g' \
-    -e 's|https://cdn.jsdelivr.net/npm/prettier@[0-9.]+/plugins/yaml.min.js|/prettier/yaml.min.js|g' \
-    -e 's|https://cdn.jsdelivr.net/npm/monaco-editor@[0-9.]+/min/vs/loader.min.js|/monaco-editor/loader.min.js|g' \
-    $static_path/index.html
-  sed -Ei 's|https://cdn.jsdelivr.net/npm/monaco-editor@[0-9.]+/min/vs|/monaco-editor/vs|g' $static_path/script.js
-}
-
 
 install_xkeenui() {
   if [ -f $lighttpd_bin_path ]; then
@@ -152,9 +140,12 @@ install_xkeenui() {
   echo -e "2. Локально (требуется дополнительно ~25МБ места)\n"
   read -p "Выбор: " editor_choice < /dev/tty
 
+  mkdir -p $static_path
+
   if [ "$editor_choice" = "2" ]; then
-      mkdir -p $(dirname $xkeenui_conf_path)
-      echo "local=true" > $xkeenui_conf_path
+    echo "const LOCAL = true;" > $local_mode_path
+  else
+    echo "const LOCAL = false;" > $local_mode_path
   fi
 
   clear
@@ -196,14 +187,14 @@ EOF
   detect_arch
   download_files "$VERSION"
 
-  if [ -f $xkeenui_conf_path ] && grep -q "local=true" $xkeenui_conf_path; then
-      setup_local_editor
+  if grep -q "LOCAL = true" "$local_mode_path"; then
+    setup_local_editor
   fi
 
   echo -e "${BLUE}\n:: Запуск веб-сервера lighttpd...${NC}"
   if ! $lighttpd_bin_path -f $lighttpd_conf_path; then
-      echo -e "${RED}\n Не удалось запустить lighttpd.\n${NC}"
-      exit 1
+    echo -e "${RED}\n Не удалось запустить lighttpd.\n${NC}"
+    exit 1
   fi
 
   router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
@@ -230,14 +221,10 @@ update_xkeenui() {
 
   download_files
 
-  if [ -f "$xkeenui_conf_path" ] && grep -q "local=true" "$xkeenui_conf_path"; then
-      if [ ! -d "$static_path/monaco-editor" ] || [ -z "$(ls "$static_path/monaco-editor" 2>/dev/null)" ]; then
-          setup_local_editor
-      elif [ ! -d "$static_path/prettier" ] || [ -z "$(ls "$static_path/prettier" 2>/dev/null)" ]; then
-          setup_local_editor
-      else
-          set_local_paths
-      fi
+  if grep -q "LOCAL = true" "$local_mode_path"; then
+    if [ ! -d "$static_path/monaco-editor" ] || [ -z "$(ls "$static_path/monaco-editor" 2>/dev/null)" ] || [ ! -d "$static_path/prettier" ] || [ -z "$(ls "$static_path/prettier" 2>/dev/null)" ]; then
+      setup_local_editor
+    fi
   fi
 
   echo -e "${BLUE}\n:: Запуск веб-сервера lighttpd...${NC}"
