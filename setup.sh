@@ -19,138 +19,135 @@ detect_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
 
   case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
-      *'armv5tel'* | *'armv6l'* | *'armv7'*)
-          arch='arm32-v5'
-          ;;
-      *'armv8'* | *'aarch64'* | *'cortex-a'* )
+    *'armv5tel'* | *'armv6l'* | *'armv7'*)
+      arch='arm32-v5'
+      ;;
+    *'armv8'* | *'aarch64'* | *'cortex-a'* )
+      arch='arm64-v8a'
+      ;;
+    *'mips64le'* )
+      arch='mips64le'
+      ;;
+    *'mips64'* )
+      arch='mips64'
+      ;;
+    *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* )
+      arch='mips32le'
+      ;;
+    *'mips'* )
+      arch='mips32'
+      ;;
+    *)
+      if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
           arch='arm64-v8a'
-          ;;
-      *'mips64le'* )
+      elif echo "${cpuinfo}" | grep -q 'mips64le'; then
           arch='mips64le'
-          ;;
-      *'mips64'* )
+      elif echo "${cpuinfo}" | grep -q 'mips64'; then
           arch='mips64'
-          ;;
-      *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* )
+      elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
           arch='mips32le'
-          ;;
-      *'mips'* )
+      elif echo "${cpuinfo}" | grep -q 'mips'; then
           arch='mips32'
-          ;;
-      *)
-          if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
-              arch='arm64-v8a'
-          elif echo "${cpuinfo}" | grep -q 'mips64le'; then
-              arch='mips64le'
-          elif echo "${cpuinfo}" | grep -q 'mips64'; then
-              arch='mips64'
-          elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
-              arch='mips32le'
-          elif echo "${cpuinfo}" | grep -q 'mips'; then
-              arch='mips32'
-          else
-              echo -e "\n${RED} Не удалось определить архитектуру.${NC}\n" >&2
-              exit 1
-          fi
-          ;;
+      else
+          echo -e "${RED}\n Не удалось определить архитектуру.\n${NC}" >&2
+          exit 1
+      fi
+      ;;
   esac
 
   if [ "${arch}" = 'mips64' ] || [ "${arch}" = 'mips32' ]; then
-      if [ ! -f /opt/bin/lscpu ]; then
-          opkg install lscpu &>/dev/null
-      fi
+    if [ ! -f /opt/bin/lscpu ]; then
+        opkg install lscpu &>/dev/null
+    fi
 
-      lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
-      if echo "${lscpu_output}" | grep -q "little endian"; then
-          arch="${arch}le"
-      fi
+    lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+    if echo "${lscpu_output}" | grep -q "little endian"; then
+        arch="${arch}le"
+    fi
   fi
 }
 
 download_files() {
   VERSION="$1"
   if [ -n "$VERSION" ]; then
-      download_url="https://github.com/zxc-rv/XKeen-UI/releases/download/${VERSION}"
+    download_url="https://github.com/zxc-rv/XKeen-UI/releases/download/${VERSION}"
   else
-      download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
+    download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
   fi
 
-  bin_name="xkeen-ui-$arch"
-  static_name="xkeen-ui-static.tar.gz"
-  static_tmp_path=/opt/tmp/$static_name
+  local bin_name="xkeen-ui-$arch"
+  local static_name="xkeen-ui-static.tar.gz"
+  local static_tmp_path=/opt/tmp/$static_name
 
-  echo -e "\n${BLUE}:: Загрузка статики...${NC}"
+  echo -e "${BLUE}\n:: Загрузка статики...${NC}"
   if ! curl --progress-bar -Lfo $static_tmp_path $download_url/xkeen-ui-static.tar.gz; then
-      echo -e "\n${RED} Не удалось скачать архив статики.${NC}\n"
-      exit 1
+    echo -e "${RED}\n Не удалось скачать архив статики.\n${NC}"
+    exit 1
   fi
 
-  echo -e "\n${BLUE}:: Распаковка...${NC}"
+  echo -e "${BLUE}\n:: Распаковка...${NC}"
   mkdir -p $static_path
   if ! tar -xzf $static_tmp_path -C $static_path; then
-      echo -e "\n${RED} Не удалось распаковать архив статики.${NC}\n"
-      rm -f $static_tmp_path
-      exit 1
+    echo -e "${RED}\n Не удалось распаковать архив статики.\n${NC}"
+    rm -f $static_tmp_path
+    exit 1
   fi
   rm -f $static_tmp_path
 
-  echo -e "\n${BLUE}:: Загрузка бинарного файла xkeen-ui...${NC}"
+  echo -e "${BLUE}\n:: Загрузка бинарного файла xkeen-ui...${NC}"
   if ! (curl --progress-bar -Lfo $xkeenui_bin_path $download_url/$bin_name && chmod +x $xkeenui_bin_path); then
-      echo -e "\n${RED} Не удалось скачать бинарный файл.${NC}\n"
-      exit 1
+    echo -e "${RED}\n Не удалось скачать бинарный файл.\n${NC}"
+    exit 1
   fi
 }
 
 setup_local_editor() {
-  echo -e "\n${BLUE}:: Установка wget...${NC}"
-  opkg update && opkg install wget
+  local editor_archive="monaco.tgz"
+  local editor_tmp_path="/opt/tmp/$editor_archive"
 
-  echo -e "\n${BLUE}:: Загрузка Monaco Editor...${NC}\n"
+  echo -e "${BLUE}\n:: Загрузка Monaco Editor...${NC}"
   mkdir -p $static_path/monaco-editor
-  wget -q --show-progress -r -nH --cut-dirs=3 -P $static_path/monaco-editor -np -R "index.html*" https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/
-  curl -Lso $static_path/monaco-editor/loader.min.js https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.min.js
+  curl --progress-bar -Lfo $editor_tmp_path https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.52.2.tgz
+  curl --progress-bar -Lfo $static_path/monaco-editor/loader.min.js https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js
 
-  echo -e "\n${BLUE}:: Загрузка Prettier...${NC}\n"
+  echo -e "${BLUE}\n:: Распаковка...${NC}"
+  if ! tar xf $editor_tmp_path --strip-components=2 -C $static_path/monaco-editor package/min/vs; then
+    echo -e "${RED}\n Не удалось распаковать архив статики.\n${NC}"
+    rm -f $editor_tmp_path
+    exit 1
+  fi
+
+  echo -e "${BLUE}\n:: Загрузка Prettier...${NC}"
   mkdir -p $static_path/prettier
-  curl -Lso $static_path/prettier/babel.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js
-  curl -Lso $static_path/prettier/yaml.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js
-  curl -Lso $static_path/prettier/standalone.min.js https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js
+  curl --progress-bar -Lfo $static_path/prettier/babel.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js
+  curl --progress-bar -Lfo $static_path/prettier/yaml.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js
+  curl --progress-bar -Lfo $static_path/prettier/standalone.min.js https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js
 
-  change_paths_to_local
+  set_local_paths
 }
 
-change_paths_to_local() {
-  echo -e "\n${BLUE}:: Правка локальных путей...${NC}\n"
-  sed -i \
-    -e 's|https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js|/prettier/standalone.min.js|g' \
-    -e 's|https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js|/prettier/babel.min.js|g' \
-    -e 's|https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js|/prettier/yaml.min.js|g' \
-    -e 's|https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.min.js|/monaco-editor/loader.min.js|g' \
+set_local_paths() {
+  echo -e "${BLUE}\n:: Установка локальных путей...${NC}"
+  sed -Ei \
+    -e 's|https://cdn.jsdelivr.net/npm/prettier@[0-9.]+/standalone.min.js|/prettier/standalone.min.js|g' \
+    -e 's|https://cdn.jsdelivr.net/npm/prettier@[0-9.]+/plugins/babel.min.js|/prettier/babel.min.js|g' \
+    -e 's|https://cdn.jsdelivr.net/npm/prettier@[0-9.]+/plugins/yaml.min.js|/prettier/yaml.min.js|g' \
+    -e 's|https://cdn.jsdelivr.net/npm/monaco-editor@[0-9.]+/min/vs/loader.min.js|/monaco-editor/loader.min.js|g' \
     $static_path/index.html
-
-  sed -i 's|https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs|/monaco-editor/vs|g' $static_path/script.js
+  sed -Ei 's|https://cdn.jsdelivr.net/npm/monaco-editor@[0-9.]+/min/vs|/monaco-editor/vs|g' $static_path/script.js
 }
 
 
 install_xkeenui() {
   if [ -f $lighttpd_bin_path ]; then
     echo -e "${YELLOW}\nПредупреждение: обнаружен установленный инстанс lighttpd."
-    echo -e "Перед продолжением требуется его полная деинсталляция.${NC}\n"
-    read -p "Продолжить? [y/N]: " response < /dev/tty
-    case "$response" in
-        [Yy])
-            uninstall_xkeenui
-            ;;
-        *)
-            echo -e "\n${RED}Отмена операции.${NC}\n"
-            exit 1
-            ;;
-    esac
+    echo -e "Перед продолжением требуется его полная деинсталляция.\n${NC}"
+    uninstall_xkeenui
   fi
 
-  echo -ne "\n${YELLOW}Выберите версию (enter для latest):${NC} "
+  echo -ne "${YELLOW}\nВыберите версию (enter для latest):${NC} "
   read VERSION < /dev/tty
-  echo -e "\n${YELLOW}Вариант установки редактора:${NC}\n"
+  echo -e "${YELLOW}\nВариант установки редактора:\n${NC}"
   echo -e "1. CDN (требуется доступность Cloudflare)"
   echo -e "2. Локально (требуется дополнительно ~25МБ места)\n"
   read -p "Выбор: " editor_choice < /dev/tty
@@ -159,12 +156,12 @@ install_xkeenui() {
       mkdir -p $(dirname $xkeenui_conf_path)
       echo "local=true" > $xkeenui_conf_path
   fi
-  
+
   clear
 
-  echo -e "\n${BLUE}:: Установка lighttpd...${NC}"
+  echo -e "${BLUE}\n:: Установка lighttpd...${NC}"
   opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv && sed -i "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" $lighttpd_init_path || {
-      echo -e "\n${RED} Ошибка установки пакетов.${NC}\n"
+      echo -e "${RED}\n Ошибка установки пакетов.\n${NC}"
       exit 1
   }
 
@@ -174,7 +171,7 @@ install_xkeenui() {
       fi
   fi
 
-  echo -e "\n${BLUE}:: Создание конфигурации lighttpd...${NC}"
+  echo -e "${BLUE}\n:: Создание конфигурации lighttpd...${NC}"
   cat << EOF >/opt/etc/lighttpd/conf.d/90-xkeenui.conf
 server.port := 1000
 server.username := ""
@@ -203,9 +200,9 @@ EOF
       setup_local_editor
   fi
 
-  echo -e "\n${BLUE}:: Запуск веб-сервера lighttpd...${NC}"
+  echo -e "${BLUE}\n:: Запуск веб-сервера lighttpd...${NC}"
   if ! $lighttpd_bin_path -f $lighttpd_conf_path; then
-      echo -e "\n${RED} Не удалось запустить lighttpd.${NC}\n"
+      echo -e "${RED}\n Не удалось запустить lighttpd.\n${NC}"
       exit 1
   fi
 
@@ -213,8 +210,8 @@ EOF
   router_ip=${router_ip:-"IP_Роутера"}
 
   clear
-  echo -e "\n${GREEN} XKeen UI успешно установлен!${NC}\n"
-  echo -e " Панель доступна по адресу: ${GREEN}http://$router_ip:1000${NC}\n"
+  echo -e "${GREEN}\n XKeen UI успешно установлен!\n${NC}"
+  echo -e " Панель доступна по адресу: ${GREEN}http://$router_ip:1000\n${NC}"
 }
 
 update_xkeenui() {
@@ -226,29 +223,36 @@ update_xkeenui() {
   detect_arch
 
   if [ -f $lighttpd_init_path ]; then
-      if $lighttpd_init_path status >/dev/null 2>&1; then
-          $lighttpd_init_path stop
-      fi
+    if $lighttpd_init_path status >/dev/null 2>&1; then
+        $lighttpd_init_path stop
+    fi
   fi
 
   download_files
 
-  if [ -f $xkeenui_conf_path ] && grep -q "local=true" $xkeenui_conf_path; then
-      if [ ! -d "$static_path/monaco-editor" ] && [ ! -d "$static_path/prettier" ]; then
+  if [ -f "$xkeenui_conf_path" ] && grep -q "local=true" "$xkeenui_conf_path"; then
+      if [ ! -d "$static_path/monaco-editor" ] || [ -z "$(ls "$static_path/monaco-editor" 2>/dev/null)" ]; then
+          setup_local_editor
+      elif [ ! -d "$static_path/prettier" ] || [ -z "$(ls "$static_path/prettier" 2>/dev/null)" ]; then
           setup_local_editor
       else
-          change_paths_to_local
+          set_local_paths
       fi
   fi
 
-  echo -e "\n${BLUE}:: Запуск веб-сервера lighttpd...${NC}"
+  echo -e "${BLUE}\n:: Запуск веб-сервера lighttpd...${NC}"
   if ! $lighttpd_bin_path -f $lighttpd_conf_path; then
-      echo -e "\n${RED} Не удалось запустить lighttpd.${NC}\n"
-      exit 1
+    echo -e "${RED}\n Не удалось запустить lighttpd.\n${NC}"
+    exit 1
   fi
 
+  router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
+  router_ip=${router_ip:-"IP_Роутера"}
+
   clear
-  echo -e "\n${GREEN} XKeen UI успешно обновлен!${NC}\n"
+
+  echo -e "${GREEN}\n XKeen UI успешно обновлен!\n${NC}"
+  echo -e " Панель доступна по адресу: ${GREEN}http://$router_ip:1000\n${NC}"
 }
 
 uninstall_xkeenui() {
@@ -257,10 +261,10 @@ uninstall_xkeenui() {
   case "$response" in
     [Yy])
         clear
-        echo -e "\n${GREEN}:: Начинаем удаление...${NC}"
+        echo -e "${GREEN}\n:: Начинаем удаление...${NC}"
         ;;
     *)
-        echo -e "\n${RED}Отмена операции.${NC}\n"
+        echo -e "${RED}\nОтмена операции.\n${NC}"
         exit 1
         ;;
   esac
@@ -273,15 +277,15 @@ uninstall_xkeenui() {
 
   echo ""
   opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
-  rm -rf /opt/etc/lighttpd/
+  rm -rf /opt/etc/lighttpd
   rm -rf $static_path
   rm -f $xkeenui_bin_path
-  echo -e "\n${GREEN}Удаление XKeen-UI завершено${NC}\n"
+  echo -e "${GREEN}\nУдаление XKeen-UI завершено\n${NC}"
 }
 
 clear
 echo -e "${BLUE}\nДобро пожаловать! Выберите действие:\n${NC}"
-echo -e "1. Установить"
+echo -e "1. Установить/переустановить"
 echo -e "2. Обновить"
 echo -e "3. Удалить\n"
 read -p "Выбор: " response < /dev/tty
