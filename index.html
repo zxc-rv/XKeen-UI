@@ -394,30 +394,6 @@
       </div>
     </div>
     <script src="local_mode.js"></script>
-    <script>
-      if (LOCAL) {
-        window.MonacoEnvironment = {
-          getWorkerUrl() { return "/monaco-editor/vs/base/worker/workerMain.js"; }
-        };
-        document.write('<script src="/prettier/standalone.min.js"><\/script>');
-        document.write('<script src="/prettier/babel.min.js"><\/script>');
-        document.write('<script src="/prettier/yaml.min.js"><\/script>');
-        document.write('<script src="/monaco-editor/loader.min.js"><\/script>');
-      } else {
-        document.write('<script src="https://cdn.jsdelivr.net/npm/prettier@2/standalone.js"><\/script>');
-        document.write('<script src="https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.js"><\/script>');
-        document.write('<script src="https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.js"><\/script>');
-        document.write('<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"><\/script>');
-      }
-    </script>
-    <script>
-      require.config({
-        paths: {
-          vs: LOCAL ? '/monaco-editor/vs' : 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs'
-        }
-      });
-      require(['vs/editor/editor.main'], function() {});
-    </script>
     <script src="script.js"></script>
   </body>
 </html>

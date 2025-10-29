@@ -18,6 +18,75 @@ let currentCore = "";
 let pendingCoreChange = "";
 let isCurrentFileJson = false;
 let dashboardPort = null;
+let dependenciesLoaded = false;
+
+async function loadDependencies() {
+  if (dependenciesLoaded) return;
+
+  const loadScript = (src) =>
+    new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+
+  if (LOCAL) {
+    window.MonacoEnvironment = {
+      getWorkerUrl: () => "/monaco-editor/vs/base/worker/workerMain.js",
+    };
+    await loadScript("/prettier/standalone.min.js");
+    await loadScript("/prettier/babel.min.js");
+    await loadScript("/prettier/yaml.min.js");
+    await loadScript("/monaco-editor/loader.min.js");
+  } else {
+    await loadScript("https://cdn.jsdelivr.net/npm/prettier@2/standalone.js");
+    await loadScript(
+      "https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.js",
+    );
+    await loadScript("https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.js");
+    await loadScript(
+      "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js",
+    );
+  }
+
+  require.config({
+    paths: {
+      vs: LOCAL
+        ? "/monaco-editor/vs"
+        : "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs",
+    },
+  });
+
+  dependenciesLoaded = true;
+}
+
+async function init() {
+  try {
+    await loadDependencies();
+    await new Promise((resolve, reject) => {
+      require(["vs/editor/editor.main"], resolve, reject);
+    });
+
+    checkXKeenStatus();
+    getAvailableCores();
+    loadMonacoEditor();
+    connectWebSocket();
+
+    const logsContainer = document.getElementById("logsContainer");
+    logsContainer.classList.add("centered");
+    logsContainer.innerHTML =
+      '<div style="color: #6b7280;">Подключение к WebSocket...</div>';
+
+    setInterval(() => {
+      if (!isActionInProgress) checkXKeenStatus();
+    }, 15000);
+  } catch (error) {
+    console.error("Failed to initialize app:", error);
+    showToast("Ошибка инициализации приложения", "error");
+  }
+}
 
 function getFileLanguage(filename) {
   if (filename.endsWith(".json")) return "json";
@@ -368,7 +437,11 @@ function switchLogFile(newLogFile) {
   }
 }
 
-function initMonacoEditor() {
+function loadMonacoEditor() {
+  if (!window.monaco) {
+    console.error("Monaco Editor not loaded yet");
+    return;
+  }
   require(["vs/editor/editor.main"], function () {
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
       allowComments: true,
@@ -1046,7 +1119,7 @@ function formatCurrentConfig() {
   }
 }
 
-async function checkStatus() {
+async function checkXKeenStatus() {
   if (isActionInProgress) return;
   const result = await apiCall("status");
   updateServiceStatus(result.running);
@@ -1064,11 +1137,11 @@ async function startXKeen() {
     } else {
       showToast(`Ошибка запуска: ${result.output || result.error}`, "error");
       isActionInProgress = false;
-      checkStatus();
+      checkXKeenStatus();
     }
   } catch (e) {
     isActionInProgress = false;
-    checkStatus();
+    checkXKeenStatus();
   }
 }
 
@@ -1085,7 +1158,7 @@ async function stopXKeen() {
     }
   } finally {
     isActionInProgress = false;
-    checkStatus();
+    checkXKeenStatus();
   }
 }
 
@@ -1105,11 +1178,11 @@ async function restartXKeen() {
         "error",
       );
       isActionInProgress = false;
-      checkStatus();
+      checkXKeenStatus();
     }
   } catch (e) {
     isActionInProgress = false;
-    checkStatus();
+    checkXKeenStatus();
   }
 }
 
@@ -1142,12 +1215,12 @@ async function clearCurrentLog() {
   }
 }
 
-async function loadCores() {
+async function getAvailableCores() {
   try {
     const result = await apiCall("core");
     if (result.success) {
       availableCores = result.cores || [];
-      currentCore = result.currentCore || "xray"; // Добавляем значение по умолчанию
+      currentCore = result.currentCore || "xray";
 
       const coreSelectRoot = document.getElementById("coreSelectRoot");
       const coreSelectLabel = document.getElementById("coreSelectLabel");
@@ -1179,21 +1252,32 @@ function closeCoreModal() {
 }
 
 async function confirmCoreChange() {
-  console.log("confirmCoreChange called");
-
-  // Получаем значение напрямую из модального окна
   const selectedCoreElement = document.getElementById("selectedCore");
   const selectedCore = selectedCoreElement
     ? selectedCoreElement.textContent
     : "";
-
-  console.log("Selected core from DOM:", selectedCore);
 
   if (!selectedCore || (selectedCore !== "xray" && selectedCore !== "mihomo")) {
     showToast("Ошибка: не выбрано ядро", "error");
     return;
   }
 
+  currentCore = selectedCore;
+  const coreSelectLabel = document.getElementById("coreSelectLabel");
+  if (coreSelectLabel) {
+    coreSelectLabel.textContent = currentCore;
+  }
+
+  const items = document.querySelectorAll("#coreSelectContent .select-item");
+  items.forEach((item) => {
+    const value = item.getAttribute("data-value");
+    if (item && value) {
+      item.setAttribute(
+        "aria-selected",
+        value === currentCore ? "true" : "false",
+      );
+    }
+  });
   closeCoreModal();
   setPendingState("Выполняется смена ядра...");
 
@@ -1205,9 +1289,6 @@ async function confirmCoreChange() {
 
     if (result.success) {
       showToast(`Ядро изменено на ${selectedCore}`);
-      currentCore = selectedCore;
-
-      // Обновляем интерфейс выбора ядра
       const coreSelectLabel = document.getElementById("coreSelectLabel");
       if (coreSelectLabel) {
         coreSelectLabel.textContent = currentCore;
@@ -1231,7 +1312,7 @@ async function confirmCoreChange() {
 
       // Ждем немного перед проверкой статуса
       setTimeout(() => {
-        checkStatus().then(() => {
+        checkXKeenStatus().then(() => {
           console.log("Status checked after core change");
           forceReloadConfigs();
         });
@@ -1239,13 +1320,13 @@ async function confirmCoreChange() {
     } else {
       showToast(`Ошибка смены ядра: ${result.error}`, "error");
       isActionInProgress = false;
-      checkStatus();
+      checkXKeenStatus();
     }
   } catch (error) {
     console.error("Core change error:", error);
     showToast(`Ошибка: ${error.message}`, "error");
     isActionInProgress = false;
-    checkStatus();
+    checkXKeenStatus();
   }
 }
 
@@ -1512,18 +1593,9 @@ document.addEventListener("DOMContentLoaded", () => {
   logSelectLabel.textContent = currentLogFile;
   setActiveLogItem(currentLogFile);
 
-  initMonacoEditor();
-  checkStatus();
-  loadCores();
-  setInterval(() => {
-    if (!isActionInProgress) checkStatus();
-  }, 15000);
-
-  logsContainer.classList.add("centered");
-  logsContainer.innerHTML =
-    '<div style="color: #6b7280;">Подключение к WebSocket...</div>';
-
-  connectWebSocket();
+  init().catch((error) => {
+    console.error("App initialization failed:", error);
+  });
 });
 
 document.addEventListener("keydown", (e) => {
@@ -1654,11 +1726,11 @@ async function saveAndRestart() {
           "error",
         );
         isActionInProgress = false;
-        checkStatus();
+        checkXKeenStatus();
       }
     } catch (e) {
       isActionInProgress = false;
-      checkStatus();
+      checkXKeenStatus();
     }
   } else {
     showToast(`Ошибка сохранения: ${result.error}`, "error");
