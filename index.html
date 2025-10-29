@@ -11,7 +11,6 @@
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" as="style" onload="this.rel='stylesheet'">
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.rel='stylesheet'">
     <link rel="stylesheet" href="style.css" />
-    <script src="local_mode.js"></script>
   </head>
 
   <body>
@@ -394,21 +393,30 @@
         </div>
       </div>
     </div>
+    <script src="local_mode.js"></script>
     <script>
       if (LOCAL) {
         window.MonacoEnvironment = {
           getWorkerUrl() { return "/monaco-editor/vs/base/worker/workerMain.js"; }
         };
+        document.write('<script src="/prettier/standalone.min.js"><\/script>');
+        document.write('<script src="/prettier/babel.min.js"><\/script>');
+        document.write('<script src="/prettier/yaml.min.js"><\/script>');
+        document.write('<script src="/monaco-editor/loader.min.js"><\/script>');
+      } else {
+        document.write('<script src="https://cdn.jsdelivr.net/npm/prettier@2/standalone.js"><\/script>');
+        document.write('<script src="https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.js"><\/script>');
+        document.write('<script src="https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.js"><\/script>');
+        document.write('<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"><\/script>');
       }
     </script>
-    <script src="/prettier/standalone.min.js"></script>
-    <script src="/prettier/babel.min.js"></script>
-    <script src="/prettier/yaml.min.js"></script>
-    <script src="/monaco-editor/loader.min.js"></script>
     <script>
-      require.config({ paths: { vs: LOCAL ? '/monaco-editor/vs' : 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs' } });
-      require(['vs/editor/editor.main'], function() {
+      require.config({
+        paths: {
+          vs: LOCAL ? '/monaco-editor/vs' : 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs'
+        }
       });
+      require(['vs/editor/editor.main'], function() {});
     </script>
     <script src="script.js"></script>
   </body>
