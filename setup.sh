@@ -244,6 +244,7 @@ update_xkeenui() {
 
   echo -e "${GREEN}\n XKeen UI успешно обновлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN}http://$router_ip:1000\n${NC}"
+  echo -e " После перехода нажмите Ctrl+Shift+R для обновления кэша\n"
 }
 
 uninstall_xkeenui() {
