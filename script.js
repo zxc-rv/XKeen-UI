@@ -953,6 +953,7 @@ function switchTab(index) {
     return;
 
   activeConfigIndex = index;
+  saveLastSelectedTab();
 
   const config = configs[index];
   const formatBtn = document.getElementById("formatBtn");
@@ -1023,7 +1024,8 @@ async function loadConfigs() {
     if (configs.length > 0) {
       isConfigsLoading = false;
       if (tabsList) tabsList.classList.remove("empty");
-      switchTab(0);
+      const savedIndex = loadLastSelectedTab();
+      switchTab(savedIndex);
     } else {
       isConfigsLoading = false;
       renderTabs();
@@ -1735,4 +1737,21 @@ async function saveAndRestart() {
   } else {
     showToast(`Ошибка сохранения: ${result.error}`, "error");
   }
+}
+
+function saveLastSelectedTab() {
+  if (activeConfigIndex >= 0 && configs[activeConfigIndex]) {
+    localStorage.setItem(
+      "lastSelectedTab",
+      configs[activeConfigIndex].filename,
+    );
+  }
+}
+
+function loadLastSelectedTab() {
+  const savedFilename = localStorage.getItem("lastSelectedTab");
+  if (!savedFilename) return 0;
+
+  const index = configs.findIndex((c) => c.filename === savedFilename);
+  return index >= 0 ? index : 0;
 }
