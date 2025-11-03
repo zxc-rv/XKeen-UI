@@ -563,7 +563,7 @@ function loadMonacoEditor() {
       scrollBeyondLastLine: false,
       minimap: { enabled: false },
       fontSize: 14,
-      fontFamily: "JetBrains Mono, monospace",
+      fontFamily: "JetBrains Mono, Noto Color Emoji, monospace",
       fontWeight: "400",
       smoothScrolling: true,
       lineHeight: 1.5,

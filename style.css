@@ -7,6 +7,7 @@
 body {
   font-family:
     Inter,
+    Noto Color Emoji,
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
@@ -270,7 +271,7 @@ textarea {
   border-radius: 6px;
   padding: 12px;
   overflow-y: auto;
-  font-family: "JetBrains Mono", monospace;
+  font-family: "JetBrains Mono", "Noto Color Emoji", monospace;
   font-size: 13px;
   line-height: 1.3;
   position: relative;
