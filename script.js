@@ -563,7 +563,7 @@ function loadMonacoEditor() {
       scrollBeyondLastLine: false,
       minimap: { enabled: false },
       fontSize: 14,
-      fontFamily: "JetBrains Mono, Noto Color Emoji, monospace",
+      fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
       fontWeight: "400",
       smoothScrolling: true,
       lineHeight: 1.5,
@@ -979,7 +979,6 @@ function switchTab(index) {
   }
   updateUIDirtyState();
   validateCurrentFile();
-  requestAnimationFrame(updateActiveTabIndicator);
 }
 
 async function apiCall(endpoint, data = null) {
@@ -1013,19 +1012,27 @@ async function loadConfigs() {
   if (tabsList) tabsList.classList.add("empty");
   renderTabs();
   const result = await apiCall("configs");
-
   if (result.success && result.configs) {
     configs = result.configs.map((c) => ({
       ...c,
       savedContent: c.content,
       isDirty: false,
     }));
-
     if (configs.length > 0) {
       isConfigsLoading = false;
       if (tabsList) tabsList.classList.remove("empty");
-      const savedIndex = loadLastSelectedTab();
-      switchTab(savedIndex);
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          const savedIndex = loadLastSelectedTab();
+          switchTab(savedIndex);
+        }, 100);
+        requestAnimationFrame(() => {
+          updateActiveTabIndicator();
+          if (monacoEditor) {
+            monacoEditor.layout();
+          }
+        });
+      });
     } else {
       isConfigsLoading = false;
       renderTabs();
