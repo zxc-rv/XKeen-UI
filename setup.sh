@@ -136,8 +136,8 @@ install_xkeenui() {
   echo -ne "${YELLOW}\nВыберите версию (enter для latest):${NC} "
   read VERSION < /dev/tty
   echo -e "${YELLOW}\nВариант установки редактора:\n${NC}"
-  echo -e "1. CDN (требуется доступность Cloudflare)"
-  echo -e "2. Локально (требуется дополнительно ~25МБ места)\n"
+  echo -e "1. CDN"
+  echo -e "2. Local\n"
   read -p "Выбор: " editor_choice < /dev/tty
 
   mkdir -p $static_path
