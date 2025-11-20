@@ -276,10 +276,20 @@ uninstall_xkeenui() {
 }
 
 clear
+echo -e "${BLUE}"
+cat <<'EOF'
+   _  __  __ __                       __  __ ____
+  | |/ / / //_/___   ___   ____      / / / //  _/
+  |   / / ,<  / _ \ / _ \ / __ \    / / / / / /
+ /   | / /| |/  __//  __// / / /   / /_/ /_/ /
+/_/|_|/_/ |_|\___/ \___//_/ /_/    \____//___/
+EOF
+echo -e "${NC}"
 echo -e "${BLUE}\nДобро пожаловать! Выберите действие:\n${NC}"
 echo -e "1. Установить/переустановить"
 echo -e "2. Обновить"
-echo -e "3. Удалить\n"
+echo -e "3. Удалить"
+echo -e "4. Выйти\n"
 read -p "Выбор: " response < /dev/tty
 
 case $response in
@@ -291,6 +301,10 @@ case $response in
     ;;
   3)
     uninstall_xkeenui
+    ;;
+  4)
+    echo ""
+    exit
     ;;
   *)
     echo -e "${RED}\n Неверный выбор.\n${NC}"
