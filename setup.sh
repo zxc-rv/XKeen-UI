@@ -69,12 +69,8 @@ detect_arch() {
 }
 
 download_files() {
-  VERSION="$1"
-  if [ -n "$VERSION" ]; then
-    download_url="https://github.com/zxc-rv/XKeen-UI/releases/download/${VERSION}"
-  else
-    download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
-  fi
+
+  download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
 
   local bin_name="xkeen-ui-$arch"
   local static_name="xkeen-ui-static.tar.gz"
@@ -131,8 +127,6 @@ install_xkeenui() {
     uninstall_xkeenui
   fi
 
-  echo -ne "${YELLOW}\nВыберите версию (enter для latest):${NC} "
-  read VERSION < /dev/tty
   echo -e "${YELLOW}\nВариант установки редактора:\n${NC}"
   echo -e "1. CDN"
   echo -e "2. Local\n"
@@ -183,7 +177,7 @@ server.groupname := ""
 EOF
 
   detect_arch
-  download_files "$VERSION"
+  download_files
 
   if grep -q "LOCAL = true" "$local_mode_path"; then
     setup_local_editor

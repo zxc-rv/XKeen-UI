@@ -488,14 +488,8 @@ function loadMonacoEditor() {
         { token: "keyword.json", foreground: "#bb9af7" },
         { token: "identifier", foreground: "#c0caf5" },
         { token: "comment", foreground: "#565f89" },
-        {
-          token: "comment.line",
-          foreground: "#565f89",
-        },
-        {
-          token: "comment.block",
-          foreground: "#565f89",
-        },
+        { token: "comment.line", foreground: "#565f89" },
+        { token: "comment.block", foreground: "#565f89" },
         { token: "operator", foreground: "#89ddff" },
         { token: "delimiter", foreground: "#c0caf5" },
         { token: "tag", foreground: "#f7768e" },
