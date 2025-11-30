@@ -136,12 +136,7 @@ textarea {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.06) 50%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0) 100%);
   animation: skeleton-shimmer 1.2s infinite;
 }
 
@@ -269,6 +264,7 @@ textarea {
   overflow-y: auto;
   font-family:
     JetBrains Mono,
+    JetBrainsMono NF,
     monospace,
     Noto Color Emoji;
   font-size: 13px;
