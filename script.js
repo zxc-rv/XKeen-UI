@@ -551,6 +551,11 @@ function loadMonacoEditor() {
         verticalHasArrows: false,
         horizontalHasArrows: false,
       },
+      quickSuggestions: true,
+      suggestOnTriggerCharacters: true,
+      acceptSuggestionOnEnter: "on",
+      tabCompletion: "on",
+      wordBasedSuggestions: true,
     })
 
     function isMobileViewport() {
@@ -808,7 +813,9 @@ function updateActiveTabIndicator() {
   const indicator = activeContainer.querySelector(".tab-active-indicator")
   if (!indicator) return
   const tabs = Array.from(activeContainer.querySelectorAll(".tab-trigger"))
-  const groupConfigs = isXkeen ? configs.filter((c) => c.filename.endsWith(".lst")) : configs.filter((c) => !c.filename.endsWith(".lst"))
+  const groupConfigs = isXkeen
+    ? configs.filter((c) => c.filename.endsWith(".lst"))
+    : configs.filter((c) => !c.filename.endsWith(".lst"))
   const groupIndex = groupConfigs.indexOf(activeConfig)
   if (groupIndex === -1) return
   const activeTab = tabs[groupIndex]
@@ -976,7 +983,9 @@ function isFileValid() {
     if (!model) return true
 
     const markers = monaco.editor.getModelMarkers({ owner: "json" })
-    return !markers.some((m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error)
+    return !markers.some(
+      (m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error,
+    )
   } else if (language === "yaml") {
     try {
       jsyaml.load(monacoEditor.getValue())
