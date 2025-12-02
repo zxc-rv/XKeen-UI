@@ -196,33 +196,27 @@ function setPendingState(actionText) {
 }
 
 function parseLogLine(line) {
+  const COLORS = {
+    success: "#69FF94",
+    info: "#82AAFF",
+    warning: "#FFCB6B",
+    error: "#FF6E6E",
+    fatal: "#FF5555",
+  }
   if (!line.trim()) return null
-
   let processedLine = line
   let className = "log-line"
 
   processedLine = processedLine
-    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, '<span style="color: #10b981;">$1</span>')
-    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, '<span style="color: #ef4444;">$1</span>')
-    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, '<span style="color: #f59e0b;">$1</span>')
-    .replace(/\u001b\[34m(.*?)\u001b\[0m/g, '<span style="color: #3b82f6;">$1</span>')
+    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.success};">$1</span>`)
+    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.error};">$1</span>`)
+    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.warning};">$1</span>`)
+    .replace(/\u001b\[34m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.info};">$1</span>`)
     .replace(/\u001b\[\d+m/g, "")
-
-  processedLine = processedLine
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/&lt;span style="color: #[\w\d]+;"&gt;/g, (match) => match.replace(/&lt;/g, "<").replace(/&gt;/g, ">"))
-    .replace(/&lt;\/span&gt;/g, "</span>")
-
-  processedLine = processedLine
-    .replace(/\[Info\]/g, '<span style="color: #3b82f6;">[Info]</span>')
-    .replace(/\[Warning\]/g, '<span style="color: #f59e0b;">[Warning]</span>')
-    .replace(/\[Error\]/g, '<span style="color: #ef4444;">[Error]</span>')
-    .replace(/level=(info)/gi, 'level=<span style="color: #3b82f6;">$1</span>')
-    .replace(/level=(warning)/gi, 'level=<span style="color: #f59e0b;">$1</span>')
-    .replace(/level=(error)/gi, 'level=<span style="color: #ef4444;">$1</span>')
-    .replace(/level=(fatal)/gi, 'level=<span style="color: #dc2626;">$1</span>')
+    .replace(/\[Info\]/g, `<span style="color: ${COLORS.info};">[INFO]</span>`)
+    .replace(/\[Warning\]/g, `<span style="color: ${COLORS.warning};">[WARN]</span>`)
+    .replace(/\[Error\]/g, `<span style="color: ${COLORS.error};">[ERRO]</span>`)
+    .replace(/\[Fatal\]/g, `<span style="color: ${COLORS.fatal};">[FATA]</span>`)
 
   return { className, content: processedLine }
 }
@@ -747,11 +741,9 @@ function renderTabs() {
   if (formatBtn) formatBtn.style.display = "inline-flex"
   if (validationSkeleton) validationSkeleton.style.display = "none"
 
-  // Разделяем конфиги
   const coreConfigs = configs.filter((config) => !config.filename.endsWith(".lst"))
   const xkeenConfigs = configs.filter((config) => config.filename.endsWith(".lst"))
 
-  // Рендерим Core вкладки
   coreTabsList.innerHTML = ""
   const newCoreIndicator = document.createElement("div")
   newCoreIndicator.className = "tab-active-indicator"
@@ -763,35 +755,28 @@ function renderTabs() {
     const tabTrigger = document.createElement("button")
     tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`
     tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`
-    tabTrigger.onclick = () => attemptSwitchTab(globalIndex)
+    tabTrigger.onclick = () => switchTab(globalIndex)
     coreTabsList.appendChild(tabTrigger)
   })
 
-  // Рендерим Xkeen вкладки только если они есть
   xkeenTabsList.innerHTML = ""
   if (xkeenConfigs.length > 0) {
     const newXkeenIndicator = document.createElement("div")
     newXkeenIndicator.className = "tab-active-indicator"
     newXkeenIndicator.style.transform = xkeenTransform
     xkeenTabsList.appendChild(newXkeenIndicator)
-
     xkeenConfigs.forEach((config, index) => {
       const globalIndex = configs.indexOf(config)
       const tabTrigger = document.createElement("button")
       tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`
       tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`
-      tabTrigger.onclick = () => attemptSwitchTab(globalIndex)
+      tabTrigger.onclick = () => switchTab(globalIndex)
       xkeenTabsList.appendChild(tabTrigger)
     })
-
-    // Показываем xkeen группу
     xkeenTabsList.parentElement.style.display = "inline-block"
   } else {
-    // Скрываем xkeen группу если нет конфигов
     xkeenTabsList.parentElement.style.display = "none"
   }
-
-  // Обновляем индикатор после рендера
   setTimeout(() => updateActiveTabIndicator(), 0)
 }
 
@@ -836,17 +821,6 @@ function updateActiveTabIndicator() {
   window.lastActiveGroup = isXkeen ? "xkeen" : "core"
 }
 
-function attemptSwitchTab(index) {
-  if (index === activeConfigIndex) return
-  const currentConfig = configs[activeConfigIndex]
-  if (currentConfig && currentConfig.isDirty) {
-    pendingSwitchIndex = index
-    document.getElementById("dirtyModal").classList.add("show")
-  } else {
-    switchTab(index)
-  }
-}
-
 function closeDirtyModal() {
   pendingSwitchIndex = -1
   document.getElementById("dirtyModal").classList.remove("show")
@@ -856,9 +830,11 @@ async function saveAndSwitch() {
   if (pendingSwitchIndex !== -1) {
     await saveCurrentConfig()
     if (!configs[activeConfigIndex].isDirty) {
-      switchTab(pendingSwitchIndex)
+      const targetIndex = pendingSwitchIndex
+      pendingSwitchIndex = -1
+      closeDirtyModal()
+      switchTab(targetIndex)
     }
-    closeDirtyModal()
   }
 }
 
@@ -868,13 +844,21 @@ function discardAndSwitch() {
     monacoEditor.setValue(config.savedContent)
     config.isDirty = false
     updateUIDirtyState()
-    switchTab(pendingSwitchIndex)
+    const targetIndex = pendingSwitchIndex
+    pendingSwitchIndex = -1
     closeDirtyModal()
+    switchTab(targetIndex)
   }
 }
 
 function switchTab(index) {
   if (index < 0 || index >= configs.length || index === activeConfigIndex) return
+  const currentConfig = configs[activeConfigIndex]
+  if (currentConfig && currentConfig.isDirty) {
+    pendingSwitchIndex = index
+    document.getElementById("dirtyModal").classList.add("show")
+    return
+  }
   activeConfigIndex = index
   saveLastSelectedTab()
   const config = configs[index]

@@ -12,7 +12,7 @@ import (
 
 var (
 	reXray   = regexp.MustCompile(`(\d{4})/(\d{2})/(\d{2}) (\d{2}):(\d{2}):(\d{2})`)
-	reMihomo = regexp.MustCompile(`time="(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"`)
+	reMihomo = regexp.MustCompile(`time="(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)" level=(\w+) msg="(.+)"`)
 )
 
 func GetLogPath(logFile string) string {
@@ -78,27 +78,34 @@ func GetLogLines(logPath string) []string {
 }
 
 func AdjustTimezone(content string) string {
-	content = reXray.ReplaceAllStringFunc(content, func(match string) string {
-		t, err := time.Parse("2006/01/02 15:04:05", match)
-		if err != nil {
-			return match
-		}
-		return t.Add(3 * time.Hour).Format("2006/01/02 15:04:05")
+	content = reXray.ReplaceAllStringFunc(content, func(m string) string {
+		t, err := time.Parse("2006/01/02 15:04:05", m)
+		if err != nil { return m }
+		return string(t.Add(3 * time.Hour).AppendFormat(nil, "2006/01/02 15:04:05"))
 	})
 
-	content = reMihomo.ReplaceAllStringFunc(content, func(match string) string {
-		parts := reMihomo.FindStringSubmatch(match)
-		if len(parts) != 2 {
-			return match
+	return reMihomo.ReplaceAllStringFunc(content, func(m string) string {
+		p := reMihomo.FindStringSubmatch(m)
+		t, err := time.Parse(time.RFC3339Nano, p[1])
+		if len(p) != 4 || err != nil {
+			return m
 		}
-		t, err := time.Parse(time.RFC3339Nano, parts[1])
-		if err != nil {
-			return match
-		}
-		return fmt.Sprintf(`time="%s"`, t.Add(3*time.Hour).Format(time.RFC3339Nano))
-	})
 
-	return content
+		lvl := "[Info]"
+		switch p[2] {
+		case "warning": lvl = "[Warning]"
+		case "error":   lvl = "[Error]"
+		case "fatal":   lvl = "[Fatal]"
+		}
+
+		b := make([]byte, 0, len(m))
+		b = t.Add(3 * time.Hour).AppendFormat(b, "02.01.2006 15:04:05")
+		b = append(b, ' ')
+		b = append(b, lvl...)
+		b = append(b, ' ')
+		b = append(b, p[3]...)
+		return string(b)
+	})
 }
 
 func CleanupLogCache() {
