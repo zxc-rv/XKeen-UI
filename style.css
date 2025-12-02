@@ -136,7 +136,12 @@ textarea {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.06) 50%, rgba(255, 255, 255, 0) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
   animation: skeleton-shimmer 1.2s infinite;
 }
 
@@ -283,33 +288,7 @@ textarea {
   margin-bottom: 2px;
   word-wrap: break-word;
   white-space: pre-wrap;
-  color: #c0c0c0;
-}
-
-.log-info {
-  color: #3b82f6;
-}
-
-.log-warning {
-  color: #f59e0b;
-}
-
-.log-error {
-  color: #ef4444;
-}
-
-.log-success {
-  color: #10b981;
-}
-
-.log-timestamp {
-  color: #6b7280;
-}
-
-.log-highlight {
-  background: rgba(59, 130, 246, 0.1);
-  padding: 1px 3px;
-  border-radius: 3px;
+  color: #dbdbdb;
 }
 
 .panel-header {
