@@ -288,7 +288,7 @@ textarea {
   margin-bottom: 2px;
   word-wrap: break-word;
   white-space: pre-wrap;
-  color: #e6edf3;
+  color: #dbdbdb;
 }
 
 .panel-header {
@@ -1124,6 +1124,189 @@ textarea {
   flex-shrink: 0;
 }
 
+.btn-group {
+  display: inline-flex;
+  position: relative;
+}
+
+.btn-group .btn {
+  border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.btn-group .btn-dropdown {
+  border-radius: 0 6px 6px 0;
+  border-left: unset;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: unset;
+  width: 35px;
+}
+
+.btn-group .btn-dropdown svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.format-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background: #020817;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  min-width: 220px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease,
+    visibility 0.15s ease;
+}
+
+.format-menu.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.format-menu-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  color: #e4e4e7;
+  transition: background 0.2s;
+  font-size: 14px;
+}
+
+.format-menu-item:hover {
+  background: #334155;
+}
+
+.format-menu-item:first-child:last-child {
+  border-radius: 6px;
+}
+
+.format-menu-item:first-child:not(:last-child) {
+  border-radius: 6px 6px 0 0;
+}
+
+.format-menu-item:last-child:not(:first-child) {
+  border-radius: 0 0 6px 6px;
+}
+
+#importInput {
+  height: 35px;
+  width: 100%;
+  padding: 12px 10px;
+  border: 1px solid #1e293b;
+  background-color: #020817;
+  color: #e5e7eb;
+  border-radius: 8px;
+  outline: none;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+  font-size: 14px;
+  background-repeat: no-repeat;
+  background-position: 10px calc(50% + 2px);
+  background-size: 16px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+#importInput:hover {
+  background-color: #1e293b;
+}
+
+#importInput:focus {
+  background-color: #020817;
+  box-shadow: 0 0 0 2px #363c4d;
+}
+
+#importInput::placeholder {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+#importOutput {
+  width: 100%;
+  min-height: 300px;
+  max-height: 70vh;
+  background: #0f172a;
+  color: #c0caf5;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 12px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  resize: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  line-height: 1.5;
+  outline: none;
+  transition: box-shadow 0.15s ease;
+}
+
+#importOutput:focus {
+  box-shadow: 0 0 0 2px #363c4d;
+}
+
+#importResult {
+  margin-top: 12px;
+}
+
+.output-wrapper {
+  position: relative;
+}
+
+.copy-output-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.copy-output-btn:hover {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
+.copy-output-btn:active {
+  transform: scale(0.95);
+}
+
+.copy-output-btn svg {
+  display: block;
+}
+
+.modal-content.expanded {
+  min-width: 500px;
+  max-width: 650px;
+}
+
 @media (max-width: 768px) {
   #dashboardLink {
     text-decoration: underline;
@@ -1254,6 +1437,27 @@ textarea {
 
   .modal-content {
     min-width: 300px;
+  }
+
+  .modal-content.expanded {
+    min-width: 300px;
+    max-width: 95vw;
+  }
+
+  #importOutput {
+    font-size: 12px;
+    min-height: 250px;
+  }
+
+  .copy-output-btn {
+    top: 6px;
+    right: 6px;
+    padding: 5px 6px;
+  }
+
+  .copy-output-btn svg {
+    width: 14px;
+    height: 14px;
   }
 
   .toast {

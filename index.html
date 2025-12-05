@@ -219,13 +219,21 @@
             >
               Сохранить
             </button>
-            <button
-              id="formatBtn"
-              class="btn btn-secondary"
-              onclick="formatCurrentConfig()"
-            >
-              Формат
-            </button>
+            <div class="btn-group">
+              <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">
+                Формат
+              </button>
+              <button id="formatDropdownBtn" class="btn btn-secondary btn-dropdown" onclick="toggleFormatMenu(event)" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="4" y1="6" x2="20" y2="6"></line>
+                  <line x1="4" y1="12" x2="20" y2="12"></line>
+                  <line x1="4" y1="18" x2="20" y2="18"></line>
+                </svg>
+              </button>
+              <div id="formatMenu" class="format-menu">
+                <div class="format-menu-item" onclick="openImportModal(); toggleFormatMenu()">Импортировать ссылку</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -396,5 +404,30 @@
     </div>
     <script src="local_mode.js"></script>
     <script src="script.js"></script>
+    <script src="outboundParser.js"></script>
+    <div class="modal-overlay" id="importModal">
+      <div class="modal-content">
+        <h3 class="modal-title">Импорт ссылки</h3>
+        <div class="modal-body">
+          <input type="text" id="importInput" class="input" placeholder="vless://...">
+          <div id="importResult" style="display: none;">
+            <div class="output-wrapper">
+              <button class="copy-output-btn" id="copyBtn" onclick="copyImportResult()" title="Скопировать" style="display: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+              <textarea id="importOutput" readonly></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="generateBtn" onclick="generateConfig()">Сгенерировать</button>
+          <button class="btn btn-success" id="addBtn" onclick="addToOutbounds()" style="display: none;">Добавить</button>
+          <button class="btn btn-secondary" onclick="closeImportModal()">Закрыть</button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

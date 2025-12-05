@@ -197,10 +197,10 @@ function setPendingState(actionText) {
 
 function parseLogLine(line) {
   const COLORS = {
-    success: "#69FF94",
-    info: "#82AAFF",
-    warning: "#FFCB6B",
-    error: "#FF6E6E",
+    success: "#00cc00",
+    info: "#3b82f6",
+    warning: "#f59e0b",
+    error: "#ef4444",
     fatal: "#FF5555",
   }
   if (!line.trim()) return null
@@ -709,6 +709,7 @@ function renderTabs() {
   const saveBtn = document.getElementById("saveBtn")
   const saveRestartBtn = document.getElementById("saveRestartBtn")
   const formatBtn = document.getElementById("formatBtn")
+  const formatDropdownBtn = document.getElementById("formatDropdownBtn")
   const validationSkeleton = document.getElementById("validationSkeleton")
   const validationInfo = document.getElementById("validationInfo")
 
@@ -718,6 +719,7 @@ function renderTabs() {
     if (saveBtn) saveBtn.style.display = "none"
     if (saveRestartBtn) saveRestartBtn.style.display = "none"
     if (formatBtn) formatBtn.style.display = "none"
+    if (formatDropdownBtn) formatDropdownBtn.style.display = "none"
     if (validationSkeleton) validationSkeleton.style.display = "block"
 
     coreTabsList.innerHTML = ""
@@ -739,6 +741,7 @@ function renderTabs() {
   if (saveBtn) saveBtn.style.display = "inline-flex"
   if (saveRestartBtn) saveRestartBtn.style.display = "inline-flex"
   if (formatBtn) formatBtn.style.display = "inline-flex"
+  if (formatDropdownBtn) formatDropdownBtn.style.display = "inline-flex"
   if (validationSkeleton) validationSkeleton.style.display = "none"
 
   const coreConfigs = configs.filter((config) => !config.filename.endsWith(".lst"))
@@ -1599,3 +1602,130 @@ function loadLastSelectedTab() {
   const index = configs.findIndex((c) => c.filename === savedFilename)
   return index >= 0 ? index : 0
 }
+
+function toggleFormatMenu(e) {
+  if (e) e.stopPropagation()
+  document.getElementById("formatMenu").classList.toggle("show")
+}
+
+function openImportModal() {
+  const modal = document.getElementById("importModal")
+  modal.classList.add("show")
+  modal.querySelector(".modal-content").classList.remove("expanded")
+  document.getElementById("importResult").style.display = "none"
+  document.getElementById("importInput").value = ""
+  document.getElementById("generateBtn").style.display = "inline-flex"
+  document.getElementById("copyBtn").style.display = "none"
+  document.getElementById("addBtn").style.display = "none"
+}
+
+function closeImportModal() {
+  document.getElementById("importModal").classList.remove("show")
+}
+
+function generateConfig() {
+  const uri = document.getElementById("importInput").value.trim()
+  if (!uri) {
+    showToast("Вставь ссылку, чувак", "error")
+    return
+  }
+
+  try {
+    const config = parseProxyUri(uri)
+    const output = JSON.stringify(config, null, 2)
+    const textarea = document.getElementById("importOutput")
+    const modalContent = document.getElementById("importModal").querySelector(".modal-content")
+
+    // Добавляем класс expanded для расширения модального окна
+    modalContent.classList.add("expanded")
+
+    // Показываем результат
+    document.getElementById("importResult").style.display = "block"
+
+    // Устанавливаем значение
+    textarea.value = output
+
+    // Автоматически подстраиваем высоту под содержимое после отображения
+    setTimeout(() => {
+      textarea.style.height = "auto"
+      const maxHeight = window.innerHeight * 0.7
+      const contentHeight = Math.min(textarea.scrollHeight + 4, maxHeight)
+      textarea.style.height = contentHeight + "px"
+    }, 0)
+
+    document.getElementById("copyBtn").style.display = "inline-flex"
+    document.getElementById("addBtn").style.display = "inline-flex"
+  } catch (e) {
+    showToast(e.message, "error")
+  }
+}
+
+function copyImportResult() {
+  const output = document.getElementById("importOutput")
+  output.select()
+  document.execCommand("copy")
+  showToast("Скопировано в буфер")
+}
+
+function addToOutbounds() {
+  try {
+    // Проверяем наличие активной конфигурации
+    if (activeConfigIndex < 0 || !configs[activeConfigIndex]) {
+      showToast("Нет активной конфигурации", "error")
+      return
+    }
+
+    if (!monacoEditor) {
+      showToast("Редактор не инициализирован", "error")
+      return
+    }
+
+    // Получаем текущую конфигурацию из редактора
+    const currentContent = monacoEditor.getValue()
+    let config
+    try {
+      config = JSON.parse(currentContent)
+    } catch (e) {
+      showToast("Ошибка парсинга конфигурации", "error")
+      return
+    }
+
+    // Проверяем наличие массива outbounds
+    if (!config.outbounds || !Array.isArray(config.outbounds)) {
+      showToast("Массив outbounds не найден в конфигурации", "error")
+      return
+    }
+
+    // Получаем сгенерированный конфиг
+    const generatedConfig = document.getElementById("importOutput").value
+    let newOutbound
+    try {
+      newOutbound = JSON.parse(generatedConfig)
+    } catch (e) {
+      showToast("Ошибка парсинга сгенерированного конфига", "error")
+      return
+    }
+
+    // Добавляем в начало массива outbounds
+    config.outbounds.unshift(newOutbound)
+
+    // Обновляем редактор с красивым форматированием
+    const updatedConfig = JSON.stringify(config, null, 2)
+    monacoEditor.setValue(updatedConfig)
+
+    // Обновляем content в configs, isDirty установится автоматически через onDidChangeModelContent
+    configs[activeConfigIndex].content = updatedConfig
+
+    showToast("Outbound успешно добавлен", "success")
+    closeImportModal()
+  } catch (e) {
+    showToast("Ошибка при добавлении: " + e.message, "error")
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("formatMenu")
+  if (menu && !e.target.closest(".btn-group")) {
+    menu.classList.remove("show")
+  }
+})
