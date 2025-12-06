@@ -54,6 +54,12 @@ function parseVlessUri(uri) {
       host: params.host ? [params.host] : [],
       path: params.path || "/",
     }
+  } else if (params.type === "xhttp") {
+    config.streamSettings.xhttpSettings = {
+      path: params.path || "/",
+      host: params.host || "",
+      mode: params.mode || "auto",
+    }
   }
 
   if (params.headerType) {
@@ -165,6 +171,24 @@ function parseShadowsocksUri(uri) {
   }
 }
 
+function parseHysteria2Uri(uri) {
+  if (!uri.startsWith("hysteria2://")) throw new Error("Невалидная ссылка")
+
+  const url = new URL(uri)
+  const params = Object.fromEntries(url.searchParams)
+
+  return {
+    tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
+    protocol: "hysteria2",
+    settings: {
+      address: url.hostname,
+      port: parseInt(url.port) || 443,
+      password: decodeURIComponent(url.username),
+      insecure: params.insecure === "1" || params.insecure === "true",
+    },
+  }
+}
+
 function parseProxyUri(uri) {
   const type = uri.split("://")[0]
 
@@ -177,12 +201,13 @@ function parseProxyUri(uri) {
       return parseTrojanUri(uri)
     case "ss":
       return parseShadowsocksUri(uri)
+    case "hysteria2":
+      return parseHysteria2Uri(uri)
     default:
       throw new Error(`Протокол ${type} не поддерживается`)
   }
 }
 
-// Конвертация Xray конфига в Mihomo YAML формат
 function convertToMihomoYaml(xrayConfig) {
   const yamlLines = []
   const name = xrayConfig.tag || "proxy_1"
@@ -190,19 +215,17 @@ function convertToMihomoYaml(xrayConfig) {
   const settings = xrayConfig.settings
   const streamSettings = xrayConfig.streamSettings
 
-  yamlLines.push(`  - name: ${name}`)
+  yamlLines.push(`  - name: '${name}'`)
   yamlLines.push(`    type: ${protocol}`)
   yamlLines.push(`    server: ${settings.address}`)
   yamlLines.push(`    port: ${settings.port}`)
 
-  // Network type
   if (streamSettings && streamSettings.network) {
     yamlLines.push(`    network: ${streamSettings.network}`)
   }
 
   yamlLines.push(`    udp: true`)
 
-  // TLS/Reality
   if (streamSettings && streamSettings.security) {
     if (streamSettings.security === "tls" || streamSettings.security === "reality") {
       yamlLines.push(`    tls: true`)
@@ -256,9 +279,11 @@ function convertToMihomoYaml(xrayConfig) {
   } else if (protocol === "shadowsocks") {
     yamlLines.push(`    cipher: ${settings.method}`)
     yamlLines.push(`    password: ${settings.password}`)
+  } else if (protocol === "hysteria2") {
+    yamlLines.push(`    password: ${settings.password}`)
+    yamlLines.push(`    fast-open: true`)
   }
 
-  // WebSocket settings
   if (streamSettings && streamSettings.network === "ws" && streamSettings.wsSettings) {
     const ws = streamSettings.wsSettings
     yamlLines.push(`    ws-opts:`)
@@ -269,13 +294,11 @@ function convertToMihomoYaml(xrayConfig) {
     }
   }
 
-  // gRPC settings
   if (streamSettings && streamSettings.network === "grpc" && streamSettings.grpcSettings) {
     yamlLines.push(`    grpc-opts:`)
     yamlLines.push(`      grpc-service-name: ${streamSettings.grpcSettings.serviceName || ""}`)
   }
 
-  // HTTP/2 settings
   if (
     streamSettings &&
     (streamSettings.network === "h2" || streamSettings.network === "http") &&
@@ -293,7 +316,6 @@ function convertToMihomoYaml(xrayConfig) {
   return yamlLines.join("\n")
 }
 
-// Генерация уникального имени для proxy-provider
 function generateUniqueProviderName(existingYaml) {
   let counter = 1
   let name = `subscription_${counter}`
@@ -306,7 +328,6 @@ function generateUniqueProviderName(existingYaml) {
   return name
 }
 
-// Генерация уникального имени для proxy
 function generateUniqueProxyName(existingYaml) {
   let counter = 1
   let name = `proxy_${counter}`
@@ -319,7 +340,6 @@ function generateUniqueProxyName(existingYaml) {
   return name
 }
 
-// Генерация YAML для HTTP subscription (proxy-provider)
 function generateProxyProviderYaml(url, existingYaml = "") {
   const name = generateUniqueProviderName(existingYaml)
 
@@ -342,34 +362,26 @@ function generateProxyProviderYaml(url, existingYaml = "") {
   return yamlLines.join("\n")
 }
 
-// Основная функция генерации конфига
 function generateConfigForCore(uri, core = "xray", existingConfig = "") {
-  // Проверяем тип ссылки
   const isHttpSubscription = uri.startsWith("http://") || uri.startsWith("https://")
 
   if (core === "mihomo") {
     if (isHttpSubscription) {
-      // Генерируем proxy-provider для HTTP подписки
       return {
         type: "proxy-provider",
         content: generateProxyProviderYaml(uri, existingConfig),
       }
     } else {
-      // Парсим прокси URI и конвертируем в YAML
       const xrayConfig = parseProxyUri(uri)
-
-      // Если имя не указано в URI, генерируем уникальное
       if (xrayConfig.tag === "PROXY") {
         xrayConfig.tag = generateUniqueProxyName(existingConfig)
       }
-
       return {
         type: "proxy",
         content: convertToMihomoYaml(xrayConfig),
       }
     }
   } else {
-    // Xray формат (JSON)
     if (isHttpSubscription) {
       throw new Error("HTTP подписки не поддерживаются для Xray. Используйте прокси URI.")
     }
