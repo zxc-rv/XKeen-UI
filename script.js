@@ -1637,8 +1637,13 @@ function generateConfig() {
   }
 
   try {
-    const config = parseProxyUri(uri)
-    const output = JSON.stringify(config, null, 2)
+    // Получаем текущий конфиг для генерации уникальных имен
+    const existingConfig = monacoEditor ? monacoEditor.getValue() : ""
+
+    // Генерируем конфиг в зависимости от выбранного ядра
+    const result = generateConfigForCore(uri, currentCore, existingConfig)
+    const output = result.content
+
     const textarea = document.getElementById("importOutput")
     const modalContent = document.getElementById("importModal").querySelector(".modal-content")
 
@@ -1650,6 +1655,9 @@ function generateConfig() {
 
     // Устанавливаем значение
     textarea.value = output
+
+    // Сохраняем тип результата для использования в addToOutbounds
+    textarea.dataset.resultType = result.type
 
     // Автоматически подстраиваем высоту под содержимое после отображения
     setTimeout(() => {
@@ -1675,7 +1683,6 @@ function copyImportResult() {
 
 function addToOutbounds() {
   try {
-    // Проверяем наличие активной конфигурации
     if (activeConfigIndex < 0 || !configs[activeConfigIndex]) {
       showToast("Нет активной конфигурации", "error")
       return
@@ -1686,43 +1693,118 @@ function addToOutbounds() {
       return
     }
 
-    // Получаем текущую конфигурацию из редактора
     const currentContent = monacoEditor.getValue()
-    let config
-    try {
-      config = JSON.parse(currentContent)
-    } catch (e) {
-      showToast("Ошибка парсинга конфигурации", "error")
-      return
-    }
-
-    // Проверяем наличие массива outbounds
-    if (!config.outbounds || !Array.isArray(config.outbounds)) {
-      showToast("Массив outbounds не найден в конфигурации", "error")
-      return
-    }
-
-    // Получаем сгенерированный конфиг
     const generatedConfig = document.getElementById("importOutput").value
-    let newOutbound
-    try {
-      newOutbound = JSON.parse(generatedConfig)
-    } catch (e) {
-      showToast("Ошибка парсинга сгенерированного конфига", "error")
-      return
+    const textarea = document.getElementById("importOutput")
+    const resultType = textarea.dataset.resultType || "outbound"
+
+    if (currentCore === "xray") {
+      // Xray: добавляем в outbounds массив
+      let config
+      try {
+        config = JSON.parse(currentContent)
+      } catch (e) {
+        showToast("Ошибка парсинга конфигурации", "error")
+        return
+      }
+
+      if (!config.outbounds || !Array.isArray(config.outbounds)) {
+        showToast("Массив outbounds не найден в конфигурации", "error")
+        return
+      }
+
+      let newOutbound
+      try {
+        newOutbound = JSON.parse(generatedConfig)
+      } catch (e) {
+        showToast("Ошибка парсинга сгенерированного конфига", "error")
+        return
+      }
+
+      config.outbounds.unshift(newOutbound)
+
+      const updatedConfig = JSON.stringify(config, null, 2)
+      monacoEditor.setValue(updatedConfig)
+      configs[activeConfigIndex].content = updatedConfig
+
+      showToast("Outbound успешно добавлен", "success")
+    } else if (currentCore === "mihomo") {
+      // Mihomo: добавляем в YAML
+      let updatedContent = currentContent
+
+      if (resultType === "proxy-provider") {
+        // Добавляем proxy-provider
+        if (updatedContent.includes("proxy-providers:")) {
+          // Блок proxy-providers уже существует, добавляем в него
+          const lines = updatedContent.split("\n")
+          let insertIndex = -1
+          let indent = 0
+
+          for (let i = 0; i < lines.length; i++) {
+            // Проверяем что proxy-providers: находится СТРОГО в начале строки (без пробелов)
+            if (lines[i].match(/^proxy-providers:\s*($|#)/)) {
+              // Находим конец блока proxy-providers
+              indent = lines[i].search(/\S/)
+              for (let j = i + 1; j < lines.length; j++) {
+                const line = lines[j]
+                if (line.trim() === "") continue
+                const lineIndent = line.search(/\S/)
+                if (lineIndent !== -1 && lineIndent <= indent && !line.trim().startsWith("#")) {
+                  insertIndex = j
+                  break
+                }
+              }
+              if (insertIndex === -1) insertIndex = lines.length
+              break
+            }
+          }
+
+          if (insertIndex !== -1) {
+            lines.splice(insertIndex, 0, generatedConfig)
+            updatedContent = lines.join("\n")
+          }
+        } else {
+          // Создаем новый блок proxy-providers в конце
+          if (!updatedContent.endsWith("\n")) updatedContent += "\n"
+          updatedContent += "\nproxy-providers:\n" + generatedConfig + "\n"
+        }
+
+        showToast("Proxy provider успешно добавлен", "success")
+      } else if (resultType === "proxy") {
+        // Добавляем proxy
+        const lines = updatedContent.split("\n")
+        let insertIndex = -1
+        let proxiesExists = false
+
+        // Ищем строку, которая содержит только "proxies:" СТРОГО в начале строки (без пробелов)
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i]
+          // Проверяем что это именно "proxies:" в начале строки БЕЗ ПРОБЕЛОВ
+          // После двоеточия может быть: конец строки, пробелы, комментарий, или массив []
+          if (line.match(/^proxies:\s*($|#|\[)/)) {
+            proxiesExists = true
+            insertIndex = i + 1
+            break
+          }
+        }
+
+        if (proxiesExists && insertIndex !== -1) {
+          // Блок proxies существует, вставляем в него
+          lines.splice(insertIndex, 0, generatedConfig)
+          updatedContent = lines.join("\n")
+        } else {
+          // Создаем новый блок proxies в конце
+          if (!updatedContent.endsWith("\n")) updatedContent += "\n"
+          updatedContent += "\nproxies:\n" + generatedConfig + "\n"
+        }
+
+        showToast("Proxy успешно добавлен", "success")
+      }
+
+      monacoEditor.setValue(updatedContent)
+      configs[activeConfigIndex].content = updatedContent
     }
 
-    // Добавляем в начало массива outbounds
-    config.outbounds.unshift(newOutbound)
-
-    // Обновляем редактор с красивым форматированием
-    const updatedConfig = JSON.stringify(config, null, 2)
-    monacoEditor.setValue(updatedConfig)
-
-    // Обновляем content в configs, isDirty установится автоматически через onDidChangeModelContent
-    configs[activeConfigIndex].content = updatedConfig
-
-    showToast("Outbound успешно добавлен", "success")
     closeImportModal()
   } catch (e) {
     showToast("Ошибка при добавлении: " + e.message, "error")
@@ -1736,9 +1818,7 @@ document.addEventListener("click", (e) => {
   }
 })
 
-// Обработчик клавиатуры для модальных окон
 document.addEventListener("keydown", (e) => {
-  // ESC - закрытие модальных окон
   if (e.key === "Escape") {
     const dirtyModal = document.getElementById("dirtyModal")
     const coreModal = document.getElementById("coreModal")
@@ -1755,24 +1835,19 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault()
     }
   }
-
-  // Enter - действия в модальных окнах
   if (e.key === "Enter") {
     const dirtyModal = document.getElementById("dirtyModal")
     const coreModal = document.getElementById("coreModal")
     const importModal = document.getElementById("importModal")
 
     if (dirtyModal && dirtyModal.classList.contains("show")) {
-      // Сохранить и переключить
       saveAndSwitch()
       e.preventDefault()
     } else if (coreModal && coreModal.classList.contains("show")) {
-      // Подтвердить смену ядра
       confirmCoreChange()
       e.preventDefault()
     } else if (importModal && importModal.classList.contains("show")) {
       const importInput = document.getElementById("importInput")
-      // Генерируем только если есть текст в input
       if (importInput.value.trim()) {
         generateConfig()
         e.preventDefault()
