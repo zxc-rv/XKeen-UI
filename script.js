@@ -1260,10 +1260,8 @@ async function confirmCoreChange() {
         }
       })
 
-      // Сбрасываем статус действия
       isActionInProgress = false
 
-      // Ждем немного перед проверкой статуса
       setTimeout(() => {
         checkXKeenStatus().then(() => {
           console.log("Status checked after core change")
@@ -1619,7 +1617,6 @@ function openImportModal() {
   document.getElementById("copyBtn").style.display = "none"
   document.getElementById("addBtn").style.display = "none"
 
-  // Автофокус на input после открытия модального окна
   setTimeout(() => {
     importInput.focus()
   }, 100)
@@ -1637,29 +1634,22 @@ function generateConfig() {
   }
 
   try {
-    // Получаем текущий конфиг для генерации уникальных имен
     const existingConfig = monacoEditor ? monacoEditor.getValue() : ""
 
-    // Генерируем конфиг в зависимости от выбранного ядра
     const result = generateConfigForCore(uri, currentCore, existingConfig)
     const output = result.content
 
     const textarea = document.getElementById("importOutput")
     const modalContent = document.getElementById("importModal").querySelector(".modal-content")
 
-    // Добавляем класс expanded для расширения модального окна
     modalContent.classList.add("expanded")
 
-    // Показываем результат
     document.getElementById("importResult").style.display = "block"
 
-    // Устанавливаем значение
     textarea.value = output
 
-    // Сохраняем тип результата для использования в addToOutbounds
     textarea.dataset.resultType = result.type
 
-    // Автоматически подстраиваем высоту под содержимое после отображения
     setTimeout(() => {
       textarea.style.height = "auto"
       const maxHeight = window.innerHeight * 0.7
@@ -1699,7 +1689,6 @@ function addToOutbounds() {
     const resultType = textarea.dataset.resultType || "outbound"
 
     if (currentCore === "xray") {
-      // Xray: добавляем в outbounds массив
       let config
       try {
         config = JSON.parse(currentContent)
@@ -1729,7 +1718,6 @@ function addToOutbounds() {
 
       showToast("Outbound успешно добавлен", "success")
 
-      // Скроллим к началу outbounds в JSON
       setTimeout(() => {
         const model = monacoEditor.getModel()
         const content = model.getValue()
@@ -1788,18 +1776,12 @@ function addToOutbounds() {
 
         showToast("Proxy provider успешно добавлен", "success")
       } else if (resultType === "proxy") {
-        // Добавляем proxy
         const lines = updatedContent.split("\n")
         let insertIndex = -1
         let indent = 0
-
-        // Ищем строку, которая содержит только "proxies:" СТРОГО в начале строки (без пробелов)
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i]
-          // Проверяем что это именно "proxies:" в начале строки БЕЗ ПРОБЕЛОВ
-          // После двоеточия может быть: конец строки, пробелы, комментарий, или массив []
           if (line.match(/^proxies:\s*($|#|\[)/)) {
-            // Находим конец блока proxies
             indent = line.search(/\S/)
             for (let j = i + 1; j < lines.length; j++) {
               const nextLine = lines[j]
@@ -1816,12 +1798,10 @@ function addToOutbounds() {
         }
 
         if (insertIndex !== -1) {
-          // Блок proxies существует, вставляем в конец
           lines.splice(insertIndex, 0, generatedConfig)
           updatedContent = lines.join("\n")
           scrollToLine = insertIndex + 1
         } else {
-          // Создаем новый блок proxies в конце
           if (!updatedContent.endsWith("\n")) updatedContent += "\n"
           const beforeLength = updatedContent.split("\n").length
           updatedContent += "\nproxies:\n" + generatedConfig
@@ -1834,7 +1814,6 @@ function addToOutbounds() {
       monacoEditor.setValue(updatedContent)
       configs[activeConfigIndex].content = updatedContent
 
-      // Скроллим к добавленному элементу
       if (scrollToLine > 0) {
         setTimeout(() => {
           monacoEditor.revealLineInCenter(scrollToLine)
