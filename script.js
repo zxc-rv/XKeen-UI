@@ -1613,10 +1613,16 @@ function openImportModal() {
   modal.classList.add("show")
   modal.querySelector(".modal-content").classList.remove("expanded")
   document.getElementById("importResult").style.display = "none"
-  document.getElementById("importInput").value = ""
+  const importInput = document.getElementById("importInput")
+  importInput.value = ""
   document.getElementById("generateBtn").style.display = "inline-flex"
   document.getElementById("copyBtn").style.display = "none"
   document.getElementById("addBtn").style.display = "none"
+
+  // Автофокус на input после открытия модального окна
+  setTimeout(() => {
+    importInput.focus()
+  }, 100)
 }
 
 function closeImportModal() {
@@ -1727,5 +1733,50 @@ document.addEventListener("click", (e) => {
   const menu = document.getElementById("formatMenu")
   if (menu && !e.target.closest(".btn-group")) {
     menu.classList.remove("show")
+  }
+})
+
+// Обработчик клавиатуры для модальных окон
+document.addEventListener("keydown", (e) => {
+  // ESC - закрытие модальных окон
+  if (e.key === "Escape") {
+    const dirtyModal = document.getElementById("dirtyModal")
+    const coreModal = document.getElementById("coreModal")
+    const importModal = document.getElementById("importModal")
+
+    if (dirtyModal && dirtyModal.classList.contains("show")) {
+      closeDirtyModal()
+      e.preventDefault()
+    } else if (coreModal && coreModal.classList.contains("show")) {
+      closeCoreModal()
+      e.preventDefault()
+    } else if (importModal && importModal.classList.contains("show")) {
+      closeImportModal()
+      e.preventDefault()
+    }
+  }
+
+  // Enter - действия в модальных окнах
+  if (e.key === "Enter") {
+    const dirtyModal = document.getElementById("dirtyModal")
+    const coreModal = document.getElementById("coreModal")
+    const importModal = document.getElementById("importModal")
+
+    if (dirtyModal && dirtyModal.classList.contains("show")) {
+      // Сохранить и переключить
+      saveAndSwitch()
+      e.preventDefault()
+    } else if (coreModal && coreModal.classList.contains("show")) {
+      // Подтвердить смену ядра
+      confirmCoreChange()
+      e.preventDefault()
+    } else if (importModal && importModal.classList.contains("show")) {
+      const importInput = document.getElementById("importInput")
+      // Генерируем только если есть текст в input
+      if (importInput.value.trim()) {
+        generateConfig()
+        e.preventDefault()
+      }
+    }
   }
 })

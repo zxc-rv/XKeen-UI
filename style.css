@@ -1161,7 +1161,7 @@ textarea {
   border: 1px solid #1e293b;
   border-radius: 6px;
   margin-bottom: 4px;
-  min-width: 220px;
+  min-width: 200px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   opacity: 0;
@@ -1221,7 +1221,7 @@ textarea {
   background-repeat: no-repeat;
   background-position: 10px calc(50% + 2px);
   background-size: 16px;
-  margin-bottom: 12px;
+  margin: 8px 0;
   box-sizing: border-box;
 }
 
