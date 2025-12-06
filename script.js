@@ -669,6 +669,7 @@ function updateUIDirtyState() {
   const saveBtn = document.getElementById("saveBtn")
   const saveRestartBtn = document.getElementById("saveRestartBtn")
   const formatBtn = document.getElementById("formatBtn")
+  const formatDropdownBtn = document.getElementById("formatDropdownBtn")
   const currentConfig = configs[activeConfigIndex]
 
   if (currentConfig) {
@@ -678,6 +679,11 @@ function updateUIDirtyState() {
 
     saveBtn.disabled = !hasChanges || !isValid
     formatBtn.disabled = !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid
+
+    // Делаем dropdown кнопку активной/неактивной в зависимости от типа файла
+    if (formatDropdownBtn) {
+      formatDropdownBtn.disabled = !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid
+    }
 
     if (fileLanguage === "json") {
       const isXray = currentCore === "xray"
@@ -694,6 +700,9 @@ function updateUIDirtyState() {
     saveBtn.disabled = true
     saveRestartBtn.disabled = true
     formatBtn.disabled = true
+    if (formatDropdownBtn) {
+      formatDropdownBtn.disabled = true
+    }
   }
   renderTabs()
 }
@@ -719,7 +728,7 @@ function renderTabs() {
     if (saveBtn) saveBtn.style.display = "none"
     if (saveRestartBtn) saveRestartBtn.style.display = "none"
     if (formatBtn) formatBtn.style.display = "none"
-    if (formatDropdownBtn) formatDropdownBtn.style.display = "none"
+    if (formatDropdownBtn) formatDropdownBtn.disabled = true
     if (validationSkeleton) validationSkeleton.style.display = "block"
 
     coreTabsList.innerHTML = ""
@@ -742,6 +751,7 @@ function renderTabs() {
   if (saveRestartBtn) saveRestartBtn.style.display = "inline-flex"
   if (formatBtn) formatBtn.style.display = "inline-flex"
   if (formatDropdownBtn) formatDropdownBtn.style.display = "inline-flex"
+  // formatDropdownBtn.disabled управляется через updateUIDirtyState() в зависимости от типа файла
   if (validationSkeleton) validationSkeleton.style.display = "none"
 
   const coreConfigs = configs.filter((config) => !config.filename.endsWith(".lst"))
@@ -866,10 +876,14 @@ function switchTab(index) {
   saveLastSelectedTab()
   const config = configs[index]
   const formatBtn = document.getElementById("formatBtn")
+  const formatDropdownBtn = document.getElementById("formatDropdownBtn")
   if (config) {
     const language = getFileLanguage(config.filename)
     isCurrentFileJson = language === "json"
     if (formatBtn) formatBtn.disabled = !(language === "json" || language === "yaml")
+    if (formatDropdownBtn) {
+      formatDropdownBtn.disabled = !(language === "json" || language === "yaml")
+    }
   }
 
   if (monacoEditor && config) {
@@ -953,6 +967,7 @@ async function loadConfigs() {
     isConfigsLoading = false
     showToast("Ошибка загрузки конфигураций", "error")
     renderTabs()
+    updateUIDirtyState()
   }
   updateDashboardLink()
 }
@@ -1582,6 +1597,7 @@ async function forceReloadConfigs() {
     isConfigsLoading = false
     showToast("Ошибка загрузки конфигов после смены ядра", "error")
     renderTabs()
+    updateUIDirtyState()
     console.error("Failed to reload configs:", result.error)
   }
   updateUIDirtyState()
@@ -1714,21 +1730,34 @@ function addToOutbounds() {
 
       const updatedConfig = JSON.stringify(config, null, 2)
       monacoEditor.setValue(updatedConfig)
-      configs[activeConfigIndex].content = updatedConfig
 
-      showToast("Outbound успешно добавлен", "success")
-
+      // Форматируем через Monaco (используется Prettier, который сохраняет компактные массивы)
       setTimeout(() => {
-        const model = monacoEditor.getModel()
-        const content = model.getValue()
-        const lines = content.split("\n")
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].includes('"outbounds"')) {
-            monacoEditor.revealLineInCenter(i + 1)
-            break
-          }
+        const formatAction = monacoEditor.getAction("editor.action.formatDocument")
+        if (formatAction) {
+          formatAction.run().then(() => {
+            // Обновляем content после форматирования
+            configs[activeConfigIndex].content = monacoEditor.getValue()
+
+            showToast("Outbound успешно добавлен", "success")
+
+            // Прокручиваем к outbounds
+            const model = monacoEditor.getModel()
+            const content = model.getValue()
+            const lines = content.split("\n")
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].includes('"outbounds"')) {
+                monacoEditor.revealLineInCenter(i + 1)
+                break
+              }
+            }
+          })
+        } else {
+          // Если форматирование недоступно, просто обновляем content
+          configs[activeConfigIndex].content = updatedConfig
+          showToast("Outbound успешно добавлен", "success")
         }
-      }, 100)
+      }, 50)
     } else if (currentCore === "mihomo") {
       // Mihomo: добавляем в YAML
       let updatedContent = currentContent

@@ -307,12 +307,12 @@ function generateConfigForCore(uri, core = "xray", existingConfig = "") {
       return { type: "proxy-provider", content: toYaml(pContent, 2).trimEnd() + "\n" }
     }
 
-    if (uri.includes("type=xhttp")) throw new Error("XHTTP not supported")
+    if (uri.includes("type=xhttp")) throw new Error("XHTTP в Mihomo не поддерживается")
     const conf = parseProxyUri(uri)
     if (conf.tag === "PROXY") conf.tag = genName(conf.protocol)
     return { type: "proxy", content: convertToMihomoYaml(conf) + "\n" }
   } else {
-    if (isSub || uri.startsWith("hysteria2")) throw new Error("Unsupported for Xray")
+    if (isSub || uri.startsWith("hysteria2")) throw new Error("Hysteria2 в Xray не поддерживается")
     return { type: "outbound", content: JSON.stringify(parseProxyUri(uri), null, 2) }
   }
 }
