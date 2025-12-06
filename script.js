@@ -1728,9 +1728,23 @@ function addToOutbounds() {
       configs[activeConfigIndex].content = updatedConfig
 
       showToast("Outbound успешно добавлен", "success")
+
+      // Скроллим к началу outbounds в JSON
+      setTimeout(() => {
+        const model = monacoEditor.getModel()
+        const content = model.getValue()
+        const lines = content.split("\n")
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes('"outbounds"')) {
+            monacoEditor.revealLineInCenter(i + 1)
+            break
+          }
+        }
+      }, 100)
     } else if (currentCore === "mihomo") {
       // Mihomo: добавляем в YAML
       let updatedContent = currentContent
+      let scrollToLine = -1
 
       if (resultType === "proxy-provider") {
         // Добавляем proxy-provider
@@ -1762,11 +1776,14 @@ function addToOutbounds() {
           if (insertIndex !== -1) {
             lines.splice(insertIndex, 0, generatedConfig)
             updatedContent = lines.join("\n")
+            scrollToLine = insertIndex + 1
           }
         } else {
           // Создаем новый блок proxy-providers в конце
           if (!updatedContent.endsWith("\n")) updatedContent += "\n"
-          updatedContent += "\nproxy-providers:\n" + generatedConfig + "\n"
+          const beforeLength = updatedContent.split("\n").length
+          updatedContent += "\nproxy-providers:\n" + generatedConfig
+          scrollToLine = beforeLength + 2
         }
 
         showToast("Proxy provider успешно добавлен", "success")
@@ -1774,7 +1791,7 @@ function addToOutbounds() {
         // Добавляем proxy
         const lines = updatedContent.split("\n")
         let insertIndex = -1
-        let proxiesExists = false
+        let indent = 0
 
         // Ищем строку, которая содержит только "proxies:" СТРОГО в начале строки (без пробелов)
         for (let i = 0; i < lines.length; i++) {
@@ -1782,20 +1799,33 @@ function addToOutbounds() {
           // Проверяем что это именно "proxies:" в начале строки БЕЗ ПРОБЕЛОВ
           // После двоеточия может быть: конец строки, пробелы, комментарий, или массив []
           if (line.match(/^proxies:\s*($|#|\[)/)) {
-            proxiesExists = true
-            insertIndex = i + 1
+            // Находим конец блока proxies
+            indent = line.search(/\S/)
+            for (let j = i + 1; j < lines.length; j++) {
+              const nextLine = lines[j]
+              if (nextLine.trim() === "") continue
+              const lineIndent = nextLine.search(/\S/)
+              if (lineIndent !== -1 && lineIndent <= indent && !nextLine.trim().startsWith("#")) {
+                insertIndex = j
+                break
+              }
+            }
+            if (insertIndex === -1) insertIndex = lines.length
             break
           }
         }
 
-        if (proxiesExists && insertIndex !== -1) {
-          // Блок proxies существует, вставляем в него
+        if (insertIndex !== -1) {
+          // Блок proxies существует, вставляем в конец
           lines.splice(insertIndex, 0, generatedConfig)
           updatedContent = lines.join("\n")
+          scrollToLine = insertIndex + 1
         } else {
           // Создаем новый блок proxies в конце
           if (!updatedContent.endsWith("\n")) updatedContent += "\n"
-          updatedContent += "\nproxies:\n" + generatedConfig + "\n"
+          const beforeLength = updatedContent.split("\n").length
+          updatedContent += "\nproxies:\n" + generatedConfig
+          scrollToLine = beforeLength + 2
         }
 
         showToast("Proxy успешно добавлен", "success")
@@ -1803,6 +1833,14 @@ function addToOutbounds() {
 
       monacoEditor.setValue(updatedContent)
       configs[activeConfigIndex].content = updatedContent
+
+      // Скроллим к добавленному элементу
+      if (scrollToLine > 0) {
+        setTimeout(() => {
+          monacoEditor.revealLineInCenter(scrollToLine)
+          monacoEditor.setPosition({ lineNumber: scrollToLine, column: 1 })
+        }, 100)
+      }
     }
 
     closeImportModal()
