@@ -1475,3 +1475,38 @@ textarea {
     transform: translateY(0) scale(1);
   }
 }
+
+/* Version display */
+.app-version {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  font-size: 13px;
+  color: #64748b;
+  background: rgba(2, 8, 23, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #1e293b;
+  font-family: "JetBrains Mono", monospace;
+  user-select: none;
+  z-index: 100;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.app-version:hover {
+  color: #94a3b8;
+  border-color: #334155;
+  background: rgba(2, 8, 23, 0.95);
+}
+
+@media (max-width: 768px) {
+  .app-version {
+    bottom: 12px;
+    right: 12px;
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+}
