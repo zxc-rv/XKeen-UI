@@ -16,7 +16,9 @@ const toYaml = (obj, indent = 0) => {
     } else if (typeof v === "object") {
       res += `${sp}${k}:\n${toYaml(v, indent + 2)}`
     } else {
-      res += `${sp}${k}: ${v}\n`
+      // Оборачиваем значение name в одинарные кавычки и экранируем кавычки внутри
+      const value = k === "name" ? `'${String(v).replace(/'/g, "''")}'` : v
+      res += `${sp}${k}: ${value}\n`
     }
   }
   return res
