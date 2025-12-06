@@ -1714,7 +1714,7 @@ function addToOutbounds() {
       }
 
       if (!config.outbounds || !Array.isArray(config.outbounds)) {
-        showToast("Массив outbounds не найден в конфигурации", "error")
+        showToast("Массив outbounds не найден", "error")
         return
       }
 
@@ -1730,18 +1730,12 @@ function addToOutbounds() {
 
       const updatedConfig = JSON.stringify(config, null, 2)
       monacoEditor.setValue(updatedConfig)
-
-      // Форматируем через Monaco (используется Prettier, который сохраняет компактные массивы)
       setTimeout(() => {
         const formatAction = monacoEditor.getAction("editor.action.formatDocument")
         if (formatAction) {
           formatAction.run().then(() => {
-            // Обновляем content после форматирования
             configs[activeConfigIndex].content = monacoEditor.getValue()
-
             showToast("Outbound успешно добавлен", "success")
-
-            // Прокручиваем к outbounds
             const model = monacoEditor.getModel()
             const content = model.getValue()
             const lines = content.split("\n")
@@ -1753,28 +1747,22 @@ function addToOutbounds() {
             }
           })
         } else {
-          // Если форматирование недоступно, просто обновляем content
           configs[activeConfigIndex].content = updatedConfig
           showToast("Outbound успешно добавлен", "success")
         }
       }, 50)
     } else if (currentCore === "mihomo") {
-      // Mihomo: добавляем в YAML
       let updatedContent = currentContent
       let scrollToLine = -1
 
       if (resultType === "proxy-provider") {
-        // Добавляем proxy-provider
         if (updatedContent.includes("proxy-providers:")) {
-          // Блок proxy-providers уже существует, добавляем в него
           const lines = updatedContent.split("\n")
           let insertIndex = -1
           let indent = 0
 
           for (let i = 0; i < lines.length; i++) {
-            // Проверяем что proxy-providers: находится СТРОГО в начале строки (без пробелов)
             if (lines[i].match(/^proxy-providers:\s*($|#)/)) {
-              // Находим конец блока proxy-providers
               indent = lines[i].search(/\S/)
               for (let j = i + 1; j < lines.length; j++) {
                 const line = lines[j]
@@ -1796,7 +1784,6 @@ function addToOutbounds() {
             scrollToLine = insertIndex + 1
           }
         } else {
-          // Создаем новый блок proxy-providers в конце
           if (!updatedContent.endsWith("\n")) updatedContent += "\n"
           const beforeLength = updatedContent.split("\n").length
           updatedContent += "\nproxy-providers:\n" + generatedConfig
