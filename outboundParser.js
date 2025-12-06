@@ -204,7 +204,7 @@ function parseProxyUri(uri) {
     case "hysteria2":
       return parseHysteria2Uri(uri)
     default:
-      throw new Error(`Протокол ${type} не поддерживается`)
+      throw new Error(`Некорректная ссылка`)
   }
 }
 
@@ -372,6 +372,9 @@ function generateConfigForCore(uri, core = "xray", existingConfig = "") {
         content: generateProxyProviderYaml(uri, existingConfig),
       }
     } else {
+      if (uri.includes("type=xhttp")) {
+        throw new Error("Транспорт XHTTP не поддерживается")
+      }
       const xrayConfig = parseProxyUri(uri)
       if (xrayConfig.tag === "PROXY") {
         xrayConfig.tag = generateUniqueProxyName(existingConfig)
@@ -383,7 +386,11 @@ function generateConfigForCore(uri, core = "xray", existingConfig = "") {
     }
   } else {
     if (isHttpSubscription) {
-      throw new Error("HTTP подписки не поддерживаются для Xray. Используйте прокси URI.")
+      throw new Error("Подписки не поддерживаются для Xray. Используйте прокси URI.")
+    }
+
+    if (uri.startsWith("hysteria2://")) {
+      throw new Error("Протокол Hysteria2 не поддерживается Xray")
     }
 
     const config = parseProxyUri(uri)

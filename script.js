@@ -1632,7 +1632,7 @@ function closeImportModal() {
 function generateConfig() {
   const uri = document.getElementById("importInput").value.trim()
   if (!uri) {
-    showToast("Вставь ссылку, чувак", "error")
+    showToast("Поле ввода не может быть пустым", "error")
     return
   }
 
