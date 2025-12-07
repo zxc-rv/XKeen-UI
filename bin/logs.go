@@ -99,7 +99,7 @@ func AdjustTimezone(content string) string {
 		}
 
 		b := make([]byte, 0, len(m))
-		b = t.Add(3 * time.Hour).AppendFormat(b, "02.01.2006 15:04:05")
+		b = t.Add(3 * time.Hour).AppendFormat(b, "2006/01/02 15:04:05.000000")
 		b = append(b, ' ')
 		b = append(b, lvl...)
 		b = append(b, ' ')

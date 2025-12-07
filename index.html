@@ -6,134 +6,124 @@
     <title>XKeen UI</title>
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="apple-touch-icon" href="favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=block" as="style" onload="this.rel='stylesheet'">
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=block" as="style" onload="this.rel='stylesheet'">
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=block" as="style" onload="this.rel='stylesheet'">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=block"
+      as="style"
+      onload="this.rel = 'stylesheet'"
+    />
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=block"
+      as="style"
+      onload="this.rel = 'stylesheet'"
+    />
+    <link
+      rel="preload"
+      href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=block"
+      as="style"
+      onload="this.rel = 'stylesheet'"
+    />
     <link rel="stylesheet" href="style.css" />
   </head>
 
   <body>
     <div class="container">
-      <div class="header">
-        <h1 class="title">XKeen UI</h1>
-      </div>
       <div class="statusBar">
-        <div class="controls-main">
+        <div class="statusBar-left">
           <div class="status" id="statusIndicator">
             <span class="status-indicator"></span>
             <span id="statusText">Проверка статуса...</span>
           </div>
 
-          <div
-            id="controlsSkeletons"
-            class="controls-skeletons"
-            style="display: inline-flex; gap: 12px"
-          >
-            <div class="skeleton skeleton-btn"></div>
-            <div class="skeleton skeleton-btn"></div>
+          <div id="controlsSkeletons" class="controls-skeletons" style="display: inline-flex; gap: 8px">
+            <div class="skeleton skeleton-btn" style="width: 26px; height: 26px"></div>
+            <div class="skeleton skeleton-btn" style="width: 26px; height: 26px"></div>
           </div>
 
           <div class="controls-buttons">
             <button
-              class="btn btn-primary"
+              class="btn btn-primary btn-icon"
               id="restartBtn"
               style="display: none"
               onclick="restartXKeen()"
-            >
-              Перезапустить
-            </button>
+              title="Перезапустить"
+            ></button>
             <button
-              class="btn btn-success"
+              class="btn btn-success btn-icon"
               id="startBtn"
               style="display: none"
               onclick="startXKeen()"
-            >
-              Запустить
-            </button>
+              title="Запустить"
+            ></button>
             <button
-              class="btn btn-danger"
+              class="btn btn-danger btn-icon"
               id="stopBtn"
               style="display: none"
               onclick="stopXKeen()"
-            >
-              Остановить
-            </button>
+              title="Остановить"
+            ></button>
           </div>
         </div>
-        <div
-          id="coreSelectRoot"
-          class="select-root core-select"
-          style="display: none"
-          aria-label="Выбор ядра"
-        >
-          <button
-            id="coreSelectTrigger"
-            class="select-trigger"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-          >
-            <span class="core-icon" aria-hidden="true">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                class="core-icon"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
-                <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
-                <path d="M12 2v2" />
-                <path d="M12 22v-2" />
-                <path d="m17 20.66-1-1.73" />
-                <path d="M11 10.27 7 3.34" />
-                <path d="m20.66 17-1.73-1" />
-                <path d="m3.34 7 1.73 1" />
-                <path d="M14 12h8" />
-                <path d="M2 12h2" />
-                <path d="m20.66 7-1.73 1" />
-                <path d="m3.34 17 1.73-1" />
-                <path d="m17 3.34-1 1.73" />
-                <path d="m11 13.73-4 6.93" />
-              </svg>
-            </span>
 
-            <span class="label" id="coreSelectLabel">xray</span>
-            <svg
-              class="chevron"
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="lucide lucide-chevrons-up-down ml-2 h-4 w-4 shrink-0 opacity-50"
-              aria-hidden="true"
-            >
-              <path d="m7 15 5 5 5-5"></path>
-              <path d="m7 9 5-5 5 5"></path>
-            </svg>
-          </button>
-          <div id="coreSelectContent" class="select-content">
-            <div
-              class="select-item"
-              role="option"
-              data-value="xray"
-              aria-selected="false"
-            >
-              xray <span class="check">✓</span>
-            </div>
-            <div
-              class="select-item"
-              role="option"
-              data-value="mihomo"
-              aria-selected="false"
-            >
-              mihomo <span class="check">✓</span>
+        <h1 class="title">XKeen UI</h1>
+
+        <div class="statusBar-right">
+          <div id="coreSelectRoot" class="select-root core-select" style="display: none" aria-label="Выбор ядра">
+            <button id="coreSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="core-icon" aria-hidden="true">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  class="core-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
+                  <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+                  <path d="M12 2v2" />
+                  <path d="M12 22v-2" />
+                  <path d="m17 20.66-1-1.73" />
+                  <path d="M11 10.27 7 3.34" />
+                  <path d="m20.66 17-1.73-1" />
+                  <path d="m3.34 7 1.73 1" />
+                  <path d="M14 12h8" />
+                  <path d="M2 12h2" />
+                  <path d="m20.66 7-1.73 1" />
+                  <path d="m3.34 17 1.73-1" />
+                  <path d="m17 3.34-1 1.73" />
+                  <path d="m11 13.73-4 6.93" />
+                </svg>
+              </span>
+
+              <span class="label" id="coreSelectLabel">xray</span>
+              <svg
+                class="chevron"
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-chevrons-up-down ml-2 h-4 w-4 shrink-0 opacity-50"
+                aria-hidden="true"
+              >
+                <path d="m7 15 5 5 5-5"></path>
+                <path d="m7 9 5-5 5 5"></path>
+              </svg>
+            </button>
+            <div id="coreSelectContent" class="select-content">
+              <div class="select-item" role="option" data-value="xray" aria-selected="false">
+                xray <span class="check">✓</span>
+              </div>
+              <div class="select-item" role="option" data-value="mihomo" aria-selected="false">
+                mihomo <span class="check">✓</span>
+              </div>
             </div>
           </div>
         </div>
@@ -143,27 +133,15 @@
         <div class="panel-header-config">
           <div class="panel-title-container">
             <h2 class="panel-title">Конфигурация</h2>
-            <a
-              id="dashboardLink"
-              href="#"
-              target="_blank"
-              style="display: none"
-            >
+            <a id="dashboardLink" href="#" target="_blank" style="display: none">
               <span class="text">Dashboard</span>
-              <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20.2929 9.70708C20.5789 9.99307 21.009 10.0786 21.3827 9.92385C21.7564 9.76907 22 9.40443 22 8.99997V2.99997C22 2.44768 21.5523 1.99997 21 1.99997H15C14.5955 1.99997 14.2309 2.24361 14.0761 2.61729C13.9213 2.99096 14.0069 3.42108 14.2929 3.70708L16.2322 5.64641L9.58574 12.2929C9.19522 12.6834 9.19522 13.3166 9.58574 13.7071L10.2928 14.4142C10.6834 14.8048 11.3165 14.8048 11.7071 14.4142L18.3536 7.76774L20.2929 9.70708Z"/>
-                <path d="M4.5 8.00006C4.5 7.72392 4.72386 7.50006 5 7.50006H10.0625C10.6148 7.50006 11.0625 7.05234 11.0625 6.50006V5.50006C11.0625 4.94777 10.6148 4.50006 10.0625 4.50006H5C3.067 4.50006 1.5 6.06706 1.5 8.00006V19.0001C1.5 20.9331 3.067 22.5001 5 22.5001H16C17.933 22.5001 19.5 20.9331 19.5 19.0001V13.9376C19.5 13.3853 19.0523 12.9376 18.5 12.9376H17.5C16.9477 12.9376 16.5 13.3853 16.5 13.9376V19.0001C16.5 19.2762 16.2761 19.5001 16 19.5001H5C4.72386 19.5001 4.5 19.2762 4.5 19.0001V8.00006Z"/>
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                 <path
-                  fill="currentColor"
-                  d="M15 2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 1 1-2 0V4.41l-4.3 4.3a1 1 0 1 1-1.4-1.42L19.58 3H16a1 1 0 0 1-1-1Z"
-                  class=""
-                ></path>
+                  d="M20.2929 9.70708C20.5789 9.99307 21.009 10.0786 21.3827 9.92385C21.7564 9.76907 22 9.40443 22 8.99997V2.99997C22 2.44768 21.5523 1.99997 21 1.99997H15C14.5955 1.99997 14.2309 2.24361 14.0761 2.61729C13.9213 2.99096 14.0069 3.42108 14.2929 3.70708L16.2322 5.64641L9.58574 12.2929C9.19522 12.6834 9.19522 13.3166 9.58574 13.7071L10.2928 14.4142C10.6834 14.8048 11.3165 14.8048 11.7071 14.4142L18.3536 7.76774L20.2929 9.70708Z"
+                />
                 <path
-                  fill="currentColor"
-                  d="M5 2a3 3 0 0 0-3 3v14a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-6a1 1 0 1 0-2 0v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h6a1 1 0 1 0 0-2H5Z"
-                  class=""
-                ></path>
+                  d="M4.5 8.00006C4.5 7.72392 4.72386 7.50006 5 7.50006H10.0625C10.6148 7.50006 11.0625 7.05234 11.0625 6.50006V5.50006C11.0625 4.94777 10.6148 4.50006 10.0625 4.50006H5C3.067 4.50006 1.5 6.06706 1.5 8.00006V19.0001C1.5 20.9331 3.067 22.5001 5 22.5001H16C17.933 22.5001 19.5 20.9331 19.5 19.0001V13.9376C19.5 13.3853 19.0523 12.9376 18.5 12.9376H17.5C16.9477 12.9376 16.5 13.3853 16.5 13.9376V19.0001C16.5 19.2762 16.2761 19.5001 16 19.5001H5C4.72386 19.5001 4.5 19.2762 4.5 19.0001V8.00006Z"
+                />
               </svg>
             </a>
           </div>
@@ -188,50 +166,49 @@
           <div id="validationSkeleton" class="skeleton skeleton-line"></div>
           <div class="editor-controls" id="editorControlsContainer">
             <div id="editorControlsSkeletons" class="controls-skeletons">
-              <div
-                id="saveRestartBtn-skeleton"
-                class="skeleton skeleton-btn"
-                style="width: 164px"
-              ></div>
-              <div
-                id="saveBtn-skeleton"
-                class="skeleton skeleton-btn"
-                style="width: 125px"
-              ></div>
-              <div
-                id="formatBtn-skeleton"
-                class="skeleton skeleton-btn"
-                style="width: 106px"
-              ></div>
+              <div id="saveRestartBtn-skeleton" class="skeleton skeleton-btn" style="width: 164px"></div>
+              <div id="saveBtn-skeleton" class="skeleton skeleton-btn" style="width: 125px"></div>
+              <div id="formatBtn-skeleton" class="skeleton skeleton-btn" style="width: 106px"></div>
             </div>
-            <button
-              class="btn btn-success"
-              id="saveRestartBtn"
-              onclick="saveAndRestart()"
-              disabled
-            >
+            <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>
               Сохр. и перезап.
             </button>
-            <button
-              class="btn btn-primary"
-              id="saveBtn"
-              onclick="saveCurrentConfig()"
-            >
-              Сохранить
-            </button>
+            <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()">Сохранить</button>
             <div class="btn-group">
-              <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">
-                Формат
-              </button>
-              <button id="formatDropdownBtn" class="btn btn-secondary btn-dropdown" onclick="toggleFormatMenu(event)" disabled>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">Формат</button>
+              <button
+                id="formatDropdownBtn"
+                class="btn btn-secondary btn-dropdown"
+                onclick="toggleFormatMenu(event)"
+                disabled
+                style="display: none"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <line x1="4" y1="6" x2="20" y2="6"></line>
                   <line x1="4" y1="12" x2="20" y2="12"></line>
                   <line x1="4" y1="18" x2="20" y2="18"></line>
                 </svg>
               </button>
               <div id="formatMenu" class="format-menu">
-                <div class="format-menu-item" onclick="openImportModal(); toggleFormatMenu()">Импорт подключения</div>
+                <div
+                  class="format-menu-item"
+                  onclick="
+                    openImportModal()
+                    toggleFormatMenu()
+                  "
+                >
+                  Импорт подключения
+                </div>
               </div>
             </div>
           </div>
@@ -250,32 +227,14 @@
                 placeholder="Фильтр"
                 aria-label="Фильтр строк журнала"
               />
-              <button
-                class="log-filter-clear"
-                id="logFilterClear"
-                aria-label="Очистить"
-              ></button>
+              <button class="log-filter-clear" id="logFilterClear" aria-label="Очистить"></button>
             </div>
 
             <div class="log-controls">
-              <div
-                id="logSelectRoot"
-                class="select-root"
-                aria-label="Выбор файла логов"
-              >
-                <button
-                  id="logSelectTrigger"
-                  class="select-trigger"
-                  aria-haspopup="listbox"
-                  aria-expanded="false"
-                >
+              <div id="logSelectRoot" class="select-root" aria-label="Выбор файла логов">
+                <button id="logSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
                   <span class="label" id="logSelectLabel">error.log</span>
-                  <svg
-                    class="chevron"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
+                  <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path
                       d="M6 9l6 6 6-6"
                       stroke="currentColor"
@@ -286,20 +245,10 @@
                   </svg>
                 </button>
                 <div id="logSelectContent" class="select-content">
-                  <div
-                    class="select-item"
-                    role="option"
-                    data-value="error.log"
-                    aria-selected="true"
-                  >
+                  <div class="select-item" role="option" data-value="error.log" aria-selected="true">
                     error.log <span class="check">✓</span>
                   </div>
-                  <div
-                    class="select-item"
-                    role="option"
-                    data-value="access.log"
-                    aria-selected="false"
-                  >
+                  <div class="select-item" role="option" data-value="access.log" aria-selected="false">
                     access.log <span class="check">✓</span>
                   </div>
                 </div>
@@ -327,9 +276,7 @@
                   <path d="M4 7l16 0"></path>
                   <path d="M10 11l0 6"></path>
                   <path d="M14 11l0 6"></path>
-                  <path
-                    d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"
-                  ></path>
+                  <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"></path>
                   <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"></path>
                 </svg>
               </button>
@@ -361,44 +308,18 @@
           Сохранить их перед выходом?
         </p>
         <div class="modal-actions">
-          <button
-            class="btn btn-primary"
-            id="saveAndSwitchBtn"
-            onclick="saveAndSwitch()"
-          >
-            Сохранить
-          </button>
-          <button
-            class="btn btn-secondary"
-            id="cancelSwitchBtn"
-            onclick="closeDirtyModal()"
-          >
-            Отмена
-          </button>
+          <button class="btn btn-primary" id="saveAndSwitchBtn" onclick="saveAndSwitch()">Сохранить</button>
+          <button class="btn btn-secondary" id="cancelSwitchBtn" onclick="closeDirtyModal()">Отмена</button>
         </div>
       </div>
     </div>
     <div class="modal-overlay" id="coreModal">
       <div class="modal-content">
         <h3 class="modal-title">Смена ядра</h3>
-        <p class="modal-body">
-          Сменить ядро на <span id="selectedCore">xray</span>?
-        </p>
+        <p class="modal-body">Сменить ядро на <span id="selectedCore">xray</span>?</p>
         <div class="modal-actions">
-          <button
-            class="btn btn-primary"
-            id="confirmCoreBtn"
-            onclick="confirmCoreChange()"
-          >
-            Да
-          </button>
-          <button
-            class="btn btn-secondary"
-            id="cancelCoreBtn"
-            onclick="closeCoreModal()"
-          >
-            Отмена
-          </button>
+          <button class="btn btn-primary" id="confirmCoreBtn" onclick="confirmCoreChange()">Да</button>
+          <button class="btn btn-secondary" id="cancelCoreBtn" onclick="closeCoreModal()">Отмена</button>
         </div>
       </div>
     </div>
@@ -410,10 +331,16 @@
       <div class="modal-content">
         <h3 class="modal-title">Импорт ссылки</h3>
         <div class="modal-body">
-          <input type="text" id="importInput" class="input" placeholder="vless://...">
-          <div id="importResult" style="display: none;">
+          <input type="text" id="importInput" class="input" placeholder="vless://..." />
+          <div id="importResult" style="display: none">
             <div class="output-wrapper">
-              <button class="copy-output-btn" id="copyBtn" onclick="copyImportResult()" title="Скопировать" style="display: none;">
+              <button
+                class="copy-output-btn"
+                id="copyBtn"
+                onclick="copyImportResult()"
+                title="Скопировать"
+                style="display: none"
+              >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -425,11 +352,13 @@
         </div>
         <div class="modal-actions">
           <button class="btn btn-primary" id="generateBtn" onclick="generateConfig()">Сгенерировать</button>
-          <button class="btn btn-success" id="addBtn" onclick="addToOutbounds()" style="display: none;">Добавить</button>
+          <button class="btn btn-success" id="addBtn" onclick="addToOutbounds()" style="display: none">Добавить</button>
           <button class="btn btn-secondary" onclick="closeImportModal()">Закрыть</button>
         </div>
       </div>
     </div>
-    <a href="https://github.com/zxc-rv/XKeen-UI/releases" target="_blank" class="app-version" id="appVersion">v<span id="versionText">dev</span></a>
+    <a href="https://github.com/zxc-rv/XKeen-UI/releases" target="_blank" class="app-version" id="appVersion"
+      >v<span id="versionText">dev</span></a
+    >
   </body>
 </html>
