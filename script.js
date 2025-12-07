@@ -1630,6 +1630,175 @@ function toggleFormatMenu(e) {
   document.getElementById("formatMenu").classList.toggle("show")
 }
 
+// Шаблоны конфигов для разных ядер
+const configTemplates = {
+  xray: [
+    {
+      name: "01_log.json",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/01_log.json",
+    },
+    {
+      name: "03_inbounds.json (Режим Mixed)",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/03_inbounds_mixed.json",
+    },
+    {
+      name: "03_inbounds.json (Режим Tproxy)",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/03_inbounds_tproxy.json",
+    },
+    {
+      name: "04_outbounds.json",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/04_outbounds.json",
+    },
+    {
+      name: "05_routing.json (только заблокированное, zkeen)",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/05_routing_1.json",
+    },
+    {
+      name: "05_routing.json (все кроме RU)",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/05_routing_2.json",
+    },
+    {
+      name: "06_policy.json",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/06_policy.json",
+    },
+  ],
+  mihomo: [
+    {
+      name: "config.yaml",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config.yaml",
+    },
+  ],
+}
+
+let selectedTemplateUrl = null
+
+function openTemplateImportModal() {
+  const modal = document.getElementById("templateImportModal")
+  const templateList = document.getElementById("templateList")
+  const importBtn = document.getElementById("importTemplateBtn")
+  const description = document.getElementById("templateModalDescription")
+  const countBadge = document.getElementById("templateCountBadge")
+
+  selectedTemplateUrl = null
+  importBtn.disabled = true
+
+  const templates = configTemplates[currentCore] || []
+
+  if (countBadge) {
+    countBadge.textContent = templates.length
+  }
+
+  const coreLabel = currentCore === "xray" ? "Xray" : "Mihomo"
+  description.innerHTML = `Выберите готовый шаблон конфигурации для <span style="color: #3b82f6; font-weight: 600;">${coreLabel}</span>`
+
+  if (templates.length === 0) {
+    templateList.innerHTML = `
+      <div class="template-list-empty">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"></path>
+          <polyline points="13 2 13 9 20 9"></polyline>
+        </svg>
+        <p>Нет доступных шаблонов для текущего ядра</p>
+      </div>
+    `
+    modal.classList.add("show")
+    return
+  }
+
+  templateList.innerHTML = templates
+    .map(
+      (template, index) => `
+    <div class="template-item" onclick="selectTemplate('${template.url}', ${index})">
+      <span class="template-label">${template.name}</span>
+    </div>
+  `,
+    )
+    .join("")
+
+  modal.classList.add("show")
+
+  if (templates.length > 0) {
+    setTimeout(() => selectTemplate(templates[0].url, 0), 0)
+  }
+}
+
+function closeTemplateImportModal() {
+  const modal = document.getElementById("templateImportModal")
+  modal.classList.remove("show")
+  selectedTemplateUrl = null
+}
+
+function selectTemplate(url, index) {
+  selectedTemplateUrl = url
+  const importBtn = document.getElementById("importTemplateBtn")
+  importBtn.disabled = false
+
+  const items = document.querySelectorAll(".template-item")
+  items.forEach((item, i) => {
+    if (i === index) {
+      item.classList.add("selected")
+    } else {
+      item.classList.remove("selected")
+    }
+  })
+}
+
+async function importSelectedTemplate() {
+  if (!selectedTemplateUrl) {
+    showToast("Выберите шаблон для импорта", "error")
+    return
+  }
+
+  const currentConfig = configs[activeConfigIndex]
+  if (currentConfig && currentConfig.isDirty) {
+    const confirmed = confirm(
+      "Внимание! Текущий файл содержит несохраненные изменения.\n\n" +
+        "При импорте шаблона все текущее содержимое файла будет заменено.\n\n" +
+        "Продолжить импорт?",
+    )
+    if (!confirmed) {
+      return
+    }
+  }
+
+  const importBtn = document.getElementById("importTemplateBtn")
+  importBtn.disabled = true
+  importBtn.textContent = "Загрузка..."
+
+  try {
+    const response = await fetch(selectedTemplateUrl)
+    if (!response.ok) {
+      throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`)
+    }
+
+    const templateContent = await response.text()
+
+    if (monacoEditor) {
+      monacoEditor.setValue(templateContent)
+
+      if (configs[activeConfigIndex]) {
+        configs[activeConfigIndex].content = templateContent
+        configs[activeConfigIndex].isDirty = true
+        configs[activeConfigIndex].isValid = true
+      }
+
+      updateUIDirtyState()
+      renderTabs()
+
+      showToast("Шаблон успешно импортирован", "success")
+      closeTemplateImportModal()
+    } else {
+      throw new Error("Редактор не инициализирован")
+    }
+  } catch (error) {
+    console.error("Ошибка импорта шаблона:", error)
+    showToast(`Ошибка импорта шаблона: ${error.message}`, "error")
+  } finally {
+    importBtn.disabled = false
+    importBtn.textContent = "Импортировать"
+  }
+}
+
 function openImportModal() {
   const modal = document.getElementById("importModal")
   modal.classList.add("show")
@@ -1857,6 +2026,15 @@ document.addEventListener("click", (e) => {
   if (menu && !e.target.closest(".btn-group")) {
     menu.classList.remove("show")
   }
+
+  // Закрытие модального окна шаблонов по клику вне его
+  const templateImportModal = document.getElementById("templateImportModal")
+  if (templateImportModal && templateImportModal.classList.contains("show")) {
+    const modalContent = templateImportModal.querySelector(".modal-content")
+    if (!modalContent.contains(e.target)) {
+      closeTemplateImportModal()
+    }
+  }
 })
 
 document.addEventListener("keydown", (e) => {
@@ -1864,12 +2042,16 @@ document.addEventListener("keydown", (e) => {
     const dirtyModal = document.getElementById("dirtyModal")
     const coreModal = document.getElementById("coreModal")
     const importModal = document.getElementById("importModal")
+    const templateImportModal = document.getElementById("templateImportModal")
 
     if (dirtyModal && dirtyModal.classList.contains("show")) {
       closeDirtyModal()
       e.preventDefault()
     } else if (coreModal && coreModal.classList.contains("show")) {
       closeCoreModal()
+      e.preventDefault()
+    } else if (templateImportModal && templateImportModal.classList.contains("show")) {
+      closeTemplateImportModal()
       e.preventDefault()
     } else if (importModal && importModal.classList.contains("show")) {
       closeImportModal()
@@ -1880,6 +2062,7 @@ document.addEventListener("keydown", (e) => {
     const dirtyModal = document.getElementById("dirtyModal")
     const coreModal = document.getElementById("coreModal")
     const importModal = document.getElementById("importModal")
+    const templateImportModal = document.getElementById("templateImportModal")
 
     if (dirtyModal && dirtyModal.classList.contains("show")) {
       saveAndSwitch()
@@ -1887,6 +2070,11 @@ document.addEventListener("keydown", (e) => {
     } else if (coreModal && coreModal.classList.contains("show")) {
       confirmCoreChange()
       e.preventDefault()
+    } else if (templateImportModal && templateImportModal.classList.contains("show")) {
+      if (selectedTemplateUrl) {
+        importSelectedTemplate()
+        e.preventDefault()
+      }
     } else if (importModal && importModal.classList.contains("show")) {
       const importInput = document.getElementById("importInput")
       if (importInput.value.trim()) {

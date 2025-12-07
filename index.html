@@ -209,6 +209,16 @@
                 >
                   Импорт подключения
                 </div>
+                <div
+                  class="format-menu-item"
+                  onclick="
+                    event.stopPropagation()
+                    openTemplateImportModal()
+                    toggleFormatMenu()
+                  "
+                >
+                  Импорт шаблона
+                </div>
               </div>
             </div>
           </div>
@@ -329,7 +339,25 @@
     <script src="version.js"></script>
     <div class="modal-overlay" id="importModal">
       <div class="modal-content">
-        <h3 class="modal-title">Импорт ссылки</h3>
+        <h3 class="modal-title">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="display: inline-block; vertical-align: middle; margin-right: 10px; margin-top: -2px"
+          >
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+          Импорт подключения
+        </h3>
+        <p class="modal-description">Вставьте ссылку в формате protocol://</p>
         <div class="modal-body">
           <input type="text" id="importInput" class="input" placeholder="vless://..." />
           <div id="importResult" style="display: none">
@@ -354,6 +382,45 @@
           <button class="btn btn-primary" id="generateBtn" onclick="generateConfig()">Сгенерировать</button>
           <button class="btn btn-success" id="addBtn" onclick="addToOutbounds()" style="display: none">Добавить</button>
           <button class="btn btn-secondary" onclick="closeImportModal()">Закрыть</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-overlay" id="templateImportModal">
+      <div class="modal-content">
+        <h3 class="modal-title">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="display: inline-block; vertical-align: middle; margin-right: 10px; margin-top: -2px"
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="12" y1="18" x2="12" y2="12"></line>
+            <line x1="9" y1="15" x2="15" y2="15"></line>
+          </svg>
+          Импорт шаблона
+          <span class="template-count-badge" id="templateCountBadge">0</span>
+        </h3>
+        <p class="modal-description" id="templateModalDescription">
+          Выберите готовый шаблон конфигурации для быстрой настройки
+        </p>
+        <div class="modal-body">
+          <div id="templateList" class="template-list">
+            <!-- Шаблоны будут загружены динамически -->
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="importTemplateBtn" onclick="importSelectedTemplate()" disabled>
+            Импортировать
+          </button>
+          <button class="btn btn-secondary" onclick="closeTemplateImportModal()">Закрыть</button>
         </div>
       </div>
     </div>
