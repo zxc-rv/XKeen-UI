@@ -213,10 +213,18 @@ function parseLogLine(line) {
     .replace(/\u001b\[33m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.warning};">$1</span>`)
     .replace(/\u001b\[34m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.info};">$1</span>`)
     .replace(/\u001b\[\d+m/g, "")
-    .replace(/\[Info\]/g, `<span style="color: ${COLORS.info};">[INFO]</span>`)
-    .replace(/\[Warning\]/g, `<span style="color: ${COLORS.warning};">[WARN]</span>`)
-    .replace(/\[Error\]/g, `<span style="color: ${COLORS.error};">[ERRO]</span>`)
-    .replace(/\[Fatal\]/g, `<span style="color: ${COLORS.fatal};">[FATA]</span>`)
+    .replace(/\[Info\]/gi, `<span class="log-badge log-badge-info">INFO</span>`)
+    .replace(/\[INFO\]/g, `<span class="log-badge log-badge-info">INFO</span>`)
+    .replace(/\[Warning\]/gi, `<span class="log-badge log-badge-warn">WARN</span>`)
+    .replace(/\[WARN\]/g, `<span class="log-badge log-badge-warn">WARN</span>`)
+    .replace(/\[Error\]/gi, `<span class="log-badge log-badge-error">ERROR</span>`)
+    .replace(/\[ERROR\]/g, `<span class="log-badge log-badge-error">ERROR</span>`)
+    .replace(/\[Fatal\]/gi, `<span class="log-badge log-badge-fatal">FATAL</span>`)
+    .replace(/\[FATAL\]/g, `<span class="log-badge log-badge-fatal">FATAL</span>`)
+    .replace(/\bINFO\b/g, `<span class="log-badge log-badge-info">INFO</span>`)
+    .replace(/\bWARN\b/g, `<span class="log-badge log-badge-warn">WARN</span>`)
+    .replace(/\bERROR\b/g, `<span class="log-badge log-badge-error">ERROR</span>`)
+    .replace(/\bFATAL\b/g, `<span class="log-badge log-badge-fatal">FATAL</span>`)
 
   return { className, content: processedLine }
 }
@@ -493,7 +501,7 @@ function loadMonacoEditor() {
         { token: "string.yaml", foreground: "#9ece6a" },
       ],
       colors: {
-        "editor.background": "#020817",
+        "editor.background": "#080e1d",
         "editor.foreground": "#c0caf5",
         "editorLineNumber.foreground": "#3b4261",
         "editorLineNumber.activeForeground": "#a9b1d6",
@@ -540,7 +548,7 @@ function loadMonacoEditor() {
       overviewRulerLanes: 0,
       scrollbar: {
         vertical: "visible",
-        horizontal: "visible",
+        horizontal: "hidden",
         useShadows: false,
         verticalHasArrows: false,
         horizontalHasArrows: false,
@@ -561,10 +569,11 @@ function loadMonacoEditor() {
       if (!container || !monacoEditor) return
       if (isMobileViewport()) {
         const contentHeight = Math.max(monacoEditor.getContentHeight ? monacoEditor.getContentHeight() : 0, 200)
-        container.style.height = contentHeight + "px"
+        const maxHeight = 750
+        container.style.height = Math.min(contentHeight, maxHeight) + "px"
         monacoEditor.layout()
       } else {
-        container.style.height = "700px"
+        container.style.height = "750px"
         monacoEditor.layout()
       }
     }
@@ -680,7 +689,6 @@ function updateUIDirtyState() {
     saveBtn.disabled = !hasChanges || !isValid
     formatBtn.disabled = !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid
 
-    // Делаем dropdown кнопку активной/неактивной в зависимости от типа файла
     if (formatDropdownBtn) {
       formatDropdownBtn.disabled = !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid
     }
