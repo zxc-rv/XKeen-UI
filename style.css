@@ -301,8 +301,8 @@ textarea {
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
+
+  padding: 3px 4px 2px 4px;
   border-radius: 9999px;
   white-space: nowrap;
   letter-spacing: 0.5px;
