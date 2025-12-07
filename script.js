@@ -1630,41 +1630,40 @@ function toggleFormatMenu(e) {
   document.getElementById("formatMenu").classList.toggle("show")
 }
 
-// Шаблоны конфигов для разных ядер
 const configTemplates = {
   xray: [
     {
-      name: "01_log.json",
+      name: "Log",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/01_log.json",
     },
     {
-      name: "03_inbounds.json (Режим Mixed)",
+      name: "Inbounds (Режим Mixed)",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/03_inbounds_mixed.json",
     },
     {
-      name: "03_inbounds.json (Режим Tproxy)",
+      name: "Inbounds (Режим TProxy)",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/03_inbounds_tproxy.json",
     },
     {
-      name: "04_outbounds.json",
+      name: "Outbounds",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/04_outbounds.json",
     },
     {
-      name: "05_routing.json (только заблокированное, zkeen)",
+      name: "Routing (только заблокированное, zkeen)",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/05_routing_1.json",
     },
     {
-      name: "05_routing.json (все кроме RU)",
+      name: "Routing (все в прокси, кроме RU)",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/05_routing_2.json",
     },
     {
-      name: "06_policy.json",
+      name: "Policy",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/06_policy.json",
     },
   ],
   mihomo: [
     {
-      name: "config.yaml",
+      name: "Сonfig (только заблокированное, refilter)",
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config.yaml",
     },
   ],
