@@ -1330,13 +1330,13 @@ textarea {
   align-items: center;
   gap: 4px;
   color: hsl(210, 40%, 98%);
-  font-weight: 400;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 11px;
-  background: hsl(217, 91%, 45%);
-  color: hsl(210, 40%, 98%);
+  background: #142337;
+  color: #4fa4f1;
   padding: 0px 9px;
   height: 22px;
   border-radius: 9999px;
@@ -1389,7 +1389,7 @@ textarea {
 }
 
 .btn-group .btn-dropdown {
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 8px 8px 0;
   border-left: unset;
   padding: 0 10px;
   display: flex;
