@@ -65,6 +65,11 @@ textarea {
   position: relative;
 }
 
+#statusText {
+  font-family: JetBrains Mono;
+  font-size: 11px;
+}
+
 .statusBar-left {
   display: flex;
   align-items: center;
@@ -167,7 +172,7 @@ textarea {
 }
 
 .skeleton-btn {
-  height: 35px;
+  height: 36px;
   width: 120px;
   border-radius: 8px;
 }
@@ -242,6 +247,7 @@ textarea {
   background-color: #ffffff;
   border-radius: 50%;
   display: none;
+  margin-top: 2px;
 }
 
 .tab-trigger.dirty .dirty-indicator {
@@ -589,12 +595,12 @@ textarea {
   gap: 8px;
   font-weight: 500;
   font-size: 11px;
-  background: hsl(210, 40%, 96.1%);
-  color: hsl(222.2, 47.4%, 11.2%);
+  background: #1e293b;
+  color: #94a3b8;
   padding: 0px 12px;
   height: 30px;
   border-radius: 8px;
-  border: 1px solid transparent;
+  border: 1px solid #334155;
   white-space: nowrap;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -618,13 +624,13 @@ textarea {
 }
 
 .status-running {
-  background: #112421;
-  color: #34b9a5;
+  background: #19292c;
+  color: #10b981;
   border-color: #195040;
 }
 
 .status-running .status-indicator {
-  background: #34b9a5;
+  background: #10b981;
   box-shadow: 0 0 0 2px rgba(52, 185, 165, 0.2);
   animation: statusPulseGreen 2s ease-in-out infinite;
 }
@@ -888,7 +894,7 @@ textarea {
   margin-left: auto;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 8px;
+  border-radius: 9999px;
   color: #60a5fa;
   font-size: 12px;
   font-weight: 700;
@@ -1324,17 +1330,17 @@ textarea {
   align-items: center;
   gap: 4px;
   color: hsl(210, 40%, 98%);
-  font-weight: 500;
+  font-weight: 400;
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 10px;
-  background: hsl(210, 40%, 96.1%);
-  color: hsl(222.2, 47.4%, 11.2%);
-  padding: 0px 8px;
+  font-size: 11px;
+  background: hsl(217, 91%, 45%);
+  color: hsl(210, 40%, 98%);
+  padding: 0px 9px;
   height: 22px;
   border-radius: 9999px;
-  border: 1px solid transparent;
+  //border: 1px solid hsl(217, 91%, 55%);
   white-space: nowrap;
   margin-top: 3px;
 }
@@ -1344,11 +1350,14 @@ textarea {
   height: 11px;
   flex-shrink: 0;
   opacity: 0.8;
+  margin-bottom: 1px;
+  margin-right: -2px;
 }
 
 #dashboardLink:hover {
-  background: hsl(210, 40%, 92%);
-  color: hsl(222.2, 47.4%, 11.2%);
+  background: hsl(217, 91%, 50%);
+  color: hsl(210, 40%, 98%);
+  border-color: hsl(217, 91%, 60%);
 }
 
 .panel-header-config {
@@ -1403,7 +1412,7 @@ textarea {
   border: 1px solid #1e293b;
   border-radius: 8px;
   margin-bottom: 4px;
-  min-width: 185px;
+  width: max-content;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   opacity: 0;
@@ -1427,12 +1436,27 @@ textarea {
   padding: 10px 16px;
   cursor: pointer;
   color: #e4e4e7;
-  transition: background 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.format-menu-item svg {
+  color: #94a3b8;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .format-menu-item:hover {
   background: #334155;
+  color: #ffffff;
+}
+
+.format-menu-item:hover svg {
+  color: #3b82f6;
+  transform: scale(1.1);
 }
 
 .format-menu-item:first-child:last-child {
@@ -1718,8 +1742,10 @@ textarea {
   }
 
   .statusBar-left {
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     width: 100%;
   }
@@ -1745,27 +1771,24 @@ textarea {
 
   .controls-buttons {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     justify-content: center;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
   }
 
   .btn-icon {
     width: 28px;
     height: 28px;
     min-width: 28px;
+    flex-shrink: 0;
   }
 
   .core-select {
     margin-left: 0;
     align-self: center;
-  }
-
-  .controls-buttons {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    width: 100%;
-    align-self: center;
+    flex-shrink: 1;
+    min-width: 0;
   }
 
   .controls-skeletons {
