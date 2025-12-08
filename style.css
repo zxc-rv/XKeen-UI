@@ -169,12 +169,12 @@ textarea {
 .skeleton-btn {
   height: 35px;
   width: 120px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .skeleton-line {
   margin-top: 10px;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #1e293b;
   max-width: 120px;
 }
@@ -269,7 +269,7 @@ textarea {
   height: 200px;
   background: var(--field-backgound);
   border: 1px solid #1e293b;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 12px;
   overflow-y: auto;
   font-family:
@@ -301,7 +301,7 @@ textarea {
   align-items: center;
   justify-content: center;
   font-size: 10px;
-
+  font-weight: 600;
   padding: 3px 4px 2px 4px;
   border-radius: 9999px;
   white-space: nowrap;
@@ -428,7 +428,7 @@ textarea {
   gap: 8px;
   width: 100%;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #e4e4e7;
   font-size: 13px;
   cursor: pointer;
@@ -592,8 +592,8 @@ textarea {
   background: hsl(210, 40%, 96.1%);
   color: hsl(222.2, 47.4%, 11.2%);
   padding: 0px 12px;
-  height: 26px;
-  border-radius: 9999px;
+  height: 30px;
+  border-radius: 8px;
   border: 1px solid transparent;
   white-space: nowrap;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -845,9 +845,9 @@ textarea {
   backdrop-filter: blur(20px);
   border: 1px solid rgba(59, 130, 246, 0.2);
   border-radius: 12px;
-  padding: 28px;
+  padding: 24px;
   width: fit-content;
-  min-width: 480px;
+  min-width: 460px;
   max-width: 90vw;
   display: inline-block;
   box-shadow:
@@ -888,7 +888,7 @@ textarea {
   margin-left: auto;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
   border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 6px;
+  border-radius: 8px;
   color: #60a5fa;
   font-size: 12px;
   font-weight: 700;
@@ -1070,8 +1070,8 @@ textarea {
 }
 
 .btn-icon {
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   min-width: 26px;
   padding: 0;
   display: inline-flex;
@@ -1079,7 +1079,7 @@ textarea {
   justify-content: center;
   position: relative;
   flex-shrink: 0;
-  border-radius: 9999px;
+  border-radius: 8px;
 }
 
 .btn-icon::before {
@@ -1109,7 +1109,7 @@ textarea {
 #formatBtn::before {
   content: "";
   position: absolute;
-  top: 50%;
+  top: 52%;
   transform: translateY(-50%);
   width: 16px;
   height: 16px;
@@ -1152,10 +1152,6 @@ textarea {
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 1 24 24'><path stroke='black' stroke-width='2' fill='none' d='M18 16l4-4-4-4'/><path stroke='black' stroke-width='2' fill='none' d='M6 8l-4 4 4 4'/><path stroke='black' stroke-width='2' fill='none' d='M14.5 4l-5 16'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 1 24 24'><path stroke='black' stroke-width='2' fill='none' d='M18 16l4-4-4-4'/><path stroke='black' stroke-width='2' fill='none' d='M6 8l-4 4 4 4'/><path stroke='black' stroke-width='2' fill='none' d='M14.5 4l-5 16'/></svg>");
 }
-
-
-
-
 
 #startBtn::before {
   content: "";
@@ -1269,7 +1265,7 @@ textarea {
   content: "";
   position: absolute;
   left: 10px;
-  top: 50%;
+  top: 52%;
   transform: translateY(calc(-50% + 1px));
   width: 14px;
   height: 14px;
@@ -1380,7 +1376,7 @@ textarea {
 }
 
 .btn-group .btn:first-child {
-  border-radius: 6px 0 0 6px;
+  border-radius: 8px 0 0 8px;
 }
 
 .btn-group .btn-dropdown {
@@ -1405,9 +1401,9 @@ textarea {
   right: 0;
   background: var(--field-backgound);
   border: 1px solid #1e293b;
-  border-radius: 6px;
+  border-radius: 8px;
   margin-bottom: 4px;
-  min-width: 200px;
+  min-width: 185px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   opacity: 0;
@@ -1440,15 +1436,15 @@ textarea {
 }
 
 .format-menu-item:first-child:last-child {
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .format-menu-item:first-child:not(:last-child) {
-  border-radius: 6px 6px 0 0;
+  border-radius: 8px 8px 0 0;
 }
 
 .format-menu-item:last-child:not(:first-child) {
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 8px 8px;
 }
 
 #importInput {
@@ -1474,10 +1470,6 @@ textarea {
   background-color: #1e293b;
 }
 
-#importInput:focus {
-  box-shadow: 0 0 0 2px #363c4d;
-}
-
 #importInput::placeholder {
   color: #6b7280;
   font-size: 14px;
@@ -1487,10 +1479,10 @@ textarea {
   width: 100%;
   min-height: 300px;
   max-height: 70vh;
-  background: #0f172a;
+  background: #080e1d;
   color: #c0caf5;
   border: 1px solid #1e293b;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 12px;
   font-family: "JetBrains Mono", monospace;
   font-size: 13px;
@@ -1501,10 +1493,6 @@ textarea {
   line-height: 1.5;
   outline: none;
   transition: box-shadow 0.15s ease;
-}
-
-#importOutput:focus {
-  box-shadow: 0 0 0 2px #363c4d;
 }
 
 #importResult {
@@ -1522,7 +1510,7 @@ textarea {
   z-index: 10;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 6px;
   color: #64748b;
   cursor: pointer;
@@ -1963,7 +1951,7 @@ textarea {
   background: rgba(2, 8, 23, 0.8);
   backdrop-filter: blur(8px);
   padding: 6px 12px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid #1e293b;
   font-family: "JetBrains Mono", monospace;
   user-select: none;
