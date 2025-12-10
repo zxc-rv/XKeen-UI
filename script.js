@@ -1664,7 +1664,7 @@ const configTemplates = {
   mihomo: [
     {
       name: "Сonfig (только заблокированное, refilter)",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config.yaml",
+      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/mihomo/config.yaml",
     },
   ],
 }
@@ -1932,33 +1932,34 @@ function addToOutbounds() {
       let scrollToLine = -1
 
       if (resultType === "proxy-provider") {
-        if (updatedContent.includes("proxy-providers:")) {
-          const lines = updatedContent.split("\n")
-          let insertIndex = -1
-          let indent = 0
+        const lines = updatedContent.split("\n")
+        let insertIndex = -1
+        let indent = 0
+        let foundProxyProviders = false
 
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].match(/^proxy-providers:\s*($|#)/)) {
-              indent = lines[i].search(/\S/)
-              for (let j = i + 1; j < lines.length; j++) {
-                const line = lines[j]
-                if (line.trim() === "") continue
-                const lineIndent = line.search(/\S/)
-                if (lineIndent !== -1 && lineIndent <= indent && !line.trim().startsWith("#")) {
-                  insertIndex = j
-                  break
-                }
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].trim().startsWith("#")) continue
+          if (lines[i].match(/^proxy-providers:\s*($|#)/)) {
+            foundProxyProviders = true
+            indent = lines[i].search(/\S/)
+            for (let j = i + 1; j < lines.length; j++) {
+              const line = lines[j]
+              if (line.trim() === "") continue
+              const lineIndent = line.search(/\S/)
+              if (lineIndent !== -1 && lineIndent <= indent && !line.trim().startsWith("#")) {
+                insertIndex = j
+                break
               }
-              if (insertIndex === -1) insertIndex = lines.length
-              break
             }
+            if (insertIndex === -1) insertIndex = lines.length
+            break
           }
+        }
 
-          if (insertIndex !== -1) {
-            lines.splice(insertIndex, 0, generatedConfig)
-            updatedContent = lines.join("\n")
-            scrollToLine = insertIndex + 1
-          }
+        if (foundProxyProviders && insertIndex !== -1) {
+          lines.splice(insertIndex, 0, generatedConfig)
+          updatedContent = lines.join("\n")
+          scrollToLine = insertIndex + 1
         } else {
           if (!updatedContent.endsWith("\n")) updatedContent += "\n"
           const beforeLength = updatedContent.split("\n").length
@@ -1971,9 +1972,13 @@ function addToOutbounds() {
         const lines = updatedContent.split("\n")
         let insertIndex = -1
         let indent = 0
+        let foundProxies = false
+
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i]
+          if (line.trim().startsWith("#")) continue
           if (line.match(/^proxies:\s*($|#|\[)/)) {
+            foundProxies = true
             indent = line.search(/\S/)
             for (let j = i + 1; j < lines.length; j++) {
               const nextLine = lines[j]
@@ -1989,7 +1994,7 @@ function addToOutbounds() {
           }
         }
 
-        if (insertIndex !== -1) {
+        if (foundProxies && insertIndex !== -1) {
           lines.splice(insertIndex, 0, generatedConfig)
           updatedContent = lines.join("\n")
           scrollToLine = insertIndex + 1
@@ -2026,7 +2031,6 @@ document.addEventListener("click", (e) => {
     menu.classList.remove("show")
   }
 
-  // Закрытие модального окна шаблонов по клику вне его
   const templateImportModal = document.getElementById("templateImportModal")
   if (templateImportModal && templateImportModal.classList.contains("show")) {
     const modalContent = templateImportModal.querySelector(".modal-content")

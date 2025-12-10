@@ -607,45 +607,21 @@ textarea {
   overflow: hidden;
 }
 
-.status::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  transform: translateX(-100%);
-}
-
-.status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  position: relative;
-}
-
 .status-running {
-  background: #19292c;
+  background: linear-gradient(#19292c, #19292c) padding-box,
+              linear-gradient(90deg,
+                #195040 0%,
+                #195040 30%,
+                #34d399 50%,
+                #195040 70%,
+                #195040 100%
+              ) border-box;
+
   color: #10b981;
-  border-color: #195040;
-}
+  border: 1px solid transparent;
 
-.status-running .status-indicator {
-  background: #10b981;
-  box-shadow: 0 0 0 2px rgba(52, 185, 165, 0.2);
-  animation: statusPulseGreen 2s ease-in-out infinite;
-}
-
-.status-running::before {
-  animation: shimmer 3s ease-in-out infinite;
-}
-
-@keyframes statusPulseGreen {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(52, 185, 165, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgba(52, 185, 165, 0);
-  }
+  background-size: 200% 100%;
+  animation: borderFlow 2s linear infinite;
 }
 
 .status-stopped {
@@ -654,67 +630,28 @@ textarea {
   border-color: #4a1f24;
 }
 
-.status-stopped .status-indicator {
-  background: #ef4444;
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
-}
-
 .status-pending {
-  background: #2a1f0d;
+  background: linear-gradient(#2a1f0d, #2a1f0d) padding-box,
+              linear-gradient(90deg,
+                #4a3615 0%,
+                #4a3615 30%,
+                #fbbf24 50%,
+                #4a3615 70%,
+                #4a3615 100%
+              ) border-box;
+
   color: #f59e0b;
-  border-color: #4a3615;
+  border: 1px solid transparent;
+  background-size: 200% 100%;
+  animation: borderFlow 2s linear infinite;
 }
 
-.status-pending .status-indicator {
-  background: #f59e0b;
-  animation: statusBlink 1.5s ease-in-out infinite;
-}
-
-.status-pending::before {
-  animation: shimmer 2s ease-in-out infinite;
-}
-
-@keyframes statusBlink {
-  0%, 100% {
-    opacity: 1;
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
-  }
-  50% {
-    opacity: 0.4;
-    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
-  }
-}
-
-@keyframes shimmer {
+@keyframes borderFlow {
   0% {
-    transform: translateX(-100%);
+    background-position: 100% 0;
   }
   100% {
-    transform: translateX(200%);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.5;
-  }
-}
-
-@keyframes badgePulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 0.85;
-    transform: scale(0.98);
+    background-position: -100% 0;
   }
 }
 
@@ -1340,7 +1277,6 @@ textarea {
   padding: 0px 9px;
   height: 22px;
   border-radius: 9999px;
-  //border: 1px solid hsl(217, 91%, 55%);
   white-space: nowrap;
   margin-top: 3px;
 }
@@ -1718,7 +1654,6 @@ textarea {
 
 @media (max-width: 768px) {
   #dashboardLink {
-    text-decoration: underline;
     margin-bottom: 14px;
   }
 
