@@ -1041,6 +1041,37 @@ async function saveCurrentConfig() {
   }
 }
 
+function hasCriticalChanges(oldContent, newContent, language) {
+  try {
+    if (language === "yaml") {
+      const oldConfig = jsyaml.load(oldContent)
+      const newConfig = jsyaml.load(newContent)
+      const criticalFields = ["listeners", "redir-port", "tproxy-port"]
+
+      for (const field of criticalFields) {
+        const oldValue = JSON.stringify(oldConfig?.[field])
+        const newValue = JSON.stringify(newConfig?.[field])
+        if (oldValue !== newValue) {
+          return true
+        }
+      }
+      return false
+    } else if (language === "json") {
+      const oldConfig = JSON.parse(oldContent)
+      const newConfig = JSON.parse(newContent)
+      const oldInbounds = JSON.stringify(oldConfig?.inbounds)
+      const newInbounds = JSON.stringify(newConfig?.inbounds)
+
+      return oldInbounds !== newInbounds
+    }
+  } catch (e) {
+    console.error("Error checking critical changes:", e)
+    return false
+  }
+
+  return false
+}
+
 async function saveAndRestart() {
   if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return
 
@@ -1064,6 +1095,9 @@ async function saveAndRestart() {
   })
 
   if (result.success) {
+    const language = getFileLanguage(config.filename)
+    const needsFullRestart = hasCriticalChanges(config.savedContent, content, language)
+
     config.content = content
     config.savedContent = content
     config.isDirty = false
@@ -1074,20 +1108,24 @@ async function saveAndRestart() {
     setPendingState("Перезапускается...")
 
     try {
-      const language = getFileLanguage(config.filename)
       let restartResult
 
       if (language === "json" || language === "yaml") {
-        restartResult = await apiCall("control", {
-          action: "restartCore",
-          core: currentCore,
-        })
+        if (needsFullRestart) {
+          restartResult = await apiCall("control", { action: "restart" })
+        } else {
+          restartResult = await apiCall("control", {
+            action: "restartCore",
+            core: currentCore,
+          })
+        }
       } else if (language === "plaintext") {
         restartResult = await apiCall("control", { action: "restart" })
       }
 
       if (restartResult && restartResult.success) {
-        showToast("Сервис перезапущен")
+        const restartType = needsFullRestart ? "Полный перезапуск выполнен" : "Ядро перезапущено"
+        showToast(restartType)
         isActionInProgress = false
         isServiceRunning = true
         updateServiceStatus(true)
