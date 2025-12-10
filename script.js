@@ -1298,7 +1298,7 @@ async function confirmCoreChange() {
     }
   })
   closeCoreModal()
-  setPendingState("Выполняется смена ядра...")
+  setPendingState("Переключение ядра...")
 
   try {
     console.log("Sending API request with core:", selectedCore)
