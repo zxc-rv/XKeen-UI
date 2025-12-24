@@ -28,6 +28,13 @@ function parseVlessUri(uri) {
   const url = new URL(uri)
   const p = Object.fromEntries(url.searchParams)
 
+  let extraObj
+  if (p.extra) {
+    try {
+      extraObj = JSON.parse(decodeURIComponent(p.extra))
+    } catch {}
+  }
+
   return {
     tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
     protocol: "vless",
@@ -83,6 +90,7 @@ function parseVlessUri(uri) {
               path: p.path || "/",
               host: p.host,
               mode: p.mode || "auto",
+              extra: extraObj,
             }
           : undefined,
       tcpSettings: p.headerType ? { header: { type: p.headerType } } : undefined,
