@@ -43,25 +43,25 @@ function parseVlessUri(uri) {
       port: parseInt(url.port) || 443,
       id: url.username,
       encryption: p.encryption || "none",
-      flow: p.flow,
+      flow: p.flow || undefined,
     },
     streamSettings: {
       network: p.type || "tcp",
-      security: p.security,
+      security: p.security || undefined,
       realitySettings:
         p.security === "reality"
           ? {
               fingerprint: p.fp || "chrome",
-              serverName: p.sni,
-              publicKey: p.pbk,
-              shortId: p.sid,
+              serverName: p.sni || undefined,
+              publicKey: p.pbk || undefined,
+              shortId: p.sid || undefined,
             }
           : undefined,
       tlsSettings:
         p.security === "tls"
           ? {
               fingerprint: p.fp || "chrome",
-              serverName: p.sni,
+              serverName: p.sni || undefined,
               alpn: p.alpn?.split(","),
             }
           : undefined,
@@ -75,7 +75,7 @@ function parseVlessUri(uri) {
       grpcSettings:
         p.type === "grpc"
           ? {
-              serviceName: p.serviceName || p.path,
+              serviceName: p.serviceName || p.path || undefined,
             }
           : undefined,
       httpSettings: ["h2", "http"].includes(p.type)
@@ -88,7 +88,7 @@ function parseVlessUri(uri) {
         p.type === "xhttp"
           ? {
               path: p.path || "/",
-              host: p.host,
+              host: p.host || undefined,
               mode: p.mode || "auto",
               extra: extraObj,
             }
@@ -117,7 +117,7 @@ function parseVmessUri(uri) {
       tlsSettings:
         d.tls === "tls"
           ? {
-              serverName: d.sni || d.host,
+              serverName: d.sni || d.host || undefined,
               fingerprint: d.fp || "chrome",
               alpn: d.alpn?.split(","),
             }
@@ -132,7 +132,7 @@ function parseVmessUri(uri) {
       grpcSettings:
         d.net === "grpc"
           ? {
-              serviceName: d.path,
+              serviceName: d.path || undefined,
             }
           : undefined,
     },
@@ -233,7 +233,7 @@ function convertToMihomoYaml(xc) {
   const ss = xc.streamSettings || {}
 
   const pMap = {
-    vless: { uuid: s.id, flow: s.flow, "packet-encoding": "xudp" },
+    vless: { uuid: s.id, flow: s.flow || undefined, "packet-encoding": "xudp" },
     vmess: { uuid: s.id, alterId: s.alterId, cipher: s.security },
     trojan: { password: s.password },
     shadowsocks: { cipher: s.method, password: s.password },
