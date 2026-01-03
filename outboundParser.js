@@ -23,17 +23,95 @@ const toYaml = (obj, indent = 0) => {
   return res
 }
 
+const getStreamSettings = (type, params) => {
+  return {
+    network: type,
+    tcpSettings: type === "tcp" && params.headerType ? { header: { type: params.headerType } } : undefined,
+    rawSettings: type === "raw" && params.headerType ? { header: { type: params.headerType } } : undefined,
+    wsSettings:
+      type === "ws"
+        ? {
+            path: params.path || "/",
+            host: params.host || undefined,
+            heartbeatPeriod: params.heartbeatPeriod ? parseInt(params.heartbeatPeriod) : undefined,
+          }
+        : undefined,
+    httpupgradeSettings:
+      type === "httpupgrade"
+        ? {
+            path: params.path || "/",
+            host: params.host || undefined,
+          }
+        : undefined,
+    grpcSettings:
+      type === "grpc"
+        ? {
+            serviceName: params.serviceName || params.path || undefined,
+            authority: params.authority || undefined,
+            multiMode: params.multiMode === "true" || params.multiMode === true || undefined,
+            user_agent: params.user_agent || undefined,
+            idle_timeout: params.idle_timeout ? parseInt(params.idle_timeout) : undefined,
+            health_check_timeout: params.health_check_timeout ? parseInt(params.health_check_timeout) : undefined,
+            permit_without_stream:
+              params.permit_without_stream === "true" || params.permit_without_stream === true || undefined,
+            initial_windows_size: params.initial_windows_size ? parseInt(params.initial_windows_size) : undefined,
+          }
+        : undefined,
+    kcpSettings:
+      type === "kcp"
+        ? {
+            mtu: params.mtu ? parseInt(params.mtu) : undefined,
+            tti: params.tti ? parseInt(params.tti) : undefined,
+            uplinkCapacity: params.uplinkCapacity ? parseInt(params.uplinkCapacity) : undefined,
+            downlinkCapacity: params.downlinkCapacity ? parseInt(params.downlinkCapacity) : undefined,
+            congestion: params.congestion === "true" || params.congestion === true || undefined,
+            readBufferSize: params.readBufferSize ? parseInt(params.readBufferSize) : undefined,
+            writeBufferSize: params.writeBufferSize ? parseInt(params.writeBufferSize) : undefined,
+            header: params.headerType ? { type: params.headerType } : undefined,
+            seed: params.seed || undefined,
+          }
+        : undefined,
+    xhttpSettings:
+      type === "xhttp"
+        ? {
+            host: params.host || undefined,
+            path: params.path || "/",
+            mode: params.mode || "auto",
+            extra: (() => {
+              if (!params.extra) return undefined
+              try {
+                return JSON.parse(decodeURIComponent(params.extra))
+              } catch {
+                return undefined
+              }
+            })(),
+          }
+        : undefined,
+    security: params.security || undefined,
+    tlsSettings:
+      params.security === "tls"
+        ? {
+            fingerprint: params.fp || undefined,
+            serverName: params.sni || undefined,
+            alpn: params.alpn?.split(","),
+          }
+        : undefined,
+    realitySettings:
+      params.security === "reality"
+        ? {
+            fingerprint: params.fp || undefined,
+            serverName: params.sni || undefined,
+            publicKey: params.pbk || undefined,
+            shortId: params.sid || undefined,
+          }
+        : undefined,
+  }
+}
+
 function parseVlessUri(uri) {
   if (!uri.startsWith("vless://")) throw new Error("Invalid VLESS")
   const url = new URL(uri)
   const p = Object.fromEntries(url.searchParams)
-
-  let extraObj
-  if (p.extra) {
-    try {
-      extraObj = JSON.parse(decodeURIComponent(p.extra))
-    } catch {}
-  }
 
   return {
     tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
@@ -45,62 +123,19 @@ function parseVlessUri(uri) {
       encryption: p.encryption || "none",
       flow: p.flow || undefined,
     },
-    streamSettings: {
-      network: p.type || "tcp",
-      security: p.security || undefined,
-      realitySettings:
-        p.security === "reality"
-          ? {
-              fingerprint: p.fp || "chrome",
-              serverName: p.sni || undefined,
-              publicKey: p.pbk || undefined,
-              shortId: p.sid || undefined,
-            }
-          : undefined,
-      tlsSettings:
-        p.security === "tls"
-          ? {
-              fingerprint: p.fp || "chrome",
-              serverName: p.sni || undefined,
-              alpn: p.alpn?.split(","),
-            }
-          : undefined,
-      wsSettings:
-        p.type === "ws"
-          ? {
-              path: p.path || "/",
-              headers: p.host ? { Host: p.host } : undefined,
-            }
-          : undefined,
-      grpcSettings:
-        p.type === "grpc"
-          ? {
-              serviceName: p.serviceName || p.path || undefined,
-            }
-          : undefined,
-      httpSettings: ["h2", "http"].includes(p.type)
-        ? {
-            host: p.host ? [p.host] : undefined,
-            path: p.path || "/",
-          }
-        : undefined,
-      xhttpSettings:
-        p.type === "xhttp"
-          ? {
-              path: p.path || "/",
-              host: p.host || undefined,
-              mode: p.mode || "auto",
-              extra: extraObj,
-            }
-          : undefined,
-      tcpSettings: p.headerType ? { header: { type: p.headerType } } : undefined,
-    },
+    streamSettings: getStreamSettings(p.type || "tcp", p),
   }
 }
 
 function parseVmessUri(uri) {
   if (!uri.startsWith("vmess://")) throw new Error("Invalid VMESS")
   const d = JSON.parse(safeBase64(uri.slice(8)))
+
+  if (d.tls === "tls") {
+    d.security = "tls"
+    if (!d.sni && d.host) d.sni = d.host
+  }
+
   return {
     tag: d.ps || "PROXY",
     protocol: "vmess",
@@ -111,31 +146,7 @@ function parseVmessUri(uri) {
       alterId: parseInt(d.aid || 0),
       security: d.scy || "auto",
     },
-    streamSettings: {
-      network: d.net || "tcp",
-      security: d.tls === "tls" ? "tls" : undefined,
-      tlsSettings:
-        d.tls === "tls"
-          ? {
-              serverName: d.sni || d.host || undefined,
-              fingerprint: d.fp || "chrome",
-              alpn: d.alpn?.split(","),
-            }
-          : undefined,
-      wsSettings:
-        d.net === "ws"
-          ? {
-              path: d.path || "/",
-              headers: d.host ? { Host: d.host } : undefined,
-            }
-          : undefined,
-      grpcSettings:
-        d.net === "grpc"
-          ? {
-              serviceName: d.path || undefined,
-            }
-          : undefined,
-    },
+    streamSettings: getStreamSettings(d.net || "tcp", d),
   }
 }
 
@@ -143,6 +154,10 @@ function parseTrojanUri(uri) {
   if (!uri.startsWith("trojan://")) throw new Error("Invalid TROJAN")
   const url = new URL(uri)
   const p = Object.fromEntries(url.searchParams)
+
+  if (!p.security) p.security = "tls"
+  if (!p.sni) p.sni = url.hostname
+
   return {
     tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
     protocol: "trojan",
@@ -151,22 +166,7 @@ function parseTrojanUri(uri) {
       port: parseInt(url.port) || 443,
       password: url.username,
     },
-    streamSettings: {
-      network: p.type || "tcp",
-      security: p.security || "tls",
-      tlsSettings: {
-        serverName: p.sni || url.hostname,
-        fingerprint: p.fp || "chrome",
-        alpn: p.alpn?.split(","),
-      },
-      wsSettings:
-        p.type === "ws"
-          ? {
-              path: p.path || "/",
-              headers: p.host ? { Host: p.host } : undefined,
-            }
-          : undefined,
-    },
+    streamSettings: getStreamSettings(p.type || "tcp", p),
   }
 }
 
@@ -274,7 +274,7 @@ function convertToMihomoYaml(xc) {
   if (ss.network === "ws") {
     common["ws-opts"] = {
       path: ss.wsSettings?.path,
-      headers: ss.wsSettings?.headers,
+      headers: ss.wsSettings?.host ? { Host: ss.wsSettings.host } : undefined,
     }
   } else if (ss.network === "grpc") {
     common["grpc-opts"] = { "grpc-service-name": ss.grpcSettings?.serviceName }
