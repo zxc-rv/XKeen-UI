@@ -1,321 +1,266 @@
-const safeBase64 = (str) => {
-  str = str.replace(/-/g, "+").replace(/_/g, "/")
-  while (str.length % 4) str += "="
-  return atob(str)
-}
+const safeBase64 = (str) =>
+  atob(
+    str
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(str.length + ((4 - (str.length % 4)) % 4), "="),
+  )
 
 const toYaml = (obj, indent = 0) => {
-  let res = ""
-  const sp = " ".repeat(indent)
-  for (const [k, v] of Object.entries(obj)) {
-    if (v === undefined || v === null || v === "") continue
-    if (Array.isArray(v)) {
-      if (v.length === 0) continue
-      res += `${sp}${k}:\n`
-      v.forEach((i) => (res += `${sp}  - ${i}\n`))
-    } else if (typeof v === "object") {
-      res += `${sp}${k}:\n${toYaml(v, indent + 2)}`
-    } else {
-      const value = k === "name" ? `'${String(v).replace(/'/g, "''")}'` : v
-      res += `${sp}${k}: ${value}\n`
-    }
-  }
-  return res
+  const padding = " ".repeat(indent)
+  return Object.entries(obj).reduce((result, [key, value]) => {
+    if (value == null || value === "") return result
+    if (Array.isArray(value))
+      return value.length
+        ? result + `${padding}${key}:\n` + value.map((item) => `${padding}  - ${item}`).join("\n") + "\n"
+        : result
+    if (typeof value === "object") return result + `${padding}${key}:\n${toYaml(value, indent + 2)}`
+    return result + `${padding}${key}: ${key === "name" ? `'${String(value).replace(/'/g, "''")}'` : value}\n`
+  }, "")
 }
 
 const getStreamSettings = (type, params) => {
-  return {
+  const number = (val) => (val ? +val : undefined)
+  const bool = (val) => val === "true" || val === true || undefined
+  const string = (val) => val || undefined
+  const output = {
     network: type,
-    tcpSettings: type === "tcp" && params.headerType ? { header: { type: params.headerType } } : undefined,
-    rawSettings: type === "raw" && params.headerType ? { header: { type: params.headerType } } : undefined,
-    wsSettings:
-      type === "ws"
-        ? {
-            path: params.path || "/",
-            host: params.host || undefined,
-            heartbeatPeriod: params.heartbeatPeriod ? parseInt(params.heartbeatPeriod) : undefined,
-          }
-        : undefined,
-    httpupgradeSettings:
-      type === "httpupgrade"
-        ? {
-            path: params.path || "/",
-            host: params.host || undefined,
-          }
-        : undefined,
-    grpcSettings:
-      type === "grpc"
-        ? {
-            serviceName: params.serviceName || params.path || undefined,
-            authority: params.authority || undefined,
-            multiMode: params.multiMode === "true" || params.multiMode === true || undefined,
-            user_agent: params.user_agent || undefined,
-            idle_timeout: params.idle_timeout ? parseInt(params.idle_timeout) : undefined,
-            health_check_timeout: params.health_check_timeout ? parseInt(params.health_check_timeout) : undefined,
-            permit_without_stream:
-              params.permit_without_stream === "true" || params.permit_without_stream === true || undefined,
-            initial_windows_size: params.initial_windows_size ? parseInt(params.initial_windows_size) : undefined,
-          }
-        : undefined,
-    kcpSettings:
-      type === "kcp"
-        ? {
-            mtu: params.mtu ? parseInt(params.mtu) : undefined,
-            tti: params.tti ? parseInt(params.tti) : undefined,
-            uplinkCapacity: params.uplinkCapacity ? parseInt(params.uplinkCapacity) : undefined,
-            downlinkCapacity: params.downlinkCapacity ? parseInt(params.downlinkCapacity) : undefined,
-            congestion: params.congestion === "true" || params.congestion === true || undefined,
-            readBufferSize: params.readBufferSize ? parseInt(params.readBufferSize) : undefined,
-            writeBufferSize: params.writeBufferSize ? parseInt(params.writeBufferSize) : undefined,
-            header: params.headerType ? { type: params.headerType } : undefined,
-            seed: params.seed || undefined,
-          }
-        : undefined,
-    xhttpSettings:
-      type === "xhttp"
-        ? {
-            host: params.host || undefined,
-            path: params.path || "/",
-            mode: params.mode || "auto",
-            extra: (() => {
-              if (!params.extra) return undefined
-              try {
-                return JSON.parse(decodeURIComponent(params.extra))
-              } catch {
-                return undefined
-              }
-            })(),
-          }
-        : undefined,
-    security: params.security || undefined,
+    security: string(params.security),
     tlsSettings:
       params.security === "tls"
-        ? {
-            fingerprint: params.fp || undefined,
-            serverName: params.sni || undefined,
-            alpn: params.alpn?.split(","),
-          }
+        ? { fingerprint: string(params.fp) || "chrome", serverName: string(params.sni), alpn: params.alpn?.split(",") }
         : undefined,
     realitySettings:
       params.security === "reality"
         ? {
-            fingerprint: params.fp || undefined,
-            serverName: params.sni || undefined,
-            publicKey: params.pbk || undefined,
-            shortId: params.sid || undefined,
+            fingerprint: string(params.fp) || "chrome",
+            serverName: string(params.sni),
+            publicKey: string(params.pbk),
+            shortId: string(params.sid),
           }
         : undefined,
   }
+  if (type === "tcp" && params.headerType) output.tcpSettings = { header: { type: params.headerType } }
+  if (type === "raw" && params.headerType) output.rawSettings = { header: { type: params.headerType } }
+  if (type === "xhttp") {
+    let extra
+    try {
+      extra = params.extra ? JSON.parse(decodeURIComponent(params.extra)) : undefined
+    } catch {}
+    output.xhttpSettings = { host: string(params.host), path: params.path || "/", mode: params.mode || "auto", extra }
+  }
+  if (type === "kcp")
+    output.kcpSettings = {
+      mtu: number(params.mtu),
+      tti: number(params.tti),
+      uplinkCapacity: number(params.uplinkCapacity),
+      downlinkCapacity: number(params.downlinkCapacity),
+      congestion: bool(params.congestion),
+      readBufferSize: number(params.readBufferSize),
+      writeBufferSize: number(params.writeBufferSize),
+      header: params.headerType ? { type: params.headerType } : undefined,
+      seed: string(params.seed),
+    }
+  if (type === "grpc")
+    output.grpcSettings = {
+      serviceName: string(params.serviceName || params.path),
+      authority: string(params.authority),
+      multiMode: bool(params.multiMode),
+      user_agent: string(params.user_agent),
+      idle_timeout: number(params.idle_timeout),
+      health_check_timeout: number(params.health_check_timeout),
+      permit_without_stream: bool(params.permit_without_stream),
+      initial_windows_size: number(params.initial_windows_size),
+    }
+  if (type === "ws")
+    output.wsSettings = {
+      path: params.path || "/",
+      host: string(params.host),
+      heartbeatPeriod: number(params.heartbeatPeriod),
+    }
+  if (type === "httpupgrade") output.httpupgradeSettings = { path: params.path || "/", host: string(params.host) }
+  return output
 }
 
-function parseVlessUri(uri) {
-  if (!uri.startsWith("vless://")) throw new Error("Invalid VLESS")
+const parseUrl = (uri, protocol, settingsMapper) => {
   const url = new URL(uri)
-  const p = Object.fromEntries(url.searchParams)
-
-  return {
+  const params = Object.fromEntries(url.searchParams)
+  const baseConfig = {
     tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
-    protocol: "vless",
-    settings: {
+    protocol: protocol,
+    settings: settingsMapper(url, params),
+  }
+
+  if (!["shadowsocks", "hysteria2"].includes(protocol)) {
+    baseConfig.streamSettings = getStreamSettings(params.type || "tcp", { ...params, sni: params.sni || url.hostname })
+  }
+
+  return baseConfig
+}
+
+const protocols = {
+  vless: (uri) =>
+    parseUrl(uri, "vless", (url, params) => ({
       address: url.hostname,
-      port: parseInt(url.port) || 443,
+      port: +url.port || 443,
       id: url.username,
-      encryption: p.encryption || "none",
-      flow: p.flow || undefined,
-    },
-    streamSettings: getStreamSettings(p.type || "tcp", p),
-  }
-}
+      encryption: params.encryption || "none",
+      flow: params.flow || undefined,
+    })),
 
-function parseVmessUri(uri) {
-  if (!uri.startsWith("vmess://")) throw new Error("Invalid VMESS")
-  const d = JSON.parse(safeBase64(uri.slice(8)))
+  trojan: (uri) =>
+    parseUrl(uri, "trojan", (url) => ({ address: url.hostname, port: +url.port || 443, password: url.username })),
 
-  if (d.tls === "tls") {
-    d.security = "tls"
-    if (!d.sni && d.host) d.sni = d.host
-  }
-
-  return {
-    tag: d.ps || "PROXY",
-    protocol: "vmess",
-    settings: {
-      address: d.add,
-      port: parseInt(d.port),
-      id: d.id,
-      alterId: parseInt(d.aid || 0),
-      security: d.scy || "auto",
-    },
-    streamSettings: getStreamSettings(d.net || "tcp", d),
-  }
-}
-
-function parseTrojanUri(uri) {
-  if (!uri.startsWith("trojan://")) throw new Error("Invalid TROJAN")
-  const url = new URL(uri)
-  const p = Object.fromEntries(url.searchParams)
-
-  if (!p.security) p.security = "tls"
-  if (!p.sni) p.sni = url.hostname
-
-  return {
-    tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
-    protocol: "trojan",
-    settings: {
+  hysteria2: (uri) =>
+    parseUrl(uri, "hysteria2", (url, params) => ({
       address: url.hostname,
-      port: parseInt(url.port) || 443,
-      password: url.username,
-    },
-    streamSettings: getStreamSettings(p.type || "tcp", p),
-  }
-}
-
-function parseShadowsocksUri(uri) {
-  if (!uri.startsWith("ss://")) throw new Error("Invalid SS")
-  const url = new URL(uri)
-  let method, password, address, port
-
-  if (url.username && !url.password) {
-    const decoded = safeBase64(url.username).split(":")
-    method = decoded[0]
-    password = decoded.slice(1).join(":")
-    address = url.hostname
-    port = url.port
-  } else {
-    method = url.username
-    password = url.password
-    address = url.hostname
-    port = url.port
-  }
-
-  return {
-    tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
-    protocol: "shadowsocks",
-    settings: {
-      address,
-      port: parseInt(port),
-      method,
-      password,
-    },
-  }
-}
-
-function parseHysteria2Uri(uri) {
-  if (!uri.startsWith("hysteria2://")) throw new Error("Invalid HY2")
-  const url = new URL(uri)
-  return {
-    tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
-    protocol: "hysteria2",
-    settings: {
-      address: url.hostname,
-      port: parseInt(url.port) || 443,
+      port: +url.port || 443,
       password: decodeURIComponent(url.username),
-      insecure: url.searchParams.get("insecure") === "1",
-    },
-  }
+      sni: params.sni,
+      insecure: params.insecure === "1" || params.allowInsecure === "1",
+    })),
+
+  ss: (uri) => {
+    const url = new URL(uri)
+    let method, password
+    if (url.username && !url.password) {
+      const decoded = safeBase64(url.username).split(":")
+      method = decoded[0]
+      password = decoded.slice(1).join(":")
+    } else {
+      method = url.username
+      password = url.password
+    }
+    return {
+      tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
+      protocol: "shadowsocks",
+      settings: { address: url.hostname, port: +url.port, method, password },
+    }
+  },
+
+  vmess: (uri) => {
+    const data = JSON.parse(safeBase64(uri.slice(8)))
+    if (data.tls === "tls") {
+      data.security = "tls"
+      data.sni = data.sni || data.host
+    }
+    return {
+      tag: data.ps || "PROXY",
+      protocol: "vmess",
+      settings: {
+        address: data.add,
+        port: +data.port,
+        id: data.id,
+        alterId: +data.aid || 0,
+        security: data.scy || "auto",
+      },
+      streamSettings: getStreamSettings(data.net || "tcp", data),
+    }
+  },
 }
 
 function parseProxyUri(uri) {
-  const p = uri.split(":")[0]
-  const map = {
-    vless: parseVlessUri,
-    vmess: parseVmessUri,
-    trojan: parseTrojanUri,
-    ss: parseShadowsocksUri,
-    hysteria2: parseHysteria2Uri,
-  }
-  if (!map[p]) throw new Error("Unsupported protocol")
-  return map[p](uri)
+  const protocol = uri.split(":")[0]
+  if (!protocols[protocol]) throw new Error("Unsupported protocol")
+  return protocols[protocol](uri)
 }
 
-function convertToMihomoYaml(xc) {
-  const s = xc.settings
-  const ss = xc.streamSettings || {}
-
-  const pMap = {
-    vless: { uuid: s.id, flow: s.flow || undefined, "packet-encoding": "xudp" },
-    vmess: { uuid: s.id, alterId: s.alterId, cipher: s.security },
-    trojan: { password: s.password },
-    shadowsocks: { cipher: s.method, password: s.password },
-    hysteria2: { password: s.password, "fast-open": true },
-  }
-
+function convertToMihomoYaml(proxyConfig) {
+  const settings = proxyConfig.settings
+  const streamSettings = proxyConfig.streamSettings || {}
   const common = {
-    name: xc.tag,
-    type: xc.protocol,
-    server: s.address,
-    port: s.port,
+    name: proxyConfig.tag,
+    type: proxyConfig.protocol,
+    server: settings.address,
+    port: settings.port,
     udp: true,
-    ...pMap[xc.protocol],
   }
 
-  if (ss.network) common.network = ss.network
+  if (proxyConfig.protocol === "vless")
+    Object.assign(common, { uuid: settings.id, flow: settings.flow, "packet-encoding": "xudp" })
+  else if (proxyConfig.protocol === "vmess")
+    Object.assign(common, { uuid: settings.id, alterId: settings.alterId, cipher: settings.security })
+  else if (proxyConfig.protocol === "trojan" || proxyConfig.protocol === "hysteria2") {
+    common.password = settings.password
+    if (settings.sni) common.servername = settings.sni
+    if (proxyConfig.protocol === "hysteria2") common["fast-open"] = true
+  } else if (proxyConfig.protocol === "shadowsocks")
+    Object.assign(common, { cipher: settings.method, password: settings.password })
 
-  if (["tls", "reality"].includes(ss.security)) {
-    common.tls = true
-    common.tfo = true
-    const tls = ss.tlsSettings || {}
-    const reality = ss.realitySettings || {}
-
-    common.servername = tls.serverName || reality.serverName
-    common["client-fingerprint"] = tls.fingerprint || reality.fingerprint
-
-    if (tls.alpn) common.alpn = tls.alpn
-
-    if (ss.security === "reality") {
+  if (streamSettings.network) common.network = streamSettings.network
+  if (["tls", "reality"].includes(streamSettings.security)) {
+    const tls = streamSettings.tlsSettings || {}
+    const reality = streamSettings.realitySettings || {}
+    Object.assign(common, {
+      tls: true,
+      tfo: true,
+      servername: tls.serverName || reality.serverName,
+      "client-fingerprint": tls.fingerprint || reality.fingerprint,
+      alpn: tls.alpn,
+    })
+    if (streamSettings.security === "reality")
       common["reality-opts"] = {
         "public-key": reality.publicKey,
         "short-id": reality.shortId,
         "support-x25519mlkem768": true,
       }
-    }
   }
 
-  if (ss.network === "ws") {
+  if (streamSettings.network === "ws")
     common["ws-opts"] = {
-      path: ss.wsSettings?.path,
-      headers: ss.wsSettings?.host ? { Host: ss.wsSettings.host } : undefined,
+      path: streamSettings.wsSettings?.path,
+      headers: streamSettings.wsSettings?.host ? { Host: streamSettings.wsSettings.host } : undefined,
     }
-  } else if (ss.network === "grpc") {
-    common["grpc-opts"] = { "grpc-service-name": ss.grpcSettings?.serviceName }
-  }
+  else if (streamSettings.network === "grpc")
+    common["grpc-opts"] = { "grpc-service-name": streamSettings.grpcSettings?.serviceName }
+  else if (streamSettings.network === "httpupgrade")
+    common["http-upgrade-opts"] = {
+      path: streamSettings.httpupgradeSettings?.path,
+      headers: streamSettings.httpupgradeSettings?.host ? { Host: streamSettings.httpupgradeSettings.host } : undefined,
+    }
+
   return `  - ${toYaml(common).trim().replace(/\n/g, "\n    ")}`
 }
 
 function generateConfigForCore(uri, core = "xray", existingConfig = "") {
-  const isSub = uri.startsWith("http")
-  const genName = (base) => {
-    let i = 1,
-      n = `${base}_${i}`
-    while (existingConfig.includes(n)) n = `${base}_${++i}`
-    return n
+  const generateName = (base) => {
+    let index = 1
+    while (existingConfig.includes(`${base}_${index}`)) index++
+    return `${base}_${index}`
   }
 
-  if (core === "mihomo") {
-    if (isSub) {
-      const pContent = {
-        [genName("subscription")]: {
-          type: "http",
-          url: uri,
-          interval: 43200,
-          "health-check": {
-            enable: true,
-            url: "https://www.gstatic.com/generate_204",
-            interval: 300,
-            "expected-status": 204,
+  if (uri.startsWith("http") && core === "mihomo") {
+    const name = generateName("subscription")
+    return {
+      type: "proxy-provider",
+      content: toYaml(
+        {
+          [name]: {
+            type: "http",
+            url: uri,
+            interval: 43200,
+            "health-check": {
+              enable: true,
+              url: "https://www.gstatic.com/generate_204",
+              interval: 300,
+              "expected-status": 204,
+            },
+            override: { udp: true, tfo: true },
           },
-          override: { udp: true, tfo: true },
         },
-      }
-      return { type: "proxy-provider", content: toYaml(pContent, 2).trimEnd() + "\n" }
+        2,
+      ),
     }
-
-    if (uri.includes("type=xhttp")) throw new Error("XHTTP в Mihomo не поддерживается")
-    const conf = parseProxyUri(uri)
-    if (conf.tag === "PROXY") conf.tag = genName(conf.protocol)
-    return { type: "proxy", content: convertToMihomoYaml(conf) + "\n" }
-  } else {
-    if (isSub || uri.startsWith("hysteria2")) throw new Error("Hysteria2 в Xray не поддерживается")
-    return { type: "outbound", content: JSON.stringify(parseProxyUri(uri), null, 2) }
   }
+
+  if (core === "mihomo" && uri.includes("type=xhttp")) throw new Error("XHTTP в Mihomo не поддерживается")
+  if (core !== "mihomo" && uri.startsWith("http")) throw new Error("Подписки в Xray не поддерживаются")
+  if (core !== "mihomo" && uri.startsWith("hysteria2")) throw new Error("Hysteria2 в Xray не поддерживается")
+
+  const config = parseProxyUri(uri)
+  if (config.tag === "PROXY" || existingConfig.includes(config.tag)) config.tag = generateName(config.protocol)
+
+  return core === "mihomo"
+    ? { type: "proxy", content: convertToMihomoYaml(config) + "\n" }
+    : { type: "outbound", content: JSON.stringify(config, null, 2) }
 }
