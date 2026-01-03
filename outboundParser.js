@@ -278,13 +278,7 @@ function convertToMihomoYaml(xc) {
     }
   } else if (ss.network === "grpc") {
     common["grpc-opts"] = { "grpc-service-name": ss.grpcSettings?.serviceName }
-  } else if (["h2", "http"].includes(ss.network)) {
-    common["h2-opts"] = {
-      host: ss.httpSettings?.host,
-      path: ss.httpSettings?.path,
-    }
   }
-
   return `  - ${toYaml(common).trim().replace(/\n/g, "\n    ")}`
 }
 
