@@ -11,9 +11,7 @@ const toYaml = (obj, indent = 0) => {
   return Object.entries(obj).reduce((result, [key, value]) => {
     if (value == null || value === "") return result
     if (Array.isArray(value))
-      return value.length
-        ? result + `${padding}${key}:\n` + value.map((item) => `${padding}  - ${item}`).join("\n") + "\n"
-        : result
+      return value.length ? result + `${padding}${key}:\n` + value.map((item) => `${padding}  - ${item}`).join("\n") + "\n" : result
     if (typeof value === "object") return result + `${padding}${key}:\n${toYaml(value, indent + 2)}`
     return result + `${padding}${key}: ${key === "name" ? `'${String(value).replace(/'/g, "''")}'` : value}\n`
   }, "")
@@ -108,8 +106,7 @@ const protocols = {
       flow: params.flow || undefined,
     })),
 
-  trojan: (uri) =>
-    parseUrl(uri, "trojan", (url) => ({ address: url.hostname, port: +url.port || 443, password: url.username })),
+  trojan: (uri) => parseUrl(uri, "trojan", (url) => ({ address: url.hostname, port: +url.port || 443, password: url.username })),
 
   hysteria2: (uri) =>
     parseUrl(uri, "hysteria2", (url, params) => ({
@@ -161,7 +158,7 @@ const protocols = {
 
 function parseProxyUri(uri) {
   const protocol = uri.split(":")[0]
-  if (!protocols[protocol]) throw new Error("Unsupported protocol")
+  if (!protocols[protocol]) throw new Error("Неизвестная ссылка")
   return protocols[protocol](uri)
 }
 
@@ -176,16 +173,14 @@ function convertToMihomoYaml(proxyConfig) {
     udp: true,
   }
 
-  if (proxyConfig.protocol === "vless")
-    Object.assign(common, { uuid: settings.id, flow: settings.flow, "packet-encoding": "xudp" })
+  if (proxyConfig.protocol === "vless") Object.assign(common, { uuid: settings.id, flow: settings.flow, "packet-encoding": "xudp" })
   else if (proxyConfig.protocol === "vmess")
     Object.assign(common, { uuid: settings.id, alterId: settings.alterId, cipher: settings.security })
   else if (proxyConfig.protocol === "trojan" || proxyConfig.protocol === "hysteria2") {
     common.password = settings.password
     if (settings.sni) common.servername = settings.sni
     if (proxyConfig.protocol === "hysteria2") common["fast-open"] = true
-  } else if (proxyConfig.protocol === "shadowsocks")
-    Object.assign(common, { cipher: settings.method, password: settings.password })
+  } else if (proxyConfig.protocol === "shadowsocks") Object.assign(common, { cipher: settings.method, password: settings.password })
 
   if (streamSettings.network) common.network = streamSettings.network
   if (["tls", "reality"].includes(streamSettings.security)) {
@@ -211,8 +206,7 @@ function convertToMihomoYaml(proxyConfig) {
       path: streamSettings.wsSettings?.path,
       headers: streamSettings.wsSettings?.host ? { Host: streamSettings.wsSettings.host } : undefined,
     }
-  else if (streamSettings.network === "grpc")
-    common["grpc-opts"] = { "grpc-service-name": streamSettings.grpcSettings?.serviceName }
+  else if (streamSettings.network === "grpc") common["grpc-opts"] = { "grpc-service-name": streamSettings.grpcSettings?.serviceName }
   else if (streamSettings.network === "httpupgrade")
     common["http-upgrade-opts"] = {
       path: streamSettings.httpupgradeSettings?.path,
