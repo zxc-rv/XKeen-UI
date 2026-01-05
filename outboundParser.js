@@ -19,14 +19,19 @@ const toYaml = (obj, indent = 0) => {
 
 const getStreamSettings = (type, params) => {
   const number = (val) => (val ? +val : undefined)
-  const bool = (val) => val === "true" || val === true || undefined
+  const bool = (val) => val === "true" || val === true || val === "1" || undefined
   const string = (val) => val || undefined
   const output = {
     network: type,
     security: string(params.security),
     tlsSettings:
       params.security === "tls"
-        ? { fingerprint: string(params.fp) || "chrome", serverName: string(params.sni), alpn: params.alpn?.split(",") }
+        ? {
+            fingerprint: string(params.fp) || "chrome",
+            serverName: string(params.sni),
+            alpn: params.alpn?.split(","),
+            allowInsecure: bool(params.allowInsecure || params.insecure),
+          }
         : undefined,
     realitySettings:
       params.security === "reality"
@@ -35,6 +40,8 @@ const getStreamSettings = (type, params) => {
             serverName: string(params.sni),
             publicKey: string(params.pbk),
             shortId: string(params.sid),
+            spiderX: string(params.spx),
+            mldsa65Verify: string(params.pqv),
           }
         : undefined,
   }
@@ -90,7 +97,7 @@ const parseUrl = (uri, protocol, settingsMapper) => {
   }
 
   if (!["shadowsocks", "hysteria2"].includes(protocol)) {
-    baseConfig.streamSettings = getStreamSettings(params.type || "tcp", { ...params, sni: params.sni || url.hostname })
+    baseConfig.streamSettings = getStreamSettings(params.type || "tcp", { ...params, sni: params.sni })
   }
 
   return baseConfig
@@ -173,26 +180,35 @@ function convertToMihomoYaml(proxyConfig) {
     udp: true,
   }
 
-  if (proxyConfig.protocol === "vless") Object.assign(common, { uuid: settings.id, flow: settings.flow, "packet-encoding": "xudp" })
-  else if (proxyConfig.protocol === "vmess")
+  if (proxyConfig.protocol === "vless") {
+    Object.assign(common, { uuid: settings.id, flow: settings.flow, "packet-encoding": "xudp" })
+    if (settings.encryption) common.encryption = settings.encryption
+  } else if (proxyConfig.protocol === "vmess")
     Object.assign(common, { uuid: settings.id, alterId: settings.alterId, cipher: settings.security })
-  else if (proxyConfig.protocol === "trojan" || proxyConfig.protocol === "hysteria2") {
+  else if (proxyConfig.protocol === "trojan") {
     common.password = settings.password
-    if (settings.sni) common.servername = settings.sni
-    if (proxyConfig.protocol === "hysteria2") common["fast-open"] = true
+  } else if (proxyConfig.protocol === "hysteria2") {
+    common.password = settings.password
+    common["fast-open"] = true
   } else if (proxyConfig.protocol === "shadowsocks") Object.assign(common, { cipher: settings.method, password: settings.password })
 
   if (streamSettings.network) common.network = streamSettings.network
   if (["tls", "reality"].includes(streamSettings.security)) {
     const tls = streamSettings.tlsSettings || {}
     const reality = streamSettings.realitySettings || {}
+    const serverName = tls.serverName || reality.serverName
     Object.assign(common, {
       tls: true,
       tfo: true,
-      servername: tls.serverName || reality.serverName,
       "client-fingerprint": tls.fingerprint || reality.fingerprint,
       alpn: tls.alpn,
     })
+    if (["trojan", "hysteria2"].includes(proxyConfig.protocol)) {
+      if (serverName) common.sni = serverName
+    } else {
+      if (serverName) common.servername = serverName
+    }
+    if (tls.allowInsecure) common["skip-cert-verify"] = true
     if (streamSettings.security === "reality")
       common["reality-opts"] = {
         "public-key": reality.publicKey,
