@@ -33,7 +33,7 @@
         padding: 20px;
       }
       .container {
-        max-width: 800px;
+        max-width: 700px;
         width: 100%;
         background: var(--panel-background);
         border: 1px solid #1e293b;
@@ -99,6 +99,7 @@
       }
       .input-group {
         margin-bottom: 20px;
+        position: relative;
       }
       label {
         display: block;
@@ -114,6 +115,7 @@
         border: 1px solid #1e293b;
         color: #fafafa;
         padding: 12px;
+        padding-right: 40px;
         border-radius: 8px;
         font-size: 14px;
         font-family: inherit;
@@ -127,8 +129,33 @@
         border-color: #3b82f6;
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
       }
-      input {
-        font-family: "JetBrains Mono", monospace;
+      .clear-input-btn {
+        position: absolute;
+        right: 8px;
+        bottom: 10px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        transition: background 0.15s ease;
+        color: #64748b;
+      }
+      .clear-input-btn:hover {
+        background: #1e293b;
+        color: #94a3b8;
+      }
+      .clear-input-btn.show {
+        display: flex;
+      }
+      .clear-input-btn svg {
+        width: 14px;
+        height: 14px;
       }
       .btn {
         width: 100%;
@@ -154,16 +181,30 @@
       }
       .output {
         background: var(--field-backgound);
-        padding: 16px;
         border-radius: 8px;
         margin-top: 20px;
         border: 1px solid #1e293b;
         display: none;
         position: relative;
-        resize: vertical;
-        overflow: auto;
         min-height: 120px;
         max-height: 600px;
+      }
+      .output.show {
+        display: block;
+      }
+      .output-scroll {
+        padding: 16px;
+        overflow: auto;
+        max-height: 600px;
+        scrollbar-width: thin;
+        scrollbar-color: #334155 transparent;
+      }
+
+      .output.success .output-scroll {
+        resize: vertical;
+      }
+      .output.success .output-scroll {
+        resize: vertical;
       }
       .output pre {
         color: #c0caf5;
@@ -173,7 +214,6 @@
         word-break: break-all;
         font-family: "JetBrains Mono", monospace;
         line-height: 1.5;
-        padding-right: 50px;
       }
       .error {
         background: #2a1215;
@@ -182,31 +222,36 @@
       .error pre {
         color: #fca5a5;
       }
-      .success {
-        display: block;
+      .error .output-scroll {
+        padding-right: 16px;
       }
       .copy-btn {
         position: absolute;
-        top: 12px;
-        right: 12px;
-        padding: 8px;
-        background: transparent;
-        border: none;
+        top: 16px;
+        right: 16px;
+        padding: 6px;
+        background: var(--field-backgound);
+        border: 1px solid #1e293b;
         color: #64748b;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s;
-        display: flex;
+        display: none;
         align-items: center;
         justify-content: center;
+        z-index: 10;
+      }
+      .output.success .copy-btn {
+        display: flex;
       }
       .copy-btn:hover {
         background: #1e293b;
         color: #e2e8f0;
+        border-color: #334155;
       }
       .copy-btn svg {
-        width: 20px;
-        height: 20px;
+        width: 19px;
+        height: 19px;
       }
       @media (max-width: 768px) {
         .container {
@@ -236,6 +281,20 @@
       <div class="input-group">
         <label>URI</label>
         <input type="text" id="uri" placeholder="vless://..." />
+        <button class="clear-input-btn" id="clearInput" onclick="clearInput()">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
       </div>
 
       <button class="btn" onclick="generate()">Сгенерировать</button>
@@ -255,13 +314,33 @@
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
         </button>
-        <pre id="result"></pre>
+        <div class="output-scroll">
+          <pre id="result"></pre>
+        </div>
       </div>
     </div>
 
     <script src="outboundParser.js"></script>
     <script>
       let currentCore = "xray"
+      const uriInput = document.getElementById("uri")
+      const clearBtn = document.getElementById("clearInput")
+
+      uriInput.addEventListener("input", () => {
+        clearBtn.classList.toggle("show", uriInput.value.length > 0)
+      })
+
+      uriInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          generate()
+        }
+      })
+
+      function clearInput() {
+        uriInput.value = ""
+        clearBtn.classList.remove("show")
+        uriInput.focus()
+      }
 
       document.querySelectorAll(".tab").forEach((tab) => {
         tab.addEventListener("click", () => {
@@ -278,13 +357,13 @@
       }
 
       function generate() {
-        const uri = document.getElementById("uri").value.trim()
+        const uri = uriInput.value.trim()
         const output = document.getElementById("output")
         const result = document.getElementById("result")
 
         if (!uri) {
           result.textContent = "Введите URI"
-          output.className = "output error success"
+          output.className = "output error show"
           return
         }
 
@@ -292,10 +371,10 @@
           const lines = uri.split("\n").filter((l) => l.trim())
           const results = lines.map((line) => generateConfigForCore(line.trim(), currentCore, ""))
           result.textContent = results.map((r) => r.content).join("\n")
-          output.className = "output success"
+          output.className = "output success show"
         } catch (e) {
           result.textContent = `Ошибка: ${e.message}`
-          output.className = "output error success"
+          output.className = "output error show"
         }
       }
 
