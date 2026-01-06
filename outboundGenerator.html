@@ -43,7 +43,7 @@
         max-width: 700px;
         width: 100%;
         background: var(--panel-background);
-        border: 1px solid #1e293b;
+        border: 3px transparent;
         border-radius: 8px;
         padding: 28px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
@@ -292,6 +292,23 @@
         height: 19px;
       }
 
+      .copy-btn.success svg {
+        color: #22c55e !important;
+        animation: pulse 0.5s ease;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.2);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
       .hljs-attr {
         color: #7aa2f7 !important;
       }
@@ -436,6 +453,8 @@
           const btn = document.querySelector(".copy-btn")
           btn.innerHTML =
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+          btn.classList.add("success")
+          setTimeout(() => btn.classList.remove("success"), 2000)
           setTimeout(
             () =>
               (btn.innerHTML =
