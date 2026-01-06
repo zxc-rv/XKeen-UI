@@ -3,17 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Proxy Config Generator</title>
+    <title>Outbound Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tokyo-night-dark.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/yaml.min.js"></script>
     <style>
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
+
       :root {
         --panel-background: #0f172a;
         --field-backgound: #080e1d;
       }
+
       body {
         font-family:
           Inter,
@@ -32,15 +38,17 @@
         justify-content: center;
         padding: 20px;
       }
+
       .container {
         max-width: 700px;
         width: 100%;
         background: var(--panel-background);
         border: 1px solid #1e293b;
         border-radius: 8px;
-        padding: 32px;
+        padding: 28px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
       }
+
       h1 {
         font-size: 1.8rem;
         font-weight: 600;
@@ -50,11 +58,13 @@
         -webkit-text-fill-color: transparent;
         background-clip: text;
       }
+
       .subtitle {
         color: #94a3b8;
         margin-bottom: 24px;
         font-size: 14px;
       }
+
       .tabs {
         display: inline-flex;
         height: 36px;
@@ -64,6 +74,7 @@
         gap: 2px;
         margin-bottom: 24px;
       }
+
       .tab {
         display: inline-flex;
         align-items: center;
@@ -79,10 +90,12 @@
         transition: all 0.15s ease;
         position: relative;
       }
+
       .tab.active {
         background: var(--field-backgound);
         color: #fafafa;
       }
+
       .disclaimer {
         background: #2a1f0d;
         border: 1px solid #4a3615;
@@ -94,13 +107,16 @@
         line-height: 1.5;
         display: none;
       }
+
       .disclaimer.show {
         display: block;
       }
+
       .input-group {
         margin-bottom: 20px;
         position: relative;
       }
+
       label {
         display: block;
         margin-bottom: 8px;
@@ -108,6 +124,7 @@
         font-size: 14px;
         font-weight: 500;
       }
+
       textarea,
       input {
         width: 100%;
@@ -124,11 +141,13 @@
           box-shadow 0.15s ease;
         outline: none;
       }
+
       textarea:focus,
       input:focus {
         border-color: #3b82f6;
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
       }
+
       .clear-input-btn {
         position: absolute;
         right: 8px;
@@ -146,23 +165,27 @@
         transition: background 0.15s ease;
         color: #64748b;
       }
+
       .clear-input-btn:hover {
         background: #1e293b;
         color: #94a3b8;
       }
+
       .clear-input-btn.show {
         display: flex;
       }
+
       .clear-input-btn svg {
         width: 14px;
         height: 14px;
       }
+
       .btn {
         width: 100%;
         padding: 12px;
-        background: #1e293b;
-        color: #e4e4e7;
-        border: 1px solid #334155;
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: #ffffff;
+        border: 1px solid #2563eb;
         font-size: 14px;
         font-weight: 500;
         border-radius: 8px;
@@ -172,13 +195,17 @@
         align-items: center;
         justify-content: center;
       }
+
       .btn:hover {
-        background: #334155;
-        color: #fafafa;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        border-color: #1d4ed8;
+        color: #ffffff;
       }
+
       .btn:active {
         transform: scale(0.98);
       }
+
       .output {
         background: var(--field-backgound);
         border-radius: 8px;
@@ -189,9 +216,11 @@
         min-height: 120px;
         max-height: 600px;
       }
+
       .output.show {
         display: block;
       }
+
       .output-scroll {
         padding: 16px;
         overflow: auto;
@@ -203,9 +232,11 @@
       .output.success .output-scroll {
         resize: vertical;
       }
+
       .output.success .output-scroll {
         resize: vertical;
       }
+
       .output pre {
         color: #c0caf5;
         font-size: 13px;
@@ -215,16 +246,20 @@
         font-family: "JetBrains Mono", monospace;
         line-height: 1.5;
       }
+
       .error {
         background: #2a1215;
         border-color: #4a1f24;
       }
+
       .error pre {
         color: #fca5a5;
       }
+
       .error .output-scroll {
         padding-right: 16px;
       }
+
       .copy-btn {
         position: absolute;
         top: 16px;
@@ -241,31 +276,45 @@
         justify-content: center;
         z-index: 10;
       }
+
       .output.success .copy-btn {
         display: flex;
       }
+
       .copy-btn:hover {
         background: #1e293b;
         color: #e2e8f0;
         border-color: #334155;
       }
+
       .copy-btn svg {
         width: 19px;
         height: 19px;
       }
+
+      .hljs-attr {
+        color: #7aa2f7 !important;
+      }
+      .hljs-literal {
+        color: #bb9af7 !important;
+      }
+
       @media (max-width: 768px) {
         .container {
           padding: 24px;
         }
+
         .tabs {
           width: 100%;
         }
+
         .tab {
           flex: 1;
         }
       }
     </style>
   </head>
+
   <body>
     <div class="container">
       <h1>Outbound Generator</h1>
@@ -370,7 +419,10 @@
         try {
           const lines = uri.split("\n").filter((l) => l.trim())
           const results = lines.map((line) => generateConfigForCore(line.trim(), currentCore, ""))
-          result.textContent = results.map((r) => r.content).join("\n")
+          const content = results.map((r) => r.content).join("\n")
+          const lang = currentCore === "xray" ? "json" : "yaml"
+
+          result.innerHTML = `<code class="language-${lang}">${hljs.highlight(content, { language: lang }).value}</code>`
           output.className = "output success show"
         } catch (e) {
           result.textContent = `Ошибка: ${e.message}`
