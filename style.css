@@ -10,8 +10,6 @@
   --field-backgound: #080e1d;
 }
 
-
-
 body {
   font-family:
     Inter,
@@ -1751,6 +1749,10 @@ textarea {
     transform: translate(-50%, -50%) scale(1);
     opacity: 1;
   }
+}
+
+.monaco-editor .minimap-shadow-visible {
+  box-shadow: none !important;
 }
 
 @media (max-width: 768px) {

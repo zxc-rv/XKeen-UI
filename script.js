@@ -532,7 +532,7 @@ function loadMonacoEditor() {
       formatOnPaste: false,
       formatOnType: false,
       scrollBeyondLastLine: false,
-      minimap: { enabled: true },
+      minimap: { enabled: true, showSlider: "always" },
       fontSize: 14,
       fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
       fontWeight: "400",
