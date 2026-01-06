@@ -50,20 +50,8 @@
               onclick="restartXKeen()"
               title="Перезапустить"
             ></button>
-            <button
-              class="btn btn-success btn-icon"
-              id="startBtn"
-              style="display: none"
-              onclick="startXKeen()"
-              title="Запустить"
-            ></button>
-            <button
-              class="btn btn-danger btn-icon"
-              id="stopBtn"
-              style="display: none"
-              onclick="stopXKeen()"
-              title="Остановить"
-            ></button>
+            <button class="btn btn-success btn-icon" id="startBtn" style="display: none" onclick="startXKeen()" title="Запустить"></button>
+            <button class="btn btn-danger btn-icon" id="stopBtn" style="display: none" onclick="stopXKeen()" title="Остановить"></button>
           </div>
         </div>
 
@@ -73,13 +61,7 @@
           <div id="coreSelectRoot" class="select-root core-select" style="display: none" aria-label="Выбор ядра">
             <button id="coreSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
               <span class="core-icon" aria-hidden="true">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  class="core-icon"
-                  aria-hidden="true"
-                  focusable="false"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="core-icon" aria-hidden="true" focusable="false">
                   <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
                   <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
                   <path d="M12 2v2" />
@@ -117,12 +99,8 @@
               </svg>
             </button>
             <div id="coreSelectContent" class="select-content">
-              <div class="select-item" role="option" data-value="xray" aria-selected="false">
-                xray <span class="check">✓</span>
-              </div>
-              <div class="select-item" role="option" data-value="mihomo" aria-selected="false">
-                mihomo <span class="check">✓</span>
-              </div>
+              <div class="select-item" role="option" data-value="xray" aria-selected="false">xray <span class="check">✓</span></div>
+              <div class="select-item" role="option" data-value="mihomo" aria-selected="false">mihomo <span class="check">✓</span></div>
             </div>
           </div>
         </div>
@@ -169,9 +147,7 @@
               <div id="saveBtn-skeleton" class="skeleton skeleton-btn" style="width: 125px"></div>
               <div id="formatBtn-skeleton" class="skeleton skeleton-btn" style="width: 106px"></div>
             </div>
-            <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>
-              Сохр. и перезап.
-            </button>
+            <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>Сохр. и перезап.</button>
             <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()">Сохранить</button>
             <div class="btn-group">
               <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">Формат</button>
@@ -259,13 +235,7 @@
           <h2 class="panel-title">Журнал</h2>
           <div class="panel-actions">
             <div class="log-filter">
-              <input
-                id="logFilterInput"
-                class="input"
-                type="text"
-                placeholder="Фильтр"
-                aria-label="Фильтр строк журнала"
-              />
+              <input id="logFilterInput" class="input" type="text" placeholder="Фильтр" aria-label="Фильтр строк журнала" />
               <button class="log-filter-clear" id="logFilterClear" aria-label="Очистить"></button>
             </div>
 
@@ -274,13 +244,7 @@
                 <button id="logSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
                   <span class="label" id="logSelectLabel">error.log</span>
                   <svg class="chevron" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path
-                      d="M6 9l6 6 6-6"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
+                    <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                   </svg>
                 </button>
                 <div id="logSelectContent" class="select-content">
@@ -388,19 +352,28 @@
         </h3>
         <p class="modal-description">Вставьте ссылку в формате protocol://</p>
         <div class="modal-body">
-          <input type="text" id="importInput" class="input" placeholder="vless://..." />
+          <div class="import-input-wrapper">
+            <input type="text" id="importInput" class="input" placeholder="vless://..." />
+            <button class="import-input-clear" id="importInputClear" aria-label="Очистить"></button>
+          </div>
           <div id="importResult" style="display: none">
             <div class="output-wrapper">
-              <button
-                class="copy-output-btn"
-                id="copyBtn"
-                onclick="copyImportResult()"
-                title="Скопировать"
-                style="display: none"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <button class="copy-output-btn" id="copyBtn" onclick="copyImportResult()" title="Скопировать" style="display: none">
+                <svg class="copy-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <svg
+                  class="check-icon"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  style="display: none"
+                >
+                  <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               </button>
               <textarea id="importOutput" readonly></textarea>
@@ -437,18 +410,14 @@
           Импорт шаблона
           <span class="template-count-badge" id="templateCountBadge">0</span>
         </h3>
-        <p class="modal-description" id="templateModalDescription">
-          Выберите готовый шаблон конфигурации для быстрой настройки
-        </p>
+        <p class="modal-description" id="templateModalDescription">Выберите готовый шаблон конфигурации для быстрой настройки</p>
         <div class="modal-body">
           <div id="templateList" class="template-list">
             <!-- Шаблоны будут загружены динамически -->
           </div>
         </div>
         <div class="modal-actions">
-          <button class="btn btn-primary" id="importTemplateBtn" onclick="importSelectedTemplate()" disabled>
-            Импортировать
-          </button>
+          <button class="btn btn-primary" id="importTemplateBtn" onclick="importSelectedTemplate()" disabled>Импортировать</button>
           <button class="btn btn-secondary" onclick="closeTemplateImportModal()">Закрыть</button>
         </div>
       </div>

@@ -819,9 +819,7 @@ function updateActiveTabIndicator() {
   const indicator = activeContainer.querySelector(".tab-active-indicator")
   if (!indicator) return
   const tabs = Array.from(activeContainer.querySelectorAll(".tab-trigger"))
-  const groupConfigs = isXkeen
-    ? configs.filter((c) => c.filename.endsWith(".lst"))
-    : configs.filter((c) => !c.filename.endsWith(".lst"))
+  const groupConfigs = isXkeen ? configs.filter((c) => c.filename.endsWith(".lst")) : configs.filter((c) => !c.filename.endsWith(".lst"))
   const groupIndex = groupConfigs.indexOf(activeConfig)
   if (groupIndex === -1) return
   const activeTab = tabs[groupIndex]
@@ -993,9 +991,7 @@ function isFileValid() {
     if (!model) return true
 
     const markers = monaco.editor.getModelMarkers({ owner: "json" })
-    return !markers.some(
-      (m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error,
-    )
+    return !markers.some((m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error)
   } else if (language === "yaml") {
     try {
       jsyaml.load(monacoEditor.getValue())
@@ -1376,6 +1372,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const coreSelectTrigger = document.getElementById("coreSelectTrigger")
   const coreSelectContent = document.getElementById("coreSelectContent")
   const logFilterClear = document.getElementById("logFilterClear")
+  const importInput = document.getElementById("importInput")
+  const importInputClear = document.getElementById("importInputClear")
 
   if (tabsList) tabsList.classList.add("empty")
   isConfigsLoading = true
@@ -1400,6 +1398,18 @@ document.addEventListener("DOMContentLoaded", () => {
       logFilter = ""
       logFilterClear.classList.remove("show")
       applyFilter()
+    })
+  }
+
+  if (importInput && importInputClear) {
+    importInput.addEventListener("input", () => {
+      importInputClear.classList.toggle("show", importInput.value.length > 0)
+    })
+
+    importInputClear.addEventListener("click", () => {
+      importInput.value = ""
+      importInputClear.classList.remove("show")
+      importInput.focus()
     })
   }
 
@@ -1843,6 +1853,7 @@ function openImportModal() {
   document.getElementById("importResult").style.display = "none"
   const importInput = document.getElementById("importInput")
   importInput.value = ""
+  document.getElementById("importInputClear").classList.remove("show")
   document.getElementById("generateBtn").style.display = "inline-flex"
   document.getElementById("copyBtn").style.display = "none"
   document.getElementById("addBtn").style.display = "none"
@@ -1896,9 +1907,38 @@ function generateConfig() {
 
 function copyImportResult() {
   const output = document.getElementById("importOutput")
-  output.select()
-  document.execCommand("copy")
-  showToast("Скопировано в буфер")
+  const copyBtn = document.getElementById("copyBtn")
+  const copyIcon = copyBtn.querySelector(".copy-icon")
+  const checkIcon = copyBtn.querySelector(".check-icon")
+
+  const tempTextArea = document.createElement("textarea")
+  tempTextArea.value = output.value
+  tempTextArea.style.position = "fixed"
+  tempTextArea.style.left = "-9999px"
+  tempTextArea.style.top = "0"
+  document.body.appendChild(tempTextArea)
+
+  tempTextArea.focus()
+  tempTextArea.select()
+
+  try {
+    document.execCommand("copy")
+
+    copyBtn.classList.add("copied")
+    setTimeout(() => {
+      copyBtn.classList.remove("copied")
+      copyIcon.style.opacity = "1"
+      copyIcon.style.transform = "scale(1)"
+      checkIcon.style.display = "none"
+    }, 2000)
+
+    showToast("Скопировано в буфер")
+  } catch (err) {
+    console.error("Copy error:", err)
+    showToast("Не удалось скопировать", "error")
+  }
+
+  document.body.removeChild(tempTextArea)
 }
 
 function addToOutbounds() {
