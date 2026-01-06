@@ -2,12 +2,15 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  scrollbar-color: #334155 transparent;
 }
 
 :root {
   --panel-background: #0f172a;
   --field-backgound: #080e1d;
 }
+
+
 
 body {
   font-family:
@@ -1441,25 +1444,36 @@ textarea {
   max-height: 70vh;
   background: #080e1d;
   color: #c0caf5;
-  border: 1px solid #1e293b;
+  border: 1px solid #1e293b !important;
   border-radius: 8px;
   padding: 12px;
   font-family: "JetBrains Mono", monospace;
   font-size: 13px;
   resize: none;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   box-sizing: border-box;
   line-height: 1.5;
   outline: none;
   transition: box-shadow 0.15s ease;
 }
 
-#importResult {
-  margin-top: 12px;
+#importResult .monaco-editor {
+  border-radius: 8px;
+  overflow: hidden;
+  --vscode-focusBorder: transparent;
+}
+
+#importResult .monaco-editor .cursor {
+  display: none !important;
 }
 
 .output-wrapper {
+  position: relative;
+  border: none;
+}
+
+.editor-wrapper {
   position: relative;
 }
 

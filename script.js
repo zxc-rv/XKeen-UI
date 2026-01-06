@@ -487,7 +487,9 @@ function loadMonacoEditor() {
         { token: "string.key.json", foreground: "#7aa2f7" },
         { token: "string.value.json", foreground: "#9ece6a" },
         { token: "number.json", foreground: "#ff9e64" },
+        { token: "number.yaml", foreground: "#ff9e64" },
         { token: "keyword.json", foreground: "#bb9af7" },
+        { token: "keyword.yaml", foreground: "#bb9af7" },
         { token: "identifier", foreground: "#c0caf5" },
         { token: "comment", foreground: "#565f89" },
         { token: "comment.line", foreground: "#565f89" },
@@ -497,8 +499,8 @@ function loadMonacoEditor() {
         { token: "tag", foreground: "#f7768e" },
         { token: "attribute.name", foreground: "#e0af68" },
         { token: "attribute.value", foreground: "#9ece6a" },
-        { token: "string", foreground: "#9ece6a" },
         { token: "string.yaml", foreground: "#9ece6a" },
+        { token: "type.yaml", foreground: "#7aa2f7" },
       ],
       colors: {
         "editor.background": "#080e1d",
@@ -530,7 +532,7 @@ function loadMonacoEditor() {
       formatOnPaste: false,
       formatOnType: false,
       scrollBeyondLastLine: false,
-      minimap: { enabled: false },
+      minimap: { enabled: true },
       fontSize: 14,
       fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
       fontWeight: "400",
@@ -544,11 +546,12 @@ function loadMonacoEditor() {
       lineNumbers: "on",
       glyphMargin: false,
       stickyScroll: { enabled: false },
-      rulers: [],
       overviewRulerLanes: 0,
+      overviewRulerBorder: false,
       scrollbar: {
-        vertical: "visible",
+        vertical: "hidden",
         horizontal: "hidden",
+        verticalScrollbarSize: 0,
         useShadows: false,
         verticalHasArrows: false,
         horizontalHasArrows: false,
@@ -1867,6 +1870,8 @@ function closeImportModal() {
   document.getElementById("importModal").classList.remove("show")
 }
 
+let importEditor = null
+
 function generateConfig() {
   const uri = document.getElementById("importInput").value.trim()
   if (!uri) {
@@ -1876,54 +1881,97 @@ function generateConfig() {
 
   try {
     const existingConfig = monacoEditor ? monacoEditor.getValue() : ""
-
     const result = generateConfigForCore(uri, currentCore, existingConfig)
     const output = result.content
 
-    const textarea = document.getElementById("importOutput")
     const modalContent = document.getElementById("importModal").querySelector(".modal-content")
-
     modalContent.classList.add("expanded")
-
     document.getElementById("importResult").style.display = "block"
 
-    textarea.value = output
+    const outputWrapper = document.querySelector("#importResult .output-wrapper")
+    const container = document.getElementById("importOutput")
+    if (container) container.style.display = "none"
 
-    textarea.dataset.resultType = result.type
+    if (importEditor) {
+      importEditor.dispose()
+      importEditor = null
+    }
 
-    setTimeout(() => {
-      textarea.style.height = "auto"
-      const maxHeight = window.innerHeight * 0.7
-      const contentHeight = Math.min(textarea.scrollHeight + 4, maxHeight)
-      textarea.style.height = contentHeight + "px"
-    }, 0)
+    const copyBtn = document.getElementById("copyBtn")
+    while (outputWrapper.firstChild) {
+      outputWrapper.firstChild.remove()
+    }
+    if (copyBtn) outputWrapper.appendChild(copyBtn)
 
-    document.getElementById("copyBtn").style.display = "inline-flex"
-    document.getElementById("addBtn").style.display = "inline-flex"
+    outputWrapper.style.position = "relative"
+    outputWrapper.style.height = "350px"
+    outputWrapper.style.overflow = "hidden"
+    outputWrapper.style.border = "1px solid #1e293b"
+    outputWrapper.style.borderRadius = "8px"
+    outputWrapper.style.background = "#080e1d"
+
+    const innerContainer = document.createElement("div")
+    innerContainer.style.margin = "16px"
+    innerContainer.style.height = "calc(100% - 32px)"
+    innerContainer.style.width = "calc(100% - 32px)"
+    innerContainer.style.position = "relative"
+    outputWrapper.appendChild(innerContainer)
+
+    importEditor = monaco.editor.create(innerContainer, {
+      value: output,
+      language: currentCore === "xray" ? "json" : "yaml",
+      theme: "tokyo-night",
+      automaticLayout: true,
+      readOnly: true,
+      minimap: { enabled: false },
+      fontSize: 13,
+      fontFamily: "JetBrains Mono, monospace",
+      lineNumbers: "off",
+      scrollBeyondLastLine: false,
+      wordWrap: "off",
+      folding: false,
+      glyphMargin: false,
+      lineDecorationsWidth: 0,
+      lineNumbersMinChars: 3,
+      renderLineHighlight: "none",
+      renderIndentGuides: false,
+      overviewRulerLanes: 0,
+      overviewRulerBorder: false,
+      smoothScrolling: true,
+      stickyScroll: { enabled: false },
+      scrollbar: {
+        vertical: "hidden",
+        horizontal: "hidden",
+        useShadows: false,
+      },
+    })
+
+    importEditor.getModel().resultType = result.type
+
+    if (copyBtn) copyBtn.style.display = "inline-flex"
+    const addBtn = document.getElementById("addBtn")
+    if (addBtn) addBtn.style.display = "inline-flex"
   } catch (e) {
     showToast(e.message, "error")
   }
 }
 
 function copyImportResult() {
-  const output = document.getElementById("importOutput")
+  if (!importEditor) return
+  const text = importEditor.getValue()
   const copyBtn = document.getElementById("copyBtn")
   const copyIcon = copyBtn.querySelector(".copy-icon")
   const checkIcon = copyBtn.querySelector(".check-icon")
-
-  const tempTextArea = document.createElement("textarea")
-  tempTextArea.value = output.value
-  tempTextArea.style.position = "fixed"
-  tempTextArea.style.left = "-9999px"
-  tempTextArea.style.top = "0"
-  document.body.appendChild(tempTextArea)
-
-  tempTextArea.focus()
-  tempTextArea.select()
+  const ta = document.createElement("textarea")
+  ta.value = text
+  ta.style.position = "fixed"
+  ta.style.left = "-9999px"
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
 
   try {
     document.execCommand("copy")
-
     copyBtn.classList.add("copied")
     setTimeout(() => {
       copyBtn.classList.remove("copied")
@@ -1931,14 +1979,12 @@ function copyImportResult() {
       copyIcon.style.transform = "scale(1)"
       checkIcon.style.display = "none"
     }, 2000)
-
     showToast("Скопировано в буфер")
-  } catch (err) {
-    console.error("Copy error:", err)
+  } catch (e) {
     showToast("Не удалось скопировать", "error")
   }
 
-  document.body.removeChild(tempTextArea)
+  document.body.removeChild(ta)
 }
 
 function addToOutbounds() {
@@ -1954,9 +2000,12 @@ function addToOutbounds() {
     }
 
     const currentContent = monacoEditor.getValue()
-    const generatedConfig = document.getElementById("importOutput").value
-    const textarea = document.getElementById("importOutput")
-    const resultType = textarea.dataset.resultType || "outbound"
+    if (!importEditor) {
+      showToast("Нечего добавлять", "error")
+      return
+    }
+    const generatedConfig = importEditor.getValue()
+    const resultType = importEditor.getModel().resultType || "outbound"
 
     if (currentCore === "xray") {
       let config
