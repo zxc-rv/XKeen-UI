@@ -9,12 +9,14 @@ BLUE='\033[1;34m'
 YELLOW='\033[1;33m'
 
 xkeenui_bin="/opt/sbin/xkeen-ui"
+xkeenui_init="/opt/etc/init.d/S99xkeen-ui"
 static_dir="/opt/share/www/XKeen-UI"
 monaco_dir="$static_dir/monaco-editor"
 local_mode_path="$static_dir/local_mode.js"
 lighttpd_init="/opt/etc/init.d/S80lighttpd"
 lighttpd_bin="/opt/sbin/lighttpd"
-lighttpd_conf="/opt/etc/lighttpd/lighttpd.conf"
+lighttpd_dir="/opt/etc/lighttpd"
+lighttpd_conf="$lighttpd_dir/conf.d/90-xkeenui.conf"
 
 detect_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
@@ -121,11 +123,6 @@ setup_local_editor() {
 }
 
 install_xkeenui() {
-  if [ -f $lighttpd_bin ]; then
-    echo -e "${YELLOW}\nПредупреждение: обнаружен установленный инстанс lighttpd."
-    echo -e "Перед продолжением требуется его полная деинсталляция.\n${NC}"
-    uninstall_xkeenui
-  fi
 
   echo -e "${YELLOW}\nВариант установки редактора:\n${NC}"
   echo -e "1. CDN"
@@ -141,51 +138,18 @@ install_xkeenui() {
   fi
 
   clear
-
-  echo -e "${BLUE}\n:: Установка lighttpd...${NC}"
-  opkg update && opkg install lighttpd lighttpd-mod-fastcgi lighttpd-mod-setenv && sed -i "s/^PROCS=lighttpd$/PROCS=\/opt\/sbin\/lighttpd/" $lighttpd_init || {
-      echo -e "${RED}\n Ошибка установки пакетов.\n${NC}"
-      exit 1
-  }
-
-  if [ -f $lighttpd_init ]; then
-      if $lighttpd_init status >/dev/null 2>&1; then
-          $lighttpd_init stop
-      fi
-  fi
-
-  echo -e "${BLUE}\n:: Создание конфигурации lighttpd...${NC}"
-  cat << EOF >/opt/etc/lighttpd/conf.d/90-xkeenui.conf
-server.port := 1000
-server.username := ""
-server.groupname := ""
-
-\$SERVER["socket"] == ":1000" {
-    server.document-root = "$static_dir"
-    setenv.add-environment = (
-        "PATH" => "/opt/bin:/opt/sbin:/bin:/sbin:/usr/bin:/usr/sbin"
-    )
-    fastcgi.server = (
-        "/cgi/" => ((
-            "bin-path" => "$xkeenui_bin",
-            "socket"   => "/opt/var/run/xkeen-ui.sock",
-            "check-local" => "disable",
-            "max-procs" => 1
-        ))
-    )
-}
-EOF
-
+  legacy_installation_check
   detect_arch
   download_files
+  create_xkeenui_init
 
   if grep -q "LOCAL = true" "$local_mode_path"; then
     setup_local_editor
   fi
 
-  echo -e "${BLUE}\n:: Запуск веб-сервера lighttpd...${NC}"
-  if ! $lighttpd_bin -f $lighttpd_conf; then
-    echo -e "${RED}\n Не удалось запустить lighttpd.\n${NC}"
+  echo -e "${BLUE}\n:: Запуск XKeen UI...${NC}"
+  if ! $xkeenui_init start; then
+    echo -e "${RED}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
 
@@ -203,14 +167,14 @@ update_xkeenui() {
     exit 1
   fi
 
-  detect_arch
-
-  if [ -f $lighttpd_init ]; then
-    if $lighttpd_init status >/dev/null 2>&1; then
-        $lighttpd_init stop
-    fi
+  if [ ! -f $xkeenui_init ]; then
+    create_xkeenui_init
+  elif $xkeenui_init status >/dev/null 2>&1; then
+    $xkeenui_init stop
   fi
 
+  legacy_installation_check
+  detect_arch
   download_files
 
   if ! [ -f $local_mode_path ]; then
@@ -223,9 +187,9 @@ update_xkeenui() {
     fi
   fi
 
-  echo -e "${BLUE}\n:: Запуск веб-сервера lighttpd...${NC}"
-  if ! $lighttpd_bin -f $lighttpd_conf; then
-    echo -e "${RED}\n Не удалось запустить lighttpd.\n${NC}"
+  echo -e "${BLUE}\n:: Запуск XKeen UI...${NC}"
+  if ! $xkeenui_init start; then
+    echo -e "${RED}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
 
@@ -240,7 +204,7 @@ update_xkeenui() {
 }
 
 uninstall_xkeenui() {
-  echo -e "\nДанное действие ${RED}удалит${NC} веб-сервер lighttpd, его зависимости и конфигурации, а также файлы XKeen-UI.\n"
+  echo -e "\nДанное действие ${RED}удалит${NC} XKeen UI, его зависимости и конфигурации.\n"
   read -p "Продолжить? [y/N]: " response < /dev/tty
   case "$response" in
     [Yy])
@@ -253,18 +217,64 @@ uninstall_xkeenui() {
         ;;
   esac
 
-  if [ -f $lighttpd_init ]; then
+  echo
+
+  if [ -f $lighttpd_init ] && [ -f $lighttpd_conf ]; then
     if $lighttpd_init status >/dev/null 2>&1; then
         $lighttpd_init stop
+        opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
+        rm -rf $lighttpd_dir
     fi
   fi
 
-  echo
-  opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
-  rm -rf /opt/etc/lighttpd
+  if [ -f $xkeenui_init ]; then
+    if $xkeenui_init status >/dev/null 2>&1; then
+        $xkeenui_init stop
+    fi
+  fi
+
   rm -rf $static_dir
-  rm -f $xkeenui_bin
+  rm -f $xkeenui_bin $xkeenui_init
   echo -e "${GREEN}\nУдаление XKeen-UI завершено\n${NC}"
+}
+
+legacy_installation_check() {
+
+  if [ ! -f "$lighttpd_conf" ]; then
+    return
+  fi
+
+  $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
+  rm -f "$lighttpd_conf"
+
+  echo -e "${YELLOW}\nВеб-сервер lighttpd для работы более не требуется."
+  read -p "Хотите удалить его? [Y/n]: " response < /dev/tty
+
+  case "$response" in
+    [Nn])
+      return
+      ;;
+    *)
+      opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
+      ;;
+  esac
+}
+
+create_xkeenui_init() {
+  cat << EOF > $xkeenui_init
+#!/bin/sh
+
+ENABLED=yes
+PROCS=/opt/sbin/xkeen-ui
+ARGS="-p 1000"
+PREARGS=""
+DESC=$PROCS
+PATH=/opt/sbin:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+. /opt/etc/init.d/rc.func
+EOF
+
+  chmod +x $xkeenui_init
 }
 
 clear
