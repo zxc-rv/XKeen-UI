@@ -245,8 +245,8 @@ legacy_installation_check() {
   if [ -f "$lighttpd_conf" ]; then
     $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
     rm -f "$lighttpd_conf"
-    echo -e "${YELLOW}\nВеб-сервер lighttpd для работы XKeen UI более не требуется.${NC}"
-    read -p "Хотите удалить его? [Y/n]: " response < /dev/tty
+    echo -e "${YELLOW}\nВеб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
+    read -p "Удалить его? [Y/n]: " response < /dev/tty
 
     case "$response" in
       [Nn])
