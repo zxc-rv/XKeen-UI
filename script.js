@@ -296,7 +296,7 @@ function connectWebSocket() {
     clearInterval(pingInterval)
   }
 
-  ws = new WebSocket(`ws://${window.location.hostname}:1000/ws?file=${currentLogFile}`)
+  ws = new WebSocket(`/ws?file=${currentLogFile}`)
 
   ws.onopen = () => {
     console.log("WebSocket connected")
@@ -926,7 +926,7 @@ async function apiCall(endpoint, data = null) {
     }
     if (data) options.body = JSON.stringify(data)
 
-    const response = await fetch(`http://${window.location.host}/cgi/${endpoint}`, options)
+    const response = await fetch(`/cgi/${endpoint}`, options)
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` }

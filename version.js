@@ -10,7 +10,7 @@ const APP_VERSION = "dev"
     if (!versionElement) return
 
     try {
-      const response = await fetch(`http://${window.location.host}/cgi/version`)
+      const response = await fetch(`/cgi/version`)
       const data = await response.json()
       if (data.success && data.version) {
         versionElement.textContent = data.version
