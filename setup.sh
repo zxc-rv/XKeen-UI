@@ -14,7 +14,6 @@ static_dir="/opt/share/www/XKeen-UI"
 monaco_dir="$static_dir/monaco-editor"
 local_mode_path="$static_dir/local_mode.js"
 lighttpd_init="/opt/etc/init.d/S80lighttpd"
-lighttpd_bin="/opt/sbin/lighttpd"
 lighttpd_dir="/opt/etc/lighttpd"
 lighttpd_conf="$lighttpd_dir/conf.d/90-xkeenui.conf"
 
@@ -124,6 +123,11 @@ setup_local_editor() {
 
 install_xkeenui() {
 
+  if [ -d $static_dir ] || [ -f $xkeenui_bin ] || [ -f $xkeenui_init ] || [ -f $lighttpd_conf ]; then
+    echo -e "${BLUE}\n:: Обнаружены файлы XKeen UI, запуск переустановки...${NC}"
+    uninstall_xkeenui
+  fi
+
   echo -e "${YELLOW}\nВариант установки редактора:\n${NC}"
   echo -e "1. CDN"
   echo -e "2. Local\n"
@@ -138,7 +142,6 @@ install_xkeenui() {
   fi
 
   clear
-  legacy_installation_check
   detect_arch
   download_files
   create_xkeenui_init
@@ -162,8 +165,8 @@ install_xkeenui() {
 }
 
 update_xkeenui() {
-  if ! [ -f $xkeenui_bin ]; then
-    echo -e "${RED}\n Ошибка: XKeen-UI не установлен!\n${NC}"
+  if [ ! -f $xkeenui_bin ]; then
+    echo -e "${RED}\n Ошибка: XKeen UI не установлен!\n${NC}"
     exit 1
   fi
 
@@ -204,7 +207,7 @@ update_xkeenui() {
 }
 
 uninstall_xkeenui() {
-  echo -e "\nДанное действие ${RED}удалит${NC} XKeen UI, его зависимости и конфигурации.\n"
+  echo -e "\nДанное действие ${RED}удалит${NC} XKeen UI, его файлы и зависимости.\n"
   read -p "Продолжить? [y/N]: " response < /dev/tty
   case "$response" in
     [Yy])
@@ -239,25 +242,22 @@ uninstall_xkeenui() {
 }
 
 legacy_installation_check() {
+  if [ -f "$lighttpd_conf" ]; then
+    $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
+    rm -f "$lighttpd_conf"
+    echo -e "${YELLOW}\nВеб-сервер lighttpd для работы XKeen UI более не требуется.${NC}"
+    read -p "Хотите удалить его? [Y/n]: " response < /dev/tty
 
-  if [ ! -f "$lighttpd_conf" ]; then
-    return
+    case "$response" in
+      [Nn])
+        return
+        ;;
+      *)
+        opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
+        rm -rf $lighttpd_dir
+        ;;
+    esac
   fi
-
-  $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
-  rm -f "$lighttpd_conf"
-
-  echo -e "${YELLOW}\nВеб-сервер lighttpd для работы более не требуется."
-  read -p "Хотите удалить его? [Y/n]: " response < /dev/tty
-
-  case "$response" in
-    [Nn])
-      return
-      ;;
-    *)
-      opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
-      ;;
-  esac
 }
 
 create_xkeenui_init() {
