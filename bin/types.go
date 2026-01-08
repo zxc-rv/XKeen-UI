@@ -5,8 +5,6 @@ import (
     "net/http"
     "sync"
     "time"
-    "os"
-    "strings"
 )
 
 type Response struct {
@@ -88,20 +86,4 @@ func jsonResponse(w http.ResponseWriter, data interface{}, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
-}
-
-func DetectClientType() ClientType {
-	initFiles := []string{"/opt/etc/init.d/S24xray", "/opt/etc/init.d/S99xkeen"}
-
-	for _, initFile := range initFiles {
-		if content, err := os.ReadFile(initFile); err == nil {
-			if strings.Contains(string(content), "xkeen -xray") {
-				return clientTypes["xray"]
-			}
-			if strings.Contains(string(content), "xkeen -mihomo") {
-				return clientTypes["mihomo"]
-			}
-		}
-	}
-	return clientTypes["xray"]
 }

@@ -64,8 +64,8 @@ async function init() {
       require(["vs/editor/editor.main"], resolve, reject)
     })
 
-    checkXKeenStatus()
-    getAvailableCores()
+    await checkXKeenStatus()
+    await getAvailableCores()
     loadMonacoEditor()
     connectWebSocket()
 
@@ -296,7 +296,7 @@ function connectWebSocket() {
     clearInterval(pingInterval)
   }
 
-  ws = new WebSocket(`ws://${window.location.hostname}:8080/ws?file=${currentLogFile}`)
+  ws = new WebSocket(`ws://${window.location.hostname}:1000/ws?file=${currentLogFile}`)
 
   ws.onopen = () => {
     console.log("WebSocket connected")
@@ -1253,9 +1253,10 @@ async function getAvailableCores() {
       const coreSelectRoot = document.getElementById("coreSelectRoot")
       const coreSelectLabel = document.getElementById("coreSelectLabel")
 
+      coreSelectLabel.textContent = currentCore
+
       if (availableCores.length >= 2) {
         coreSelectRoot.style.display = "inline-block"
-        coreSelectLabel.textContent = currentCore
 
         const items = document.querySelectorAll("#coreSelectContent .select-item")
         items.forEach((item) => {

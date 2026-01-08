@@ -40,7 +40,7 @@ jobs:
           GOMIPS: ${{ matrix.GOMIPS }}
           CGO_ENABLED: 0
         run: |
-          go build -ldflags="-s -w" -o xkeen-ui-${{ matrix.name }} main.go
+          go build -ldflags="-s -w -X main.version=$GITHUB_REF_NAME" -o xkeen-ui-${{ matrix.name }} main.go
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -54,9 +54,8 @@ jobs:
 
       - name: Update version in version.js
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"$VERSION"'"/' version.js
-          echo "Updated version to: $VERSION"
+          sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"$GITHUB_REF_NAME"'"/' version.js
+          echo "Updated version to: $GITHUB_REF_NAME"
 
       - name: Pack static files
         run: |
