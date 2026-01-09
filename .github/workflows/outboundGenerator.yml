@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
       - name: Create deployment folder
         run: |
-          mkdir -p _site/OutboundGenerator
+          mkdir -p _site/Outbound_Generator
           cp outboundGenerator.html _site/Outbound_Generator/index.html
           cp outboundParser.js _site/Outbound_Generator/outboundParser.js
       - name: Setup Pages
