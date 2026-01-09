@@ -21,15 +21,15 @@ jobs:
         uses: actions/checkout@v4
       - name: Create deployment folder
         run: |
-          mkdir _site
-          cp outboundGenerator.html _site/index.html
-          cp outboundParser.js _site/outboundParser.js
+          mkdir -p _site/OutboundGenerator
+          cp outboundGenerator.html _site/Outbound_Generator/index.html
+          cp outboundParser.js _site/Outbound_Generator/outboundParser.js
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './_site'
+          path: "./_site"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
