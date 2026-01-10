@@ -71,7 +71,7 @@ async function init() {
 
     const logsContainer = document.getElementById("logsContainer")
     logsContainer.classList.add("centered")
-    logsContainer.innerHTML = '<div style="color: #6b7280;">Подключение к WebSocket...</div>'
+    logsContainer.innerHTML = '<div style="color: #6b7280;">Установка соединения...</div>'
 
     setInterval(() => {
       if (!isActionInProgress) checkXKeenStatus()
@@ -195,38 +195,50 @@ function setPendingState(actionText) {
   updateControlButtons()
 }
 
+const ANSI_REGEX = /\u001b\[(\d+)m/g
+const LEVEL_REGEX = /\[(Info|Warning|Error|Fatal)\]/gi
+const LEVEL_WORD_REGEX = /\b(INFO|WARN|ERROR|FATAL)\b/g
+const LOG_COLORS = {
+  success: "#00cc00",
+  info: "#3b82f6",
+  warning: "#f59e0b",
+  error: "#ef4444",
+  fatal: "#FF5555",
+}
+
 function parseLogLine(line) {
-  const COLORS = {
-    success: "#00cc00",
-    info: "#3b82f6",
-    warning: "#f59e0b",
-    error: "#ef4444",
-    fatal: "#FF5555",
+  if (!line || !line.trim()) return null
+
+  let content = line
+    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.success};">$1</span>`)
+    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.error};">$1</span>`)
+    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.warning};">$1</span>`)
+    .replace(/\u001b\[34m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.info};">$1</span>`)
+    .replace(ANSI_REGEX, "")
+
+  content = content.replace(LEVEL_REGEX, (match, p1) => {
+    const level = p1.toLowerCase()
+    const labels = {
+      info: "INFO",
+      warning: "WARN",
+      error: "ERROR",
+      fatal: "FATAL",
+    }
+    const label = labels[level] || p1.toUpperCase()
+    const className = label.toLowerCase()
+
+    return `<span class="log-badge log-badge-${className}">${label}</span>`
+  })
+
+  if (!content.includes("log-badge")) {
+    content = content.replace(LEVEL_WORD_REGEX, (match) => {
+      const level = match.toLowerCase()
+      const map = { info: "info", warn: "warn", error: "error", fatal: "fatal" }
+      return `<span class="log-badge log-badge-${map[level] || "info"}">${match}</span>`
+    })
   }
-  if (!line.trim()) return null
-  let processedLine = line
-  let className = "log-line"
 
-  processedLine = processedLine
-    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.success};">$1</span>`)
-    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.error};">$1</span>`)
-    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.warning};">$1</span>`)
-    .replace(/\u001b\[34m(.*?)\u001b\[0m/g, `<span style="color: ${COLORS.info};">$1</span>`)
-    .replace(/\u001b\[\d+m/g, "")
-    .replace(/\[Info\]/gi, `<span class="log-badge log-badge-info">INFO</span>`)
-    .replace(/\[INFO\]/g, `<span class="log-badge log-badge-info">INFO</span>`)
-    .replace(/\[Warning\]/gi, `<span class="log-badge log-badge-warn">WARN</span>`)
-    .replace(/\[WARN\]/g, `<span class="log-badge log-badge-warn">WARN</span>`)
-    .replace(/\[Error\]/gi, `<span class="log-badge log-badge-error">ERROR</span>`)
-    .replace(/\[ERROR\]/g, `<span class="log-badge log-badge-error">ERROR</span>`)
-    .replace(/\[Fatal\]/gi, `<span class="log-badge log-badge-fatal">FATAL</span>`)
-    .replace(/\[FATAL\]/g, `<span class="log-badge log-badge-fatal">FATAL</span>`)
-    .replace(/\bINFO\b/g, `<span class="log-badge log-badge-info">INFO</span>`)
-    .replace(/\bWARN\b/g, `<span class="log-badge log-badge-warn">WARN</span>`)
-    .replace(/\bERROR\b/g, `<span class="log-badge log-badge-error">ERROR</span>`)
-    .replace(/\bFATAL\b/g, `<span class="log-badge log-badge-fatal">FATAL</span>`)
-
-  return { className, content: processedLine }
+  return `<div class="log-line">${content}</div>`
 }
 
 function updateServiceStatus(running) {
@@ -247,24 +259,38 @@ function updateServiceStatus(running) {
   updateControlButtons()
 }
 
-function renderLines(container, lines) {
-  const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 5
-
-  if (lines.length === 0) {
-    container.classList.add("centered")
-    container.innerHTML = '<div style="color: #6b7280;">Журнал пуст</div>'
-    return
-  }
-
-  container.classList.remove("centered")
-  const processedLines = lines
-    .map((line) => {
-      const parsed = parseLogLine(line)
-      return parsed ? `<div class="${parsed.className}">${parsed.content}</div>` : ""
-    })
+function renderAllLogs(container, lines) {
+  const html = lines
+    .map((line) => parseLogLine(line))
     .filter(Boolean)
+    .join("")
 
-  container.innerHTML = processedLines.join("")
+  container.innerHTML = html || '<div class="centered" style="color: #6b7280;">Журнал пуст</div>'
+  container.classList.toggle("centered", !html)
+
+  container.scrollTop = container.scrollHeight
+}
+
+function appendLogLines(container, newLines) {
+  if (newLines.length === 0) return
+
+  const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50 // Даем допуск 50px
+  const htmlFragment = newLines
+    .map((line) => parseLogLine(line))
+    .filter(Boolean)
+    .join("")
+
+  if (!htmlFragment) return
+  if (container.firstElementChild && container.firstElementChild.innerText === "Журнал пуст") {
+    container.innerHTML = ""
+    container.classList.remove("centered")
+  }
+  container.insertAdjacentHTML("beforeend", htmlFragment)
+
+  const maxLines = 1000
+  while (container.children.length > maxLines) {
+    container.firstElementChild.remove()
+  }
 
   if (wasAtBottom && !userScrolled) {
     container.scrollTop = container.scrollHeight
@@ -274,7 +300,7 @@ function renderLines(container, lines) {
 function applyFilter() {
   if (!logFilter || logFilter.trim() === "") {
     displayLines = allLogLines.slice(-1000)
-    renderLines(document.getElementById("logsContainer"), displayLines)
+    renderAllLogs(document.getElementById("logsContainer"), displayLines)
   } else {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(
@@ -304,11 +330,11 @@ function connectWebSocket() {
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "ping" }))
       }
-    }, 15000)
+    }, 30000)
   }
 
   ws.onclose = (event) => {
-    console.warn(`WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting in 1 seconds...`)
+    console.warn(`WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting...`)
     clearInterval(pingInterval)
     setTimeout(connectWebSocket, 1000)
   }
@@ -322,7 +348,6 @@ function connectWebSocket() {
     const data = JSON.parse(event.data)
 
     if (data.type === "pong") return
-
     if (data.error) {
       console.error("WebSocket error:", data.error)
       const container = document.getElementById("logsContainer")
@@ -330,18 +355,16 @@ function connectWebSocket() {
       container.innerHTML = `<div style="color: #ef4444;">Ошибка WebSocket: ${data.error}</div>`
       return
     }
-
     if (data.type === "initial") {
       allLogLines = data.allLines || []
       displayLines = data.displayLines || []
-      renderLines(document.getElementById("logsContainer"), displayLines)
+      renderAllLogs(document.getElementById("logsContainer"), displayLines)
 
       if (logFilter && logFilter.trim() !== "") {
         applyFilter()
       }
       return
     }
-
     if (data.type === "clear") {
       allLogLines = []
       displayLines = []
@@ -350,28 +373,35 @@ function connectWebSocket() {
       container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>'
       return
     }
-
     if (data.type === "append") {
       const newLines = data.content.split("\n").filter((line) => line.trim())
       allLogLines.push(...newLines)
 
+      let linesToRender = []
+
       if (!logFilter) {
         displayLines.push(...newLines)
-        displayLines = displayLines.slice(-1000)
-        renderLines(document.getElementById("logsContainer"), displayLines)
+        linesToRender = newLines
       } else {
         const matchedNewLines = newLines.filter((line) => line.includes(logFilter))
         if (matchedNewLines.length > 0) {
           displayLines.push(...matchedNewLines)
-          renderLines(document.getElementById("logsContainer"), displayLines)
+          linesToRender = matchedNewLines
         }
+      }
+
+      if (displayLines.length > 1000) {
+        displayLines = displayLines.slice(-1000)
+      }
+      if (linesToRender.length > 0) {
+        appendLogLines(document.getElementById("logsContainer"), linesToRender)
       }
       return
     }
 
     if (data.type === "filtered") {
       displayLines = data.lines || []
-      renderLines(document.getElementById("logsContainer"), displayLines)
+      renderAllLogs(document.getElementById("logsContainer"), displayLines)
       return
     }
   }

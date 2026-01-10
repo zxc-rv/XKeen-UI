@@ -23,7 +23,7 @@ var Upgrader = websocket.Upgrader{
 func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := Upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("WebSocket upgrade failed:", err)
+		log.Println("upgrade:", err)
 		return
 	}
 	defer conn.Close()
@@ -31,16 +31,11 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-	conn.SetPongHandler(func(string) error {
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
-	})
+	conn.SetReadDeadline(time.Now().Add(65 * time.Second))
 
 	var (
 		connMutex  sync.Mutex
 		stateMutex sync.RWMutex
-		logFile    string
 		logPath    string
 		lastSize   int64
 	)
@@ -48,19 +43,16 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON := func(v interface{}) error {
 		connMutex.Lock()
 		defer connMutex.Unlock()
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		return conn.WriteJSON(v)
 	}
 
-	logFileQuery := r.URL.Query().Get("file")
-	if logFileQuery == "" {
-		logFileQuery = "error.log"
-	}
-
 	stateMutex.Lock()
-	logFile = logFileQuery
+	logFile := r.URL.Query().Get("file")
+	if logFile == "" {
+		logFile = "error.log"
+	}
 	logPath = GetLogPath(logFile)
-	lastSize = 0
 	stateMutex.Unlock()
 
 	logDir := "/opt/var/log/xray/"
@@ -68,143 +60,108 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		os.MkdirAll(logDir, 0755)
 	}
 
-	sendInitialLogs := func() {
+	sendLogs := func() {
 		stateMutex.RLock()
-		localLogPath := logPath
+		lp := logPath
 		stateMutex.RUnlock()
 
-		lines := GetLogLines(localLogPath)
-		displayLines := lines
+		lines := GetLogLines(lp)
+		dl := lines
 		if len(lines) > 1000 {
-			displayLines = lines[len(lines)-1000:]
+			dl = lines[len(lines)-1000:]
 		}
-		if err := writeJSON(map[string]interface{}{
-			"type":         "initial",
-			"allLines":     lines,
-			"displayLines": displayLines,
-		}); err != nil {
+		if err := writeJSON(map[string]interface{}{"type": "initial", "allLines": lines, "displayLines": dl}); err != nil {
 			return
 		}
 
-		stat, err := os.Stat(localLogPath)
-		if err == nil {
+		if stat, err := os.Stat(lp); err == nil {
 			stateMutex.Lock()
 			lastSize = stat.Size()
 			stateMutex.Unlock()
-		} else {
-			stateMutex.Lock()
-			lastSize = 0
-			stateMutex.Unlock()
 		}
 	}
 
-	filterLogs := func(query string) {
-		stateMutex.RLock()
-		localLogPath := logPath
-		stateMutex.RUnlock()
-
-		lines := GetLogLines(localLogPath)
-		var matchedLines []string
-		for _, line := range lines {
-			if strings.Contains(line, query) {
-				matchedLines = append(matchedLines, line)
-			}
-		}
-		writeJSON(map[string]interface{}{"type": "filtered", "lines": matchedLines})
-	}
-
-	sendInitialLogs()
+	sendLogs()
 
 	go func() {
 		defer cancel()
 		for {
-			select {
-			case <-ctx.Done():
+			var msg struct {
+				Type  string `json:"type"`
+				Query string `json:"query"`
+				File  string `json:"file"`
+			}
+			if err := conn.ReadJSON(&msg); err != nil {
 				return
-			default:
-				var msg WSMessage
-				if err := conn.ReadJSON(&msg); err != nil {
-					return
+			}
+			conn.SetReadDeadline(time.Now().Add(120 * time.Second))
+
+			switch msg.Type {
+			case "filter":
+				stateMutex.RLock()
+				lp := logPath
+				stateMutex.RUnlock()
+				lines := GetLogLines(lp)
+				var matched []string
+				for _, l := range lines {
+					if strings.Contains(l, msg.Query) {
+						matched = append(matched, l)
+					}
 				}
-				if msg.Type == "ping" {
-					conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-					continue
-				}
-				switch msg.Type {
-				case "filter":
-					filterLogs(msg.Query)
-				case "switchFile":
-					stateMutex.Lock()
-					logFile = msg.File
-					logPath = GetLogPath(logFile)
-					lastSize = 0
-					stateMutex.Unlock()
-					sendInitialLogs()
-				}
-				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+				writeJSON(map[string]interface{}{"type": "filtered", "lines": matched})
+			case "switchFile":
+				stateMutex.Lock()
+				logPath = GetLogPath(msg.File)
+				lastSize = 0
+				stateMutex.Unlock()
+				sendLogs()
 			}
 		}
 	}()
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-ticker.C:
 			stateMutex.RLock()
-			localLogPath := logPath
-			localLastSize := lastSize
+			lp := logPath
+			lz := lastSize
 			stateMutex.RUnlock()
 
-			stat, err := os.Stat(localLogPath)
-			if err != nil {
+			stat, err := os.Stat(lp)
+			if err != nil || stat.Size() < lz {
 				writeJSON(map[string]string{"type": "clear"})
 				stateMutex.Lock()
 				lastSize = 0
 				stateMutex.Unlock()
+				if err == nil {
+					sendLogs()
+				}
 				continue
 			}
 
-			currentSize := stat.Size()
-			if currentSize < localLastSize {
-				LogCacheMutex.Lock()
-				delete(LogCacheMap, localLogPath)
-				LogCacheMutex.Unlock()
-				writeJSON(map[string]string{"type": "clear"})
-				stateMutex.Lock()
-				lastSize = 0
-				stateMutex.Unlock()
-				sendInitialLogs()
-				continue
-			}
-			if currentSize > localLastSize {
-				LogCacheMutex.Lock()
-				delete(LogCacheMap, localLogPath)
-				LogCacheMutex.Unlock()
-
-				file, err := os.Open(localLogPath)
+			if stat.Size() > lz {
+				file, err := os.Open(lp)
 				if err != nil {
 					continue
 				}
-				file.Seek(localLastSize, 0)
-				newData, _ := io.ReadAll(file)
+				file.Seek(lz, 0)
+				data, _ := io.ReadAll(file)
 				file.Close()
 
-				if len(newData) > 0 {
-					if err := writeJSON(map[string]string{
-						"type":    "append",
-						"content": AdjustTimezone(string(newData)),
-					}); err != nil {
+				if len(data) > 0 {
+					if err := writeJSON(map[string]string{"type": "append", "content": AdjustTimezone(string(data))}); err != nil {
 						return
 					}
+					stateMutex.Lock()
+					lastSize = stat.Size()
+					stateMutex.Unlock()
 				}
-				stateMutex.Lock()
-				lastSize = currentSize
-				stateMutex.Unlock()
 			}
-		case <-ctx.Done():
-			return
 		}
 	}
 }
