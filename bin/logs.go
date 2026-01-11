@@ -91,11 +91,11 @@ func AdjustTimezone(content string) string {
 			return m
 		}
 
-		lvl := "[Info]"
+		lvl := "[INFO]"
 		switch p[2] {
-		case "warning": lvl = "[Warning]"
-		case "error":   lvl = "[Error]"
-		case "fatal":   lvl = "[Fatal]"
+		case "warning": lvl = "[WARN]"
+		case "error":   lvl = "[ERROR]"
+		case "fatal":   lvl = "[FATAL]"
 		}
 
 		b := make([]byte, 0, len(m))
@@ -106,6 +106,13 @@ func AdjustTimezone(content string) string {
 		b = append(b, p[3]...)
 		return string(b)
 	})
+
+	content = strings.ReplaceAll(content, "[Debug]", "[DEBUG]")
+	content = strings.ReplaceAll(content, "[Info]", "[INFO]")
+	content = strings.ReplaceAll(content, "[Warning]", "[WARN]")
+	content = strings.ReplaceAll(content, "[Error]", "[ERROR]")
+
+	return content
 }
 
 func CleanupLogCache() {

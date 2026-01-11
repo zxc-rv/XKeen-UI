@@ -102,10 +102,14 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 				lp := logPath
 				stateMutex.RUnlock()
 				lines := GetLogLines(lp)
+				q := strings.Split(msg.Query, "|")
 				var matched []string
 				for _, l := range lines {
-					if strings.Contains(l, msg.Query) {
-						matched = append(matched, l)
+					for _, k := range q {
+						if k != "" && strings.Contains(l, k) {
+							matched = append(matched, l)
+							break
+						}
 					}
 				}
 				writeJSON(map[string]interface{}{"type": "filtered", "lines": matched})

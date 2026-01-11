@@ -21,25 +21,20 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, Response{Success: false, Error: "Invalid JSON"}, 400)
 		return
 	}
-
 	if req.Action == "restartCore" {
 		if req.Core != "xray" && req.Core != "mihomo" {
 			jsonResponse(w, Response{Success: false, Error: "Invalid core"}, 400)
 			return
 		}
-
 		updateCurrentClient()
-
 		ClientMutex.Lock()
 		currentClientType := CurrentClient
 		ClientMutex.Unlock()
-
 		requestedClientType, exists := clientTypes[req.Core]
 		if !exists || currentClientType != requestedClientType {
 			jsonResponse(w, Response{Success: false, Error: "Core mismatch"}, 400)
 			return
 		}
-
 		script := fmt.Sprintf(`
 		. "/opt/sbin/.xkeen/01_info/03_info_cpu.sh"
 		status_file="/opt/lib/opkg/status"
@@ -65,19 +60,15 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 				;;
 		esac
 		`, req.Core)
-
 		cmd := exec.Command("sh", "-c", script)
-
 		logFileHandle, err := OpenLogFile()
 		if err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Cannot open log file"}, 500)
 			return
 		}
 		defer logFileHandle.Close()
-
 		cmd.Stdout = logFileHandle
 		cmd.Stderr = logFileHandle
-
 		if err := cmd.Run(); err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Command failed"}, 500)
 		} else {
@@ -85,7 +76,6 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
 	var cmd *exec.Cmd
 	switch req.Action {
 	case "start":
@@ -98,9 +88,8 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, Response{Success: false, Error: "Unknown action"}, 400)
 		return
 	}
-	logFile := "/opt/var/log/xray/error.log"
-	os.Truncate(logFile, 0)
-	logFileHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	os.Truncate("/opt/var/log/xray/error.log", 0)
+	logFileHandle, err := OpenLogFile()
 	if err != nil {
 		jsonResponse(w, Response{Success: false, Error: "Cannot open log file"}, 500)
 		return
