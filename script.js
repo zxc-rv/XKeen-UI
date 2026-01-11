@@ -1,115 +1,102 @@
-let monacoEditor;
-let configs = [];
-let activeConfigIndex = -1;
-let isServiceRunning = false;
-let isActionInProgress = false;
-let userScrolled = false;
-let pendingSwitchIndex = -1;
-let currentLogFile = "error.log";
-let isConfigsLoading = true;
-let logFilter = "";
-let isStatusLoading = true;
-let ws = null;
-let pingInterval = null;
-let allLogLines = [];
-let displayLines = [];
-let availableCores = [];
-let currentCore = "";
-let pendingCoreChange = "";
-let isCurrentFileJson = false;
-let dashboardPort = null;
-let dependenciesLoaded = false;
+let monacoEditor
+let configs = []
+let activeConfigIndex = -1
+let isServiceRunning = false
+let isActionInProgress = false
+let userScrolled = false
+let pendingSwitchIndex = -1
+let currentLogFile = "error.log"
+let isConfigsLoading = true
+let logFilter = ""
+let isStatusLoading = true
+let ws = null
+let pingInterval = null
+let allLogLines = []
+let displayLines = []
+let availableCores = []
+let currentCore = ""
+let pendingCoreChange = ""
+let isCurrentFileJson = false
+let dashboardPort = null
+let dependenciesLoaded = false
 
 async function loadDependencies() {
-  if (dependenciesLoaded) return;
+  if (dependenciesLoaded) return
 
   const loadScript = (src) =>
     new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = src;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
+      const script = document.createElement("script")
+      script.src = src
+      script.onload = resolve
+      script.onerror = reject
+      document.head.appendChild(script)
+    })
 
   if (LOCAL) {
     window.MonacoEnvironment = {
       getWorkerUrl: () => "/monaco-editor/vs/base/worker/workerMain.js",
-    };
-    await loadScript("/monaco-editor/standalone.min.js");
-    await loadScript("/monaco-editor/babel.min.js");
-    await loadScript("/monaco-editor/yaml.min.js");
-    await loadScript("/monaco-editor/js-yaml.min.js");
-    await loadScript("/monaco-editor/loader.min.js");
+    }
+    await loadScript("/monaco-editor/standalone.min.js")
+    await loadScript("/monaco-editor/babel.min.js")
+    await loadScript("/monaco-editor/yaml.min.js")
+    await loadScript("/monaco-editor/js-yaml.min.js")
+    await loadScript("/monaco-editor/loader.min.js")
   } else {
-    await loadScript(
-      "https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js"
-    );
-    await loadScript(
-      "https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js"
-    );
-    await loadScript(
-      "https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js"
-    );
-    await loadScript(
-      "https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"
-    );
-    await loadScript(
-      "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js"
-    );
+    await loadScript("https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js")
+    await loadScript("https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js")
+    await loadScript("https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js")
+    await loadScript("https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js")
+    await loadScript("https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js")
   }
 
   require.config({
     paths: {
-      vs: LOCAL
-        ? "/monaco-editor/vs"
-        : "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs",
+      vs: LOCAL ? "/monaco-editor/vs" : "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs",
     },
-  });
-  dependenciesLoaded = true;
+  })
+  dependenciesLoaded = true
 }
 
 async function init() {
   try {
-    await loadDependencies();
+    await loadDependencies()
     await new Promise((resolve, reject) => {
-      require(["vs/editor/editor.main"], resolve, reject);
-    });
+      require(["vs/editor/editor.main"], resolve, reject)
+    })
 
-    await checkXKeenStatus();
-    await getAvailableCores();
-    loadMonacoEditor();
-    connectWebSocket();
+    await checkXKeenStatus()
+    await getAvailableCores()
+    loadMonacoEditor()
+    connectWebSocket()
 
-    const logsContainer = document.getElementById("logsContainer");
-    logsContainer.classList.add("centered");
-    logsContainer.innerHTML =
-      '<div style="color: #6b7280;">Установка соединения...</div>';
+    const logsContainer = document.getElementById("logsContainer")
+    logsContainer.classList.add("centered")
+    logsContainer.innerHTML = '<div style="color: #6b7280;">Установка соединения...</div>'
 
     setInterval(() => {
-      if (!isActionInProgress) checkXKeenStatus();
-    }, 15000);
+      if (!isActionInProgress) checkXKeenStatus()
+    }, 15000)
   } catch (error) {
-    console.error("Failed to initialize app:", error);
-    showToast("Ошибка инициализации приложения", "error");
+    console.error("Failed to initialize app:", error)
+    showToast("Ошибка инициализации приложения", "error")
   }
 }
 
 function getFileLanguage(filename) {
-  if (filename.endsWith(".json")) return "json";
-  if (filename.endsWith(".yaml") || filename.endsWith(".yml")) return "yaml";
-  if (filename.endsWith(".lst")) return "plaintext";
-  return "json";
+  if (filename.endsWith(".json")) return "json"
+  if (filename.endsWith(".yaml") || filename.endsWith(".yml")) return "yaml"
+  if (filename.endsWith(".lst")) return "plaintext"
+  return "json"
 }
 
 function showToast(message, type = "success") {
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
+  const toast = document.createElement("div")
+  toast.className = `toast ${type}`
 
   const icons = {
     success: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon success"><circle cx="12" cy="12" r="10"></circle><path d="m9 12 2 2 4-4"></path></svg>`,
     error: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon error"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>`,
-  };
+  }
 
   if (typeof message === "object" && message.title && message.body) {
     toast.innerHTML = `
@@ -118,7 +105,7 @@ function showToast(message, type = "success") {
         <div class="toast-title">${message.title}</div>
       </div>
       <div class="toast-body">${message.body}</div>
-    `;
+    `
   } else {
     toast.innerHTML = `
       <div class="toast-header">
@@ -126,252 +113,227 @@ function showToast(message, type = "success") {
         <div class="toast-title">${type === "error" ? "Ошибка" : "Успех"}</div>
       </div>
       <div class="toast-body">${message}</div>
-    `;
+    `
   }
 
-  document.body.appendChild(toast);
+  document.body.appendChild(toast)
 
-  setTimeout(() => toast.classList.add("show"), 100);
+  setTimeout(() => toast.classList.add("show"), 100)
   setTimeout(() => {
-    toast.classList.remove("show");
-    setTimeout(() => document.body.removeChild(toast), 300);
-  }, 3000);
+    toast.classList.remove("show")
+    setTimeout(() => document.body.removeChild(toast), 300)
+  }, 3000)
 }
 
 function updateValidationInfo(isValid, error = null) {
-  const messageContainer = document.getElementById(
-    "validationMessageContainer"
-  );
-  const currentConfig = configs[activeConfigIndex];
-  const fileLanguage = currentConfig
-    ? getFileLanguage(currentConfig.filename)
-    : null;
-  const shouldShowMessage =
-    currentConfig && (fileLanguage === "json" || fileLanguage === "yaml");
+  const messageContainer = document.getElementById("validationMessageContainer")
+  const currentConfig = configs[activeConfigIndex]
+  const fileLanguage = currentConfig ? getFileLanguage(currentConfig.filename) : null
+  const shouldShowMessage = currentConfig && (fileLanguage === "json" || fileLanguage === "yaml")
 
   if (!shouldShowMessage) {
-    messageContainer.style.display = "none";
-    const editorControls = document.querySelector(".editor-controls");
-    if (editorControls) editorControls.style.display = "flex";
+    messageContainer.style.display = "none"
+    const editorControls = document.querySelector(".editor-controls")
+    if (editorControls) editorControls.style.display = "flex"
   } else {
-    messageContainer.style.display = "flex";
+    messageContainer.style.display = "flex"
 
-    const fileType = fileLanguage.toUpperCase();
+    const fileType = fileLanguage.toUpperCase()
     if (isValid) {
       messageContainer.innerHTML = `
         <span class="validation-icon validation-success">✓</span>
         <span class="validation-success">${fileType} валиден</span>
-      `;
+      `
     } else {
       messageContainer.innerHTML = `
         <span class="validation-icon validation-error">✗</span>
-        <span class="validation-error">Ошибка: ${
-          error || "Файл невалиден"
-        }</span>
-      `;
+        <span class="validation-error">Ошибка: ${error || "Файл невалиден"}</span>
+      `
     }
   }
 }
 
 function updateControlButtons() {
-  const startBtn = document.getElementById("startBtn");
-  const stopBtn = document.getElementById("stopBtn");
-  const restartBtn = document.getElementById("restartBtn");
-  const controlsSkeletons = document.getElementById("controlsSkeletons");
+  const startBtn = document.getElementById("startBtn")
+  const stopBtn = document.getElementById("stopBtn")
+  const restartBtn = document.getElementById("restartBtn")
+  const controlsSkeletons = document.getElementById("controlsSkeletons")
 
   if (isStatusLoading) {
-    if (controlsSkeletons) controlsSkeletons.style.display = "inline-flex";
-    startBtn.style.display = "none";
-    stopBtn.style.display = "none";
-    restartBtn.style.display = "none";
-    return;
+    if (controlsSkeletons) controlsSkeletons.style.display = "inline-flex"
+    startBtn.style.display = "none"
+    stopBtn.style.display = "none"
+    restartBtn.style.display = "none"
+    return
   }
 
   if (isActionInProgress) {
-    startBtn.disabled = true;
-    stopBtn.disabled = true;
-    restartBtn.disabled = true;
-    return;
+    startBtn.disabled = true
+    stopBtn.disabled = true
+    restartBtn.disabled = true
+    return
   }
 
-  if (controlsSkeletons) controlsSkeletons.style.display = "none";
-  startBtn.style.display = isServiceRunning ? "none" : "inline-flex";
-  stopBtn.style.display = isServiceRunning ? "inline-flex" : "none";
-  restartBtn.style.display = isServiceRunning ? "inline-flex" : "none";
+  if (controlsSkeletons) controlsSkeletons.style.display = "none"
+  startBtn.style.display = isServiceRunning ? "none" : "inline-flex"
+  stopBtn.style.display = isServiceRunning ? "inline-flex" : "none"
+  restartBtn.style.display = isServiceRunning ? "inline-flex" : "none"
 
-  startBtn.disabled = false;
-  stopBtn.disabled = false;
-  restartBtn.disabled = false;
+  startBtn.disabled = false
+  stopBtn.disabled = false
+  restartBtn.disabled = false
 }
 
 function setPendingState(actionText) {
-  isActionInProgress = true;
-  const indicator = document.getElementById("statusIndicator");
-  const text = document.getElementById("statusText");
+  isActionInProgress = true
+  const indicator = document.getElementById("statusIndicator")
+  const text = document.getElementById("statusText")
 
-  indicator.className = "status status-pending";
-  text.textContent = actionText;
-  updateControlButtons();
+  indicator.className = "status status-pending"
+  text.textContent = actionText
+  updateControlButtons()
 }
 
-const ANSI_REGEX = /\u001b\[(\d+)m/g;
-const LEVEL_REGEX = /\[(DEBUG|INFO|WARN|ERROR|FATAL)\]/g;
-const LEVEL_WORD_REGEX = /\b(DEBUG|INFO|WARN|ERROR|FATAL)\b/g;
+const ANSI_REGEX = /\u001b\[(\d+)m/g
+const LEVEL_REGEX = /\[(DEBUG|INFO|WARN|ERROR|FATAL)\]/g
+const LEVEL_WORD_REGEX = /\b(DEBUG|INFO|WARN|ERROR|FATAL)\b/g
 const LOG_COLORS = {
   success: "#00cc00",
   info: "#3b82f6",
   warning: "#f59e0b",
   error: "#ef4444",
   fatal: "#FF5555",
-};
+}
 function parseLogLine(line) {
-  if (!line || !line.trim()) return null;
+  if (!line || !line.trim()) return null
   let content = line
-    .replace(
-      /\u001b\[32m(.*?)\u001b\[0m/g,
-      `<span style="color: ${LOG_COLORS.success};">$1</span>`
-    )
-    .replace(
-      /\u001b\[31m(.*?)\u001b\[0m/g,
-      `<span style="color: ${LOG_COLORS.error};">$1</span>`
-    )
-    .replace(
-      /\u001b\[33m(.*?)\u001b\[0m/g,
-      `<span style="color: ${LOG_COLORS.warning};">$1</span>`
-    )
-    .replace(
-      /\u001b\[34m(.*?)\u001b\[0m/g,
-      `<span style="color: ${LOG_COLORS.info};">$1</span>`
-    )
-    .replace(ANSI_REGEX, "");
+    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.success};">$1</span>`)
+    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.error};">$1</span>`)
+    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.warning};">$1</span>`)
+    .replace(/\u001b\[34m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.info};">$1</span>`)
+    .replace(ANSI_REGEX, "")
   content = content.replace(LEVEL_REGEX, (match, p1) => {
-    const level = p1.toLowerCase();
+    const level = p1.toLowerCase()
     const labels = {
       debug: "DEBUG",
       info: "INFO",
       warn: "WARN",
       error: "ERROR",
       fatal: "FATAL",
-    };
-    const label = labels[level] || p1.toUpperCase();
-    const className = label.toLowerCase();
-    return `<span class="log-badge log-badge-${className}" data-filter="${label}">${label}</span>`;
-  });
+    }
+    const label = labels[level] || p1.toUpperCase()
+    const className = label.toLowerCase()
+    return `<span class="log-badge log-badge-${className}" data-filter="${label}">${label}</span>`
+  })
   if (!content.includes("log-badge")) {
     content = content.replace(LEVEL_WORD_REGEX, (match) => {
-      const level = match.toLowerCase();
+      const level = match.toLowerCase()
       const labels = {
         debug: "DEBUG",
         info: "INFO",
         warn: "WARN",
         error: "ERROR",
         fatal: "FATAL",
-      };
-      const label = labels[level] || match.toUpperCase();
-      const className = label.toLowerCase();
-      return `<span class="log-badge log-badge-${className}" data-filter="${label}">${label}</span>`;
-    });
+      }
+      const label = labels[level] || match.toUpperCase()
+      const className = label.toLowerCase()
+      return `<span class="log-badge log-badge-${className}" data-filter="${label}">${label}</span>`
+    })
   }
-  return `<div class="log-line">${content}</div>`;
+  return `<div class="log-line">${content}</div>`
 }
 
 function updateServiceStatus(running) {
-  const indicator = document.getElementById("statusIndicator");
-  const text = document.getElementById("statusText");
+  const indicator = document.getElementById("statusIndicator")
+  const text = document.getElementById("statusText")
 
-  isServiceRunning = running;
-  isStatusLoading = false;
+  isServiceRunning = running
+  isStatusLoading = false
 
   if (running) {
-    indicator.className = "status status-running";
-    text.textContent = "Сервис запущен";
+    indicator.className = "status status-running"
+    text.textContent = "Сервис запущен"
   } else {
-    indicator.className = "status status-stopped";
-    text.textContent = "Сервис остановлен";
+    indicator.className = "status status-stopped"
+    text.textContent = "Сервис остановлен"
   }
 
-  updateControlButtons();
+  updateControlButtons()
 }
 
 function renderAllLogs(container, lines) {
   const html = lines
     .map((line) => parseLogLine(line))
     .filter(Boolean)
-    .join("");
+    .join("")
 
-  container.innerHTML =
-    html || '<div class="centered" style="color: #6b7280;">Журнал пуст</div>';
-  container.classList.toggle("centered", !html);
+  container.innerHTML = html || '<div class="centered" style="color: #6b7280;">Журнал пуст</div>'
+  container.classList.toggle("centered", !html)
 
-  container.scrollTop = container.scrollHeight;
+  container.scrollTop = container.scrollHeight
 }
 
 function appendLogLines(container, newLines) {
-  if (newLines.length === 0) return;
+  if (newLines.length === 0) return
 
-  const wasAtBottom =
-    container.scrollTop + container.clientHeight >= container.scrollHeight - 50; // Даем допуск 50px
+  const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50
   const htmlFragment = newLines
     .map((line) => parseLogLine(line))
     .filter(Boolean)
-    .join("");
+    .join("")
 
-  if (!htmlFragment) return;
-  if (
-    container.firstElementChild &&
-    container.firstElementChild.innerText === "Журнал пуст"
-  ) {
-    container.innerHTML = "";
-    container.classList.remove("centered");
+  if (!htmlFragment) return
+  if (container.firstElementChild && container.firstElementChild.innerText === "Журнал пуст") {
+    container.innerHTML = ""
+    container.classList.remove("centered")
   }
-  container.insertAdjacentHTML("beforeend", htmlFragment);
+  container.insertAdjacentHTML("beforeend", htmlFragment)
 
-  const maxLines = 1000;
+  const maxLines = 1000
   while (container.children.length > maxLines) {
-    container.firstElementChild.remove();
+    container.firstElementChild.remove()
   }
 
   if (wasAtBottom && !userScrolled) {
-    container.scrollTop = container.scrollHeight;
+    container.scrollTop = container.scrollHeight
   }
 }
 
 function applyFilter() {
   if (!logFilter || logFilter.trim() === "") {
-    displayLines = allLogLines.slice(-1000);
-    renderAllLogs(document.getElementById("logsContainer"), displayLines);
+    displayLines = allLogLines.slice(-1000)
+    renderAllLogs(document.getElementById("logsContainer"), displayLines)
   } else {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(
         JSON.stringify({
           type: "filter",
           query: logFilter,
-        })
-      );
+        }),
+      )
     }
   }
 }
 
 function toggleLogFullscreen() {
-  const panel = document.getElementById("logsPanel");
-  const btn = document.getElementById("expandLogBtn");
+  const panel = document.getElementById("logsPanel")
+  const btn = document.getElementById("expandLogBtn")
   if (panel.classList.contains("expanded-vertical")) {
-    panel.classList.remove("expanded-vertical");
-    document.body.style.overflow = "";
+    panel.classList.remove("expanded-vertical")
+    document.body.style.overflow = ""
 
-    const clone = panel.cloneNode(true);
-    clone.id = "";
-    document.body.appendChild(clone);
+    const clone = panel.cloneNode(true)
+    clone.id = ""
+    document.body.appendChild(clone)
 
-    clone.classList.add("expanded-vertical");
-    clone.style.pointerEvents = "none";
-    clone.offsetHeight;
-    clone.style.animation =
-      "panel-collapse 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards";
+    clone.classList.add("expanded-vertical")
+    clone.style.pointerEvents = "none"
+    clone.offsetHeight
+    clone.style.animation = "panel-collapse 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards"
 
     setTimeout(() => {
-      clone.remove();
-    }, 350);
+      clone.remove()
+    }, 350)
 
     btn.innerHTML = `
       <svg
@@ -391,152 +353,148 @@ function toggleLogFullscreen() {
         <path d="M4 16v2a2 2 0 0 0 2 2h2" />
         <path d="M16 4h2a2 2 0 0 1 2 2v2" />
         <path d="M16 20h2a2 2 0 0 0 2 -2v-2" />
-      </svg>`;
-    btn.title = "Развернуть";
+      </svg>`
+    btn.title = "Развернуть"
   } else {
-    panel.classList.add("expanded-vertical");
+    panel.classList.add("expanded-vertical")
     btn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-minimize"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M15 19v-2a2 2 0 0 1 2 -2h2" /><path d="M15 5v2a2 2 0 0 0 2 2h2" /><path d="M5 15h2a2 2 0 0 1 2 2v2" /><path d="M5 9h2a2 2 0 0 0 2 -2v-2" /></svg>`;
-    btn.title = "Свернуть";
-    document.body.style.overflow = "hidden";
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-minimize"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M15 19v-2a2 2 0 0 1 2 -2h2" /><path d="M15 5v2a2 2 0 0 0 2 2h2" /><path d="M5 15h2a2 2 0 0 1 2 2v2" /><path d="M5 9h2a2 2 0 0 0 2 -2v-2" /></svg>`
+    btn.title = "Свернуть"
+    document.body.style.overflow = "hidden"
   }
-  const container = document.getElementById("logsContainer");
+  const container = document.getElementById("logsContainer")
   setTimeout(() => {
-    container.scrollTop = container.scrollHeight;
-  }, 100);
+    container.scrollTop = container.scrollHeight
+  }, 100)
 }
 
 function connectWebSocket() {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.close();
+    ws.close()
   }
 
   if (pingInterval) {
-    clearInterval(pingInterval);
+    clearInterval(pingInterval)
   }
 
-  ws = new WebSocket(`/ws?file=${currentLogFile}`);
+  ws = new WebSocket(`/ws?file=${currentLogFile}`)
 
   ws.onopen = () => {
-    console.log("WebSocket connected");
+    console.log("WebSocket connected")
     pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "ping" }));
+        ws.send(JSON.stringify({ type: "ping" }))
       }
-    }, 30000);
-  };
+    }, 30000)
+  }
 
   ws.onclose = (event) => {
-    console.warn(
-      `WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting...`
-    );
-    clearInterval(pingInterval);
-    setTimeout(connectWebSocket, 1000);
-  };
+    console.warn(`WebSocket disconnected: ${event.code} (${event.reason}). Reconnecting...`)
+    clearInterval(pingInterval)
+    setTimeout(connectWebSocket, 1000)
+  }
 
   ws.onerror = (error) => {
-    console.error("WebSocket error:", error);
-    ws.close();
-  };
+    console.error("WebSocket error:", error)
+    ws.close()
+  }
 
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    const data = JSON.parse(event.data)
 
-    if (data.type === "pong") return;
+    if (data.type === "pong") return
     if (data.error) {
-      console.error("WebSocket error:", data.error);
-      const container = document.getElementById("logsContainer");
-      container.classList.add("centered");
-      container.innerHTML = `<div style="color: #ef4444;">Ошибка WebSocket: ${data.error}</div>`;
-      return;
+      console.error("WebSocket error:", data.error)
+      const container = document.getElementById("logsContainer")
+      container.classList.add("centered")
+      container.innerHTML = `<div style="color: #ef4444;">Ошибка WebSocket: ${data.error}</div>`
+      return
     }
     if (data.type === "initial") {
-      allLogLines = data.allLines || [];
-      displayLines = data.displayLines || [];
-      renderAllLogs(document.getElementById("logsContainer"), displayLines);
+      allLogLines = data.allLines || []
+      displayLines = data.displayLines || []
+      renderAllLogs(document.getElementById("logsContainer"), displayLines)
 
       if (logFilter && logFilter.trim() !== "") {
-        applyFilter();
+        applyFilter()
       }
-      return;
+      return
     }
     if (data.type === "clear") {
-      allLogLines = [];
-      displayLines = [];
-      const container = document.getElementById("logsContainer");
-      container.classList.add("centered");
-      container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>';
-      return;
+      allLogLines = []
+      displayLines = []
+      const container = document.getElementById("logsContainer")
+      container.classList.add("centered")
+      container.innerHTML = '<div style="color: #6b7280;">Логи очищены</div>'
+      return
     }
     if (data.type === "append") {
-      const newLines = data.content.split("\n").filter((line) => line.trim());
-      allLogLines.push(...newLines);
+      const newLines = data.content.split("\n").filter((line) => line.trim())
+      allLogLines.push(...newLines)
 
-      let linesToRender = [];
+      let linesToRender = []
 
       if (!logFilter) {
-        displayLines.push(...newLines);
-        linesToRender = newLines;
+        displayLines.push(...newLines)
+        linesToRender = newLines
       } else {
-        const matchedNewLines = newLines.filter((line) =>
-          line.includes(logFilter)
-        );
+        const matchedNewLines = newLines.filter((line) => line.includes(logFilter))
         if (matchedNewLines.length > 0) {
-          displayLines.push(...matchedNewLines);
-          linesToRender = matchedNewLines;
+          displayLines.push(...matchedNewLines)
+          linesToRender = matchedNewLines
         }
       }
 
       if (displayLines.length > 1000) {
-        displayLines = displayLines.slice(-1000);
+        displayLines = displayLines.slice(-1000)
       }
       if (linesToRender.length > 0) {
-        appendLogLines(document.getElementById("logsContainer"), linesToRender);
+        appendLogLines(document.getElementById("logsContainer"), linesToRender)
       }
-      return;
+      return
     }
 
     if (data.type === "filtered") {
-      displayLines = data.lines || [];
-      renderAllLogs(document.getElementById("logsContainer"), displayLines);
-      return;
+      displayLines = data.lines || []
+      renderAllLogs(document.getElementById("logsContainer"), displayLines)
+      return
     }
-  };
+  }
 }
 
 function switchLogFile(newLogFile) {
-  if (currentLogFile === newLogFile) return;
+  if (currentLogFile === newLogFile) return
 
-  currentLogFile = newLogFile;
+  currentLogFile = newLogFile
 
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(
       JSON.stringify({
         type: "switchFile",
         file: newLogFile,
-      })
-    );
+      }),
+    )
   }
 }
 
 function loadMonacoEditor() {
   if (!window.monaco) {
-    console.error("Monaco Editor not loaded yet");
-    return;
+    console.error("Monaco Editor not loaded yet")
+    return
   }
   require(["vs/editor/editor.main"], function () {
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
       allowComments: true,
-    });
+    })
     monaco.languages.json.jsonDefaults.setModeConfiguration({
       ...monaco.languages.json.jsonDefaults.modeConfiguration,
       documentFormattingEdits: false,
-    });
+    })
 
     monaco.languages.registerDocumentFormattingEditProvider("json", {
       async provideDocumentFormattingEdits(model, options, token) {
         try {
-          console.log("Using Prettier for JSON formatting...");
+          console.log("Using Prettier for JSON formatting...")
           const text = await window.prettier.format(model.getValue(), {
             parser: "json",
             plugins: [window.prettierPlugins.babel],
@@ -545,35 +503,35 @@ function loadMonacoEditor() {
             trailingComma: "none",
             printWidth: 120,
             endOfLine: "lf",
-          });
+          })
           const cleanedText = text
             .replace(/\n{3,}/g, "\n\n")
             .replace(/\s+$/gm, "")
-            .replace(/\n$/, "");
+            .replace(/\n$/, "")
           return [
             {
               range: model.getFullModelRange(),
               text: cleanedText,
             },
-          ];
+          ]
         } catch (error) {
-          console.error("Prettier formatting error:", error);
+          console.error("Prettier formatting error:", error)
           showToast(
             {
               title: "Ошибка форматирования",
               body: `Файл содержит ошибки`,
             },
-            "error"
-          );
-          return [];
+            "error",
+          )
+          return []
         }
       },
-    });
+    })
 
     monaco.languages.registerDocumentFormattingEditProvider("yaml", {
       async provideDocumentFormattingEdits(model, options, token) {
         try {
-          console.log("Using Prettier for YAML formatting...");
+          console.log("Using Prettier for YAML formatting...")
           const text = await window.prettier.format(model.getValue(), {
             parser: "yaml",
             plugins: [window.prettierPlugins.yaml],
@@ -585,27 +543,27 @@ function loadMonacoEditor() {
             proseWrap: "preserve",
             endOfLine: "lf",
             bracketSpacing: true,
-          });
+          })
           return [
             {
               range: model.getFullModelRange(),
               text: text,
             },
-          ];
+          ]
         } catch (error) {
-          console.error("Prettier YAML formatting error:", error);
-          const errorMessage = error.message.split("\n")[0];
+          console.error("Prettier YAML formatting error:", error)
+          const errorMessage = error.message.split("\n")[0]
           showToast(
             {
               title: "Ошибка форматирования",
               body: `Файл содержит ошибки`,
             },
-            "error"
-          );
-          return [];
+            "error",
+          )
+          return []
         }
       },
-    });
+    })
 
     monaco.editor.defineTheme("tokyo-night", {
       base: "vs-dark",
@@ -646,10 +604,10 @@ function loadMonacoEditor() {
         "editorGutter.addedBackground": "#9ece6a",
         "editorGutter.deletedBackground": "#f7768e",
       },
-    });
+    })
 
-    const editorContainer = document.getElementById("editorContainer");
-    editorContainer.innerHTML = "";
+    const editorContainer = document.getElementById("editorContainer")
+    editorContainer.innerHTML = ""
 
     monacoEditor = monaco.editor.create(editorContainer, {
       value: "",
@@ -688,91 +646,81 @@ function loadMonacoEditor() {
       acceptSuggestionOnEnter: "on",
       tabCompletion: "on",
       wordBasedSuggestions: true,
-    });
+    })
 
     function isMobileViewport() {
-      return (
-        window.matchMedia && window.matchMedia("(max-width: 768px)").matches
-      );
+      return window.matchMedia && window.matchMedia("(max-width: 768px)").matches
     }
 
     function applyDynamicEditorHeight() {
-      const container = document.getElementById("editorContainer");
-      if (!container || !monacoEditor) return;
+      const container = document.getElementById("editorContainer")
+      if (!container || !monacoEditor) return
       if (isMobileViewport()) {
-        const contentHeight = Math.max(
-          monacoEditor.getContentHeight ? monacoEditor.getContentHeight() : 0,
-          200
-        );
-        const maxHeight = 750;
-        container.style.height = Math.min(contentHeight, maxHeight) + "px";
-        monacoEditor.layout();
+        const contentHeight = Math.max(monacoEditor.getContentHeight ? monacoEditor.getContentHeight() : 0, 200)
+        const maxHeight = 750
+        container.style.height = Math.min(contentHeight, maxHeight) + "px"
+        monacoEditor.layout()
       } else {
-        container.style.height = "750px";
-        monacoEditor.layout();
+        container.style.height = "750px"
+        monacoEditor.layout()
       }
     }
 
     monaco.editor.onDidChangeMarkers((uris) => {
-      const currentConfig = configs[activeConfigIndex];
+      const currentConfig = configs[activeConfigIndex]
       if (!currentConfig) {
-        updateValidationInfo(false);
-        return;
+        updateValidationInfo(false)
+        return
       }
 
-      const language = getFileLanguage(currentConfig.filename);
-      const model = monacoEditor.getModel();
-      if (!model) return;
+      const language = getFileLanguage(currentConfig.filename)
+      const model = monacoEditor.getModel()
+      if (!model) return
 
       if (uris.some((uri) => uri.toString() === model.uri.toString())) {
         if (language === "json") {
           const markers = monaco.editor.getModelMarkers({
             owner: "json",
             resource: model.uri,
-          });
-          const errorMarker = markers.find(
-            (m) => m.severity === monaco.MarkerSeverity.Error
-          );
+          })
+          const errorMarker = markers.find((m) => m.severity === monaco.MarkerSeverity.Error)
 
           if (!errorMarker) {
-            updateValidationInfo(true);
+            updateValidationInfo(true)
           } else {
-            updateValidationInfo(false, errorMarker.message);
+            updateValidationInfo(false, errorMarker.message)
           }
-          updateUIDirtyState();
+          updateUIDirtyState()
         }
       }
-    });
+    })
 
     monacoEditor.onDidChangeModelContent(async () => {
-      const currentConfig = configs[activeConfigIndex];
-      if (!currentConfig) return;
+      const currentConfig = configs[activeConfigIndex]
+      if (!currentConfig) return
 
-      const currentContent = monacoEditor.getValue();
-      const isDirty = currentContent !== currentConfig.savedContent;
+      const currentContent = monacoEditor.getValue()
+      const isDirty = currentContent !== currentConfig.savedContent
 
       if (currentConfig.isDirty !== isDirty) {
-        currentConfig.isDirty = isDirty;
-        updateUIDirtyState();
+        currentConfig.isDirty = isDirty
+        updateUIDirtyState()
       }
 
-      const language = getFileLanguage(currentConfig.filename);
-      const model = monacoEditor.getModel();
+      const language = getFileLanguage(currentConfig.filename)
+      const model = monacoEditor.getModel()
 
       if (language === "yaml") {
         try {
-          jsyaml.load(currentContent);
-          monaco.editor.setModelMarkers(model, "yaml", []);
-          updateValidationInfo(true);
+          jsyaml.load(currentContent)
+          monaco.editor.setModelMarkers(model, "yaml", [])
+          updateValidationInfo(true)
         } catch (e) {
-          const line = e.mark ? e.mark.line + 1 : 1;
-          const column = e.mark ? e.mark.column + 1 : 1;
-          const message = e.mark
-            ? `${e.reason || e.message} [строка ${line}]`
-            : e.message;
-          const lineContent = model.getLineContent(line);
-          const endColumn =
-            column + Math.max(1, lineContent.length - column + 1);
+          const line = e.mark ? e.mark.line + 1 : 1
+          const column = e.mark ? e.mark.column + 1 : 1
+          const message = e.mark ? `${e.reason || e.message} [строка ${line}]` : e.message
+          const lineContent = model.getLineContent(line)
+          const endColumn = column + Math.max(1, lineContent.length - column + 1)
 
           monaco.editor.setModelMarkers(model, "yaml", [
             {
@@ -783,309 +731,275 @@ function loadMonacoEditor() {
               endLineNumber: line,
               endColumn: endColumn,
             },
-          ]);
-          updateValidationInfo(false, message);
+          ])
+          updateValidationInfo(false, message)
         }
-        updateUIDirtyState();
+        updateUIDirtyState()
       } else if (language !== "json") {
-        monaco.editor.setModelMarkers(model, "yaml", []);
-        updateValidationInfo(false);
-        updateUIDirtyState();
+        monaco.editor.setModelMarkers(model, "yaml", [])
+        updateValidationInfo(false)
+        updateUIDirtyState()
       }
-    });
+    })
 
     if (monacoEditor.onDidContentSizeChange) {
       monacoEditor.onDidContentSizeChange(() => {
-        applyDynamicEditorHeight();
-      });
+        applyDynamicEditorHeight()
+      })
     }
 
     window.addEventListener(
       "resize",
       () => {
-        applyDynamicEditorHeight();
+        applyDynamicEditorHeight()
       },
-      { passive: true }
-    );
+      { passive: true },
+    )
 
-    loadConfigs();
+    loadConfigs()
 
-    requestAnimationFrame(() => applyDynamicEditorHeight());
-  });
+    requestAnimationFrame(() => applyDynamicEditorHeight())
+  })
 }
 
 function updateUIDirtyState() {
-  const saveBtn = document.getElementById("saveBtn");
-  const saveRestartBtn = document.getElementById("saveRestartBtn");
-  const formatBtn = document.getElementById("formatBtn");
-  const formatDropdownBtn = document.getElementById("formatDropdownBtn");
-  const currentConfig = configs[activeConfigIndex];
+  const saveBtn = document.getElementById("saveBtn")
+  const saveRestartBtn = document.getElementById("saveRestartBtn")
+  const formatBtn = document.getElementById("formatBtn")
+  const formatDropdownBtn = document.getElementById("formatDropdownBtn")
+  const currentConfig = configs[activeConfigIndex]
 
   if (currentConfig) {
-    const isValid = isFileValid();
-    const fileLanguage = getFileLanguage(currentConfig.filename);
-    const hasChanges = currentConfig.isDirty;
+    const isValid = isFileValid()
+    const fileLanguage = getFileLanguage(currentConfig.filename)
+    const hasChanges = currentConfig.isDirty
 
-    saveBtn.disabled = !hasChanges || !isValid;
-    formatBtn.disabled =
-      !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid;
+    saveBtn.disabled = !hasChanges || !isValid
+    formatBtn.disabled = !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid
 
     if (formatDropdownBtn) {
-      formatDropdownBtn.disabled =
-        !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid;
+      formatDropdownBtn.disabled = !(fileLanguage === "json" || fileLanguage === "yaml") || !isValid
     }
 
     if (fileLanguage === "json") {
-      const isXray = currentCore === "xray";
-      saveRestartBtn.disabled = !(
-        isXray &&
-        hasChanges &&
-        isServiceRunning &&
-        isValid
-      );
+      const isXray = currentCore === "xray"
+      saveRestartBtn.disabled = !(isXray && hasChanges && isServiceRunning && isValid)
     } else if (fileLanguage === "yaml") {
-      const isMihomo = currentCore === "mihomo";
-      saveRestartBtn.disabled = !(
-        isMihomo &&
-        hasChanges &&
-        isServiceRunning &&
-        isValid
-      );
+      const isMihomo = currentCore === "mihomo"
+      saveRestartBtn.disabled = !(isMihomo && hasChanges && isServiceRunning && isValid)
     } else if (fileLanguage === "plaintext") {
-      saveRestartBtn.disabled = !(hasChanges && isServiceRunning && isValid);
+      saveRestartBtn.disabled = !(hasChanges && isServiceRunning && isValid)
     } else {
-      saveRestartBtn.disabled = true;
+      saveRestartBtn.disabled = true
     }
   } else {
-    saveBtn.disabled = true;
-    saveRestartBtn.disabled = true;
-    formatBtn.disabled = true;
+    saveBtn.disabled = true
+    saveRestartBtn.disabled = true
+    formatBtn.disabled = true
     if (formatDropdownBtn) {
-      formatDropdownBtn.disabled = true;
+      formatDropdownBtn.disabled = true
     }
   }
-  renderTabs();
+  renderTabs()
 }
 
 function renderTabs() {
-  const coreTabsList = document.getElementById("coreTabsList");
-  const xkeenTabsList = document.getElementById("xkeenTabsList");
-  const coreIndicator = coreTabsList?.querySelector(".tab-active-indicator");
-  const xkeenIndicator = xkeenTabsList?.querySelector(".tab-active-indicator");
-  const coreTransform = coreIndicator?.style.transform || "";
-  const xkeenTransform = xkeenIndicator?.style.transform || "";
-  const editorControlsSkeletons = document.getElementById(
-    "editorControlsSkeletons"
-  );
-  const saveBtn = document.getElementById("saveBtn");
-  const saveRestartBtn = document.getElementById("saveRestartBtn");
-  const formatBtn = document.getElementById("formatBtn");
-  const formatDropdownBtn = document.getElementById("formatDropdownBtn");
-  const validationSkeleton = document.getElementById("validationSkeleton");
-  const validationInfo = document.getElementById("validationInfo");
+  const coreTabsList = document.getElementById("coreTabsList")
+  const xkeenTabsList = document.getElementById("xkeenTabsList")
+  const coreIndicator = coreTabsList?.querySelector(".tab-active-indicator")
+  const xkeenIndicator = xkeenTabsList?.querySelector(".tab-active-indicator")
+  const coreTransform = coreIndicator?.style.transform || ""
+  const xkeenTransform = xkeenIndicator?.style.transform || ""
+  const editorControlsSkeletons = document.getElementById("editorControlsSkeletons")
+  const saveBtn = document.getElementById("saveBtn")
+  const saveRestartBtn = document.getElementById("saveRestartBtn")
+  const formatBtn = document.getElementById("formatBtn")
+  const formatDropdownBtn = document.getElementById("formatDropdownBtn")
+  const validationSkeleton = document.getElementById("validationSkeleton")
+  const validationInfo = document.getElementById("validationInfo")
 
   if (isConfigsLoading) {
-    if (validationInfo) validationInfo.style.display = "flex";
-    if (editorControlsSkeletons)
-      editorControlsSkeletons.style.display = "inline-flex";
-    if (saveBtn) saveBtn.style.display = "none";
-    if (saveRestartBtn) saveRestartBtn.style.display = "none";
-    if (formatBtn) formatBtn.style.display = "none";
-    if (formatDropdownBtn) formatDropdownBtn.disabled = true;
-    if (validationSkeleton) validationSkeleton.style.display = "block";
+    if (validationInfo) validationInfo.style.display = "flex"
+    if (editorControlsSkeletons) editorControlsSkeletons.style.display = "inline-flex"
+    if (saveBtn) saveBtn.style.display = "none"
+    if (saveRestartBtn) saveRestartBtn.style.display = "none"
+    if (formatBtn) formatBtn.style.display = "none"
+    if (formatDropdownBtn) formatDropdownBtn.disabled = true
+    if (validationSkeleton) validationSkeleton.style.display = "block"
 
-    coreTabsList.innerHTML = "";
-    xkeenTabsList.innerHTML = "";
+    coreTabsList.innerHTML = ""
+    xkeenTabsList.innerHTML = ""
     for (let i = 0; i < 3; i++) {
-      const sk = document.createElement("div");
-      sk.className = "skeleton skeleton-tab";
-      coreTabsList.appendChild(sk);
+      const sk = document.createElement("div")
+      sk.className = "skeleton skeleton-tab"
+      coreTabsList.appendChild(sk)
     }
     for (let i = 0; i < 2; i++) {
-      const sk = document.createElement("div");
-      sk.className = "skeleton skeleton-tab";
-      xkeenTabsList.appendChild(sk);
+      const sk = document.createElement("div")
+      sk.className = "skeleton skeleton-tab"
+      xkeenTabsList.appendChild(sk)
     }
-    return;
+    return
   }
 
-  if (editorControlsSkeletons) editorControlsSkeletons.style.display = "none";
-  if (saveBtn) saveBtn.style.display = "inline-flex";
-  if (saveRestartBtn) saveRestartBtn.style.display = "inline-flex";
-  if (formatBtn) formatBtn.style.display = "inline-flex";
-  if (formatDropdownBtn) formatDropdownBtn.style.display = "inline-flex";
-  if (validationSkeleton) validationSkeleton.style.display = "none";
+  if (editorControlsSkeletons) editorControlsSkeletons.style.display = "none"
+  if (saveBtn) saveBtn.style.display = "inline-flex"
+  if (saveRestartBtn) saveRestartBtn.style.display = "inline-flex"
+  if (formatBtn) formatBtn.style.display = "inline-flex"
+  if (formatDropdownBtn) formatDropdownBtn.style.display = "inline-flex"
+  if (validationSkeleton) validationSkeleton.style.display = "none"
 
-  const coreConfigs = configs.filter(
-    (config) => !config.filename.endsWith(".lst")
-  );
-  const xkeenConfigs = configs.filter((config) =>
-    config.filename.endsWith(".lst")
-  );
+  const coreConfigs = configs.filter((config) => !config.filename.endsWith(".lst"))
+  const xkeenConfigs = configs.filter((config) => config.filename.endsWith(".lst"))
 
-  coreTabsList.innerHTML = "";
-  const newCoreIndicator = document.createElement("div");
-  newCoreIndicator.className = "tab-active-indicator";
-  newCoreIndicator.style.transform = coreTransform;
-  coreTabsList.appendChild(newCoreIndicator);
+  coreTabsList.innerHTML = ""
+  const newCoreIndicator = document.createElement("div")
+  newCoreIndicator.className = "tab-active-indicator"
+  newCoreIndicator.style.transform = coreTransform
+  coreTabsList.appendChild(newCoreIndicator)
 
   coreConfigs.forEach((config, index) => {
-    const globalIndex = configs.indexOf(config);
-    const tabTrigger = document.createElement("button");
-    tabTrigger.className = `tab-trigger ${
-      globalIndex === activeConfigIndex ? "active" : ""
-    } ${config.isDirty ? "dirty" : ""}`;
-    tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`;
-    tabTrigger.onclick = () => switchTab(globalIndex);
-    coreTabsList.appendChild(tabTrigger);
-  });
+    const globalIndex = configs.indexOf(config)
+    const tabTrigger = document.createElement("button")
+    tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`
+    tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`
+    tabTrigger.onclick = () => switchTab(globalIndex)
+    coreTabsList.appendChild(tabTrigger)
+  })
 
-  xkeenTabsList.innerHTML = "";
+  xkeenTabsList.innerHTML = ""
   if (xkeenConfigs.length > 0) {
-    const newXkeenIndicator = document.createElement("div");
-    newXkeenIndicator.className = "tab-active-indicator";
-    newXkeenIndicator.style.transform = xkeenTransform;
-    xkeenTabsList.appendChild(newXkeenIndicator);
+    const newXkeenIndicator = document.createElement("div")
+    newXkeenIndicator.className = "tab-active-indicator"
+    newXkeenIndicator.style.transform = xkeenTransform
+    xkeenTabsList.appendChild(newXkeenIndicator)
     xkeenConfigs.forEach((config, index) => {
-      const globalIndex = configs.indexOf(config);
-      const tabTrigger = document.createElement("button");
-      tabTrigger.className = `tab-trigger ${
-        globalIndex === activeConfigIndex ? "active" : ""
-      } ${config.isDirty ? "dirty" : ""}`;
-      tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`;
-      tabTrigger.onclick = () => switchTab(globalIndex);
-      xkeenTabsList.appendChild(tabTrigger);
-    });
-    xkeenTabsList.parentElement.style.display = "inline-block";
+      const globalIndex = configs.indexOf(config)
+      const tabTrigger = document.createElement("button")
+      tabTrigger.className = `tab-trigger ${globalIndex === activeConfigIndex ? "active" : ""} ${config.isDirty ? "dirty" : ""}`
+      tabTrigger.innerHTML = `${config.name}<span class="dirty-indicator"></span>`
+      tabTrigger.onclick = () => switchTab(globalIndex)
+      xkeenTabsList.appendChild(tabTrigger)
+    })
+    xkeenTabsList.parentElement.style.display = "inline-block"
   } else {
-    xkeenTabsList.parentElement.style.display = "none";
+    xkeenTabsList.parentElement.style.display = "none"
   }
-  setTimeout(() => updateActiveTabIndicator(), 0);
+  setTimeout(() => updateActiveTabIndicator(), 0)
 }
 
 function updateActiveTabIndicator() {
-  const coreTabsList = document.getElementById("coreTabsList");
-  const xkeenTabsList = document.getElementById("xkeenTabsList");
-  [coreTabsList, xkeenTabsList].forEach((container) => {
-    if (!container) return;
-    const indicator = container.querySelector(".tab-active-indicator");
+  const coreTabsList = document.getElementById("coreTabsList")
+  const xkeenTabsList = document.getElementById("xkeenTabsList")
+  ;[coreTabsList, xkeenTabsList].forEach((container) => {
+    if (!container) return
+    const indicator = container.querySelector(".tab-active-indicator")
     if (indicator) {
-      indicator.style.opacity = "0";
+      indicator.style.opacity = "0"
     }
-  });
-  const activeConfig = configs[activeConfigIndex];
-  if (!activeConfig) return;
-  const isXkeen = activeConfig.filename.endsWith(".lst");
-  const activeContainer = isXkeen ? xkeenTabsList : coreTabsList;
-  if (!activeContainer) return;
-  const indicator = activeContainer.querySelector(".tab-active-indicator");
-  if (!indicator) return;
-  const tabs = Array.from(activeContainer.querySelectorAll(".tab-trigger"));
-  const groupConfigs = isXkeen
-    ? configs.filter((c) => c.filename.endsWith(".lst"))
-    : configs.filter((c) => !c.filename.endsWith(".lst"));
-  const groupIndex = groupConfigs.indexOf(activeConfig);
-  if (groupIndex === -1) return;
-  const activeTab = tabs[groupIndex];
-  if (!activeTab) return;
-  const offsetLeft = activeTab.offsetLeft;
-  const width = activeTab.offsetWidth;
+  })
+  const activeConfig = configs[activeConfigIndex]
+  if (!activeConfig) return
+  const isXkeen = activeConfig.filename.endsWith(".lst")
+  const activeContainer = isXkeen ? xkeenTabsList : coreTabsList
+  if (!activeContainer) return
+  const indicator = activeContainer.querySelector(".tab-active-indicator")
+  if (!indicator) return
+  const tabs = Array.from(activeContainer.querySelectorAll(".tab-trigger"))
+  const groupConfigs = isXkeen ? configs.filter((c) => c.filename.endsWith(".lst")) : configs.filter((c) => !c.filename.endsWith(".lst"))
+  const groupIndex = groupConfigs.indexOf(activeConfig)
+  if (groupIndex === -1) return
+  const activeTab = tabs[groupIndex]
+  if (!activeTab) return
+  const offsetLeft = activeTab.offsetLeft
+  const width = activeTab.offsetWidth
 
-  indicator.style.width = `${width}px`;
-  indicator.style.transform = `translateX(${offsetLeft}px)`;
-  indicator.style.opacity = "1";
+  indicator.style.width = `${width}px`
+  indicator.style.transform = `translateX(${offsetLeft}px)`
+  indicator.style.opacity = "1"
 
   if (window.lastActiveGroup !== (isXkeen ? "xkeen" : "core")) {
-    indicator.style.transition = "none";
+    indicator.style.transition = "none"
     setTimeout(() => {
-      indicator.style.transition = "";
-    }, 10);
+      indicator.style.transition = ""
+    }, 10)
   }
-  window.lastActiveGroup = isXkeen ? "xkeen" : "core";
+  window.lastActiveGroup = isXkeen ? "xkeen" : "core"
 }
 
 function closeDirtyModal() {
-  pendingSwitchIndex = -1;
-  document.getElementById("dirtyModal").classList.remove("show");
+  pendingSwitchIndex = -1
+  document.getElementById("dirtyModal").classList.remove("show")
 }
 
 async function saveAndSwitch() {
   if (pendingSwitchIndex !== -1) {
-    await saveCurrentConfig();
+    await saveCurrentConfig()
     if (!configs[activeConfigIndex].isDirty) {
-      const targetIndex = pendingSwitchIndex;
-      pendingSwitchIndex = -1;
-      closeDirtyModal();
-      switchTab(targetIndex);
+      const targetIndex = pendingSwitchIndex
+      pendingSwitchIndex = -1
+      closeDirtyModal()
+      switchTab(targetIndex)
     }
   }
 }
 
 function discardAndSwitch() {
   if (pendingSwitchIndex !== -1) {
-    const config = configs[activeConfigIndex];
-    monacoEditor.setValue(config.savedContent);
-    config.isDirty = false;
-    updateUIDirtyState();
-    const targetIndex = pendingSwitchIndex;
-    pendingSwitchIndex = -1;
-    closeDirtyModal();
-    switchTab(targetIndex);
+    const config = configs[activeConfigIndex]
+    monacoEditor.setValue(config.savedContent)
+    config.isDirty = false
+    updateUIDirtyState()
+    const targetIndex = pendingSwitchIndex
+    pendingSwitchIndex = -1
+    closeDirtyModal()
+    switchTab(targetIndex)
   }
 }
 
 function switchTab(index) {
-  if (index < 0 || index >= configs.length || index === activeConfigIndex)
-    return;
-  const currentConfig = configs[activeConfigIndex];
+  if (index < 0 || index >= configs.length || index === activeConfigIndex) return
+  const currentConfig = configs[activeConfigIndex]
   if (currentConfig && currentConfig.isDirty) {
-    pendingSwitchIndex = index;
-    document.getElementById("dirtyModal").classList.add("show");
-    return;
+    pendingSwitchIndex = index
+    document.getElementById("dirtyModal").classList.add("show")
+    return
   }
-  activeConfigIndex = index;
-  saveLastSelectedTab();
-  const config = configs[index];
-  const formatBtn = document.getElementById("formatBtn");
-  const formatDropdownBtn = document.getElementById("formatDropdownBtn");
+  activeConfigIndex = index
+  saveLastSelectedTab()
+  const config = configs[index]
+  const formatBtn = document.getElementById("formatBtn")
+  const formatDropdownBtn = document.getElementById("formatDropdownBtn")
   if (config) {
-    const language = getFileLanguage(config.filename);
-    isCurrentFileJson = language === "json";
-    if (formatBtn)
-      formatBtn.disabled = !(language === "json" || language === "yaml");
+    const language = getFileLanguage(config.filename)
+    isCurrentFileJson = language === "json"
+    if (formatBtn) formatBtn.disabled = !(language === "json" || language === "yaml")
     if (formatDropdownBtn) {
-      formatDropdownBtn.disabled = !(
-        language === "json" || language === "yaml"
-      );
+      formatDropdownBtn.disabled = !(language === "json" || language === "yaml")
     }
   }
 
   if (monacoEditor && config) {
-    const language = getFileLanguage(config.filename);
-    monacoEditor.setValue(config.content);
-    monaco.editor.setModelLanguage(monacoEditor.getModel(), language);
-    config.isDirty = false;
+    const language = getFileLanguage(config.filename)
+    monacoEditor.setValue(config.content)
+    monaco.editor.setModelLanguage(monacoEditor.getModel(), language)
+    config.isDirty = false
   }
-  renderTabs();
-  updateUIDirtyState();
-  const validationInfo = document.getElementById("validationInfo");
+  renderTabs()
+  updateUIDirtyState()
+  const validationInfo = document.getElementById("validationInfo")
   if (validationInfo) {
-    validationInfo.style.display = "flex";
+    validationInfo.style.display = "flex"
   }
   if (config && getFileLanguage(config.filename) === "json") {
-    const model = monacoEditor.getModel();
+    const model = monacoEditor.getModel()
     if (model) {
-      const markers = monaco.editor.getModelMarkers({ owner: "json" });
-      const errorMarker = markers.find(
-        (m) => m.severity === monaco.MarkerSeverity.Error
-      );
-      updateValidationInfo(
-        !errorMarker,
-        errorMarker ? errorMarker.message : null
-      );
+      const markers = monaco.editor.getModelMarkers({ owner: "json" })
+      const errorMarker = markers.find((m) => m.severity === monaco.MarkerSeverity.Error)
+      updateValidationInfo(!errorMarker, errorMarker ? errorMarker.message : null)
     }
   }
-  updateUIDirtyState();
+  updateUIDirtyState()
 }
 
 async function apiCall(endpoint, data = null) {
@@ -1093,819 +1007,776 @@ async function apiCall(endpoint, data = null) {
     const options = {
       method: data ? "POST" : "GET",
       headers: { "Content-Type": "application/json" },
-    };
-    if (data) options.body = JSON.stringify(data);
+    }
+    if (data) options.body = JSON.stringify(data)
 
-    const response = await fetch(`/cgi/${endpoint}`, options);
+    const response = await fetch(`/cgi/${endpoint}`, options)
 
     if (!response.ok) {
-      return { success: false, error: `HTTP ${response.status}` };
+      return { success: false, error: `HTTP ${response.status}` }
     }
 
-    const result = await response.json();
-    return result;
+    const result = await response.json()
+    return result
   } catch (error) {
-    console.error("API Error:", error);
-    return { success: false, error: error.message };
+    console.error("API Error:", error)
+    return { success: false, error: error.message }
   }
 }
 
 async function loadConfigs() {
-  const tabsList = document.getElementById("tabsList");
-  isConfigsLoading = true;
-  if (tabsList) tabsList.classList.add("empty");
-  renderTabs();
-  const result = await apiCall("configs");
+  const tabsList = document.getElementById("tabsList")
+  isConfigsLoading = true
+  if (tabsList) tabsList.classList.add("empty")
+  renderTabs()
+  const result = await apiCall("configs")
   if (result.success && result.configs) {
     configs = result.configs.map((c) => ({
       ...c,
       savedContent: c.content,
       isDirty: false,
-    }));
+    }))
     if (configs.length > 0) {
-      isConfigsLoading = false;
-      if (tabsList) tabsList.classList.remove("empty");
+      isConfigsLoading = false
+      if (tabsList) tabsList.classList.remove("empty")
       requestAnimationFrame(() => {
         setTimeout(() => {
-          const savedIndex = loadLastSelectedTab();
-          switchTab(savedIndex);
-        }, 100);
+          const savedIndex = loadLastSelectedTab()
+          switchTab(savedIndex)
+        }, 100)
         requestAnimationFrame(() => {
-          updateActiveTabIndicator();
+          updateActiveTabIndicator()
           if (monacoEditor) {
-            monacoEditor.layout();
+            monacoEditor.layout()
           }
-        });
-      });
+        })
+      })
     } else {
-      isConfigsLoading = false;
-      renderTabs();
-      updateUIDirtyState();
+      isConfigsLoading = false
+      renderTabs()
+      updateUIDirtyState()
     }
   } else {
-    isConfigsLoading = false;
-    showToast("Ошибка загрузки конфигураций", "error");
-    renderTabs();
-    updateUIDirtyState();
+    isConfigsLoading = false
+    showToast("Ошибка загрузки конфигураций", "error")
+    renderTabs()
+    updateUIDirtyState()
   }
-  updateDashboardLink();
+  updateDashboardLink()
 }
 
 function isFileValid() {
-  if (!monacoEditor) return false;
+  if (!monacoEditor) return false
 
-  const currentConfig = configs[activeConfigIndex];
-  if (!currentConfig) return false;
+  const currentConfig = configs[activeConfigIndex]
+  if (!currentConfig) return false
 
-  const language = getFileLanguage(currentConfig.filename);
+  const language = getFileLanguage(currentConfig.filename)
 
   if (language === "json") {
-    const model = monacoEditor.getModel();
-    if (!model) return true;
+    const model = monacoEditor.getModel()
+    if (!model) return true
 
-    const markers = monaco.editor.getModelMarkers({ owner: "json" });
-    return !markers.some(
-      (m) =>
-        m.resource.toString() === model.uri.toString() &&
-        m.severity === monaco.MarkerSeverity.Error
-    );
+    const markers = monaco.editor.getModelMarkers({ owner: "json" })
+    return !markers.some((m) => m.resource.toString() === model.uri.toString() && m.severity === monaco.MarkerSeverity.Error)
   } else if (language === "yaml") {
     try {
-      jsyaml.load(monacoEditor.getValue());
-      return true;
+      jsyaml.load(monacoEditor.getValue())
+      return true
     } catch (e) {
-      return false;
+      return false
     }
   }
 
-  return true;
+  return true
 }
 
 async function saveCurrentConfig() {
-  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor)
-    return;
+  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return
 
-  const config = configs[activeConfigIndex];
-  const content = monacoEditor.getValue();
+  const config = configs[activeConfigIndex]
+  const content = monacoEditor.getValue()
 
   if (!content.trim()) {
-    showToast("Конфигурация пустая", "error");
-    return;
+    showToast("Конфигурация пустая", "error")
+    return
   }
 
   if (!isFileValid()) {
-    showToast("Невозможно сохранить: файл содержит ошибки", "error");
-    return;
+    showToast("Невозможно сохранить: файл содержит ошибки", "error")
+    return
   }
 
   const result = await apiCall("configs", {
     action: "save",
     filename: config.filename,
     content: content,
-  });
+  })
 
   if (result.success) {
-    config.content = content;
-    config.savedContent = content;
-    config.isDirty = false;
-    updateUIDirtyState();
-    showToast(`Конфигурация "${config.name}" сохранена`);
+    config.content = content
+    config.savedContent = content
+    config.isDirty = false
+    updateUIDirtyState()
+    showToast(`Конфигурация "${config.name}" сохранена`)
   } else {
-    showToast(`Ошибка сохранения: ${result.error}`, "error");
+    showToast(`Ошибка сохранения: ${result.error}`, "error")
   }
 }
 
 function hasCriticalChanges(oldContent, newContent, language) {
   try {
     if (language === "yaml") {
-      const oldConfig = jsyaml.load(oldContent);
-      const newConfig = jsyaml.load(newContent);
-      const criticalFields = ["listeners", "redir-port", "tproxy-port"];
+      const oldConfig = jsyaml.load(oldContent)
+      const newConfig = jsyaml.load(newContent)
+      const criticalFields = ["listeners", "redir-port", "tproxy-port"]
 
       for (const field of criticalFields) {
-        const oldValue = JSON.stringify(oldConfig?.[field]);
-        const newValue = JSON.stringify(newConfig?.[field]);
+        const oldValue = JSON.stringify(oldConfig?.[field])
+        const newValue = JSON.stringify(newConfig?.[field])
         if (oldValue !== newValue) {
-          return true;
+          return true
         }
       }
-      return false;
+      return false
     } else if (language === "json") {
-      const oldConfig = JSON.parse(oldContent);
-      const newConfig = JSON.parse(newContent);
-      const oldInbounds = JSON.stringify(oldConfig?.inbounds);
-      const newInbounds = JSON.stringify(newConfig?.inbounds);
+      const oldConfig = JSON.parse(oldContent)
+      const newConfig = JSON.parse(newContent)
+      const oldInbounds = JSON.stringify(oldConfig?.inbounds)
+      const newInbounds = JSON.stringify(newConfig?.inbounds)
 
-      return oldInbounds !== newInbounds;
+      return oldInbounds !== newInbounds
     }
   } catch (e) {
-    console.error("Error checking critical changes:", e);
-    return false;
+    console.error("Error checking critical changes:", e)
+    return false
   }
 
-  return false;
+  return false
 }
 
 async function saveAndRestart() {
-  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor)
-    return;
+  if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return
 
-  const config = configs[activeConfigIndex];
-  const content = monacoEditor.getValue();
+  const config = configs[activeConfigIndex]
+  const content = monacoEditor.getValue()
 
   if (!content.trim()) {
-    showToast("Конфиг пустой", "error");
-    return;
+    showToast("Конфиг пустой", "error")
+    return
   }
 
   if (!isFileValid()) {
-    showToast("Невозможно сохранить: файл содержит ошибки", "error");
-    return;
+    showToast("Невозможно сохранить: файл содержит ошибки", "error")
+    return
   }
 
   const result = await apiCall("configs", {
     action: "save",
     filename: config.filename,
     content: content,
-  });
+  })
 
   if (result.success) {
-    const language = getFileLanguage(config.filename);
-    const needsFullRestart = hasCriticalChanges(
-      config.savedContent,
-      content,
-      language
-    );
+    const language = getFileLanguage(config.filename)
+    const needsFullRestart = hasCriticalChanges(config.savedContent, content, language)
 
-    config.content = content;
-    config.savedContent = content;
-    config.isDirty = false;
-    updateUIDirtyState();
-    updateDashboardLink();
-    showToast(`Конфиг "${config.name}" сохранен`);
+    config.content = content
+    config.savedContent = content
+    config.isDirty = false
+    updateUIDirtyState()
+    updateDashboardLink()
+    showToast(`Конфиг "${config.name}" сохранен`)
 
-    setPendingState("Перезапускается...");
+    setPendingState("Перезапускается...")
 
     try {
-      let restartResult;
+      let restartResult
 
       if (language === "json" || language === "yaml") {
         if (needsFullRestart) {
-          restartResult = await apiCall("control", { action: "restart" });
+          restartResult = await apiCall("control", { action: "restart" })
         } else {
           restartResult = await apiCall("control", {
             action: "restartCore",
             core: currentCore,
-          });
+          })
         }
       } else if (language === "plaintext") {
-        restartResult = await apiCall("control", { action: "restart" });
+        restartResult = await apiCall("control", { action: "restart" })
       }
 
       if (restartResult && restartResult.success) {
-        const restartType = needsFullRestart
-          ? "Полный перезапуск выполнен"
-          : "Ядро перезапущено";
-        showToast(restartType);
-        isActionInProgress = false;
-        isServiceRunning = true;
-        updateServiceStatus(true);
+        const restartType = needsFullRestart ? "Полный перезапуск выполнен" : "Ядро перезапущено"
+        showToast(restartType)
+        isActionInProgress = false
+        isServiceRunning = true
+        updateServiceStatus(true)
       } else {
-        showToast(
-          `Ошибка перезапуска: ${restartResult?.error || "unknown"}`,
-          "error"
-        );
-        isActionInProgress = false;
-        checkXKeenStatus();
+        showToast(`Ошибка перезапуска: ${restartResult?.error || "unknown"}`, "error")
+        isActionInProgress = false
+        checkXKeenStatus()
       }
     } catch (e) {
-      isActionInProgress = false;
-      checkXKeenStatus();
+      isActionInProgress = false
+      checkXKeenStatus()
     }
   } else {
-    showToast(`Ошибка сохранения: ${result.error}`, "error");
+    showToast(`Ошибка сохранения: ${result.error}`, "error")
   }
 }
 function formatCurrentConfig() {
-  if (!monacoEditor) return;
+  if (!monacoEditor) return
 
-  const formatAction = monacoEditor.getAction("editor.action.formatDocument");
+  const formatAction = monacoEditor.getAction("editor.action.formatDocument")
   if (formatAction) {
-    formatAction.run();
+    formatAction.run()
   }
 }
 
 async function checkXKeenStatus() {
-  if (isActionInProgress) return;
-  const result = await apiCall("status");
-  updateServiceStatus(result.running);
+  if (isActionInProgress) return
+  const result = await apiCall("status")
+  updateServiceStatus(result.running)
 }
 
 async function startXKeen() {
   try {
-    setPendingState("Запускается...");
-    const result = await apiCall("control", { action: "start" });
+    setPendingState("Запускается...")
+    const result = await apiCall("control", { action: "start" })
     if (result.success) {
-      showToast("XKeen запущен");
-      isActionInProgress = false;
-      isServiceRunning = true;
-      updateServiceStatus(true);
+      showToast("XKeen запущен")
+      isActionInProgress = false
+      isServiceRunning = true
+      updateServiceStatus(true)
     } else {
-      showToast(`Ошибка запуска: ${result.output || result.error}`, "error");
-      isActionInProgress = false;
-      checkXKeenStatus();
+      showToast(`Ошибка запуска: ${result.output || result.error}`, "error")
+      isActionInProgress = false
+      checkXKeenStatus()
     }
   } catch (e) {
-    isActionInProgress = false;
-    checkXKeenStatus();
+    isActionInProgress = false
+    checkXKeenStatus()
   }
 }
 
 async function stopXKeen() {
   try {
-    setPendingState("Останавливается...");
-    const result = await apiCall("control", { action: "stop" });
+    setPendingState("Останавливается...")
+    const result = await apiCall("control", { action: "stop" })
     if (result.success) {
-      showToast("XKeen остановлен");
-      isServiceRunning = false;
-      updateServiceStatus(false);
+      showToast("XKeen остановлен")
+      isServiceRunning = false
+      updateServiceStatus(false)
     } else {
-      showToast(`Ошибка остановки: ${result.output || result.error}`, "error");
+      showToast(`Ошибка остановки: ${result.output || result.error}`, "error")
     }
   } finally {
-    isActionInProgress = false;
-    checkXKeenStatus();
+    isActionInProgress = false
+    checkXKeenStatus()
   }
 }
 
 async function restartXKeen() {
   try {
-    setPendingState("Перезапускается...");
-    const result = await apiCall("control", { action: "restart" });
+    setPendingState("Перезапускается...")
+    const result = await apiCall("control", { action: "restart" })
     if (result.success) {
-      showToast("XKeen перезапущен");
-      isActionInProgress = false;
-      isServiceRunning = true;
-      updateServiceStatus(true);
-      updateDashboardLink();
+      showToast("XKeen перезапущен")
+      isActionInProgress = false
+      isServiceRunning = true
+      updateServiceStatus(true)
+      updateDashboardLink()
     } else {
-      showToast(
-        `Ошибка перезапуска: ${result.output || result.error}`,
-        "error"
-      );
-      isActionInProgress = false;
-      checkXKeenStatus();
+      showToast(`Ошибка перезапуска: ${result.output || result.error}`, "error")
+      isActionInProgress = false
+      checkXKeenStatus()
     }
   } catch (e) {
-    isActionInProgress = false;
-    checkXKeenStatus();
+    isActionInProgress = false
+    checkXKeenStatus()
   }
 }
 
 async function clearCurrentLog() {
   if (!currentLogFile) {
-    showToast("Не выбран файл журнала", "error");
-    return;
+    showToast("Не выбран файл журнала", "error")
+    return
   }
 
   try {
     const result = await apiCall("logs", {
       action: "clear",
       file: currentLogFile,
-    });
+    })
 
     if (result.success) {
-      allLogLines = [];
-      displayLines = [];
+      allLogLines = []
+      displayLines = []
 
-      const container = document.getElementById("logsContainer");
-      container.classList.add("centered");
-      container.innerHTML = '<div style="color: #6b7280;">Лог очищен</div>';
+      const container = document.getElementById("logsContainer")
+      container.classList.add("centered")
+      container.innerHTML = '<div style="color: #6b7280;">Лог очищен</div>'
 
-      showToast(`Лог ${currentLogFile} очищен`);
+      showToast(`Лог ${currentLogFile} очищен`)
     } else {
-      showToast(`Ошибка очистки лога: ${result.error}`, "error");
+      showToast(`Ошибка очистки лога: ${result.error}`, "error")
     }
   } catch (error) {
-    showToast(`Ошибка: ${error.message}`, "error");
+    showToast(`Ошибка: ${error.message}`, "error")
   }
 }
 
 async function getAvailableCores() {
   try {
-    const result = await apiCall("core");
+    const result = await apiCall("core")
     if (result.success) {
-      availableCores = result.cores || [];
-      currentCore = result.currentCore || "xray";
+      availableCores = result.cores || []
+      currentCore = result.currentCore || "xray"
 
-      const coreSelectRoot = document.getElementById("coreSelectRoot");
-      const coreSelectLabel = document.getElementById("coreSelectLabel");
+      const coreSelectRoot = document.getElementById("coreSelectRoot")
+      const coreSelectLabel = document.getElementById("coreSelectLabel")
 
-      coreSelectLabel.textContent = currentCore;
+      coreSelectLabel.textContent = currentCore
 
       if (availableCores.length >= 2) {
-        coreSelectRoot.style.display = "inline-block";
+        coreSelectRoot.style.display = "inline-block"
 
-        const items = document.querySelectorAll(
-          "#coreSelectContent .select-item"
-        );
+        const items = document.querySelectorAll("#coreSelectContent .select-item")
         items.forEach((item) => {
-          const value = item.getAttribute("data-value");
-          item.setAttribute(
-            "aria-selected",
-            value === currentCore ? "true" : "false"
-          );
-        });
+          const value = item.getAttribute("data-value")
+          item.setAttribute("aria-selected", value === currentCore ? "true" : "false")
+        })
       }
     }
   } catch (error) {
-    console.error("Error loading cores:", error);
+    console.error("Error loading cores:", error)
   }
 }
 
 function closeCoreModal() {
-  pendingCoreChange = "";
-  document.getElementById("coreModal").classList.remove("show");
+  pendingCoreChange = ""
+  document.getElementById("coreModal").classList.remove("show")
 }
 
 async function confirmCoreChange() {
-  const selectedCoreElement = document.getElementById("selectedCore");
-  const selectedCore = selectedCoreElement
-    ? selectedCoreElement.textContent
-    : "";
+  const selectedCoreElement = document.getElementById("selectedCore")
+  const selectedCore = selectedCoreElement ? selectedCoreElement.textContent : ""
 
   if (!selectedCore || (selectedCore !== "xray" && selectedCore !== "mihomo")) {
-    showToast("Ошибка: не выбрано ядро", "error");
-    return;
+    showToast("Ошибка: не выбрано ядро", "error")
+    return
   }
 
-  currentCore = selectedCore;
-  const coreSelectLabel = document.getElementById("coreSelectLabel");
+  currentCore = selectedCore
+  const coreSelectLabel = document.getElementById("coreSelectLabel")
   if (coreSelectLabel) {
-    coreSelectLabel.textContent = currentCore;
+    coreSelectLabel.textContent = currentCore
   }
 
-  const items = document.querySelectorAll("#coreSelectContent .select-item");
+  const items = document.querySelectorAll("#coreSelectContent .select-item")
   items.forEach((item) => {
-    const value = item.getAttribute("data-value");
+    const value = item.getAttribute("data-value")
     if (item && value) {
-      item.setAttribute(
-        "aria-selected",
-        value === currentCore ? "true" : "false"
-      );
+      item.setAttribute("aria-selected", value === currentCore ? "true" : "false")
     }
-  });
-  closeCoreModal();
-  setPendingState("Переключение ядра...");
+  })
+  closeCoreModal()
+  setPendingState("Переключение ядра...")
 
   try {
-    console.log("Sending API request with core:", selectedCore);
-    const result = await apiCall("core", { core: selectedCore });
+    console.log("Sending API request with core:", selectedCore)
+    const result = await apiCall("core", { core: selectedCore })
 
-    console.log("API response:", result);
+    console.log("API response:", result)
 
     if (result.success) {
-      showToast(`Ядро изменено на ${selectedCore}`);
-      const coreSelectLabel = document.getElementById("coreSelectLabel");
+      showToast(`Ядро изменено на ${selectedCore}`)
+      const coreSelectLabel = document.getElementById("coreSelectLabel")
       if (coreSelectLabel) {
-        coreSelectLabel.textContent = currentCore;
+        coreSelectLabel.textContent = currentCore
       }
 
-      const items = document.querySelectorAll(
-        "#coreSelectContent .select-item"
-      );
+      const items = document.querySelectorAll("#coreSelectContent .select-item")
       items.forEach((item) => {
-        const value = item.getAttribute("data-value");
+        const value = item.getAttribute("data-value")
         if (item && value) {
-          item.setAttribute(
-            "aria-selected",
-            value === currentCore ? "true" : "false"
-          );
+          item.setAttribute("aria-selected", value === currentCore ? "true" : "false")
         }
-      });
+      })
 
-      isActionInProgress = false;
+      isActionInProgress = false
 
       setTimeout(() => {
         checkXKeenStatus().then(() => {
-          console.log("Status checked after core change");
-          forceReloadConfigs();
-        });
-      }, 100);
+          console.log("Status checked after core change")
+          forceReloadConfigs()
+        })
+      }, 100)
     } else {
-      showToast(`Ошибка смены ядра: ${result.error}`, "error");
-      isActionInProgress = false;
-      checkXKeenStatus();
+      showToast(`Ошибка смены ядра: ${result.error}`, "error")
+      isActionInProgress = false
+      checkXKeenStatus()
     }
   } catch (error) {
-    console.error("Core change error:", error);
-    showToast(`Ошибка: ${error.message}`, "error");
-    isActionInProgress = false;
-    checkXKeenStatus();
+    console.error("Core change error:", error)
+    showToast(`Ошибка: ${error.message}`, "error")
+    isActionInProgress = false
+    checkXKeenStatus()
   }
 }
 
 function parseDashboardPort(yamlContent) {
-  const match = yamlContent.match(/^external-controller:\s*[\w\.-]+:(\d+)/m);
-  return match ? match[1] : null;
+  const match = yamlContent.match(/^external-controller:\s*[\w\.-]+:(\d+)/m)
+  return match ? match[1] : null
 }
 
 function updateDashboardLink() {
-  const dashboardLink = document.getElementById("dashboardLink");
+  const dashboardLink = document.getElementById("dashboardLink")
   if (currentCore === "mihomo") {
-    const mihomoConfig = configs.find((c) => c.filename === "config.yaml");
+    const mihomoConfig = configs.find((c) => c.filename === "config.yaml")
     if (mihomoConfig) {
-      const port = parseDashboardPort(mihomoConfig.content);
+      const port = parseDashboardPort(mihomoConfig.content)
       if (port) {
-        dashboardPort = port;
-        dashboardLink.style.display = "inline-flex";
-        dashboardLink.href = `http://${window.location.hostname}:${port}/ui`;
-        return;
+        dashboardPort = port
+        dashboardLink.style.display = "inline-flex"
+        dashboardLink.href = `http://${window.location.hostname}:${port}/ui`
+        return
       }
     }
   }
-  dashboardLink.style.display = "none";
+  dashboardLink.style.display = "none"
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  const logsContainer = document.getElementById("logsContainer");
-  const logSelectRoot = document.getElementById("logSelectRoot");
-  const logSelectTrigger = document.getElementById("logSelectTrigger");
-  const logSelectContent = document.getElementById("logSelectContent");
-  const logSelectLabel = document.getElementById("logSelectLabel");
-  const logFilterInput = document.getElementById("logFilterInput");
-  const tabsList = document.getElementById("tabsList");
-  const coreSelectRoot = document.getElementById("coreSelectRoot");
-  const coreSelectTrigger = document.getElementById("coreSelectTrigger");
-  const coreSelectContent = document.getElementById("coreSelectContent");
-  const logFilterClear = document.getElementById("logFilterClear");
-  const importInput = document.getElementById("importInput");
-  const importInputClear = document.getElementById("importInputClear");
+  const logsContainer = document.getElementById("logsContainer")
+  const logSelectRoot = document.getElementById("logSelectRoot")
+  const logSelectTrigger = document.getElementById("logSelectTrigger")
+  const logSelectContent = document.getElementById("logSelectContent")
+  const logSelectLabel = document.getElementById("logSelectLabel")
+  const logFilterInput = document.getElementById("logFilterInput")
+  const tabsList = document.getElementById("tabsList")
+  const coreSelectRoot = document.getElementById("coreSelectRoot")
+  const coreSelectTrigger = document.getElementById("coreSelectTrigger")
+  const coreSelectContent = document.getElementById("coreSelectContent")
+  const logFilterClear = document.getElementById("logFilterClear")
+  const importInput = document.getElementById("importInput")
+  const importInputClear = document.getElementById("importInputClear")
 
-  if (tabsList) tabsList.classList.add("empty");
-  isConfigsLoading = true;
-  isStatusLoading = true;
-  updateControlButtons();
-  renderTabs();
+  if (tabsList) tabsList.classList.add("empty")
+  isConfigsLoading = true
+  isStatusLoading = true
+  updateControlButtons()
+  renderTabs()
 
   logsContainer.addEventListener("click", (e) => {
-    const badge = e.target.closest(".log-badge");
+    const badge = e.target.closest(".log-badge")
     if (badge) {
-      const filterText = badge.getAttribute("data-filter");
+      const filterText = badge.getAttribute("data-filter")
       if (filterText && logFilterInput) {
-        logFilterInput.value = filterText;
-        logFilter = filterText;
-        logFilterClear.classList.add("show");
-        applyFilter();
+        logFilterInput.value = filterText
+        logFilter = filterText
+        logFilterClear.classList.add("show")
+        applyFilter()
       }
     }
-  });
+  })
 
   if (logFilterInput && logFilterClear) {
-    let filterTimeout;
+    let filterTimeout
 
     logFilterInput.addEventListener("input", () => {
-      logFilterClear.classList.toggle("show", logFilterInput.value.length > 0);
-      clearTimeout(filterTimeout);
+      logFilterClear.classList.toggle("show", logFilterInput.value.length > 0)
+      clearTimeout(filterTimeout)
       filterTimeout = setTimeout(() => {
-        logFilter = logFilterInput.value || "";
-        applyFilter();
-      }, 100);
-    });
+        logFilter = logFilterInput.value || ""
+        applyFilter()
+      }, 100)
+    })
 
     logFilterClear.addEventListener("click", () => {
-      logFilterInput.value = "";
-      logFilter = "";
-      logFilterClear.classList.remove("show");
-      applyFilter();
-    });
+      logFilterInput.value = ""
+      logFilter = ""
+      logFilterClear.classList.remove("show")
+      applyFilter()
+    })
   }
 
   if (importInput && importInputClear) {
     importInput.addEventListener("input", () => {
-      importInputClear.classList.toggle("show", importInput.value.length > 0);
-    });
+      importInputClear.classList.toggle("show", importInput.value.length > 0)
+    })
 
     importInputClear.addEventListener("click", () => {
-      importInput.value = "";
-      importInputClear.classList.remove("show");
-      importInput.focus();
-    });
+      importInput.value = ""
+      importInputClear.classList.remove("show")
+      importInput.focus()
+    })
   }
 
-  const tabsScroll = document.querySelector(".tabs-scroll");
+  const tabsScroll = document.querySelector(".tabs-scroll")
   if (tabsScroll) {
     tabsScroll.addEventListener(
       "wheel",
       (e) => {
-        const canScroll = tabsScroll.scrollWidth > tabsScroll.clientWidth;
-        if (!canScroll) return;
+        const canScroll = tabsScroll.scrollWidth > tabsScroll.clientWidth
+        if (!canScroll) return
         if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-          e.preventDefault();
-          tabsScroll.scrollLeft += e.deltaY;
+          e.preventDefault()
+          tabsScroll.scrollLeft += e.deltaY
         }
       },
-      { passive: false }
-    );
+      { passive: false },
+    )
 
     tabsScroll.addEventListener(
       "scroll",
       () => {
-        requestAnimationFrame(
-          () => updateActiveTabIndicator && updateActiveTabIndicator()
-        );
+        requestAnimationFrame(() => updateActiveTabIndicator && updateActiveTabIndicator())
       },
-      { passive: true }
-    );
+      { passive: true },
+    )
   }
 
   logsContainer.addEventListener("scroll", () => {
-    const isAtBottom =
-      logsContainer.scrollTop + logsContainer.clientHeight >=
-      logsContainer.scrollHeight - 5;
-    userScrolled = !isAtBottom;
-  });
+    const isAtBottom = logsContainer.scrollTop + logsContainer.clientHeight >= logsContainer.scrollHeight - 5
+    userScrolled = !isAtBottom
+  })
 
   function closeLogMenu() {
-    logSelectRoot.classList.remove("select-open");
-    logSelectTrigger.setAttribute("aria-expanded", "false");
+    logSelectRoot.classList.remove("select-open")
+    logSelectTrigger.setAttribute("aria-expanded", "false")
   }
 
   function openLogMenu() {
-    logSelectRoot.classList.add("select-open");
-    logSelectTrigger.setAttribute("aria-expanded", "true");
+    logSelectRoot.classList.add("select-open")
+    logSelectTrigger.setAttribute("aria-expanded", "true")
   }
 
   function setActiveLogItem(value) {
-    const items = logSelectContent.querySelectorAll(".select-item");
+    const items = logSelectContent.querySelectorAll(".select-item")
     items.forEach((el) => {
-      const selected = el.getAttribute("data-value") === value;
-      el.setAttribute("aria-selected", selected ? "true" : "false");
-    });
+      const selected = el.getAttribute("data-value") === value
+      el.setAttribute("aria-selected", selected ? "true" : "false")
+    })
   }
 
   function applyLogSelection(value) {
-    if (currentLogFile === value) return;
-    switchLogFile(value);
-    logSelectLabel.textContent = value;
-    setActiveLogItem(value);
+    if (currentLogFile === value) return
+    switchLogFile(value)
+    logSelectLabel.textContent = value
+    setActiveLogItem(value)
   }
 
   function closeCoreMenu() {
-    coreSelectRoot.classList.remove("select-open");
-    coreSelectTrigger.setAttribute("aria-expanded", "false");
+    coreSelectRoot.classList.remove("select-open")
+    coreSelectTrigger.setAttribute("aria-expanded", "false")
   }
 
   function openCoreMenu() {
-    coreSelectRoot.classList.add("select-open");
-    coreSelectTrigger.setAttribute("aria-expanded", "true");
+    coreSelectRoot.classList.add("select-open")
+    coreSelectTrigger.setAttribute("aria-expanded", "true")
   }
 
   function applyCoreSelection(value) {
-    console.log("applyCoreSelection called with:", value);
+    console.log("applyCoreSelection called with:", value)
     if (!value) {
-      console.error("Empty value provided to applyCoreSelection");
-      return;
+      console.error("Empty value provided to applyCoreSelection")
+      return
     }
 
     if (value === currentCore) {
-      console.log("Same core selected, ignoring");
-      return;
+      console.log("Same core selected, ignoring")
+      return
     }
 
-    pendingCoreChange = value;
-    console.log("pendingCoreChange set to:", pendingCoreChange);
-    document.getElementById("selectedCore").textContent = value;
-    document.getElementById("coreModal").classList.add("show");
+    pendingCoreChange = value
+    console.log("pendingCoreChange set to:", pendingCoreChange)
+    document.getElementById("selectedCore").textContent = value
+    document.getElementById("coreModal").classList.add("show")
   }
 
   logSelectTrigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isOpen = logSelectRoot.classList.contains("select-open");
+    e.stopPropagation()
+    const isOpen = logSelectRoot.classList.contains("select-open")
     if (isOpen) {
-      closeLogMenu();
+      closeLogMenu()
     } else {
-      openLogMenu();
+      openLogMenu()
     }
-  });
+  })
 
   logSelectContent.addEventListener("click", (e) => {
-    const target = e.target.closest(".select-item");
-    if (!target) return;
-    const value = target.getAttribute("data-value");
-    applyLogSelection(value);
-    closeLogMenu();
-  });
+    const target = e.target.closest(".select-item")
+    if (!target) return
+    const value = target.getAttribute("data-value")
+    applyLogSelection(value)
+    closeLogMenu()
+  })
 
   logSelectContent.addEventListener("mouseenter", () => {
-    logSelectRoot.classList.add("select-hovering");
-  });
+    logSelectRoot.classList.add("select-hovering")
+  })
   logSelectContent.addEventListener("mouseleave", () => {
-    logSelectRoot.classList.remove("select-hovering");
-  });
+    logSelectRoot.classList.remove("select-hovering")
+  })
 
   coreSelectTrigger.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isOpen = coreSelectRoot.classList.contains("select-open");
+    e.stopPropagation()
+    const isOpen = coreSelectRoot.classList.contains("select-open")
     if (isOpen) {
-      closeCoreMenu();
+      closeCoreMenu()
     } else {
-      openCoreMenu();
+      openCoreMenu()
     }
-  });
+  })
 
   coreSelectContent.addEventListener("click", (e) => {
-    const target = e.target.closest(".select-item");
-    if (!target) return;
+    const target = e.target.closest(".select-item")
+    if (!target) return
 
-    const value = target.getAttribute("data-value");
-    console.log("Core selected:", value);
+    const value = target.getAttribute("data-value")
+    console.log("Core selected:", value)
 
-    applyCoreSelection(value);
-    closeCoreMenu();
-  });
+    applyCoreSelection(value)
+    closeCoreMenu()
+  })
 
   coreSelectContent.addEventListener("mouseenter", () => {
-    coreSelectRoot.classList.add("select-hovering");
-  });
+    coreSelectRoot.classList.add("select-hovering")
+  })
   coreSelectContent.addEventListener("mouseleave", () => {
-    coreSelectRoot.classList.remove("select-hovering");
-  });
+    coreSelectRoot.classList.remove("select-hovering")
+  })
 
   document.addEventListener("click", (e) => {
     if (!logSelectRoot.contains(e.target)) {
-      closeLogMenu();
+      closeLogMenu()
     }
     if (!coreSelectRoot.contains(e.target)) {
-      closeCoreMenu();
+      closeCoreMenu()
     }
-  });
+  })
 
   logSelectTrigger.addEventListener("keydown", (e) => {
-    const items = Array.from(logSelectContent.querySelectorAll(".select-item"));
-    const currentIndex = items.findIndex(
-      (i) => i.getAttribute("data-value") === currentLogFile
-    );
+    const items = Array.from(logSelectContent.querySelectorAll(".select-item"))
+    const currentIndex = items.findIndex((i) => i.getAttribute("data-value") === currentLogFile)
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      if (!logSelectRoot.classList.contains("select-open")) openLogMenu();
-      let nextIndex = currentIndex;
-      if (e.key === "ArrowDown")
-        nextIndex = Math.min(items.length - 1, currentIndex + 1);
-      if (e.key === "ArrowUp") nextIndex = Math.max(0, currentIndex - 1);
-      const nextItem = items[nextIndex];
+      e.preventDefault()
+      if (!logSelectRoot.classList.contains("select-open")) openLogMenu()
+      let nextIndex = currentIndex
+      if (e.key === "ArrowDown") nextIndex = Math.min(items.length - 1, currentIndex + 1)
+      if (e.key === "ArrowUp") nextIndex = Math.max(0, currentIndex - 1)
+      const nextItem = items[nextIndex]
       if (nextItem) {
-        items.forEach((i) => (i.tabIndex = -1));
-        nextItem.tabIndex = 0;
-        nextItem.focus();
+        items.forEach((i) => (i.tabIndex = -1))
+        nextItem.tabIndex = 0
+        nextItem.focus()
       }
     } else if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      if (logSelectRoot.classList.contains("select-open")) closeLogMenu();
-      else openLogMenu();
+      e.preventDefault()
+      if (logSelectRoot.classList.contains("select-open")) closeLogMenu()
+      else openLogMenu()
     } else if (e.key === "Escape") {
-      closeLogMenu();
+      closeLogMenu()
     }
-  });
+  })
 
   logSelectContent.addEventListener("keydown", (e) => {
-    const items = Array.from(logSelectContent.querySelectorAll(".select-item"));
-    let idx = items.indexOf(document.activeElement);
+    const items = Array.from(logSelectContent.querySelectorAll(".select-item"))
+    let idx = items.indexOf(document.activeElement)
     if (e.key === "ArrowDown") {
-      e.preventDefault();
-      idx = Math.min(items.length - 1, idx + 1);
-      items[idx].focus();
+      e.preventDefault()
+      idx = Math.min(items.length - 1, idx + 1)
+      items[idx].focus()
     } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      idx = Math.max(0, idx - 1);
-      items[idx].focus();
+      e.preventDefault()
+      idx = Math.max(0, idx - 1)
+      items[idx].focus()
     } else if (e.key === "Enter") {
-      e.preventDefault();
-      const value = document.activeElement.getAttribute("data-value");
-      if (value) applyLogSelection(value);
-      closeLogMenu();
+      e.preventDefault()
+      const value = document.activeElement.getAttribute("data-value")
+      if (value) applyLogSelection(value)
+      closeLogMenu()
     } else if (e.key === "Escape") {
-      closeLogMenu();
-      logSelectTrigger.focus();
+      closeLogMenu()
+      logSelectTrigger.focus()
     }
-  });
+  })
 
-  logSelectLabel.textContent = currentLogFile;
-  setActiveLogItem(currentLogFile);
+  logSelectLabel.textContent = currentLogFile
+  setActiveLogItem(currentLogFile)
 
   init().catch((error) => {
-    console.error("App initialization failed:", error);
-  });
-});
+    console.error("App initialization failed:", error)
+  })
+})
 
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.key === "s") {
-    e.preventDefault();
-    const saveBtn = document.getElementById("saveBtn");
+    e.preventDefault()
+    const saveBtn = document.getElementById("saveBtn")
     if (!saveBtn.disabled) {
-      saveCurrentConfig();
+      saveCurrentConfig()
     }
   }
-});
+})
 
 async function forceReloadConfigs() {
-  console.log("Force reloading configs...");
-  isConfigsLoading = true;
-  const tabsList = document.getElementById("tabsList");
-  if (tabsList) tabsList.classList.add("empty");
-  renderTabs();
-  configs = [];
-  activeConfigIndex = -1;
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const result = await apiCall("configs");
+  console.log("Force reloading configs...")
+  isConfigsLoading = true
+  const tabsList = document.getElementById("tabsList")
+  if (tabsList) tabsList.classList.add("empty")
+  renderTabs()
+  configs = []
+  activeConfigIndex = -1
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  const result = await apiCall("configs")
   if (result.success && result.configs) {
     configs = result.configs.map((c) => ({
       ...c,
       savedContent: c.content,
       isDirty: false,
-    }));
+    }))
 
     if (configs.length > 0) {
-      isConfigsLoading = false;
-      if (tabsList) tabsList.classList.remove("empty");
-      switchTab(0);
-      console.log("Configs reloaded successfully, count:", configs.length);
+      isConfigsLoading = false
+      if (tabsList) tabsList.classList.remove("empty")
+      switchTab(0)
+      console.log("Configs reloaded successfully, count:", configs.length)
     } else {
-      isConfigsLoading = false;
-      renderTabs();
-      updateUIDirtyState();
-      console.log("No configs found after reload");
+      isConfigsLoading = false
+      renderTabs()
+      updateUIDirtyState()
+      console.log("No configs found after reload")
     }
   } else {
-    isConfigsLoading = false;
-    showToast("Ошибка загрузки конфигов после смены ядра", "error");
-    renderTabs();
-    updateUIDirtyState();
-    console.error("Failed to reload configs:", result.error);
+    isConfigsLoading = false
+    showToast("Ошибка загрузки конфигов после смены ядра", "error")
+    renderTabs()
+    updateUIDirtyState()
+    console.error("Failed to reload configs:", result.error)
   }
-  updateUIDirtyState();
-  updateDashboardLink();
+  updateUIDirtyState()
+  updateDashboardLink()
 }
 
 function saveLastSelectedTab() {
   if (activeConfigIndex >= 0 && configs[activeConfigIndex]) {
-    localStorage.setItem(
-      "lastSelectedTab",
-      configs[activeConfigIndex].filename
-    );
+    localStorage.setItem("lastSelectedTab", configs[activeConfigIndex].filename)
   }
 }
 
 function loadLastSelectedTab() {
-  const savedFilename = localStorage.getItem("lastSelectedTab");
-  if (!savedFilename) return 0;
-  const index = configs.findIndex((c) => c.filename === savedFilename);
-  return index >= 0 ? index : 0;
+  const savedFilename = localStorage.getItem("lastSelectedTab")
+  if (!savedFilename) return 0
+  const index = configs.findIndex((c) => c.filename === savedFilename)
+  return index >= 0 ? index : 0
 }
 
 function toggleFormatMenu(e) {
-  if (e) e.stopPropagation();
-  document.getElementById("formatMenu").classList.toggle("show");
+  if (e) e.stopPropagation()
+  document.getElementById("formatMenu").classList.toggle("show")
 }
 
 const configTemplates = {
@@ -1945,28 +1816,28 @@ const configTemplates = {
       url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/mihomo/config.yaml",
     },
   ],
-};
+}
 
-let selectedTemplateUrl = null;
+let selectedTemplateUrl = null
 
 function openTemplateImportModal() {
-  const modal = document.getElementById("templateImportModal");
-  const templateList = document.getElementById("templateList");
-  const importBtn = document.getElementById("importTemplateBtn");
-  const description = document.getElementById("templateModalDescription");
-  const countBadge = document.getElementById("templateCountBadge");
+  const modal = document.getElementById("templateImportModal")
+  const templateList = document.getElementById("templateList")
+  const importBtn = document.getElementById("importTemplateBtn")
+  const description = document.getElementById("templateModalDescription")
+  const countBadge = document.getElementById("templateCountBadge")
 
-  selectedTemplateUrl = null;
-  importBtn.disabled = true;
+  selectedTemplateUrl = null
+  importBtn.disabled = true
 
-  const templates = configTemplates[currentCore] || [];
+  const templates = configTemplates[currentCore] || []
 
   if (countBadge) {
-    countBadge.textContent = templates.length;
+    countBadge.textContent = templates.length
   }
 
-  const coreLabel = currentCore === "xray" ? "Xray" : "Mihomo";
-  description.innerHTML = `Выберите готовый шаблон конфигурации для <span style="color: #3b82f6; font-weight: 600;">${coreLabel}</span>`;
+  const coreLabel = currentCore === "xray" ? "Xray" : "Mihomo"
+  description.innerHTML = `Выберите готовый шаблон конфигурации для <span style="color: #3b82f6; font-weight: 600;">${coreLabel}</span>`
 
   if (templates.length === 0) {
     templateList.innerHTML = `
@@ -1977,9 +1848,9 @@ function openTemplateImportModal() {
         </svg>
         <p>Нет доступных шаблонов для текущего ядра</p>
       </div>
-    `;
-    modal.classList.add("show");
-    return;
+    `
+    modal.classList.add("show")
+    return
   }
 
   templateList.innerHTML = templates
@@ -1988,167 +1859,161 @@ function openTemplateImportModal() {
     <div class="template-item" onclick="selectTemplate('${template.url}', ${index})">
       <span class="template-label">${template.name}</span>
     </div>
-  `
+  `,
     )
-    .join("");
+    .join("")
 
-  modal.classList.add("show");
+  modal.classList.add("show")
 
   if (templates.length > 0) {
-    setTimeout(() => selectTemplate(templates[0].url, 0), 0);
+    setTimeout(() => selectTemplate(templates[0].url, 0), 0)
   }
 }
 
 function closeTemplateImportModal() {
-  const modal = document.getElementById("templateImportModal");
-  modal.classList.remove("show");
-  selectedTemplateUrl = null;
+  const modal = document.getElementById("templateImportModal")
+  modal.classList.remove("show")
+  selectedTemplateUrl = null
 }
 
 function selectTemplate(url, index) {
-  selectedTemplateUrl = url;
-  const importBtn = document.getElementById("importTemplateBtn");
-  importBtn.disabled = false;
+  selectedTemplateUrl = url
+  const importBtn = document.getElementById("importTemplateBtn")
+  importBtn.disabled = false
 
-  const items = document.querySelectorAll(".template-item");
+  const items = document.querySelectorAll(".template-item")
   items.forEach((item, i) => {
     if (i === index) {
-      item.classList.add("selected");
+      item.classList.add("selected")
     } else {
-      item.classList.remove("selected");
+      item.classList.remove("selected")
     }
-  });
+  })
 }
 
 async function importSelectedTemplate() {
   if (!selectedTemplateUrl) {
-    showToast("Выберите шаблон для импорта", "error");
-    return;
+    showToast("Выберите шаблон для импорта", "error")
+    return
   }
 
-  const currentConfig = configs[activeConfigIndex];
+  const currentConfig = configs[activeConfigIndex]
   if (currentConfig && currentConfig.isDirty) {
     const confirmed = confirm(
       "Внимание! Текущий файл содержит несохраненные изменения.\n\n" +
         "При импорте шаблона все текущее содержимое файла будет заменено.\n\n" +
-        "Продолжить импорт?"
-    );
+        "Продолжить импорт?",
+    )
     if (!confirmed) {
-      return;
+      return
     }
   }
 
-  const importBtn = document.getElementById("importTemplateBtn");
-  importBtn.disabled = true;
-  importBtn.textContent = "Загрузка...";
+  const importBtn = document.getElementById("importTemplateBtn")
+  importBtn.disabled = true
+  importBtn.textContent = "Загрузка..."
 
   try {
-    const response = await fetch(selectedTemplateUrl);
+    const response = await fetch(selectedTemplateUrl)
     if (!response.ok) {
-      throw new Error(
-        `Ошибка загрузки: ${response.status} ${response.statusText}`
-      );
+      throw new Error(`Ошибка загрузки: ${response.status} ${response.statusText}`)
     }
 
-    const templateContent = await response.text();
+    const templateContent = await response.text()
 
     if (monacoEditor) {
-      monacoEditor.setValue(templateContent);
+      monacoEditor.setValue(templateContent)
 
       if (configs[activeConfigIndex]) {
-        configs[activeConfigIndex].content = templateContent;
-        configs[activeConfigIndex].isDirty = true;
-        configs[activeConfigIndex].isValid = true;
+        configs[activeConfigIndex].content = templateContent
+        configs[activeConfigIndex].isDirty = true
+        configs[activeConfigIndex].isValid = true
       }
 
-      updateUIDirtyState();
-      renderTabs();
+      updateUIDirtyState()
+      renderTabs()
 
-      showToast("Шаблон успешно импортирован", "success");
-      closeTemplateImportModal();
+      showToast("Шаблон успешно импортирован", "success")
+      closeTemplateImportModal()
     } else {
-      throw new Error("Редактор не инициализирован");
+      throw new Error("Редактор не инициализирован")
     }
   } catch (error) {
-    console.error("Ошибка импорта шаблона:", error);
-    showToast(`Ошибка импорта шаблона: ${error.message}`, "error");
+    console.error("Ошибка импорта шаблона:", error)
+    showToast(`Ошибка импорта шаблона: ${error.message}`, "error")
   } finally {
-    importBtn.disabled = false;
-    importBtn.textContent = "Импортировать";
+    importBtn.disabled = false
+    importBtn.textContent = "Импортировать"
   }
 }
 
 function openImportModal() {
-  const modal = document.getElementById("importModal");
-  modal.classList.add("show");
-  modal.querySelector(".modal-content").classList.remove("expanded");
-  document.getElementById("importResult").style.display = "none";
-  const importInput = document.getElementById("importInput");
-  importInput.value = "";
-  document.getElementById("importInputClear").classList.remove("show");
-  document.getElementById("generateBtn").style.display = "inline-flex";
-  document.getElementById("copyBtn").style.display = "none";
-  document.getElementById("addBtn").style.display = "none";
+  const modal = document.getElementById("importModal")
+  modal.classList.add("show")
+  modal.querySelector(".modal-content").classList.remove("expanded")
+  document.getElementById("importResult").style.display = "none"
+  const importInput = document.getElementById("importInput")
+  importInput.value = ""
+  document.getElementById("importInputClear").classList.remove("show")
+  document.getElementById("generateBtn").style.display = "inline-flex"
+  document.getElementById("copyBtn").style.display = "none"
+  document.getElementById("addBtn").style.display = "none"
 
   setTimeout(() => {
-    importInput.focus();
-  }, 100);
+    importInput.focus()
+  }, 100)
 }
 
 function closeImportModal() {
-  document.getElementById("importModal").classList.remove("show");
+  document.getElementById("importModal").classList.remove("show")
 }
 
-let importEditor = null;
+let importEditor = null
 
 function generateConfig() {
-  const uri = document.getElementById("importInput").value.trim();
+  const uri = document.getElementById("importInput").value.trim()
   if (!uri) {
-    showToast("Поле ввода не может быть пустым", "error");
-    return;
+    showToast("Поле ввода не может быть пустым", "error")
+    return
   }
 
   try {
-    const existingConfig = monacoEditor ? monacoEditor.getValue() : "";
-    const result = generateConfigForCore(uri, currentCore, existingConfig);
-    const output = result.content;
+    const existingConfig = monacoEditor ? monacoEditor.getValue() : ""
+    const result = generateConfigForCore(uri, currentCore, existingConfig)
+    const output = result.content
 
-    const modalContent = document
-      .getElementById("importModal")
-      .querySelector(".modal-content");
-    modalContent.classList.add("expanded");
-    document.getElementById("importResult").style.display = "block";
+    const modalContent = document.getElementById("importModal").querySelector(".modal-content")
+    modalContent.classList.add("expanded")
+    document.getElementById("importResult").style.display = "block"
 
-    const outputWrapper = document.querySelector(
-      "#importResult .output-wrapper"
-    );
-    const container = document.getElementById("importOutput");
-    if (container) container.style.display = "none";
+    const outputWrapper = document.querySelector("#importResult .output-wrapper")
+    const container = document.getElementById("importOutput")
+    if (container) container.style.display = "none"
 
     if (importEditor) {
-      importEditor.dispose();
-      importEditor = null;
+      importEditor.dispose()
+      importEditor = null
     }
 
-    const copyBtn = document.getElementById("copyBtn");
+    const copyBtn = document.getElementById("copyBtn")
     while (outputWrapper.firstChild) {
-      outputWrapper.firstChild.remove();
+      outputWrapper.firstChild.remove()
     }
-    if (copyBtn) outputWrapper.appendChild(copyBtn);
+    if (copyBtn) outputWrapper.appendChild(copyBtn)
 
-    outputWrapper.style.position = "relative";
-    outputWrapper.style.height = "350px";
-    outputWrapper.style.overflow = "hidden";
-    outputWrapper.style.border = "1px solid #1e293b";
-    outputWrapper.style.borderRadius = "8px";
-    outputWrapper.style.background = "#080e1d";
+    outputWrapper.style.position = "relative"
+    outputWrapper.style.height = "350px"
+    outputWrapper.style.overflow = "hidden"
+    outputWrapper.style.border = "1px solid #1e293b"
+    outputWrapper.style.borderRadius = "8px"
+    outputWrapper.style.background = "#080e1d"
 
-    const innerContainer = document.createElement("div");
-    innerContainer.style.margin = "16px";
-    innerContainer.style.height = "calc(100% - 32px)";
-    innerContainer.style.width = "calc(100% - 32px)";
-    innerContainer.style.position = "relative";
-    outputWrapper.appendChild(innerContainer);
+    const innerContainer = document.createElement("div")
+    innerContainer.style.margin = "16px"
+    innerContainer.style.height = "calc(100% - 32px)"
+    innerContainer.style.width = "calc(100% - 32px)"
+    innerContainer.style.position = "relative"
+    outputWrapper.appendChild(innerContainer)
 
     importEditor = monaco.editor.create(innerContainer, {
       value: output,
@@ -2177,315 +2042,294 @@ function generateConfig() {
         horizontal: "hidden",
         useShadows: false,
       },
-    });
+    })
 
-    importEditor.getModel().resultType = result.type;
+    importEditor.getModel().resultType = result.type
 
-    if (copyBtn) copyBtn.style.display = "inline-flex";
-    const addBtn = document.getElementById("addBtn");
-    if (addBtn) addBtn.style.display = "inline-flex";
+    if (copyBtn) copyBtn.style.display = "inline-flex"
+    const addBtn = document.getElementById("addBtn")
+    if (addBtn) addBtn.style.display = "inline-flex"
   } catch (e) {
-    showToast(e.message, "error");
+    showToast(e.message, "error")
   }
 }
 
 function copyImportResult() {
-  if (!importEditor) return;
-  const text = importEditor.getValue();
-  const copyBtn = document.getElementById("copyBtn");
-  const copyIcon = copyBtn.querySelector(".copy-icon");
-  const checkIcon = copyBtn.querySelector(".check-icon");
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.left = "-9999px";
-  document.body.appendChild(ta);
-  ta.focus();
-  ta.select();
+  if (!importEditor) return
+  const text = importEditor.getValue()
+  const copyBtn = document.getElementById("copyBtn")
+  const copyIcon = copyBtn.querySelector(".copy-icon")
+  const checkIcon = copyBtn.querySelector(".check-icon")
+  const ta = document.createElement("textarea")
+  ta.value = text
+  ta.style.position = "fixed"
+  ta.style.left = "-9999px"
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
 
   try {
-    document.execCommand("copy");
-    copyBtn.classList.add("copied");
+    document.execCommand("copy")
+    copyBtn.classList.add("copied")
     setTimeout(() => {
-      copyBtn.classList.remove("copied");
-      copyIcon.style.opacity = "1";
-      copyIcon.style.transform = "scale(1)";
-      checkIcon.style.display = "none";
-    }, 2000);
-    showToast("Скопировано в буфер");
+      copyBtn.classList.remove("copied")
+      copyIcon.style.opacity = "1"
+      copyIcon.style.transform = "scale(1)"
+      checkIcon.style.display = "none"
+    }, 2000)
+    showToast("Скопировано в буфер")
   } catch (e) {
-    showToast("Не удалось скопировать", "error");
+    showToast("Не удалось скопировать", "error")
   }
 
-  document.body.removeChild(ta);
+  document.body.removeChild(ta)
 }
 
 function addToOutbounds() {
   try {
     if (activeConfigIndex < 0 || !configs[activeConfigIndex]) {
-      showToast("Нет активной конфигурации", "error");
-      return;
+      showToast("Нет активной конфигурации", "error")
+      return
     }
 
     if (!monacoEditor) {
-      showToast("Редактор не инициализирован", "error");
-      return;
+      showToast("Редактор не инициализирован", "error")
+      return
     }
 
-    const currentContent = monacoEditor.getValue();
+    const currentContent = monacoEditor.getValue()
     if (!importEditor) {
-      showToast("Нечего добавлять", "error");
-      return;
+      showToast("Нечего добавлять", "error")
+      return
     }
-    const generatedConfig = importEditor.getValue();
-    const resultType = importEditor.getModel().resultType || "outbound";
+    const generatedConfig = importEditor.getValue()
+    const resultType = importEditor.getModel().resultType || "outbound"
 
     if (currentCore === "xray") {
-      let config;
+      let config
       try {
-        config = JSON.parse(currentContent);
+        config = JSON.parse(currentContent)
       } catch (e) {
-        showToast("Ошибка парсинга конфигурации", "error");
-        return;
+        showToast("Ошибка парсинга конфигурации", "error")
+        return
       }
 
       if (!config.outbounds || !Array.isArray(config.outbounds)) {
-        showToast("Массив outbounds не найден", "error");
-        return;
+        showToast("Массив outbounds не найден", "error")
+        return
       }
 
-      let newOutbound;
+      let newOutbound
       try {
-        newOutbound = JSON.parse(generatedConfig);
+        newOutbound = JSON.parse(generatedConfig)
       } catch (e) {
-        showToast("Ошибка парсинга сгенерированного конфига", "error");
-        return;
+        showToast("Ошибка парсинга сгенерированного конфига", "error")
+        return
       }
 
-      config.outbounds.unshift(newOutbound);
+      config.outbounds.unshift(newOutbound)
 
-      const updatedConfig = JSON.stringify(config, null, 2);
-      monacoEditor.setValue(updatedConfig);
+      const updatedConfig = JSON.stringify(config, null, 2)
+      monacoEditor.setValue(updatedConfig)
       setTimeout(() => {
-        const formatAction = monacoEditor.getAction(
-          "editor.action.formatDocument"
-        );
+        const formatAction = monacoEditor.getAction("editor.action.formatDocument")
         if (formatAction) {
           formatAction.run().then(() => {
-            configs[activeConfigIndex].content = monacoEditor.getValue();
-            showToast("Outbound успешно добавлен", "success");
-            const model = monacoEditor.getModel();
-            const content = model.getValue();
-            const lines = content.split("\n");
+            configs[activeConfigIndex].content = monacoEditor.getValue()
+            showToast("Outbound успешно добавлен", "success")
+            const model = monacoEditor.getModel()
+            const content = model.getValue()
+            const lines = content.split("\n")
             for (let i = 0; i < lines.length; i++) {
               if (lines[i].includes('"outbounds"')) {
-                monacoEditor.revealLineInCenter(i + 1);
-                break;
+                monacoEditor.revealLineInCenter(i + 1)
+                break
               }
             }
-          });
+          })
         } else {
-          configs[activeConfigIndex].content = updatedConfig;
-          showToast("Outbound успешно добавлен", "success");
+          configs[activeConfigIndex].content = updatedConfig
+          showToast("Outbound успешно добавлен", "success")
         }
-      }, 50);
+      }, 50)
     } else if (currentCore === "mihomo") {
-      let updatedContent = currentContent;
-      let scrollToLine = -1;
+      let updatedContent = currentContent
+      let scrollToLine = -1
 
       if (resultType === "proxy-provider") {
-        const lines = updatedContent.split("\n");
-        let insertIndex = -1;
-        let indent = 0;
-        let foundProxyProviders = false;
+        const lines = updatedContent.split("\n")
+        let insertIndex = -1
+        let indent = 0
+        let foundProxyProviders = false
 
         for (let i = 0; i < lines.length; i++) {
-          if (lines[i].trim().startsWith("#")) continue;
+          if (lines[i].trim().startsWith("#")) continue
           if (lines[i].match(/^proxy-providers:\s*($|#)/)) {
-            foundProxyProviders = true;
-            indent = lines[i].search(/\S/);
+            foundProxyProviders = true
+            indent = lines[i].search(/\S/)
             for (let j = i + 1; j < lines.length; j++) {
-              const line = lines[j];
-              if (line.trim() === "") continue;
-              const lineIndent = line.search(/\S/);
-              if (
-                lineIndent !== -1 &&
-                lineIndent <= indent &&
-                !line.trim().startsWith("#")
-              ) {
-                insertIndex = j;
-                break;
+              const line = lines[j]
+              if (line.trim() === "") continue
+              const lineIndent = line.search(/\S/)
+              if (lineIndent !== -1 && lineIndent <= indent && !line.trim().startsWith("#")) {
+                insertIndex = j
+                break
               }
             }
-            if (insertIndex === -1) insertIndex = lines.length;
-            break;
+            if (insertIndex === -1) insertIndex = lines.length
+            break
           }
         }
 
         if (foundProxyProviders && insertIndex !== -1) {
-          lines.splice(insertIndex, 0, generatedConfig);
-          updatedContent = lines.join("\n");
-          scrollToLine = insertIndex + 1;
+          lines.splice(insertIndex, 0, generatedConfig)
+          updatedContent = lines.join("\n")
+          scrollToLine = insertIndex + 1
         } else {
-          if (!updatedContent.endsWith("\n")) updatedContent += "\n";
-          const beforeLength = updatedContent.split("\n").length;
-          updatedContent += "\nproxy-providers:\n" + generatedConfig;
-          scrollToLine = beforeLength + 2;
+          if (!updatedContent.endsWith("\n")) updatedContent += "\n"
+          const beforeLength = updatedContent.split("\n").length
+          updatedContent += "\nproxy-providers:\n" + generatedConfig
+          scrollToLine = beforeLength + 2
         }
 
-        showToast("Proxy provider успешно добавлен", "success");
+        showToast("Proxy provider успешно добавлен", "success")
       } else if (resultType === "proxy") {
-        const lines = updatedContent.split("\n");
-        let insertIndex = -1;
-        let indent = 0;
-        let foundProxies = false;
+        const lines = updatedContent.split("\n")
+        let insertIndex = -1
+        let indent = 0
+        let foundProxies = false
 
         for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.trim().startsWith("#")) continue;
+          const line = lines[i]
+          if (line.trim().startsWith("#")) continue
           if (line.match(/^proxies:\s*($|#|\[)/)) {
-            foundProxies = true;
-            indent = line.search(/\S/);
+            foundProxies = true
+            indent = line.search(/\S/)
             for (let j = i + 1; j < lines.length; j++) {
-              const nextLine = lines[j];
-              if (nextLine.trim() === "") continue;
-              const lineIndent = nextLine.search(/\S/);
-              if (
-                lineIndent !== -1 &&
-                lineIndent <= indent &&
-                !nextLine.trim().startsWith("#")
-              ) {
-                insertIndex = j;
-                break;
+              const nextLine = lines[j]
+              if (nextLine.trim() === "") continue
+              const lineIndent = nextLine.search(/\S/)
+              if (lineIndent !== -1 && lineIndent <= indent && !nextLine.trim().startsWith("#")) {
+                insertIndex = j
+                break
               }
             }
-            if (insertIndex === -1) insertIndex = lines.length;
-            break;
+            if (insertIndex === -1) insertIndex = lines.length
+            break
           }
         }
 
         if (foundProxies && insertIndex !== -1) {
-          lines.splice(insertIndex, 0, generatedConfig);
-          updatedContent = lines.join("\n");
-          scrollToLine = insertIndex + 1;
+          lines.splice(insertIndex, 0, generatedConfig)
+          updatedContent = lines.join("\n")
+          scrollToLine = insertIndex + 1
         } else {
-          if (!updatedContent.endsWith("\n")) updatedContent += "\n";
-          const beforeLength = updatedContent.split("\n").length;
-          updatedContent += "\nproxies:\n" + generatedConfig;
-          scrollToLine = beforeLength + 2;
+          if (!updatedContent.endsWith("\n")) updatedContent += "\n"
+          const beforeLength = updatedContent.split("\n").length
+          updatedContent += "\nproxies:\n" + generatedConfig
+          scrollToLine = beforeLength + 2
         }
 
-        showToast("Proxy успешно добавлен", "success");
+        showToast("Proxy успешно добавлен", "success")
       }
 
-      monacoEditor.setValue(updatedContent);
-      configs[activeConfigIndex].content = updatedContent;
+      monacoEditor.setValue(updatedContent)
+      configs[activeConfigIndex].content = updatedContent
 
       if (scrollToLine > 0) {
         setTimeout(() => {
-          monacoEditor.revealLineInCenter(scrollToLine);
-          monacoEditor.setPosition({ lineNumber: scrollToLine, column: 1 });
-        }, 100);
+          monacoEditor.revealLineInCenter(scrollToLine)
+          monacoEditor.setPosition({ lineNumber: scrollToLine, column: 1 })
+        }, 100)
       }
     }
 
-    closeImportModal();
+    closeImportModal()
   } catch (e) {
-    showToast("Ошибка при добавлении: " + e.message, "error");
+    showToast("Ошибка при добавлении: " + e.message, "error")
   }
 }
 
 document.addEventListener("click", (e) => {
-  const menu = document.getElementById("formatMenu");
+  const menu = document.getElementById("formatMenu")
   if (menu && !e.target.closest(".btn-group")) {
-    menu.classList.remove("show");
+    menu.classList.remove("show")
   }
 
-  const templateImportModal = document.getElementById("templateImportModal");
+  const templateImportModal = document.getElementById("templateImportModal")
   if (templateImportModal && templateImportModal.classList.contains("show")) {
-    const modalContent = templateImportModal.querySelector(".modal-content");
+    const modalContent = templateImportModal.querySelector(".modal-content")
     if (!modalContent.contains(e.target)) {
-      closeTemplateImportModal();
+      closeTemplateImportModal()
     }
   }
-});
+})
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    const dirtyModal = document.getElementById("dirtyModal");
-    const coreModal = document.getElementById("coreModal");
-    const importModal = document.getElementById("importModal");
-    const templateImportModal = document.getElementById("templateImportModal");
-    const logsPanel = document.getElementById("logsPanel");
+    const dirtyModal = document.getElementById("dirtyModal")
+    const coreModal = document.getElementById("coreModal")
+    const importModal = document.getElementById("importModal")
+    const templateImportModal = document.getElementById("templateImportModal")
+    const logsPanel = document.getElementById("logsPanel")
     if (logsPanel && logsPanel.classList.contains("expanded-vertical")) {
-      toggleLogFullscreen();
-      e.preventDefault();
+      toggleLogFullscreen()
+      e.preventDefault()
     }
 
     if (dirtyModal && dirtyModal.classList.contains("show")) {
-      closeDirtyModal();
-      e.preventDefault();
+      closeDirtyModal()
+      e.preventDefault()
     } else if (coreModal && coreModal.classList.contains("show")) {
-      closeCoreModal();
-      e.preventDefault();
-    } else if (
-      templateImportModal &&
-      templateImportModal.classList.contains("show")
-    ) {
-      closeTemplateImportModal();
-      e.preventDefault();
+      closeCoreModal()
+      e.preventDefault()
+    } else if (templateImportModal && templateImportModal.classList.contains("show")) {
+      closeTemplateImportModal()
+      e.preventDefault()
     } else if (importModal && importModal.classList.contains("show")) {
-      closeImportModal();
-      e.preventDefault();
+      closeImportModal()
+      e.preventDefault()
     }
   }
   if (e.key === "Enter") {
-    const dirtyModal = document.getElementById("dirtyModal");
-    const coreModal = document.getElementById("coreModal");
-    const importModal = document.getElementById("importModal");
-    const templateImportModal = document.getElementById("templateImportModal");
+    const dirtyModal = document.getElementById("dirtyModal")
+    const coreModal = document.getElementById("coreModal")
+    const importModal = document.getElementById("importModal")
+    const templateImportModal = document.getElementById("templateImportModal")
 
     if (dirtyModal && dirtyModal.classList.contains("show")) {
-      saveAndSwitch();
-      e.preventDefault();
+      saveAndSwitch()
+      e.preventDefault()
     } else if (coreModal && coreModal.classList.contains("show")) {
-      confirmCoreChange();
-      e.preventDefault();
-    } else if (
-      templateImportModal &&
-      templateImportModal.classList.contains("show")
-    ) {
+      confirmCoreChange()
+      e.preventDefault()
+    } else if (templateImportModal && templateImportModal.classList.contains("show")) {
       if (selectedTemplateUrl) {
-        importSelectedTemplate();
-        e.preventDefault();
+        importSelectedTemplate()
+        e.preventDefault()
       }
     } else if (importModal && importModal.classList.contains("show")) {
-      const importInput = document.getElementById("importInput");
+      const importInput = document.getElementById("importInput")
       if (importInput.value.trim()) {
-        generateConfig();
-        e.preventDefault();
+        generateConfig()
+        e.preventDefault()
       }
     }
   }
-});
+})
 
 document.getElementById("fullscreenBackdrop")?.addEventListener("click", () => {
-  const panel = document.getElementById("logsPanel");
+  const panel = document.getElementById("logsPanel")
   if (panel.classList.contains("expanded-vertical")) {
-    toggleLogFullscreen();
+    toggleLogFullscreen()
   }
-});
+})
 
 document.addEventListener("mousedown", (e) => {
-  const panel = document.getElementById("logsPanel");
-  if (!panel || !panel.classList.contains("expanded-vertical")) return;
-  const rect = panel.getBoundingClientRect();
-  if (
-    e.clientX < rect.left ||
-    e.clientX > rect.right ||
-    e.clientY < rect.top ||
-    e.clientY > rect.bottom
-  ) {
-    toggleLogFullscreen();
+  const panel = document.getElementById("logsPanel")
+  if (!panel || !panel.classList.contains("expanded-vertical")) return
+  const rect = panel.getBoundingClientRect()
+  if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+    toggleLogFullscreen()
   }
-});
+})

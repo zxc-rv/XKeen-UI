@@ -158,23 +158,20 @@ textarea {
   background: rgba(8, 14, 29, 0.6);
   backdrop-filter: blur(4px);
   border: 1px solid #1e293b;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
-  opacity: 0.6;
-}
-
-.panel:hover .log-overlay-btn,
-.log-overlay-btn:hover {
-  opacity: 1;
 }
 
 .log-overlay-btn:hover {
   background-color: #1e293b;
   color: #fafafa;
   border-color: #334155;
-  transform: scale(1.05);
+}
+
+.log-overlay-btn:active {
+  transform: scale(0.95);
 }
 
 .log-overlay-btn svg {
@@ -1055,8 +1052,8 @@ textarea {
   right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -1075,8 +1072,8 @@ textarea {
 
 .log-filter-clear::before {
   content: "";
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   background-color: #94a3b8;
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>");
@@ -1567,24 +1564,26 @@ textarea {
 
 .copy-output-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 15px;
+  right: 15px;
   z-index: 10;
-  background: transparent;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: rgba(8, 14, 29, 0.6);
+  backdrop-filter: blur(4px);
+  border: 1px solid #1e293b;
   border-radius: 8px;
-  padding: 6px;
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .copy-output-btn:hover {
-  background: #1e293b;
-  color: #e2e8f0;
+  background-color: #1e293b;
+  color: #fafafa;
   border-color: #334155;
 }
 
@@ -1597,7 +1596,7 @@ textarea {
 }
 
 .modal-content.expanded {
-  min-width: 500px;
+  min-width: 600px;
   max-width: 650px;
 }
 
@@ -1789,8 +1788,8 @@ textarea {
 .import-input-clear {
   position: absolute;
   right: 8px;
-  width: 18px;
-  height: 18px;
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -1808,8 +1807,8 @@ textarea {
 
 .import-input-clear::before {
   content: "";
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   background-color: #94a3b8;
   -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>");
   mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>");
@@ -1865,9 +1864,38 @@ textarea {
   box-shadow: none !important;
 }
 
+.app-version {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  font-size: 13px;
+  color: #64748b;
+  background: rgba(8, 14, 29, 0.6);
+  backdrop-filter: blur(4px);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  font-family: "JetBrains Mono", monospace;
+  user-select: none;
+  z-index: 100;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.app-version:hover {
+  color: #94a3b8;
+  border-color: #334155;
+  background: rgba(2, 8, 23, 0.95);
+}
+
 @media (max-width: 768px) {
   #dashboardLink {
     margin-bottom: 14px;
+  }
+
+  #logsPanel {
+    margin-bottom: 50px;
   }
 
   .validation-info {
@@ -1915,6 +1943,7 @@ textarea {
 
   .status {
     align-self: center;
+    height: 35px;
   }
 
   .controls-buttons {
@@ -1926,9 +1955,9 @@ textarea {
   }
 
   .btn-icon {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
+    width: 35px;
+    height: 35px;
+    min-width: 35px;
     flex-shrink: 0;
   }
 
@@ -2011,7 +2040,12 @@ textarea {
   }
 
   .log-filter .input {
+    font-size: 16px;
     width: 160px;
+  }
+
+  .log-overlay-btn {
+    top: 125px;
   }
 
   .modal-content {
@@ -2110,38 +2144,18 @@ textarea {
   .toast.show {
     transform: translateY(0) scale(1);
   }
-}
-
-.app-version {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  font-size: 13px;
-  color: #64748b;
-  background: rgba(2, 8, 23, 0.8);
-  backdrop-filter: blur(8px);
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid #1e293b;
-  font-family: "JetBrains Mono", monospace;
-  user-select: none;
-  z-index: 100;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.app-version:hover {
-  color: #94a3b8;
-  border-color: #334155;
-  background: rgba(2, 8, 23, 0.95);
-}
-
-@media (max-width: 768px) {
   .app-version {
-    bottom: 12px;
-    right: 12px;
-    font-size: 10px;
+    bottom: 14px;
+    right: 18px;
+    font-size: 12px;
     padding: 4px 8px;
+  }
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  #importInput {
+    font-size: 16px;
   }
 }
