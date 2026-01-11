@@ -273,32 +273,38 @@
         position: absolute;
         top: 16px;
         right: 16px;
-        padding: 6px;
-        background: var(--field-backgound);
-        border: 1px solid #1e293b;
-        color: #64748b;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.2s;
-        display: none;
+        z-index: 10;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        z-index: 10;
+        width: 34px;
+        height: 34px;
+        background: rgba(8, 14, 29, 0.6);
+        backdrop-filter: blur(4px);
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        color: #64748b;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .copy-btn:hover {
+        background-color: #1e293b;
+        color: #fafafa;
+        border-color: #334155;
+      }
+
+      .copy-btn:active {
+        transform: scale(0.95);
       }
 
       .output.success .copy-btn {
         display: flex;
       }
 
-      .copy-btn:hover {
-        background: #1e293b;
-        color: #e2e8f0;
-        border-color: #334155;
-      }
-
       .copy-btn svg {
-        width: 19px;
-        height: 19px;
+        width: 18px;
+        height: 18px;
       }
 
       .copy-btn.success svg {
