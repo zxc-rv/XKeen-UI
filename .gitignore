@@ -3,6 +3,7 @@ Makefile
 monaco-editor
 prettier
 local_mode.js
+version.js
 version.js.bak
 version.js.tmp
 *.bak
