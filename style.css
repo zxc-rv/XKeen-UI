@@ -1035,7 +1035,6 @@ textarea {
   font-weight: 600;
   letter-spacing: 0.01em;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modal-actions .btn:hover {
@@ -1051,7 +1050,6 @@ textarea {
   color: #ffffff;
   position: relative;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modal-actions .btn-primary:hover:not(:disabled) {

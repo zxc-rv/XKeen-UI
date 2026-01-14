@@ -288,7 +288,7 @@ get_editor_mode() {
 
 toggle_editor_mode() {
   if [ ! -f "$local_mode_path" ]; then
-    echo -e "${RED}\n Ошибка: редактор не установлен\n${NC}"
+    echo -e "${RED}\n Ошибка: XKeen UI не установлен\n${NC}"
     exit 1
   fi
 
@@ -326,7 +326,7 @@ echo -e " 3. Удалить"
 echo -e " 4. Сменить режим редактора [Сейчас: ${YELLOW}$current_mode${NC}]"
 echo -e " 5. Выйти\n"
 
-read -p "${GREEN}>: ${NC}" response < /dev/tty
+read -p "${GREEN} >: ${NC}" response < /dev/tty
 
 case $response in
   1)
