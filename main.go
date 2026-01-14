@@ -1,12 +1,12 @@
 package main
 
 import (
+	"XKeen-UI/bin"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"XKeen-UI/bin"
 )
 
 var version = "dev"

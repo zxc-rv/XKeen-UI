@@ -482,7 +482,8 @@ function loadMonacoEditor() {
     console.error("Monaco Editor not loaded yet")
     return
   }
-  require(["vs/editor/editor.main"], function () {
+  require(["vs/editor/editor.main"], async function () {
+    await document.fonts.ready
     monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
       allowComments: true,
     })
@@ -620,7 +621,7 @@ function loadMonacoEditor() {
       minimap: { enabled: true, showSlider: "always" },
       fontSize: 14,
       fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
-      fontWeight: "400",
+      fontWeight: 400,
       smoothScrolling: true,
       lineHeight: 1.5,
       renderLineHighlight: "none",
@@ -1462,6 +1463,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const logFilterClear = document.getElementById("logFilterClear")
   const importInput = document.getElementById("importInput")
   const importInputClear = document.getElementById("importInputClear")
+  const scrollBtn = document.getElementById("scrollBottomBtn")
 
   if (tabsList) tabsList.classList.add("empty")
   isConfigsLoading = true
@@ -1499,6 +1501,27 @@ document.addEventListener("DOMContentLoaded", () => {
       logFilter = ""
       logFilterClear.classList.remove("show")
       applyFilter()
+    })
+  }
+
+  if (scrollBtn && logsContainer) {
+    scrollBtn.addEventListener("click", () => {
+      logsContainer.scrollTo({ top: logsContainer.scrollHeight })
+      userScrolled = false
+    })
+
+    logsContainer.addEventListener("scroll", () => {
+      const isAtBottom = logsContainer.scrollTop + logsContainer.clientHeight >= logsContainer.scrollHeight - 5
+
+      if (isAtBottom) {
+        scrollBtn.style.pointerEvents = "none"
+        scrollBtn.style.opacity = "0"
+        scrollBtn.classList.remove("visible")
+      } else {
+        scrollBtn.style.pointerEvents = "auto"
+        scrollBtn.style.opacity = ""
+        scrollBtn.classList.add("visible")
+      }
     })
   }
 
@@ -1579,7 +1602,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function applyCoreSelection(value) {
-    console.log("applyCoreSelection called with:", value)
     if (!value) {
       console.error("Empty value provided to applyCoreSelection")
       return
@@ -1591,7 +1613,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     pendingCoreChange = value
-    console.log("pendingCoreChange set to:", pendingCoreChange)
     document.getElementById("selectedCore").textContent = value
     document.getElementById("coreModal").classList.add("show")
   }
@@ -1636,7 +1657,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!target) return
 
     const value = target.getAttribute("data-value")
-    console.log("Core selected:", value)
 
     applyCoreSelection(value)
     closeCoreMenu()
@@ -2023,7 +2043,8 @@ function generateConfig() {
       readOnly: true,
       minimap: { enabled: false },
       fontSize: 13,
-      fontFamily: "JetBrains Mono, monospace",
+      fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
+      lineHeight: 1.5,
       lineNumbers: "off",
       scrollBeyondLastLine: false,
       wordWrap: "off",

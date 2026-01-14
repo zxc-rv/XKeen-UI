@@ -59,7 +59,7 @@ jobs:
 
       - name: Pack static files
         run: |
-          tar -czf xkeen-ui-static.tar.gz *.js *.css index.html favicon.png
+          tar -czf xkeen-ui-static.tar.gz *.js *.css index.html favicon.png assets
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

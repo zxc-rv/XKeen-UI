@@ -1,3 +1,51 @@
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/assets/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("/assets/Inter-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Noto Color Emoji";
+  src: url("/assets/NotoColorEmoji.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -162,12 +210,14 @@ textarea {
   color: #64748b;
   cursor: pointer;
   transition: all 0.2s ease;
+  opacity: 0.5;
 }
 
 .log-overlay-btn:hover {
   background-color: #1e293b;
   color: #fafafa;
   border-color: #334155;
+  opacity: 1;
 }
 
 .log-overlay-btn:active {
@@ -367,7 +417,6 @@ textarea {
   overflow-y: auto;
   font-family:
     JetBrains Mono,
-    JetBrainsMono NF,
     monospace,
     Noto Color Emoji;
   font-size: 13px;
@@ -393,8 +442,7 @@ textarea {
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  font-weight: 600;
-  padding: 4px 6px 3px 8px;
+  padding: 5px 6px 3px 8px;
   border-radius: 9999px;
   white-space: nowrap;
   letter-spacing: 0.5px;
@@ -922,7 +970,7 @@ textarea {
   min-width: 24px;
   height: 24px;
   padding: 0 8px;
-  margin-left: auto;
+  margin-left: 8px;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 9999px;
@@ -931,19 +979,20 @@ textarea {
   font-weight: 700;
   letter-spacing: 0.02em;
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.1);
+  vertical-align: middle;
 }
 
 .modal-description {
   font-size: 14px;
   color: #94a3b8;
-  margin: -12px 0 24px 0;
+  margin: -5px 0 24px 0;
   line-height: 1.5;
   font-weight: 400;
 }
 
 .modal-body {
   font-size: 14px;
-  color: #cbd5e1;
+  color: #94a3b8;
   margin-bottom: 28px;
   line-height: 1.5;
 }
@@ -1610,6 +1659,20 @@ textarea {
   margin: 4px 0;
 }
 
+.template-modal-desc {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #94a3b8;
+  margin: -5px 0 24px 0;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+#templateCountBadge {
+  margin-left: auto !important;
+}
+
 @keyframes templateFadeIn {
   from {
     opacity: 0;
@@ -1889,7 +1952,86 @@ textarea {
   background: rgba(2, 8, 23, 0.95);
 }
 
+.modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: unset;
+  border-radius: 8px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  z-index: 10;
+}
+
+.modal-close:hover {
+  background: #1e293b;
+  border-color: #475569;
+  color: #e2e8f0;
+}
+
+.modal-close:active {
+  transform: scale(0.95);
+}
+
+.modal-close svg {
+  width: 24px;
+  height: 24px;
+}
+
+.modal-title {
+  padding-right: 40px;
+}
+
+.log-overlay-btn {
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+#logsPanel:hover .log-overlay-btn,
+#logsPanel .logs-container:hover ~ .log-overlay-btn,
+.log-overlay-btn:hover {
+  opacity: 1;
+}
+
+.scroll-bottom-btn {
+  position: absolute;
+  top: auto;
+  right: 35px;
+  bottom: 35px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.scroll-bottom-btn.visible {
+  opacity: 0.5 !important;
+  pointer-events: auto !important;
+}
+
+#logsPanel:hover .scroll-bottom-btn.visible {
+  opacity: 1 !important;
+  pointer-events: auto;
+}
+
+.scroll-bottom-btn svg {
+  margin-top: 1px;
+}
+
 @media (max-width: 768px) {
+  .scroll-bottom-btn::before {
+    display: none;
+  }
   #dashboardLink {
     margin-bottom: 14px;
   }
@@ -2157,5 +2299,9 @@ textarea {
 
   #importInput {
     font-size: 16px;
+  }
+  .scroll-bottom-btn {
+    top: auto;
+    bottom: 35px;
   }
 }
