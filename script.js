@@ -1449,6 +1449,25 @@ function updateDashboardLink() {
   dashboardLink.style.display = "none"
 }
 
+const SUPPORTED_IMPORT_PROTOCOLS = ["ss://", "vless://", "vmess://", "hysteria2://", "http://", "https://", "trojan://"]
+
+function checkImportURIInput() {
+  const uri = document.getElementById("importInput").value.trim()
+  const generateBtn = document.getElementById("generateBtn")
+
+  if (!generateBtn) return
+
+  if (uri.length === 0) {
+    generateBtn.disabled = true
+    return
+  }
+
+  const uriLower = uri.toLowerCase()
+  const isValid = SUPPORTED_IMPORT_PROTOCOLS.some((protocol) => uriLower.startsWith(protocol))
+
+  generateBtn.disabled = !isValid
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const logsContainer = document.getElementById("logsContainer")
   const logSelectRoot = document.getElementById("logSelectRoot")
@@ -1534,6 +1553,7 @@ document.addEventListener("DOMContentLoaded", () => {
       importInput.value = ""
       importInputClear.classList.remove("show")
       importInput.focus()
+      checkImportURIInput()
     })
   }
 
@@ -1726,6 +1746,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
   logSelectLabel.textContent = currentLogFile
   setActiveLogItem(currentLogFile)
+
+  if (importInput) {
+    importInput.addEventListener("input", () => {
+      const importInputClear = document.getElementById("importInputClear")
+      if (importInputClear) {
+        importInputClear.classList.toggle("show", importInput.value.length > 0)
+      }
+      checkImportURIInput()
+    })
+    setTimeout(checkImportURIInput, 100)
+  }
+
+  if (importInput) {
+    importInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault()
+        const generateBtn = document.getElementById("generateBtn")
+        if (generateBtn && !generateBtn.disabled) {
+          generateConfig()
+        }
+      }
+    })
+  }
 
   init().catch((error) => {
     console.error("App initialization failed:", error)
@@ -1972,13 +2015,15 @@ function openImportModal() {
   modal.classList.add("show")
   modal.querySelector(".modal-content").classList.remove("expanded")
   document.getElementById("importResult").style.display = "none"
-  const importInput = document.getElementById("importInput")
-  importInput.value = ""
   document.getElementById("importInputClear").classList.remove("show")
-  document.getElementById("generateBtn").style.display = "inline-flex"
   document.getElementById("copyBtn").style.display = "none"
   document.getElementById("addBtn").style.display = "none"
 
+  const btn = document.getElementById("generateBtn")
+  btn ? (btn.disabled = true) : null
+
+  const importInput = document.getElementById("importInput")
+  importInput.value = ""
   setTimeout(() => {
     importInput.focus()
   }, 100)
@@ -2332,8 +2377,10 @@ document.addEventListener("keydown", (e) => {
     } else if (importModal && importModal.classList.contains("show")) {
       const importInput = document.getElementById("importInput")
       if (importInput.value.trim()) {
-        generateConfig()
-        e.preventDefault()
+        if (generateBtn && !generateBtn.disabled) {
+          generateConfig()
+          e.preventDefault()
+        }
       }
     }
   }

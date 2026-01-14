@@ -706,10 +706,6 @@ textarea {
   color: #0f172a;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #dfe2e5;
-}
-
 .btn-success {
   background: #10b981;
   color: white;
@@ -896,7 +892,7 @@ textarea {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(2, 8, 23, 0.8); /* #020817 с 80% прозрачности */
+  background: rgba(2, 8, 23, 0.8);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -935,16 +931,44 @@ textarea {
     0 20px 25px -5px rgba(0, 0, 0, 0.4),
     0 10px 10px -5px rgba(0, 0, 0, 0.2),
     0 0 0 1px rgba(59, 130, 246, 0.1);
+  opacity: 0;
   transform: scale(0.95);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: modalDisappear 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.modal-overlay.show .modal-content {
+  animation: modalAppear 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.modal-content.expanded {
+  min-width: 600px;
+  max-width: 650px;
+}
+
+@keyframes modalAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes modalDisappear {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
 }
 
 .modal-template .modal-content {
   width: 600px;
-}
-
-.modal-overlay.show .modal-content {
-  transform: scale(1);
 }
 
 .modal-title {
@@ -1023,32 +1047,18 @@ textarea {
 }
 
 .modal-actions .btn-primary {
-  background: linear-gradient(to bottom, #3b82f6, #2563eb);
+  background: #3b82f6;
   color: #ffffff;
   position: relative;
   overflow: hidden;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.modal-actions .btn-primary::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.2));
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.modal-actions .btn-primary:hover::before {
-  opacity: 1;
-}
-
-.modal-actions .btn-primary:hover {
-  background: linear-gradient(to bottom, #2563eb, #1d4ed8);
+.modal-actions .btn-primary:hover:not(:disabled) {
+  background: #2563eb;
 }
 
 .modal-actions .btn-primary:disabled {
-  background: #334155;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -1644,11 +1654,6 @@ textarea {
   display: block;
 }
 
-.modal-content.expanded {
-  min-width: 600px;
-  max-width: 650px;
-}
-
 .template-list {
   display: flex;
   flex-direction: column;
@@ -1988,11 +1993,6 @@ textarea {
 
 .modal-title {
   padding-right: 40px;
-}
-
-.log-overlay-btn {
-  opacity: 0.5;
-  transition: opacity 0.3s ease;
 }
 
 #logsPanel:hover .log-overlay-btn,
