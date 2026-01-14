@@ -2,11 +2,11 @@
 
 set -e
 
-GREEN='\033[1;32m'
-RED='\033[1;31m'
-NC='\033[0m'
-BLUE='\033[1;34m'
-YELLOW='\033[1;33m'
+GREEN=$'\033[1;32m'
+RED=$'\033[1;31m'
+NC=$'\033[0m'
+BLUE=$'\033[1;34m'
+YELLOW=$'\033[1;33m'
 
 xkeenui_bin="/opt/sbin/xkeen-ui"
 xkeenui_init="/opt/etc/init.d/S99xkeen-ui"
@@ -128,10 +128,10 @@ install_xkeenui() {
     uninstall_xkeenui
   fi
 
-  echo -e "${YELLOW}\nВариант установки редактора:\n${NC}"
-  echo -e "1. CDN"
-  echo -e "2. Local\n"
-  read -p "Выбор: " editor_choice < /dev/tty
+  echo -e "${YELLOW}\n Вариант установки редактора:\n${NC}"
+  echo -e " 1. CDN"
+  echo -e " 2. Local\n"
+  read -p "${GREEN}>: ${NC}" editor_choice < /dev/tty
 
   mkdir -p $static_dir
 
@@ -207,15 +207,15 @@ update_xkeenui() {
 }
 
 uninstall_xkeenui() {
-  echo -e "\nДанное действие ${RED}удалит${NC} XKeen UI, его файлы и зависимости.\n"
-  read -p "Продолжить? [y/N]: " response < /dev/tty
+  echo -e "\n Данное действие ${RED}удалит${NC} XKeen UI, его файлы и зависимости.\n"
+  read -p " Продолжить? [y/N]: " response < /dev/tty
   case "$response" in
     [Yy])
         clear
         echo -e "${GREEN}\n:: Начинаем удаление...${NC}"
         ;;
     *)
-        echo -e "${RED}\nОтмена операции.\n${NC}"
+        echo -e "${RED}\n Отмена операции.\n${NC}"
         exit 1
         ;;
   esac
@@ -245,8 +245,8 @@ legacy_installation_check() {
   if [ -f "$lighttpd_conf" ]; then
     $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
     rm -f "$lighttpd_conf"
-    echo -e "${YELLOW}\nВеб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
-    read -p "Удалить его? [Y/n]: " response < /dev/tty
+    echo -e "${YELLOW}\n Веб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
+    read -p " Удалить его? [Y/n]: " response < /dev/tty
 
     case "$response" in
       [Nn])
@@ -278,32 +278,32 @@ EOF
 
 get_editor_mode() {
   if grep -q "const LOCAL = true" "$local_mode_path" 2>/dev/null; then
-    echo "Local"
+    echo -e "${GREEN}Local${NC}"
   elif grep -q "const LOCAL = false" "$local_mode_path" 2>/dev/null; then
-    echo "CDN"
+    echo -e "${YELLOW}CDN${NC}"
   else
-    echo "не установлено"
+    echo -e "${RED}N/A${NC}"
   fi
 }
 
 toggle_editor_mode() {
   if [ ! -f "$local_mode_path" ]; then
-    echo -e "${RED}\nОшибка: редактор не установлен\n${NC}"
+    echo -e "${RED}\n Ошибка: редактор не установлен\n${NC}"
     exit 1
   fi
 
   if grep -q "const LOCAL = true" "$local_mode_path"; then
     echo "const LOCAL = false" > "$local_mode_path"
-    echo -e "${GREEN}\nРежим редактора переключен на CDN\n${NC}"
+    echo -e "${GREEN}\n Режим редактора переключен на CDN\n${NC}"
   else
     if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
-      echo -e "\nБудет выполнена загрузка файлов редактора.\n"
-      read -p "Продолжить? [Y/n]: " response < /dev/tty
+      echo -e "\n Будет выполнена загрузка файлов редактора.\n"
+      read -p " Продолжить? [Y/n]: " response < /dev/tty
       [[ ! $response =~ ^[Yy]?$ ]] && echo && return
       setup_local_editor
     fi
     echo "const LOCAL = true" > "$local_mode_path"
-    echo -e "${GREEN}\nРежим редактора переключен на Local\n${NC}"
+    echo -e "${GREEN}\n Режим редактора переключен на Local\n${NC}"
   fi
 }
 
@@ -320,12 +320,13 @@ echo -e "${BLUE}\nДобро пожаловать! Выберите действ
 
 current_mode=$(get_editor_mode)
 
-echo -e "1. Установить/переустановить"
-echo -e "2. Обновить"
-echo -e "3. Удалить"
-echo -e "4. Сменить режим редактора [Сейчас: ${YELLOW}$current_mode${NC}]"
-echo -e "5. Выйти\n"
-read -p "Выбор: " response < /dev/tty
+echo -e " 1. Установить/переустановить"
+echo -e " 2. Обновить"
+echo -e " 3. Удалить"
+echo -e " 4. Сменить режим редактора [Сейчас: ${YELLOW}$current_mode${NC}]"
+echo -e " 5. Выйти\n"
+
+read -p "${GREEN}>: ${NC}" response < /dev/tty
 
 case $response in
   1)
