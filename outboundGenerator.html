@@ -212,6 +212,24 @@
         transform: scale(0.98);
       }
 
+      .btn:disabled {
+        background: linear-gradient(135deg, #374151, #4b5563);
+        border-color: #4b5563;
+        color: #9ca3af;
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      .btn:disabled:hover {
+        background: linear-gradient(135deg, #374151, #4b5563);
+        border-color: #4b5563;
+        transform: none;
+      }
+
+      .btn:disabled:active {
+        transform: none;
+      }
+
       .output {
         background: var(--field-backgound);
         border-radius: 8px;
@@ -402,7 +420,7 @@
         </button>
       </div>
 
-      <button class="btn" onclick="generate()">Сгенерировать</button>
+      <button class="btn" id="generateBtn" onclick="generate()" disabled>Сгенерировать</button>
 
       <div class="output" id="output">
         <button class="copy-btn" onclick="copy()" title="Скопировать">
@@ -430,13 +448,26 @@
       let currentCore = "xray"
       const uriInput = document.getElementById("uri")
       const clearBtn = document.getElementById("clearInput")
+      const generateBtn = document.getElementById("generateBtn")
+      const SUPPORTED_PROTOCOLS = ["http://", "https://", "ss://", "trojan://", "vmess://", "vless://", "hysteria2://"]
+
+      function checkURIInput() {
+        const uri = uriInput.value.trim().toLowerCase()
+        const isValid = SUPPORTED_PROTOCOLS.some((protocol) => uri.startsWith(protocol))
+        generateBtn.disabled = !isValid
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        checkURIInput()
+      })
 
       uriInput.addEventListener("input", () => {
         clearBtn.classList.toggle("show", uriInput.value.length > 0)
+        checkURIInput()
       })
 
       uriInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
+        if (e.key === "Enter" && generateBtn.disabled === false) {
           generate()
         }
       })
@@ -444,6 +475,7 @@
       function clearInput() {
         uriInput.value = ""
         clearBtn.classList.remove("show")
+        checkURIInput()
         uriInput.focus()
       }
 
