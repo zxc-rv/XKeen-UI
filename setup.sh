@@ -279,14 +279,17 @@ EOF
 get_editor_mode() {
   if grep -q "const LOCAL = true" "$local_mode_path" 2>/dev/null; then
     echo "Local"
-  else
+  elif grep -q "const LOCAL = false" "$local_mode_path" 2>/dev/null; then
     echo "CDN"
+  else
+    echo "не установлено"
   fi
 }
 
 toggle_editor_mode() {
   if [ ! -f "$local_mode_path" ]; then
-    echo "const LOCAL = false" > "$local_mode_path"
+    echo -e "${RED}\nОшибка: редактор не установлен\n${NC}"
+    exit 1
   fi
 
   if grep -q "const LOCAL = true" "$local_mode_path"; then
