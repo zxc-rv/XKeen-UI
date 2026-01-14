@@ -273,8 +273,35 @@ PATH=/opt/sbin:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:
 
 . /opt/etc/init.d/rc.func
 EOF
-
   chmod +x $xkeenui_init
+}
+
+get_editor_mode() {
+  if grep -q "const LOCAL = true" "$local_mode_path" 2>/dev/null; then
+    echo "Local"
+  else
+    echo "CDN"
+  fi
+}
+
+toggle_editor_mode() {
+  if [ ! -f "$local_mode_path" ]; then
+    echo "const LOCAL = false" > "$local_mode_path"
+  fi
+
+  if grep -q "const LOCAL = true" "$local_mode_path"; then
+    echo "const LOCAL = false" > "$local_mode_path"
+    echo -e "${GREEN}\nРежим редактора переключен на CDN\n${NC}"
+  else
+    if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
+      echo -e "\nБудет выполнена загрузка файлов редактора.\n"
+      read -p "Продолжить? [Y/n]: " response < /dev/tty
+      [[ ! $response =~ ^[Yy]?$ ]] && echo && return
+      setup_local_editor
+    fi
+    echo "const LOCAL = true" > "$local_mode_path"
+    echo -e "${GREEN}\nРежим редактора переключен на Local\n${NC}"
+  fi
 }
 
 clear
@@ -287,10 +314,14 @@ cat <<'EOF'
 /_/|_|/_/ |_|\___/ \___//_/ /_/    \____//___/
 EOF
 echo -e "${BLUE}\nДобро пожаловать! Выберите действие:\n${NC}"
+
+current_mode=$(get_editor_mode)
+
 echo -e "1. Установить/переустановить"
 echo -e "2. Обновить"
 echo -e "3. Удалить"
-echo -e "4. Выйти\n"
+echo -e "4. Сменить режим редактора [Сейчас: ${YELLOW}$current_mode${NC}]"
+echo -e "5. Выйти\n"
 read -p "Выбор: " response < /dev/tty
 
 case $response in
@@ -304,6 +335,9 @@ case $response in
     uninstall_xkeenui
     ;;
   4)
+    toggle_editor_mode
+    ;;
+  5)
     echo
     exit
     ;;
