@@ -441,6 +441,7 @@ textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 48px;
   font-size: 10px;
   padding: 5px 6px 3px 8px;
   border-radius: 9999px;
@@ -2009,7 +2010,6 @@ textarea {
   justify-content: center;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
 }
 
 .scroll-bottom-btn.visible {
