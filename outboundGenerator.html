@@ -457,10 +457,6 @@
         generateBtn.disabled = !isValid
       }
 
-      document.addEventListener("DOMContentLoaded", () => {
-        checkURIInput()
-      })
-
       uriInput.addEventListener("input", () => {
         clearBtn.classList.toggle("show", uriInput.value.length > 0)
         checkURIInput()
@@ -470,6 +466,13 @@
         if (e.key === "Enter" && generateBtn.disabled === false) {
           generate()
         }
+      })
+
+      window.addEventListener("pageshow", () => {
+        if (uriInput.value.trim()) {
+          clearBtn.classList.add("show")
+        }
+        checkURIInput()
       })
 
       function clearInput() {
