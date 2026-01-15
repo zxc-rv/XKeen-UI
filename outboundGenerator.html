@@ -139,12 +139,13 @@
         padding: 12px;
         padding-right: 40px;
         border-radius: 8px;
-        font-size: 14px;
+        font-size: 13px;
         font-family: inherit;
         transition:
           border-color 0.15s ease,
           box-shadow 0.15s ease;
         outline: none;
+        letter-spacing: 0.4px;
       }
 
       textarea:focus,
@@ -192,7 +193,7 @@
         color: #ffffff;
         border: 1px solid #2563eb;
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 400;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s;
@@ -200,6 +201,7 @@
         align-items: center;
         justify-content: center;
         font-family: "Inter", sans-serif;
+        letter-spacing: 0.4px;
       }
 
       .btn:hover {
@@ -358,22 +360,22 @@
         margin-bottom: 20px;
       }
 
-      #fullConfigGroup label {
+      #fullConfigGroup > div {
         display: flex;
         align-items: center;
-        cursor: pointer;
         user-select: none;
-        font-size: 14px;
-        font-weight: 500;
+        font-size: 13px;
+        font-weight: 400;
         color: #e4e4e7;
-        gap: 12px;
+        gap: 10px;
+        letter-spacing: 0.2px;
       }
 
       #fullConfigGroup input[type="checkbox"] {
         appearance: none;
         width: 44px !important;
         height: 24px !important;
-        border: 2px solid #334155;
+        border: 1px solid #334155;
         border-radius: 12px;
         background: var(--field-backgound);
         cursor: pointer;
@@ -395,8 +397,8 @@
         height: 16px;
         border-radius: 50%;
         background: #64748b;
-        top: 2px;
-        left: 2px;
+        top: 3px;
+        left: 3px;
         transition: all 0.2s ease;
       }
 
@@ -407,7 +409,7 @@
 
       #fullConfigGroup input[type="checkbox"]:checked::before {
         background: #ffffff;
-        left: 22px;
+        left: 23px;
       }
 
       #fullConfigGroup input[type="checkbox"]:focus {
@@ -491,10 +493,10 @@
       </div>
 
       <div class="input-group" id="fullConfigGroup" style="display: none">
-        <label>
+        <div>
           <input type="checkbox" id="fullConfig" />
           Полная конфигурация
-        </label>
+        </div>
       </div>
 
       <button class="btn" id="generateBtn" onclick="generate()" disabled>Сгенерировать</button>
@@ -630,11 +632,30 @@
             }
             content = JSON.stringify(config, null, 2)
             lang = "json"
+          } else if (currentCore === "mihomo") {
+            const proxies = []
+            const providers = []
+
+            lines.forEach((line, i) => {
+              const trimmed = line.trim().toLowerCase()
+              if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                providers.push(results[i].content)
+              } else {
+                proxies.push(results[i].content)
+              }
+            })
+
+            content = ""
+            if (proxies.length > 0) {
+              content += "proxies:\n" + proxies.join("\n")
+            }
+            if (providers.length > 0) {
+              if (content) content += "\n\n"
+              content += "proxy-providers:\n" + providers.join("\n")
+            }
+            lang = "yaml"
           } else {
             content = results.map((r) => r.content).join("\n")
-            if (currentCore === "mihomo") {
-              content = "proxies:\n" + content
-            }
             lang = currentCore === "xray" ? "json" : "yaml"
           }
 
