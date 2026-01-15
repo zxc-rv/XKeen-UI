@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tokyo-night-dark.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=block" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/yaml.min.js"></script>
@@ -248,6 +248,7 @@
       .output-scroll {
         padding: 16px;
         overflow: auto;
+        height: 300px;
         max-height: 600px;
         scrollbar-width: thin;
         scrollbar-color: #334155 transparent;
@@ -353,6 +354,75 @@
         color: #bb9af7 !important;
       }
 
+      #fullConfigGroup {
+        margin-bottom: 20px;
+      }
+
+      #fullConfigGroup label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+        font-size: 14px;
+        font-weight: 500;
+        color: #e4e4e7;
+        gap: 12px;
+      }
+
+      #fullConfigGroup input[type="checkbox"] {
+        appearance: none;
+        width: 44px !important;
+        height: 24px !important;
+        border: 2px solid #334155;
+        border-radius: 12px;
+        background: var(--field-backgound);
+        cursor: pointer;
+        position: relative;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      #fullConfigGroup input[type="checkbox"]:hover {
+        border-color: #475569;
+      }
+
+      #fullConfigGroup input[type="checkbox"]::before {
+        content: "";
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #64748b;
+        top: 2px;
+        left: 2px;
+        transition: all 0.2s ease;
+      }
+
+      #fullConfigGroup input[type="checkbox"]:checked {
+        background: #3b82f6;
+        border-color: #3b82f6;
+      }
+
+      #fullConfigGroup input[type="checkbox"]:checked::before {
+        background: #ffffff;
+        left: 22px;
+      }
+
+      #fullConfigGroup input[type="checkbox"]:focus {
+        outline: none;
+        box-shadow: none;
+      }
+
+      .download-btn {
+        display: none !important;
+      }
+
+      .output.success .download-btn.show {
+        display: flex !important;
+      }
+
       @media (max-width: 768px) {
         .container {
           padding: 24px;
@@ -372,7 +442,7 @@
   <body>
     <div class="container">
       <h1>Outbound Generator</h1>
-      <p class="subtitle">Конвертер URI в конфиги для Xray/Mihomo</p>
+      <p class="subtitle">Конвертер URI в конфигурации для Xray и Mihomo</p>
 
       <div class="tabs">
         <button class="tab active" data-core="xray">Xray</button>
@@ -420,6 +490,13 @@
         </button>
       </div>
 
+      <div class="input-group" id="fullConfigGroup" style="display: none">
+        <label>
+          <input type="checkbox" id="fullConfig" />
+          Полная конфигурация
+        </label>
+      </div>
+
       <button class="btn" id="generateBtn" onclick="generate()" disabled>Сгенерировать</button>
 
       <div class="output" id="output">
@@ -435,6 +512,21 @@
           >
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        </button>
+        <button class="copy-btn download-btn" onclick="download()" title="Скачать" style="top: 58px">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
         </button>
         <div class="output-scroll">
@@ -475,11 +567,19 @@
         checkURIInput()
       })
 
+      if (currentCore === "xray") {
+        document.getElementById("fullConfigGroup").style.display = "block"
+      }
+
       function clearInput() {
         uriInput.value = ""
         clearBtn.classList.remove("show")
         checkURIInput()
         uriInput.focus()
+      }
+      function updateDisclaimer() {
+        const disclaimer = document.getElementById("disclaimer")
+        disclaimer.classList.toggle("show", currentCore === "xray")
       }
 
       document.querySelectorAll(".tab").forEach((tab) => {
@@ -488,18 +588,15 @@
           tab.classList.add("active")
           currentCore = tab.dataset.core
           updateDisclaimer()
+          document.getElementById("fullConfigGroup").style.display = currentCore === "xray" ? "block" : "none"
         })
       })
-
-      function updateDisclaimer() {
-        const disclaimer = document.getElementById("disclaimer")
-        disclaimer.classList.toggle("show", currentCore === "xray")
-      }
 
       function generate() {
         const uri = uriInput.value.trim()
         const output = document.getElementById("output")
         const result = document.getElementById("result")
+        const fullConfig = document.getElementById("fullConfig")
 
         if (!uri) {
           result.textContent = "Введите URI"
@@ -510,14 +607,49 @@
         try {
           const lines = uri.split("\n").filter((l) => l.trim())
           const results = lines.map((line) => generateConfigForCore(line.trim(), currentCore, ""))
-          const content = results.map((r) => r.content).join("\n")
-          const lang = currentCore === "xray" ? "json" : "yaml"
+
+          let content
+          let lang
+
+          if (currentCore === "xray" && fullConfig.checked) {
+            const outbounds = results.map((r) => JSON.parse(r.content))
+            const config = {
+              outbounds: [
+                ...outbounds,
+                { tag: "direct", protocol: "freedom" },
+                {
+                  tag: "block",
+                  protocol: "blackhole",
+                  settings: {
+                    response: {
+                      type: "http",
+                    },
+                  },
+                },
+              ],
+            }
+            content = JSON.stringify(config, null, 2)
+            lang = "json"
+          } else {
+            content = results.map((r) => r.content).join("\n")
+            if (currentCore === "mihomo") {
+              content = "proxies:\n" + content
+            }
+            lang = currentCore === "xray" ? "json" : "yaml"
+          }
 
           result.innerHTML = `<code class="language-${lang}">${hljs.highlight(content, { language: lang }).value}</code>`
           output.className = "output success show"
         } catch (e) {
           result.textContent = `Ошибка: ${e.message}`
           output.className = "output error show"
+        }
+
+        const downloadBtn = document.querySelector(".download-btn")
+        if (currentCore === "xray" && fullConfig.checked && output.classList.contains("success")) {
+          downloadBtn.classList.add("show")
+        } else {
+          downloadBtn.classList.remove("show")
         }
       }
 
@@ -536,6 +668,31 @@
             2000,
           )
         })
+      }
+
+      function download() {
+        const text = document.getElementById("result").textContent
+        const blob = new Blob([text], { type: "application/json" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = "04_outbounds.json"
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
+        const btn = document.querySelector(".download-btn")
+        btn.innerHTML =
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+        btn.classList.add("success")
+        setTimeout(() => btn.classList.remove("success"), 2000)
+        setTimeout(
+          () =>
+            (btn.innerHTML =
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'),
+          2000,
+        )
       }
     </script>
   </body>
