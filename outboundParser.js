@@ -70,7 +70,7 @@ const getStreamSettings = (type, params) => {
     output.grpcSettings = {
       serviceName: string(params.serviceName || params.path),
       authority: string(params.authority),
-      multiMode: bool(params.multiMode),
+      multiMode: params.mode === "multi",
       user_agent: string(params.user_agent),
       idle_timeout: number(params.idle_timeout),
       health_check_timeout: number(params.health_check_timeout),
