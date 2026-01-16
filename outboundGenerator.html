@@ -596,81 +596,62 @@
 
       function generate() {
         const uri = uriInput.value.trim()
-        const output = document.getElementById("output")
-        const result = document.getElementById("result")
-        const fullConfig = document.getElementById("fullConfig")
+        if (!uri) return
 
-        if (!uri) {
-          result.textContent = "Введите URI"
-          output.className = "output error show"
-          return
-        }
+        const output = document.getElementById("output")
+        const resultEl = document.getElementById("result")
+        const isFull = document.getElementById("fullConfig").checked
 
         try {
-          const lines = uri.split("\n").filter((l) => l.trim())
-          const results = lines.map((line) => generateConfigForCore(line.trim(), currentCore, ""))
+          const lines = uri
+            .split(/[\r\n]+/)
+            .map((l) => l.trim())
+            .filter(Boolean)
+          const results = lines.map((line) => {
+            const res = generateConfigForCore(line, currentCore, "")
+            return currentCore === "xray" ? JSON.parse(res.content) : res.content
+          })
 
-          let content
-          let lang
+          let content, lang
 
-          if (currentCore === "xray" && fullConfig.checked) {
-            const outbounds = results.map((r) => JSON.parse(r.content))
-            const config = {
-              outbounds: [
-                ...outbounds,
-                { tag: "direct", protocol: "freedom" },
-                {
-                  tag: "block",
-                  protocol: "blackhole",
-                  settings: {
-                    response: {
-                      type: "http",
-                    },
-                  },
-                },
-              ],
-            }
-            content = JSON.stringify(config, null, 2)
+          if (currentCore === "xray") {
             lang = "json"
-          } else if (currentCore === "mihomo") {
-            const proxies = []
-            const providers = []
-
-            lines.forEach((line, i) => {
-              const trimmed = line.trim().toLowerCase()
-              if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-                providers.push(results[i].content)
-              } else {
-                proxies.push(results[i].content)
+            if (isFull) {
+              const config = {
+                outbounds: [
+                  ...results,
+                  { tag: "direct", protocol: "freedom" },
+                  { tag: "block", protocol: "blackhole", settings: { response: { type: "http" } } },
+                ],
               }
-            })
-
-            content = ""
-            if (proxies.length > 0) {
-              content += "proxies:\n" + proxies.join("\n")
+              content = JSON.stringify(config, null, 2)
+            } else {
+              content = results.map((r) => JSON.stringify(r, null, 2)).join(",\n")
             }
-            if (providers.length > 0) {
-              if (content) content += "\n\n"
-              content += "proxy-providers:\n" + providers.join("\n")
-            }
-            lang = "yaml"
           } else {
-            content = results.map((r) => r.content).join("\n")
-            lang = currentCore === "xray" ? "json" : "yaml"
+            lang = "yaml"
+            const { proxies, providers } = results.reduce(
+              (acc, item, i) => {
+                const isProvider = lines[i].toLowerCase().startsWith("http")
+                isProvider ? acc.providers.push(item) : acc.proxies.push(item)
+                return acc
+              },
+              { proxies: [], providers: [] },
+            )
+
+            const parts = []
+            if (proxies.length) parts.push(`proxies:\n${proxies.join("\n")}`)
+            if (providers.length) parts.push(`proxy-providers:\n${providers.join("\n")}`)
+            content = parts.join("\n\n")
           }
 
-          result.innerHTML = `<code class="language-${lang}">${hljs.highlight(content, { language: lang }).value}</code>`
+          resultEl.innerHTML = `<code class="language-${lang}">${hljs.highlight(content, { language: lang }).value}</code>`
           output.className = "output success show"
-        } catch (e) {
-          result.textContent = `Ошибка: ${e.message}`
-          output.className = "output error show"
-        }
 
-        const downloadBtn = document.querySelector(".download-btn")
-        if (currentCore === "xray" && fullConfig.checked && output.classList.contains("success")) {
-          downloadBtn.classList.add("show")
-        } else {
-          downloadBtn.classList.remove("show")
+          document.querySelector(".download-btn").classList.toggle("show", currentCore === "xray" && isFull)
+        } catch (e) {
+          resultEl.textContent = `Ошибка: ${e.message}`
+          output.className = "output error show"
         }
       }
 
