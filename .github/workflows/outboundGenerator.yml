@@ -2,6 +2,9 @@ name: Deploy static content to Pages
 on:
   push:
     branches: ["main"]
+    paths:
+      - outboundGenerator.html
+      - outboundParser.js
   workflow_dispatch:
 permissions:
   contents: read
