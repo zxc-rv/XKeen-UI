@@ -563,6 +563,10 @@
         }
       })
 
+      document.getElementById("fullConfig").addEventListener("change", () => {
+        if (!generateBtn.disabled) generate()
+      })
+
       window.addEventListener("pageshow", () => {
         if (uriInput.value.trim()) {
           clearBtn.classList.add("show")
