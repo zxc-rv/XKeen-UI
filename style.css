@@ -2108,7 +2108,6 @@ textarea {
   align-items: center;
   gap: 8px;
   margin-bottom: 11px;
-  /*border-bottom: 1px solid rgba(51, 65, 85, 0.5);*/
 }
 
 .drag-handle {
@@ -2117,7 +2116,7 @@ textarea {
   display: flex;
   align-items: center;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: 8px;
   transition: all 0.15s;
   user-select: none;
 }
@@ -2170,7 +2169,7 @@ textarea {
   border: 1px solid transparent;
   color: #64748b;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   transition: all 0.15s;
@@ -2216,7 +2215,7 @@ textarea {
   grid-column: 1 / -1;
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(37, 99, 235, 0.05));
   border: 1px solid rgba(59, 130, 246, 0.2);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 12px;
   position: relative;
 }
@@ -2308,7 +2307,7 @@ textarea {
   height: 36px;
   background: transparent;
   border: 1px solid #334155;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #64748b;
   cursor: pointer;
   font-size: 20px;
@@ -2349,7 +2348,7 @@ textarea {
   padding: 10px 14px;
   background: transparent;
   border: 1.5px dashed #1e293b;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #94a3b8;
   font-size: 13px;
   font-weight: 500;
@@ -2462,7 +2461,7 @@ textarea {
   justify-content: space-between;
   background: var(--field-background);
   border: 1px solid #334155;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 10px 12px;
   color: #e5e7eb;
   font-size: 13px;
@@ -2650,38 +2649,10 @@ textarea {
   margin-top: 4px;
 }
 
-.tag-input-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  background: var(--field-background);
-  border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 4px 6px;
-  min-height: 36px;
-  height: auto;
-  cursor: text;
-  transition: all 0.2s;
-  align-items: center;
-}
-
-.tag-input-container::-webkit-scrollbar {
-  display: none;
-}
-
-.tag-input-container:hover {
-  border-color: #475569;
-}
-
-.tag-input-container.focused {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-}
-
 .tag {
   display: inline-flex;
   align-items: center;
-  border-radius: 4px;
+  border-radius: 5px;
   padding: 2px 8px;
   font-size: 12px;
   font-weight: 500;
@@ -2789,7 +2760,7 @@ textarea {
   display: inline-flex;
   align-items: center;
   border: 1px solid #334155;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #e5e7eb;
   font-size: 13px;
   font-weight: 500;
@@ -2867,6 +2838,7 @@ textarea {
 .settings-modal-body {
   padding: 0;
   margin-bottom: 0;
+  min-width: 500px;
 }
 
 .settings-section {
@@ -2972,41 +2944,53 @@ textarea {
   transform: scale(0.95);
 }
 
-/* Общие стили для protocol и inbound кнопок */
+.tag-input-container::-webkit-scrollbar {
+  display: none;
+}
+
+.tag-input-container,
+.network-buttons,
 .protocol-buttons,
 .inboundtag-buttons {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: var(--field-background);
   border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 4px 6px;
-  height: 36px;
+  border-radius: 8px;
+  padding: 4px 5px;
+  min-height: 36px;
+  height: auto;
   align-items: center;
   transition: all 0.2s;
   flex: 1;
   width: 100%;
 }
 
+.tag-input-container:hover,
+.network-buttons:hover,
 .protocol-buttons:hover,
 .inboundtag-buttons:hover {
   border-color: #475569;
 }
 
+.tag-input-container.focused,
+.network-buttons.focused,
 .protocol-buttons.focused,
 .inboundtag-buttons.focused {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
+.network-btn,
 .protocol-btn,
 .inboundtag-btn {
+  height: 24px;
   padding: 4px 10px;
   background: rgba(51, 65, 85, 0.4);
   border: 1px solid rgba(51, 65, 85, 0.8);
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
   color: #cbd5e1;
@@ -3017,29 +3001,12 @@ textarea {
   opacity: 0.5;
 }
 
-.protocol-btn:hover,
-.inboundtag-btn:hover {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: #60a5fa;
-  color: #e5e7eb;
-}
-
+.network-btn.active,
 .protocol-btn.active,
 .inboundtag-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: #fff;
-  font-weight: 600;
   opacity: 1;
 }
 
-.protocol-btn.active:hover,
-.inboundtag-btn.active:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-}
-
-/* Специфичные стили для inbound кнопок */
 .inboundtag-btn {
   background: rgba(158, 206, 106, 0.15);
   border-color: rgba(158, 206, 106, 0.3);
@@ -3063,7 +3030,6 @@ textarea {
   border-color: #8ec45a;
 }
 
-/* Специфичные стили для protocol кнопок */
 .protocol-btn {
   background: rgba(187, 154, 247, 0.15);
   border-color: rgba(187, 154, 247, 0.3);
@@ -3087,41 +3053,12 @@ textarea {
   border-color: #ab8ae7;
 }
 
-/* Стили для контейнеров */
 .protocol-container,
 .inbound-container {
   width: 100%;
   min-height: 36px;
   display: flex;
   align-items: center;
-}
-
-/* Стили для тегов protocol и inboundTag */
-.tag-protocol {
-  background: rgba(187, 154, 247, 0.15);
-  color: #bb9af7;
-  border-color: rgba(187, 154, 247, 0.2);
-}
-
-.tag-inboundtag {
-  background: rgba(158, 206, 106, 0.15);
-  color: #9ece6a;
-  border-color: rgba(158, 206, 106, 0.2);
-}
-
-.network-btn {
-  padding: 4px 10px;
-  background: rgba(122, 162, 247, 0.15);
-  border: 1px solid rgba(122, 162, 247, 0.3);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #7aa2f7;
-  transition: all 0.15s;
-  white-space: nowrap;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  opacity: 0.5;
 }
 
 .network-btn:hover {
@@ -3141,30 +3078,6 @@ textarea {
 .network-btn.active:hover {
   background: #6a92e7;
   border-color: #6a92e7;
-}
-
-.network-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  background: var(--field-background);
-  border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 4px 6px;
-  height: 36px;
-  transition: all 0.2s;
-  flex: 1;
-  width: 100%;
-}
-
-.network-buttons:hover {
-  border-color: #475569;
-}
-
-.network-buttons.focused {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .timezone-select-wrapper {
