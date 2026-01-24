@@ -125,20 +125,43 @@ const protocols = {
     })),
 
   ss: (uri) => {
-    const url = new URL(uri)
-    let method, password
-    if (url.username && !url.password) {
-      const decoded = safeBase64(url.username).split(":")
+    let [head, tag] = uri.split("#")
+    head = head.split("?")[0].replace("ss://", "")
+
+    try {
+      tag = tag ? decodeURIComponent(tag) : "PROXY"
+    } catch {
+      tag = tag || "PROXY"
+    }
+
+    let method, password, address, port
+    if (head.includes("@")) {
+      const [userinfo, server] = head.split("@")
+      const decoded = safeBase64(userinfo).split(":")
       method = decoded[0]
       password = decoded.slice(1).join(":")
+      ;[address, port] = server.split(":")
+      if (address.startsWith("[") && server.includes("]:")) {
+        const parts = server.split("]:")
+        address = parts[0] + "]"
+        port = parts[1]
+      }
     } else {
-      method = url.username
-      password = url.password
+      const decoded = safeBase64(head)
+      const match = decoded.match(/^(.*?):(.*?)@(.*):(\d+)$/)
+      if (!match) throw new Error("Ошибка парсинга")
+      ;[, method, password, address, port] = match
     }
+
     return {
-      tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
+      tag,
       protocol: "shadowsocks",
-      settings: { address: url.hostname, port: +url.port, method, password },
+      settings: {
+        address,
+        port: +port,
+        method,
+        password,
+      },
     }
   },
 
@@ -172,9 +195,16 @@ function parseProxyUri(uri) {
 function convertToMihomoYaml(proxyConfig) {
   const settings = proxyConfig.settings
   const streamSettings = proxyConfig.streamSettings || {}
+  const protocolMap = {
+    shadowsocks: "ss",
+    vless: "vless",
+    vmess: "vmess",
+    trojan: "trojan",
+    hysteria2: "hysteria2",
+  }
   const common = {
     name: proxyConfig.tag,
-    type: proxyConfig.protocol,
+    type: protocolMap[proxyConfig.protocol] || proxyConfig.protocol,
     server: settings.address,
     port: settings.port,
     udp: true,

@@ -19,6 +19,8 @@ let pendingCoreChange = ""
 let isCurrentFileJson = false
 let dashboardPort = null
 let dependenciesLoaded = false
+let toastStack = []
+let currentTimezone = 3
 
 async function loadDependencies() {
   if (dependenciesLoaded) return
@@ -66,8 +68,27 @@ async function init() {
 
     await checkXKeenStatus()
     await getAvailableCores()
+    await loadTimezone()
     loadMonacoEditor()
     connectWebSocket()
+
+    const savedState = localStorage.getItem("routingGUI_enabled")
+    if (typeof routingGUIState !== "undefined") {
+      routingGUIState.enabled = savedState === "1"
+    }
+
+    const routingCheckboxSettings = document.getElementById("routingGUICheckboxSettings")
+    if (routingCheckboxSettings) {
+      routingCheckboxSettings.checked = routingGUIState.enabled
+    }
+
+    const savedAutoApply = localStorage.getItem("autoApplyOutbound")
+    autoApplyOutbound = savedAutoApply === "1"
+
+    const autoApplyCheckbox = document.getElementById("autoApplyOutboundCheckbox")
+    if (autoApplyCheckbox) {
+      autoApplyCheckbox.checked = autoApplyOutbound
+    }
 
     const logsContainer = document.getElementById("logsContainer")
     logsContainer.classList.add("centered")
@@ -118,11 +139,42 @@ function showToast(message, type = "success") {
 
   document.body.appendChild(toast)
 
-  setTimeout(() => toast.classList.add("show"), 100)
-  setTimeout(() => {
-    toast.classList.remove("show")
-    setTimeout(() => document.body.removeChild(toast), 300)
-  }, 3000)
+  requestAnimationFrame(() => {
+    const toastHeight = toast.offsetHeight
+    toastStack.unshift({ element: toast, height: toastHeight }) // Изменено здесь
+
+    toastStack.forEach((item, index) => {
+      let offset = 35
+      for (let i = 0; i < index; i++) {
+        offset += toastStack[i].height + 12
+      }
+      item.element.style.bottom = `${offset}px`
+    })
+
+    setTimeout(() => toast.classList.add("show"), 10)
+
+    setTimeout(() => {
+      toast.classList.add("hide")
+      setTimeout(() => {
+        const toastIndex = toastStack.findIndex((item) => item.element === toast)
+        if (toastIndex > -1) {
+          toastStack.splice(toastIndex, 1)
+        }
+
+        if (toast.parentNode) {
+          document.body.removeChild(toast)
+        }
+
+        toastStack.forEach((item, index) => {
+          let offset = 35
+          for (let i = 0; i < index; i++) {
+            offset += toastStack[i].height + 12
+          }
+          item.element.style.bottom = `${offset}px`
+        })
+      }, 300)
+    }, 3000)
+  })
 }
 
 function updateValidationInfo(isValid, error = null) {
@@ -194,55 +246,6 @@ function setPendingState(actionText) {
   updateControlButtons()
 }
 
-const ANSI_REGEX = /\u001b\[(\d+)m/g
-const LEVEL_REGEX = /\[(DEBUG|INFO|WARN|ERROR|FATAL)\]/g
-const LEVEL_WORD_REGEX = /\b(DEBUG|INFO|WARN|ERROR|FATAL)\b/g
-const LOG_COLORS = {
-  success: "#00cc00",
-  info: "#3b82f6",
-  warning: "#f59e0b",
-  error: "#ef4444",
-  fatal: "#FF5555",
-}
-function parseLogLine(line) {
-  if (!line || !line.trim()) return null
-  let content = line
-    .replace(/\u001b\[32m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.success};">$1</span>`)
-    .replace(/\u001b\[31m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.error};">$1</span>`)
-    .replace(/\u001b\[33m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.warning};">$1</span>`)
-    .replace(/\u001b\[34m(.*?)\u001b\[0m/g, `<span style="color: ${LOG_COLORS.info};">$1</span>`)
-    .replace(ANSI_REGEX, "")
-  content = content.replace(LEVEL_REGEX, (match, p1) => {
-    const level = p1.toLowerCase()
-    const labels = {
-      debug: "DEBUG",
-      info: "INFO",
-      warn: "WARN",
-      error: "ERROR",
-      fatal: "FATAL",
-    }
-    const label = labels[level] || p1.toUpperCase()
-    const className = label.toLowerCase()
-    return `<span class="log-badge log-badge-${className}" data-filter="${label}">${label}</span>`
-  })
-  if (!content.includes("log-badge")) {
-    content = content.replace(LEVEL_WORD_REGEX, (match) => {
-      const level = match.toLowerCase()
-      const labels = {
-        debug: "DEBUG",
-        info: "INFO",
-        warn: "WARN",
-        error: "ERROR",
-        fatal: "FATAL",
-      }
-      const label = labels[level] || match.toUpperCase()
-      const className = label.toLowerCase()
-      return `<span class="log-badge log-badge-${className}" data-filter="${label}">${label}</span>`
-    })
-  }
-  return `<div class="log-line">${content}</div>`
-}
-
 function updateServiceStatus(running) {
   const indicator = document.getElementById("statusIndicator")
   const text = document.getElementById("statusText")
@@ -262,14 +265,9 @@ function updateServiceStatus(running) {
 }
 
 function renderAllLogs(container, lines) {
-  const html = lines
-    .map((line) => parseLogLine(line))
-    .filter(Boolean)
-    .join("")
-
+  const html = lines.join("")
   container.innerHTML = html || '<div class="centered" style="color: #6b7280;">Журнал пуст</div>'
   container.classList.toggle("centered", !html)
-
   container.scrollTop = container.scrollHeight
 }
 
@@ -277,10 +275,7 @@ function appendLogLines(container, newLines) {
   if (newLines.length === 0) return
 
   const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50
-  const htmlFragment = newLines
-    .map((line) => parseLogLine(line))
-    .filter(Boolean)
-    .join("")
+  const htmlFragment = newLines.join("")
 
   if (!htmlFragment) return
   if (container.firstElementChild && container.firstElementChild.innerText === "Журнал пуст") {
@@ -960,24 +955,27 @@ function discardAndSwitch() {
 
 function switchTab(index) {
   if (index < 0 || index >= configs.length || index === activeConfigIndex) return
+
   const currentConfig = configs[activeConfigIndex]
   if (currentConfig && currentConfig.isDirty) {
     pendingSwitchIndex = index
     document.getElementById("dirtyModal").classList.add("show")
     return
   }
+
   activeConfigIndex = index
   saveLastSelectedTab()
+
   const config = configs[index]
   const formatBtn = document.getElementById("formatBtn")
   const formatDropdownBtn = document.getElementById("formatDropdownBtn")
+
   if (config) {
     const language = getFileLanguage(config.filename)
     isCurrentFileJson = language === "json"
+
     if (formatBtn) formatBtn.disabled = !(language === "json" || language === "yaml")
-    if (formatDropdownBtn) {
-      formatDropdownBtn.disabled = !(language === "json" || language === "yaml")
-    }
+    if (formatDropdownBtn) formatDropdownBtn.disabled = !(language === "json" || language === "yaml")
   }
 
   if (monacoEditor && config) {
@@ -986,12 +984,14 @@ function switchTab(index) {
     monaco.editor.setModelLanguage(monacoEditor.getModel(), language)
     config.isDirty = false
   }
+
+  applyRoutingGUIState()
   renderTabs()
   updateUIDirtyState()
+
   const validationInfo = document.getElementById("validationInfo")
-  if (validationInfo) {
-    validationInfo.style.display = "flex"
-  }
+  if (validationInfo) validationInfo.style.display = "flex"
+
   if (config && getFileLanguage(config.filename) === "json") {
     const model = monacoEditor.getModel()
     if (model) {
@@ -1000,6 +1000,7 @@ function switchTab(index) {
       updateValidationInfo(!errorMarker, errorMarker ? errorMarker.message : null)
     }
   }
+
   updateUIDirtyState()
 }
 
@@ -1141,10 +1142,12 @@ function hasCriticalChanges(oldContent, newContent, language) {
       }
       return false
     } else if (language === "json") {
-      const oldConfig = JSON.parse(oldContent)
-      const newConfig = JSON.parse(newContent)
-      const oldInbounds = JSON.stringify(oldConfig?.inbounds)
-      const newInbounds = JSON.stringify(newConfig?.inbounds)
+      const strip = (s) => s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "")
+      const oldConfig = JSON.parse(strip(oldContent))
+      const newConfig = JSON.parse(strip(newContent))
+      const clean = (inb) => (inb || []).map(({ sniffing, ...rest }) => rest)
+      const oldInbounds = JSON.stringify(clean(oldConfig?.inbounds))
+      const newInbounds = JSON.stringify(clean(newConfig?.inbounds))
 
       return oldInbounds !== newInbounds
     }
@@ -1162,15 +1165,8 @@ async function saveAndRestart() {
   const config = configs[activeConfigIndex]
   const content = monacoEditor.getValue()
 
-  if (!content.trim()) {
-    showToast("Конфиг пустой", "error")
-    return
-  }
-
-  if (!isFileValid()) {
-    showToast("Невозможно сохранить: файл содержит ошибки", "error")
-    return
-  }
+  if (!content.trim()) return showToast("Конфиг пустой", "error")
+  if (!isFileValid()) return showToast("Невозможно сохранить: файл содержит ошибки", "error")
 
   const result = await apiCall("configs", {
     action: "save",
@@ -1178,54 +1174,62 @@ async function saveAndRestart() {
     content: content,
   })
 
-  if (result.success) {
-    const language = getFileLanguage(config.filename)
-    const needsFullRestart = hasCriticalChanges(config.savedContent, content, language)
+  if (!result.success) {
+    showToast(`Ошибка сохранения: ${result.error}`, "error")
+    return
+  }
 
-    config.content = content
-    config.savedContent = content
-    config.isDirty = false
-    updateUIDirtyState()
-    updateDashboardLink()
-    showToast(`Конфиг "${config.name}" сохранен`)
+  const language = getFileLanguage(config.filename)
+  const needsFullRestart = hasCriticalChanges(config.savedContent, content, language)
 
-    setPendingState("Перезапускается...")
+  config.content = content
+  config.savedContent = content
+  config.isDirty = false
+  updateUIDirtyState()
+  updateDashboardLink()
 
-    try {
-      let restartResult
-
-      if (language === "json" || language === "yaml") {
-        if (needsFullRestart) {
-          restartResult = await apiCall("control", { action: "restart" })
-        } else {
-          restartResult = await apiCall("control", {
-            action: "restartCore",
-            core: currentCore,
-          })
-        }
-      } else if (language === "plaintext") {
+  try {
+    let restartResult
+    if (language === "json" || language === "yaml") {
+      if (needsFullRestart) {
+        setPendingState("Перезапуск сервиса...")
         restartResult = await apiCall("control", { action: "restart" })
-      }
-
-      if (restartResult && restartResult.success) {
-        const restartType = needsFullRestart ? "Полный перезапуск выполнен" : "Ядро перезапущено"
-        showToast(restartType)
-        isActionInProgress = false
-        isServiceRunning = true
-        updateServiceStatus(true)
       } else {
-        showToast(`Ошибка перезапуска: ${restartResult?.error || "unknown"}`, "error")
-        isActionInProgress = false
-        checkXKeenStatus()
+        restartResult = await apiCall("control", { action: "restartCore", core: currentCore })
       }
-    } catch (e) {
+    } else {
+      setPendingState("Перезапуск сервиса...")
+      restartResult = await apiCall("control", { action: "restart" })
+    }
+
+    if (!restartResult || !restartResult.success) {
+      showToast(`Ошибка перезапуска: ${restartResult?.error || "unknown"}`, "error")
       isActionInProgress = false
       checkXKeenStatus()
+      return
     }
-  } else {
-    showToast(`Ошибка сохранения: ${result.error}`, "error")
+
+    showToast(`Изменения успешно применены`)
+
+    isActionInProgress = false
+    isServiceRunning = true
+    updateServiceStatus(true)
+  } catch (e) {
+    showToast("Ошибка перезапуска", "error")
+    isActionInProgress = false
+    checkXKeenStatus()
   }
 }
+
+function formatCurrentConfig() {
+  if (!monacoEditor) return
+
+  const formatAction = monacoEditor.getAction("editor.action.formatDocument")
+  if (formatAction) {
+    formatAction.run()
+  }
+}
+
 function formatCurrentConfig() {
   if (!monacoEditor) return
 
@@ -1243,7 +1247,7 @@ async function checkXKeenStatus() {
 
 async function startXKeen() {
   try {
-    setPendingState("Запускается...")
+    setPendingState("Запуск сервиса...")
     const result = await apiCall("control", { action: "start" })
     if (result.success) {
       showToast("XKeen запущен")
@@ -1263,7 +1267,7 @@ async function startXKeen() {
 
 async function stopXKeen() {
   try {
-    setPendingState("Останавливается...")
+    setPendingState("Остановка сервиса...")
     const result = await apiCall("control", { action: "stop" })
     if (result.success) {
       showToast("XKeen остановлен")
@@ -1280,7 +1284,7 @@ async function stopXKeen() {
 
 async function restartXKeen() {
   try {
-    setPendingState("Перезапускается...")
+    setPendingState("Перезапуск сервиса...")
     const result = await apiCall("control", { action: "restart" })
     if (result.success) {
       showToast("XKeen перезапущен")
@@ -1998,6 +2002,7 @@ async function importSelectedTemplate() {
 
       showToast("Шаблон успешно импортирован", "success")
       closeTemplateImportModal()
+      syncJSONToGUI()
     } else {
       throw new Error("Редактор не инициализирован")
     }
@@ -2316,6 +2321,19 @@ function addToOutbounds() {
   }
 }
 
+async function updateRoutingViaAPI(routingConfig) {
+  try {
+    const result = await apiCall("routing", {
+      action: "update",
+      config: routingConfig,
+    })
+    return result
+  } catch (e) {
+    console.error("Routing API error:", e)
+    return { success: false, error: e.message }
+  }
+}
+
 document.addEventListener("click", (e) => {
   const menu = document.getElementById("formatMenu")
   if (menu && !e.target.closest(".btn-group")) {
@@ -2338,12 +2356,16 @@ document.addEventListener("keydown", (e) => {
     const importModal = document.getElementById("importModal")
     const templateImportModal = document.getElementById("templateImportModal")
     const logsPanel = document.getElementById("logsPanel")
+
     if (logsPanel && logsPanel.classList.contains("expanded-vertical")) {
       toggleLogFullscreen()
       e.preventDefault()
     }
 
-    if (dirtyModal && dirtyModal.classList.contains("show")) {
+    if (settingsModal && settingsModal.classList.contains("show")) {
+      closeSettingsModal()
+      e.preventDefault()
+    } else if (dirtyModal && dirtyModal.classList.contains("show")) {
       closeDirtyModal()
       e.preventDefault()
     } else if (coreModal && coreModal.classList.contains("show")) {
@@ -2399,5 +2421,127 @@ document.addEventListener("mousedown", (e) => {
   const rect = panel.getBoundingClientRect()
   if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
     toggleLogFullscreen()
+  }
+})
+
+function toggleSettingsModal() {
+  const modal = document.getElementById("settingsModal")
+  modal.classList.add("show")
+
+  const routingCheckboxSettings = document.getElementById("routingGUICheckboxSettings")
+  if (routingCheckboxSettings) {
+    routingCheckboxSettings.checked = routingGUIState.enabled
+  }
+
+  const autoApplyCheckbox = document.getElementById("autoApplyOutboundCheckbox")
+  if (autoApplyCheckbox) {
+    autoApplyCheckbox.checked = autoApplyOutbound
+  }
+}
+
+function closeSettingsModal() {
+  document.getElementById("settingsModal").classList.remove("show")
+}
+
+function saveGUIState() {
+  localStorage.setItem("routingGUI_enabled", routingGUIState.enabled ? "1" : "0")
+}
+
+function loadGUIState() {
+  const saved = localStorage.getItem("routingGUI_enabled")
+  return saved === "1"
+}
+
+async function loadTimezone() {
+  try {
+    const result = await apiCall("settings")
+    if (result.success && result.timezoneOffset !== undefined) {
+      currentTimezone = result.timezoneOffset
+      updateTimezoneLabel()
+    } else {
+      console.error("Failed to load timezone:", result)
+      currentTimezone = 3
+      updateTimezoneLabel()
+    }
+  } catch (e) {
+    console.error("Error loading timezone:", e)
+    currentTimezone = 3
+    updateTimezoneLabel()
+  }
+}
+
+function updateTimezoneLabel() {
+  const label = document.getElementById("timezoneLabel")
+  if (!label) return
+  const sign = currentTimezone >= 0 ? "+" : ""
+  label.textContent = `UTC${sign}${currentTimezone}`
+}
+
+function toggleTimezoneSelect() {
+  const select = document.getElementById("timezoneSelect")
+  const dropdown = document.getElementById("timezoneDropdown")
+
+  if (!dropdown.hasChildNodes()) {
+    for (let i = -12; i <= 14; i++) {
+      const option = document.createElement("div")
+      option.className = "custom-select-option"
+      option.dataset.value = i
+      const sign = i >= 0 ? "+" : ""
+      option.innerHTML = `UTC${sign}${i}`
+      if (i === currentTimezone) option.classList.add("selected")
+      option.onclick = () => selectTimezone(i)
+      dropdown.appendChild(option)
+    }
+  }
+
+  select.classList.toggle("open")
+  if (select.classList.contains("open")) {
+    setTimeout(() => {
+      const selectedOption = dropdown.querySelector(".custom-select-option.selected")
+      if (selectedOption) {
+        selectedOption.scrollIntoView({ block: "center", behavior: "instant" })
+      }
+    }, 10)
+  }
+}
+
+async function selectTimezone(offset) {
+  try {
+    console.log("Selecting timezone:", offset)
+    const result = await apiCall("settings", { timezoneOffset: offset })
+
+    if (result.success) {
+      currentTimezone = offset
+      updateTimezoneLabel()
+
+      const options = document.querySelectorAll("#timezoneDropdown .custom-select-option")
+      options.forEach((opt) => {
+        opt.classList.toggle("selected", parseInt(opt.dataset.value) === offset)
+      })
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "reload",
+          }),
+        )
+      }
+
+      showToast("Часовой пояс обновлён")
+      document.getElementById("timezoneSelect").classList.remove("open")
+    } else {
+      console.error("Timezone update failed:", result)
+      showToast(result.error || "Ошибка обновления", "error")
+    }
+  } catch (e) {
+    console.error("Error updating timezone:", e)
+    showToast("Ошибка обновления часового пояса", "error")
+  }
+}
+
+document.addEventListener("click", (e) => {
+  const select = document.getElementById("timezoneSelect")
+  if (select && !select.contains(e.target)) {
+    select.classList.remove("open")
   }
 })

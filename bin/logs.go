@@ -37,6 +37,43 @@ func GetLogPath(logFile string) string {
 	return "/opt/var/log/xray/error.log"
 }
 
+func parseLogLine(line string) string {
+	if line == "" {
+		return ""
+	}
+
+	content := line
+	content = strings.ReplaceAll(content, "\u001b[32m", `<span style="color: #00cc00;">`)
+	content = strings.ReplaceAll(content, "\u001b[92m", `<span style="color: #00cc00;">`)
+	content = strings.ReplaceAll(content, "\u001b[31m", `<span style="color: #ef4444;">`)
+	content = strings.ReplaceAll(content, "\u001b[91m", `<span style="color: #ef4444;">`)
+	content = strings.ReplaceAll(content, "\u001b[33m", `<span style="color: #f59e0b;">`)
+	content = strings.ReplaceAll(content, "\u001b[93m", `<span style="color: #f59e0b;">`)
+	content = strings.ReplaceAll(content, "\u001b[96m", `<span style="color: #8BCEF7;">`)
+	content = strings.ReplaceAll(content, "\u001b[0m", "</span>")
+
+	ansiRegex := regexp.MustCompile(`\x1b\[\d+m`)
+	content = ansiRegex.ReplaceAllString(content, "")
+
+	levelRegex := regexp.MustCompile(`\[(DEBUG|INFO|WARN|ERROR|FATAL)\]`)
+	content = levelRegex.ReplaceAllStringFunc(content, func(match string) string {
+		level := strings.ToUpper(strings.Trim(match, "[]"))
+		className := strings.ToLower(level)
+		return fmt.Sprintf(`<span class="log-badge log-badge-%s" data-filter="%s">%s</span>`, className, level, level)
+	})
+
+	if !strings.Contains(content, "log-badge") {
+		levelWordRegex := regexp.MustCompile(`\b(DEBUG|INFO|WARN|ERROR|FATAL)\b`)
+		content = levelWordRegex.ReplaceAllStringFunc(content, func(match string) string {
+			level := strings.ToUpper(match)
+			className := strings.ToLower(level)
+			return fmt.Sprintf(`<span class="log-badge log-badge-%s" data-filter="%s">%s</span>`, className, level, level)
+		})
+	}
+
+	return fmt.Sprintf(`<div class="log-line">%s</div>`, content)
+}
+
 func GetLogLines(logPath string) []string {
 	stat, err := os.Stat(logPath)
 	if err != nil {
@@ -60,8 +97,9 @@ func GetLogLines(logPath string) []string {
 	lines := strings.Split(adjusted, "\n")
 	filteredLines := make([]string, 0, len(lines))
 	for _, line := range lines {
-		if line = strings.TrimSpace(line); line != "" {
-			filteredLines = append(filteredLines, line)
+		if line != "" {
+			parsed := parseLogLine(line)
+			filteredLines = append(filteredLines, parsed)
 		}
 	}
 
@@ -82,12 +120,18 @@ func OpenLogFile() (*os.File, error) {
 }
 
 func AdjustTimezone(content string) string {
+	AppSettingsMutex.RLock()
+	offset := AppSettings.TimezoneOffset
+	AppSettingsMutex.RUnlock()
+
+	duration := time.Duration(offset) * time.Hour
+
 	content = reXray.ReplaceAllStringFunc(content, func(m string) string {
 		t, err := time.Parse("2006/01/02 15:04:05", m)
 		if err != nil {
 			return m
 		}
-		return t.Add(3 * time.Hour).Format("2006/01/02 15:04:05")
+		return t.Add(duration).Format("2006/01/02 15:04:05")
 	})
 
 	content = reMihomo.ReplaceAllStringFunc(content, func(m string) string {
@@ -104,7 +148,7 @@ func AdjustTimezone(content string) string {
 			lvl = "[INFO]"
 		}
 		b := make([]byte, 0, 64)
-		b = t.Add(3 * time.Hour).AppendFormat(b, "2006/01/02 15:04:05.000000")
+		b = t.Add(duration).AppendFormat(b, "2006/01/02 15:04:05.000000")
 		b = append(b, ' ')
 		b = append(b, lvl...)
 		b = append(b, ' ')

@@ -119,6 +119,14 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 				lastSize = 0
 				stateMutex.Unlock()
 				sendLogs()
+			case "reload":
+				LogCacheMutex.Lock()
+				LogCacheMap = make(map[string]*LogCache)
+				LogCacheMutex.Unlock()
+				stateMutex.Lock()
+				lastSize = 0
+				stateMutex.Unlock()
+				sendLogs()
 			}
 		}
 	}()
@@ -158,7 +166,15 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 				file.Close()
 
 				if len(data) > 0 {
-					if err := writeJSON(map[string]string{"type": "append", "content": AdjustTimezone(string(data))}); err != nil {
+					adjusted := AdjustTimezone(string(data))
+					lines := strings.Split(adjusted, "\n")
+					parsed := make([]string, 0, len(lines))
+					for _, line := range lines {
+						if line != "" {
+							parsed = append(parsed, parseLogLine(line))
+						}
+					}
+					if err := writeJSON(map[string]interface{}{"type": "append", "content": strings.Join(parsed, "\n")}); err != nil {
 						return
 					}
 					stateMutex.Lock()

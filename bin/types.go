@@ -7,6 +7,11 @@ import (
     "time"
 )
 
+
+type AppConfig struct {
+	TimezoneOffset int `json:"timezoneOffset"`
+}
+
 type Response struct {
 	Success bool        `json:"success"`
 	Error   string      `json:"error,omitempty"`
@@ -73,6 +78,9 @@ var (
 
 	LogCacheMap   = make(map[string]*LogCache)
 	LogCacheMutex = &sync.RWMutex{}
+
+	AppSettings      = AppConfig{TimezoneOffset: 3}
+	AppSettingsMutex sync.RWMutex
 )
 
 func setCORSHeaders(w http.ResponseWriter) {

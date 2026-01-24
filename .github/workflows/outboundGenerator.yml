@@ -28,6 +28,7 @@ jobs:
           mkdir -p _site/Outbound_Generator
           cp outboundGenerator.html _site/Outbound_Generator/index.html
           cp outboundParser.js _site/Outbound_Generator/outboundParser.js
+          cp generator-favicon.png _site/Outbound_Generator/favicon.png
           echo '<meta http-equiv="refresh" content="0;url=./Outbound_Generator/">' > _site/index.html
       - name: Setup Pages
         uses: actions/configure-pages@v5

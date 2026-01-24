@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Outbound Generator</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tokyo-night-dark.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -595,7 +596,8 @@
       })
 
       function generate() {
-        const uri = uriInput.value.trim()
+        let uri = uriInput.value.trim()
+        uri = uri.replace(/#.*$/, "#vless-reality")
         if (!uri) return
 
         const output = document.getElementById("output")
@@ -618,11 +620,7 @@
             lang = "json"
             if (isFull) {
               const config = {
-                outbounds: [
-                  ...results,
-                  { tag: "direct", protocol: "freedom" },
-                  { tag: "block", protocol: "blackhole", settings: { response: { type: "http" } } },
-                ],
+                outbounds: [...results, { tag: "direct", protocol: "freedom" }, { tag: "block", protocol: "blackhole" }],
               }
               content = JSON.stringify(config, null, 2)
             } else {
