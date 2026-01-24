@@ -597,7 +597,7 @@
 
       function generate() {
         let uri = uriInput.value.trim()
-        uri = uri.replace(/#.*$/, "#vless-reality")
+        uri = uri.split("#")[0] + "#vless-reality"
         if (!uri) return
 
         const output = document.getElementById("output")
