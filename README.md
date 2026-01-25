@@ -53,13 +53,13 @@ curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh
 
 ## 🪙 Понравился проект? Поддержи разработку:
 
-- [Cloudtips](https://pay.cloudtips.ru/p/24b4c4b6)
+- [**Cloudtips**](https://pay.cloudtips.ru/p/24b4c4b6)
 
 - Банковская карта: `2204 3203 4161 6409`
   
 &nbsp;
 ## 🙏 Благодарности
 
-- [Skrill0/XKeen](https://github.com/Skrill0/XKeen)  
-- [jameszeroX/XKeen](https://github.com/jameszeroX/XKeen)  
-- [Anonym-tsk/nfqws-keenetic](https://github.com/Anonym-tsk/nfqws-keenetic) 
+- [**Skrill0/XKeen**](https://github.com/Skrill0/XKeen)  
+- [**jameszeroX/XKeen**](https://github.com/jameszeroX/XKeen)  
+- [**Anonym-tsk/nfqws-keenetic**](https://github.com/Anonym-tsk/nfqws-keenetic) 
