@@ -95,7 +95,7 @@ function loadAvailableTags() {
     }
 
     if (content.routing && content.routing.balancers && Array.isArray(content.routing.balancers)) {
-      const balancerTags = content.routing.balancers.filter((b) => b.badge).map((b) => b.badge)
+      const balancerTags = content.routing.balancers.filter((b) => b.tag).map((b) => b.tag)
       guiRoutingState.availableBalancers = [...new Set(balancerTags)]
     }
 
@@ -318,7 +318,7 @@ function createRuleElement(rule, index) {
     outboundInputHTML = `
       <div class="custom-select outbound-select" data-rule="${index}" data-field="balancerTag">
         <div class="custom-select-trigger">
-          <span>${val || "Select balancer..."}</span>
+          <span>${val || "Выберите балансир..."}</span>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
@@ -327,7 +327,7 @@ function createRuleElement(rule, index) {
           ${guiRoutingState.availableBalancers
             .map((t) => `<div class="custom-select-option ${val === t ? "selected" : ""}" data-value="${t}">${t}</div>`)
             .join("")}
-          ${guiRoutingState.availableBalancers.length === 0 ? '<div class="custom-select-option empty">No balancers found</div>' : ""}
+          ${guiRoutingState.availableBalancers.length === 0 ? '<div class="custom-select-option empty">Балансиры не найдены</div>' : ""}
         </div>
       </div>`
   } else {
