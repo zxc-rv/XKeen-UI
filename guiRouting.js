@@ -1,4 +1,4 @@
-let routingGUIState = {
+let guiRoutingState = {
   enabled: false,
   rules: [],
   availableOutbounds: [],
@@ -15,7 +15,7 @@ let restartDebounceTimer = null
 
 function startEditRuleName(e, index) {
   e.stopPropagation()
-  const rule = routingGUIState.rules[index]
+  const rule = guiRoutingState.rules[index]
   const nameSpan = e.target.closest(".rule-card-header").querySelector(".rule-name")
   const currentName = rule.ruleTag || ""
 
@@ -34,7 +34,7 @@ function startEditRuleName(e, index) {
     if (newName) rule.ruleTag = newName
     else delete rule.ruleTag
     syncGUIToJSON()
-    renderRoutingGUI()
+    renderGuiRouting()
   }
 
   input.addEventListener("blur", saveName)
@@ -44,7 +44,7 @@ function startEditRuleName(e, index) {
       saveName()
     } else if (ev.key === "Escape") {
       ev.preventDefault()
-      renderRoutingGUI()
+      renderGuiRouting()
     }
   })
 }
@@ -60,24 +60,15 @@ const RULE_FIELDS = {
   protocol: { type: "buttons", options: ["http", "tls", "quic", "bittorrent"] },
 }
 
-function toggleAutoApplyOutbound() {
-  const checkbox = document.getElementById("autoApplyOutboundCheckbox")
-  if (checkbox) {
-    autoApplyOutbound = checkbox.checked
-    localStorage.setItem("autoApplyOutbound", autoApplyOutbound ? "1" : "0")
-  }
-}
-
 function isRoutingFile() {
   const config = configs[activeConfigIndex]
   return config && config.filename.toLowerCase().includes("routing")
 }
 
-function loadAvailableOutbounds() {
-  console.log("loadAvailableOutbounds called, stack:", new Error().stack)
-  routingGUIState.availableOutbounds = []
-  routingGUIState.availableBalancers = []
-  routingGUIState.availableInbounds = []
+function loadAvailableTags() {
+  guiRoutingState.availableInbounds = []
+  guiRoutingState.availableOutbounds = []
+  guiRoutingState.availableBalancers = []
 
   const config = configs[activeConfigIndex]
   if (!config) return
@@ -85,58 +76,34 @@ function loadAvailableOutbounds() {
   try {
     const content = JSON.parse(config.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
 
+    const inboundsConfig = configs.find((c) => c.filename.toLowerCase().includes("inbounds"))
+    if (inboundsConfig) {
+      const inboundsContent = JSON.parse(inboundsConfig.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
+      if (inboundsContent.inbounds && Array.isArray(inboundsContent.inbounds)) {
+        const tags = inboundsContent.inbounds.filter((i) => i.tag).map((i) => i.tag)
+        guiRoutingState.availableInbounds = [...new Set(tags)]
+      }
+    }
+
     const outboundsConfig = configs.find((c) => c.filename.toLowerCase().includes("outbound"))
     if (outboundsConfig) {
       const outboundsContent = JSON.parse(outboundsConfig.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
       if (outboundsContent.outbounds && Array.isArray(outboundsContent.outbounds)) {
         const tags = outboundsContent.outbounds.filter((o) => o.tag).map((o) => o.tag)
-        routingGUIState.availableOutbounds = [...new Set(tags)]
-      }
-    }
-
-    const inboundsConfig = configs.find(
-      (c) => c.filename.toLowerCase().includes("inbound") || c.filename.toLowerCase().includes("03_inbounds"),
-    )
-    if (inboundsConfig) {
-      const inboundsContent = JSON.parse(inboundsConfig.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
-      if (inboundsContent.inbounds && Array.isArray(inboundsContent.inbounds)) {
-        const tags = inboundsContent.inbounds.filter((i) => i.tag).map((i) => i.tag)
-        routingGUIState.availableInbounds = [...new Set(tags)]
+        guiRoutingState.availableOutbounds = [...new Set(tags)]
       }
     }
 
     if (content.routing && content.routing.balancers && Array.isArray(content.routing.balancers)) {
-      const balancerTags = content.routing.balancers.filter((b) => b.tag).map((b) => b.tag)
-      routingGUIState.availableBalancers = [...new Set(balancerTags)]
+      const balancerTags = content.routing.balancers.filter((b) => b.badge).map((b) => b.badge)
+      guiRoutingState.availableBalancers = [...new Set(balancerTags)]
     }
 
-    console.log("Loaded outbounds:", routingGUIState.availableOutbounds)
-    console.log("Loaded balancers:", routingGUIState.availableBalancers)
-    console.log("Loaded inbounds:", routingGUIState.availableInbounds)
+    console.log("Loaded inbounds:", guiRoutingState.availableInbounds)
+    console.log("Loaded outbounds:", guiRoutingState.availableOutbounds)
+    console.log("Loaded balancers:", guiRoutingState.availableBalancers)
   } catch (e) {
-    console.error("Failed to parse outbounds/balancers/inbounds:", e)
-  }
-}
-
-function loadAvailableInbounds() {
-  routingGUIState.availableInbounds = []
-
-  try {
-    const inboundConfig = configs.find(
-      (c) => c.filename.toLowerCase().includes("inbound") || c.filename.toLowerCase().includes("03_inbounds"),
-    )
-
-    if (inboundConfig) {
-      const inboundContent = JSON.parse(inboundConfig.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
-      if (inboundContent.inbounds && Array.isArray(inboundContent.inbounds)) {
-        const tags = inboundContent.inbounds.filter((i) => i.tag).map((i) => i.tag)
-        routingGUIState.availableInbounds = [...new Set(tags)]
-      }
-    }
-
-    console.log("Loaded inbounds:", routingGUIState.availableInbounds)
-  } catch (e) {
-    console.error("Failed to parse inbounds:", e)
+    console.error("Failed to parse inbounds/outbounds/balancers:", e)
   }
 }
 
@@ -144,7 +111,7 @@ function parseRoutingJSON(content) {
   try {
     const json = JSON.parse(content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
     if (json.routing && json.routing.rules) {
-      routingGUIState.rules = JSON.parse(JSON.stringify(json.routing.rules))
+      guiRoutingState.rules = JSON.parse(JSON.stringify(json.routing.rules))
       return true
     }
   } catch (e) {
@@ -157,7 +124,7 @@ async function buildRoutingJSON() {
   const currentContent = monacoEditor.getValue()
   try {
     const json = JSON.parse(currentContent.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
-    json.routing.rules = routingGUIState.rules
+    json.routing.rules = guiRoutingState.rules
 
     const preFormatted = JSON.stringify(json, null, 2)
 
@@ -184,10 +151,10 @@ async function buildRoutingJSON() {
 }
 
 function syncJSONToGUI() {
-  if (!routingGUIState.enabled || !isRoutingFile()) return
+  if (!guiRoutingState.enabled || !isRoutingFile()) return
   const content = monacoEditor.getValue()
   parseRoutingJSON(content)
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function syncGUIToJSON() {
@@ -206,78 +173,65 @@ function syncGUIToJSON() {
 function saveGUIState() {
   if (!configs[activeConfigIndex]) return
   const filename = configs[activeConfigIndex].filename
-  localStorage.setItem(`routingGUI_${filename}`, routingGUIState.enabled ? "1" : "0")
+  localStorage.setItem(`guiRouting_${filename}`, guiRoutingState.enabled ? "1" : "0")
 }
 
 function loadGUIState() {
   if (!configs[activeConfigIndex]) return false
   const filename = configs[activeConfigIndex].filename
-  const saved = localStorage.getItem(`routingGUI_${filename}`)
+  const saved = localStorage.getItem(`guiRouting_${filename}`)
   return saved === "1"
 }
 
-function toggleRoutingGUI() {
-  const checkbox = document.getElementById("routingGUICheckboxSettings")
+function toggleGuiRouting() {
+  const checkbox = document.getElementById("guiRoutingCheckboxSettings")
   if (checkbox) {
-    routingGUIState.enabled = checkbox.checked
-    localStorage.setItem("routingGUI_enabled", routingGUIState.enabled ? "1" : "0")
+    guiRoutingState.enabled = checkbox.checked
+    localStorage.setItem("guiRouting_enabled", guiRoutingState.enabled ? "1" : "0")
   }
-
-  if (typeof applyRoutingGUIState === "function") {
-    applyRoutingGUIState()
+  const config = configs[activeConfigIndex]
+  if (config && config.filename.toLowerCase().includes("routing") && typeof applyGUIState === "function") {
+    applyGUIState()
   }
 }
 
-function applyRoutingGUIState() {
+function applyGuiRoutingState() {
   if (!monacoEditor) return
   const editorContainer = document.getElementById("editorContainer")
-  const routingContainer = document.getElementById("routingGUIContainer")
+  const routingContainer = document.getElementById("guiRoutingContainer")
   const tabsContent = document.querySelector(".tabs-content")
 
   if (!editorContainer) return
 
   const config = configs[activeConfigIndex]
   if (!config) return
+  if (!isRoutingFile()) return
 
-  const isLogActive = typeof logGUIState !== "undefined" && logGUIState.enabled && config.filename.toLowerCase().includes("log")
-  let isRoutingActive = routingGUIState.enabled && config.filename.toLowerCase().includes("routing")
-
-  if (isRoutingActive) {
-    try {
-      const json = JSON.parse(config.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
-      if (!json || typeof json !== "object" || !json.routing) isRoutingActive = false
-    } catch {
-      isRoutingActive = false
-    }
-  }
+  const isRoutingActive = guiRoutingState.enabled
 
   editorContainer.style.display = "none"
   if (routingContainer) routingContainer.style.display = "none"
-  if (tabsContent) tabsContent.classList.remove("no-border")
+  tabsContent?.classList.remove("no-border")
 
-  if (isRoutingActive && !isLogActive) {
+  if (isRoutingActive) {
     let gui = routingContainer
     if (!gui) {
       gui = document.createElement("div")
-      gui.id = "routingGUIContainer"
+      gui.id = "guiRoutingContainer"
       gui.className = "routing-gui-container"
       editorContainer.parentNode.appendChild(gui)
     }
     gui.style.display = "block"
     tabsContent?.classList.add("no-border")
 
-    loadAvailableOutbounds()
+    loadAvailableTags()
     syncJSONToGUI()
-    renderRoutingGUI()
-  } else if (isLogActive) {
-    if (typeof applyLogGUIState === "function") applyLogGUIState()
-  } else {
-    editorContainer.style.display = "block"
+    renderGuiRouting()
   }
 }
 
-function renderRoutingGUI() {
-  let container = document.getElementById("routingGUIContainer")
+function renderGuiRouting() {
+  let container = document.getElementById("guiRoutingContainer")
   if (!container) return
 
   container.innerHTML = `
@@ -292,7 +246,7 @@ function renderRoutingGUI() {
   `
 
   const rulesList = document.getElementById("routingRulesList")
-  routingGUIState.rules.forEach((rule, index) => {
+  guiRoutingState.rules.forEach((rule, index) => {
     rulesList.appendChild(createRuleElement(rule, index))
   })
 }
@@ -309,13 +263,11 @@ function initCustomSelects(container) {
 
     trigger.addEventListener("click", (e) => {
       e.stopPropagation()
-
       document.querySelectorAll(".custom-select").forEach((s) => {
         if (s !== select && s.classList.contains("open")) {
           s.classList.remove("open")
         }
       })
-
       select.classList.toggle("open")
     })
 
@@ -372,10 +324,10 @@ function createRuleElement(rule, index) {
           </svg>
         </div>
         <div class="custom-select-dropdown">
-          ${routingGUIState.availableBalancers
+          ${guiRoutingState.availableBalancers
             .map((t) => `<div class="custom-select-option ${val === t ? "selected" : ""}" data-value="${t}">${t}</div>`)
             .join("")}
-          ${routingGUIState.availableBalancers.length === 0 ? '<div class="custom-select-option empty">No balancers found</div>' : ""}
+          ${guiRoutingState.availableBalancers.length === 0 ? '<div class="custom-select-option empty">No balancers found</div>' : ""}
         </div>
       </div>`
   } else {
@@ -388,10 +340,10 @@ function createRuleElement(rule, index) {
           </svg>
         </div>
         <div class="custom-select-dropdown">
-          ${routingGUIState.availableOutbounds
+          ${guiRoutingState.availableOutbounds
             .map((t) => `<div class="custom-select-option ${val === t ? "selected" : ""}" data-value="${t}">${t}</div>`)
             .join("")}
-          ${routingGUIState.availableOutbounds.length === 0 ? '<div class="custom-select-option empty">No outbounds found</div>' : ""}
+          ${guiRoutingState.availableOutbounds.length === 0 ? '<div class="custom-select-option empty">No outbounds found</div>' : ""}
         </div>
       </div>`
   }
@@ -439,27 +391,27 @@ function createRuleElement(rule, index) {
 
   setTimeout(() => {
     initCustomSelects(div)
-    initTagInputsForFields(div, rule, index)
+    initBadgeInputsForFields(div, rule, index)
   }, 0)
 
   return div
 }
 
-function initTagInputsForFields(container, rule, ruleIndex) {
-  const tagFields = ["domain", "ip", "port", "sourceIP", "sourcePort"]
+function initBadgeInputsForFields(container, rule, ruleIndex) {
+  const badgeFields = ["domain", "ip", "port", "sourceIP", "sourcePort"]
 
-  tagFields.forEach((fieldName) => {
+  badgeFields.forEach((fieldName) => {
     if (rule[fieldName] !== undefined) {
-      const wrapper = container.querySelector(`.tag-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
+      const wrapper = container.querySelector(`.badge-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
       if (wrapper) {
-        initTagInput(wrapper, ruleIndex, fieldName)
+        initBadgeInput(wrapper, ruleIndex, fieldName)
       }
     }
   })
 }
 
-function initTagInput(wrapper, ruleIndex, fieldName) {
-  const input = wrapper.querySelector(".tag-input")
+function initBadgeInput(wrapper, ruleIndex, fieldName) {
+  const input = wrapper.querySelector(".badge-input")
   if (!input) return
 
   wrapper.addEventListener("click", (e) => {
@@ -471,7 +423,7 @@ function initTagInput(wrapper, ruleIndex, fieldName) {
     wrapper.classList.remove("focused")
     const val = input.value.trim()
     if (val) {
-      addTag(ruleIndex, fieldName, val)
+      addBadge(ruleIndex, fieldName, val)
       input.value = ""
     }
   })
@@ -481,49 +433,49 @@ function initTagInput(wrapper, ruleIndex, fieldName) {
       e.preventDefault()
       const val = input.value.trim()
       if (val) {
-        addTag(ruleIndex, fieldName, val)
+        addBadge(ruleIndex, fieldName, val)
         input.value = ""
       }
     } else if (e.key === " ") {
       e.preventDefault()
       const val = input.value.trim()
       if (val) {
-        addTag(ruleIndex, fieldName, val)
+        addBadge(ruleIndex, fieldName, val)
         input.value = ""
 
         setTimeout(() => {
-          const newWrapper = document.querySelector(`.tag-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
+          const newWrapper = document.querySelector(`.badge-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
           if (newWrapper) {
-            const newInput = newWrapper.querySelector(".tag-input")
+            const newInput = newWrapper.querySelector(".badge-input")
             if (newInput) newInput.focus()
           }
         }, 10)
       }
     } else if (e.key === "Backspace" && input.value === "") {
-      const tags = wrapper.querySelectorAll(".tag")
-      if (tags.length > 0) {
-        const lastTag = tags[tags.length - 1]
-        removeTag(ruleIndex, fieldName, lastTag.dataset.value)
+      const badges = wrapper.querySelectorAll(".badge")
+      if (badges.length > 0) {
+        const lastBadge = badges[badges.length - 1]
+        removeBadge(ruleIndex, fieldName, lastTag.dataset.value)
       }
     }
   })
 
   wrapper.addEventListener("click", (e) => {
-    const removeBtn = e.target.closest(".tag-remove")
-    const tagBody = e.target.closest(".tag")
+    const removeBtn = e.target.closest(".badge-remove")
+    const badgeBody = e.target.closest(".badge")
 
     if (removeBtn) {
       e.stopPropagation()
-      removeTag(ruleIndex, fieldName, removeBtn.parentElement.dataset.value)
-    } else if (tagBody) {
+      removeBadge(ruleIndex, fieldName, removeBtn.parentElement.dataset.value)
+    } else if (badgeBody) {
       e.stopPropagation()
-      const val = tagBody.dataset.value
-      removeTag(ruleIndex, fieldName, val)
+      const val = badgeBody.dataset.value
+      removeBadge(ruleIndex, fieldName, val)
 
       setTimeout(() => {
-        const newWrapper = document.querySelector(`.tag-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
+        const newWrapper = document.querySelector(`.badge-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
         if (newWrapper) {
-          const newInput = newWrapper.querySelector(".tag-input")
+          const newInput = newWrapper.querySelector(".badge-input")
           if (newInput) {
             newInput.value = val
             newInput.focus()
@@ -545,7 +497,7 @@ function showSwitchOutboundMenu(e, ruleIndex) {
 
   if (isOpen) return
 
-  const rule = routingGUIState.rules[ruleIndex]
+  const rule = guiRoutingState.rules[ruleIndex]
   const currentType = rule.balancerTag !== undefined ? "balancerTag" : "outboundTag"
 
   btn.classList.add("menu-open")
@@ -581,16 +533,16 @@ function showSwitchOutboundMenu(e, ruleIndex) {
 }
 
 function switchOutboundType(ruleIndex, newType) {
-  const rule = routingGUIState.rules[ruleIndex]
+  const rule = guiRoutingState.rules[ruleIndex]
   if (newType === "outboundTag") {
     delete rule.balancerTag
-    rule.outboundTag = routingGUIState.availableOutbounds[0] || ""
+    rule.outboundTag = guiRoutingState.availableOutbounds[0] || ""
   } else {
     delete rule.outboundTag
-    rule.balancerTag = routingGUIState.availableBalancers[0] || ""
+    rule.balancerTag = guiRoutingState.availableBalancers[0] || ""
   }
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function destroyMenu(menu, btn) {
@@ -602,27 +554,27 @@ function destroyMenu(menu, btn) {
   setTimeout(() => menu.remove(), 100)
 }
 
-function initTagInputs(container) {
-  const inputs = container.querySelectorAll(".tag-input-container")
+function initBadgeInputs(container) {
+  const inputs = container.querySelectorAll(".badge-input-container")
 
   inputs.forEach((wrapper) => {
     const ruleIndex = parseInt(wrapper.dataset.rule)
     const fieldName = wrapper.dataset.field
 
     if (fieldName !== "protocol" && fieldName !== "inboundTag") {
-      initTagInput(wrapper, ruleIndex, fieldName)
+      initBadgeInput(wrapper, ruleIndex, fieldName)
     }
   })
 }
 
-function addTag(ruleIndex, fieldName, value) {
+function addBadge(ruleIndex, fieldName, value) {
   if (["port", "sourcePort"].includes(fieldName)) {
     if (!validatePortValue(value)) {
       showToast("Некорректное значение.\nДопустимы числа или диапазоны от 1 до 65535.", "error")
       return
     }
   }
-  const rule = routingGUIState.rules[ruleIndex]
+  const rule = guiRoutingState.rules[ruleIndex]
   let currentVal = rule[fieldName]
   const fieldConfig = RULE_FIELDS[fieldName]
 
@@ -642,11 +594,11 @@ function addTag(ruleIndex, fieldName, value) {
     valArray.push(value)
   }
 
-  saveTagsToRule(ruleIndex, fieldName, valArray, fieldConfig.type)
+  saveBadgesToRule(ruleIndex, fieldName, valArray, fieldConfig.type)
 }
 
-function removeTag(ruleIndex, fieldName, value) {
-  const rule = routingGUIState.rules[ruleIndex]
+function removeBadge(ruleIndex, fieldName, value) {
+  const rule = guiRoutingState.rules[ruleIndex]
   let currentVal = rule[fieldName]
   const fieldConfig = RULE_FIELDS[fieldName]
 
@@ -664,11 +616,11 @@ function removeTag(ruleIndex, fieldName, value) {
 
   valArray = valArray.filter((v) => v.toString() !== value.toString())
 
-  saveTagsToRule(ruleIndex, fieldName, valArray, fieldConfig.type)
+  saveBadgesToRule(ruleIndex, fieldName, valArray, fieldConfig.type)
 }
 
-function saveTagsToRule(ruleIndex, fieldName, valArray, fieldType) {
-  const rule = routingGUIState.rules[ruleIndex]
+function saveBadgesToRule(ruleIndex, fieldName, valArray, fieldType) {
+  const rule = guiRoutingState.rules[ruleIndex]
 
   if (fieldType === "array") {
     rule[fieldName] = valArray
@@ -682,10 +634,10 @@ function saveTagsToRule(ruleIndex, fieldName, valArray, fieldType) {
   }
 
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 
   setTimeout(() => {
-    const wrapper = document.querySelector(`.tag-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
+    const wrapper = document.querySelector(`.badge-input-container[data-rule="${ruleIndex}"][data-field="${fieldName}"]`)
     if (wrapper) {
       wrapper.scrollLeft = wrapper.scrollWidth
     }
@@ -700,7 +652,7 @@ function createFieldHTML(fieldName, value, ruleIndex) {
   let inputHTML = ""
 
   if (fieldConfig.type === "buttons" || fieldName === "inboundTag") {
-    const availableValues = fieldName === "inboundTag" ? routingGUIState.availableInbounds || [] : fieldConfig.options || []
+    const availableValues = fieldName === "inboundTag" ? guiRoutingState.availableInbounds || [] : fieldConfig.options || []
     const currentValues = Array.isArray(value) ? value : typeof value === "string" ? value.split(",").filter(Boolean) : []
 
     inputHTML = `
@@ -717,19 +669,19 @@ function createFieldHTML(fieldName, value, ruleIndex) {
           .join("")}
       </div>`
   } else if (fieldConfig.type === "array" || ["port", "sourcePort"].includes(fieldName)) {
-    const tags = Array.isArray(value) ? value : value ? String(value).split(",").filter(Boolean) : []
+    const badges = Array.isArray(value) ? value : value ? String(value).split(",").filter(Boolean) : []
     inputHTML = `
-      <div class="tag-input-container" data-rule="${ruleIndex}" data-field="${fieldName}">
-        ${tags
+      <div class="badge-input-container" data-rule="${ruleIndex}" data-field="${fieldName}">
+        ${badges
           .map(
-            (tag) => `
-          <span class="tag tag-${lowerName}" data-value="${tag}">
-            <span class="tag-text">${tag}</span>
-            <span class="tag-remove">×</span>
+            (badge) => `
+          <span class="badge badge-${lowerName}" data-value="${badge}">
+            <span class="badge-text">${badge}</span>
+            <span class="badge-remove">×</span>
           </span>`,
           )
           .join("")}
-        <input type="text" class="tag-input" placeholder="${tags.length === 0 ? fieldConfig.placeholder || "" : ""}" />
+        <input type="text" class="badge-input" placeholder="${badges.length === 0 ? fieldConfig.placeholder || "" : ""}" />
       </div>`
   } else if (fieldConfig.type === "select") {
     inputHTML = `
@@ -762,7 +714,7 @@ function createFieldHTML(fieldName, value, ruleIndex) {
 }
 
 function toggleMultiField(ruleIndex, fieldName, value) {
-  const rule = routingGUIState.rules[ruleIndex]
+  const rule = guiRoutingState.rules[ruleIndex]
   const cfg = RULE_FIELDS[fieldName]
   let current = []
 
@@ -783,7 +735,7 @@ function toggleMultiField(ruleIndex, fieldName, value) {
   rule[fieldName] = cfg.isString ? current.join(",") : current
 
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function changeConditionField(e, ruleIndex, oldField) {
@@ -795,7 +747,7 @@ function changeConditionField(e, ruleIndex, oldField) {
 
   if (isOpen) return
 
-  const existingFields = Object.keys(routingGUIState.rules[ruleIndex])
+  const existingFields = Object.keys(guiRoutingState.rules[ruleIndex])
   const availableFields = Object.keys(RULE_FIELDS).filter((f) => !existingFields.includes(f))
   if (!availableFields.length) return
 
@@ -828,30 +780,30 @@ function changeConditionField(e, ruleIndex, oldField) {
 }
 
 function replaceConditionField(ruleIndex, oldField, newField) {
-  const rule = routingGUIState.rules[ruleIndex]
+  const rule = guiRoutingState.rules[ruleIndex]
   delete rule[oldField]
   const cfg = RULE_FIELDS[newField]
   if (cfg.type === "array") rule[newField] = []
   else if (cfg.type === "select") rule[newField] = cfg.options[0]
   else rule[newField] = ""
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function addRoutingRule() {
   const newRule = {
     domain: [],
-    outboundTag: routingGUIState.availableOutbounds[0] || "direct",
+    outboundTag: guiRoutingState.availableOutbounds[0] || "direct",
   }
-  routingGUIState.rules.push(newRule)
+  guiRoutingState.rules.push(newRule)
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function deleteRule(index) {
-  routingGUIState.rules.splice(index, 1)
+  guiRoutingState.rules.splice(index, 1)
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function validatePortList(str) {
@@ -901,32 +853,29 @@ function updateRuleField(ruleIndex, fieldName, value) {
   }
 
   if (fieldConfig && fieldConfig.type === "array") {
-    routingGUIState.rules[ruleIndex][fieldName] = value
+    guiRoutingState.rules[ruleIndex][fieldName] = value
       .split(",")
       .map((v) => v.trim())
       .filter((v) => v)
   } else {
-    routingGUIState.rules[ruleIndex][fieldName] = value
+    guiRoutingState.rules[ruleIndex][fieldName] = value
   }
 
   syncGUIToJSON()
 
   if (autoApply && (fieldName === "outboundTag" || fieldName === "balancerTag")) {
-    if (restartDebounceTimer) clearTimeout(restartDebounceTimer)
-
-    restartDebounceTimer = setTimeout(() => {
+    setTimeout(() => {
       if (typeof saveAndRestart === "function") {
         saveAndRestart()
       }
-      restartDebounceTimer = null
-    }, 1000)
+    }, 100)
   }
 }
 
 function removeRuleField(ruleIndex, fieldName) {
-  delete routingGUIState.rules[ruleIndex][fieldName]
+  delete guiRoutingState.rules[ruleIndex][fieldName]
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function showAddConditionMenu(e, ruleIndex) {
@@ -939,7 +888,7 @@ function showAddConditionMenu(e, ruleIndex) {
 
   if (isOpen) return
 
-  const existingFields = Object.keys(routingGUIState.rules[ruleIndex])
+  const existingFields = Object.keys(guiRoutingState.rules[ruleIndex])
   const availableFields = Object.keys(RULE_FIELDS).filter((f) => !existingFields.includes(f))
 
   if (!availableFields.length) return showToast("Все доступные поля уже добавлены", "error")
@@ -976,22 +925,22 @@ function addConditionField(ruleIndex, fieldName) {
   const fieldConfig = RULE_FIELDS[fieldName]
 
   if (fieldConfig.type === "array") {
-    routingGUIState.rules[ruleIndex][fieldName] = []
+    guiRoutingState.rules[ruleIndex][fieldName] = []
   } else if (fieldConfig.type === "select") {
-    routingGUIState.rules[ruleIndex][fieldName] = fieldConfig.options[0]
+    guiRoutingState.rules[ruleIndex][fieldName] = fieldConfig.options[0]
   } else {
-    routingGUIState.rules[ruleIndex][fieldName] = ""
+    guiRoutingState.rules[ruleIndex][fieldName] = ""
   }
 
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
 
 function startDrag(event, index) {
   const isTouchEvent = event.type === "touchstart"
 
   if (!isTouchEvent && event.button !== 0) return
-  if (event.target.tagName === "INPUT" || event.target.tagName === "SELECT") return
+  if (event.target.badgeName === "INPUT" || event.target.badgeName === "SELECT") return
 
   const card = event.target.closest(".routing-rule-card")
   if (!card) return
@@ -1086,31 +1035,16 @@ function onDragEnd() {
 
   cards.forEach((card) => {
     const oldIndex = parseInt(card.dataset.index)
-    if (routingGUIState.rules[oldIndex]) {
-      newRules.push(routingGUIState.rules[oldIndex])
+    if (guiRoutingState.rules[oldIndex]) {
+      newRules.push(guiRoutingState.rules[oldIndex])
     }
   })
 
-  routingGUIState.rules = newRules
+  guiRoutingState.rules = newRules
 
   dragState.dragging = false
   dragState.originalCard = null
 
   syncGUIToJSON()
-  renderRoutingGUI()
+  renderGuiRouting()
 }
-
-// document.addEventListener("DOMContentLoaded", () => {
-//   routingGUIState.enabled = loadGUIState()
-
-//   const routingCheckboxSettings = document.getElementById("routingGUICheckboxSettings")
-//   if (routingCheckboxSettings) {
-//     routingCheckboxSettings.checked = routingGUIState.enabled
-//   }
-
-//   if (typeof applyRoutingGUIState === "function") {
-//     setTimeout(() => {
-//       applyRoutingGUIState()
-//     }, 100)
-//   }
-// })

@@ -73,19 +73,26 @@ async function init() {
     loadMonacoEditor()
     connectWebSocket()
 
-    const savedState = localStorage.getItem("routingGUI_enabled")
-    if (typeof routingGUIState !== "undefined") {
-      routingGUIState.enabled = savedState === "1"
+    const savedState = localStorage.getItem("guiRouting_enabled")
+    if (typeof guiRoutingState !== "undefined") {
+      guiRoutingState.enabled = savedState === "1"
+    }
+    const routingCheckboxSettings = document.getElementById("guiRoutingCheckboxSettings")
+    if (routingCheckboxSettings) {
+      routingCheckboxSettings.checked = guiRoutingState.enabled
     }
 
-    const routingCheckboxSettings = document.getElementById("routingGUICheckboxSettings")
-    if (routingCheckboxSettings) {
-      routingCheckboxSettings.checked = routingGUIState.enabled
+    const savedLogState = localStorage.getItem("guiLog_enabled")
+    if (typeof guiLogState !== "undefined") {
+      guiLogState.enabled = savedLogState === "1"
+    }
+    const logCheckboxSettings = document.getElementById("guiLogCheckboxSettings")
+    if (logCheckboxSettings) {
+      logCheckboxSettings.checked = guiLogState.enabled
     }
 
     const savedAutoApply = localStorage.getItem("autoApply")
     autoApply = savedAutoApply === "1"
-
     const autoApplyCheckbox = document.getElementById("autoApplyCheckbox")
     if (autoApplyCheckbox) {
       autoApplyCheckbox.checked = autoApply
@@ -992,21 +999,15 @@ function switchTab(index) {
   const editorContainer = document.getElementById("editorContainer")
   if (editorContainer) editorContainer.style.display = "block"
 
-  const routingGuiContainer = document.getElementById("routingGUIContainer")
-  if (routingGuiContainer) routingGuiContainer.style.display = "none"
+  const guiRoutingContainer = document.getElementById("guiRoutingContainer")
+  if (guiRoutingContainer) guiRoutingContainer.style.display = "none"
 
-  const logGuiContainer = document.getElementById("logGUIContainer")
-  if (logGuiContainer) logGuiContainer.style.display = "none"
+  const guiLogContainer = document.getElementById("guiLogContainer")
+  if (guiLogContainer) guiLogContainer.style.display = "none"
 
   document.querySelector(".tabs-content")?.classList.remove("no-border")
 
-  if (typeof applyRoutingGUIState === "function") {
-    applyRoutingGUIState()
-  }
-  if (typeof applyLogGUIState === "function") {
-    applyLogGUIState()
-  }
-
+  applyGUIState()
   renderTabs()
   updateUIDirtyState()
 
@@ -2342,19 +2343,6 @@ function addToOutbounds() {
   }
 }
 
-async function updateRoutingViaAPI(routingConfig) {
-  try {
-    const result = await apiCall("routing", {
-      action: "update",
-      config: routingConfig,
-    })
-    return result
-  } catch (e) {
-    console.error("Routing API error:", e)
-    return { success: false, error: e.message }
-  }
-}
-
 document.addEventListener("click", (e) => {
   const menu = document.getElementById("formatMenu")
   if (menu && !e.target.closest(".btn-group")) {
@@ -2455,9 +2443,9 @@ function toggleSettingsModal() {
   const modal = document.getElementById("settingsModal")
   modal.classList.add("show")
 
-  const routingCheckboxSettings = document.getElementById("routingGUICheckboxSettings")
+  const routingCheckboxSettings = document.getElementById("guiRoutingCheckboxSettings")
   if (routingCheckboxSettings) {
-    routingCheckboxSettings.checked = routingGUIState.enabled
+    routingCheckboxSettings.checked = guiRoutingState.enabled
   }
 
   const autoApplyCheckbox = document.getElementById("autoApplyOutboundCheckbox")
@@ -2471,11 +2459,11 @@ function closeSettingsModal() {
 }
 
 function saveGUIState() {
-  localStorage.setItem("routingGUI_enabled", routingGUIState.enabled ? "1" : "0")
+  localStorage.setItem("guiRouting_enabled", guiRoutingState.enabled ? "1" : "0")
 }
 
 function loadGUIState() {
-  const saved = localStorage.getItem("routingGUI_enabled")
+  const saved = localStorage.getItem("guiRouting_enabled")
   return saved === "1"
 }
 
@@ -2578,5 +2566,36 @@ function toggleAutoApply() {
   if (checkbox) {
     autoApply = checkbox.checked
     localStorage.setItem("autoApply", autoApply ? "1" : "0")
+  }
+}
+
+function applyGUIState() {
+  if (!monacoEditor) return
+  const editorContainer = document.getElementById("editorContainer")
+  const routingContainer = document.getElementById("guiRoutingContainer")
+  const logContainer = document.getElementById("guiLogContainer")
+  const tabsContent = document.querySelector(".tabs-content")
+
+  if (!editorContainer) return
+
+  const config = configs[activeConfigIndex]
+  if (!config) return
+
+  const filenameLower = config.filename.toLowerCase()
+  const isRouting = filenameLower.includes("routing")
+  const isLog = filenameLower.includes("log")
+
+  editorContainer.style.display = "none"
+  if (routingContainer) routingContainer.style.display = "none"
+  if (logContainer) logContainer.style.display = "none"
+  tabsContent?.classList.remove("no-border")
+
+  if (isRouting && guiRoutingState.enabled) {
+    applyGuiRoutingState()
+  } else if (isLog && guiLogState.enabled) {
+    applyGuiLogState()
+  } else {
+    editorContainer.style.display = "block"
+    tabsContent?.classList.remove("no-border")
   }
 }

@@ -164,7 +164,6 @@ textarea {
     background-color 0.2s,
     border-color 0.2s,
     box-shadow 0.2s;
-  will-change: transform, opacity;
 }
 
 .panel-title {
@@ -278,7 +277,6 @@ textarea {
   position: relative;
 }
 
-/* Стиль для разделителя между группами вкладок */
 .tab-separator {
   width: 1px;
   height: 24px;
@@ -347,9 +345,7 @@ textarea {
   display: flex;
   gap: 8px;
   flex-grow: 1;
-  /* Заставляем блок растянуться на всю доступную ширину */
   justify-content: flex-end;
-  /* Выравниваем его содержимое (группы вкладок) по правому краю */
 }
 
 .tabs-scroll::-webkit-scrollbar {
@@ -413,7 +409,7 @@ textarea {
   border: 1px solid #1e293b;
   border-radius: 8px;
   background: var(--field-background);
-  overflow: hidden;
+  /*overflow: hidden;*/
 }
 
 .tabs-content.no-border {
@@ -2503,7 +2499,7 @@ textarea {
   border: 1px solid #1e293b;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  z-index: 10000;
+  z-index: 10000 !important;
   max-height: 400px;
   overflow-y: auto;
   padding: 6px;
@@ -2653,7 +2649,7 @@ textarea {
   margin-top: 4px;
 }
 
-.tag {
+.badge {
   display: inline-flex;
   align-items: center;
   border-radius: 4px;
@@ -2671,39 +2667,39 @@ textarea {
   height: 24px;
 }
 
-.tag:hover {
+.badge:hover {
   filter: brightness(1.2);
 }
 
-.tag-domain {
+.badge-domain {
   background: rgba(247, 118, 142, 0.15);
   color: #f7768e;
   border-color: rgba(247, 118, 142, 0.2);
 }
 
-.tag-ip,
-.tag-sourceip,
-.tag-localip {
+.badge-ip,
+.badge-sourceip,
+.badge-localip {
   background: rgba(122, 162, 247, 0.15);
   color: #7aa2f7;
   border-color: rgba(122, 162, 247, 0.2);
 }
 
-.tag-port,
-.tag-sourceport,
-.tag-localport {
+.badge-port,
+.badge-sourceport,
+.badge-localport {
   background: rgba(224, 175, 104, 0.15);
   color: #e0af68;
   border-color: rgba(224, 175, 104, 0.2);
 }
 
-.tag-text {
+.badge-text {
   white-space: nowrap;
   letter-spacing: 0.3px;
   margin-bottom: 2px;
 }
 
-.tag-remove {
+.badge-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2715,12 +2711,12 @@ textarea {
   line-height: 1;
 }
 
-.tag:hover .tag-remove {
+.badge:hover .badge-remove {
   opacity: 1;
   background: rgba(0, 0, 0, 0.2);
 }
 
-.tag-input {
+.badge-input {
   flex: 1 1 auto;
   min-width: 60px;
   background: transparent !important;
@@ -2738,14 +2734,14 @@ textarea {
   width: 100%;
 }
 
-.rule-field.full-width .tag-input-container {
+.rule-field.full-width .badge-input-container {
   flex: 1 1 100%;
   min-width: 0;
 }
 
 .rule-field,
 .field-input-group,
-.tag-input-container {
+.badge-input-container {
   width: 100%;
 }
 
@@ -2767,7 +2763,7 @@ textarea {
 
 .field-name-btn:hover {
   background: rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
+  border-color: #60a5fa;
   color: #60a5fa;
 }
 
@@ -2937,11 +2933,11 @@ textarea {
   transform: scale(0.95);
 }
 
-.tag-input-container::-webkit-scrollbar {
+.badge-input-container::-webkit-scrollbar {
   display: none;
 }
 
-.tag-input-container,
+.badge-input-container,
 .network-buttons,
 .protocol-buttons,
 .inboundtag-buttons {
@@ -2961,14 +2957,14 @@ textarea {
   width: 100%;
 }
 
-.tag-input-container:hover,
+.badge-input-container:hover,
 .network-buttons:hover,
 .protocol-buttons:hover,
 .inboundtag-buttons:hover {
   border-color: #475569;
 }
 
-.tag-input-container.focused,
+.badge-input-container.focused,
 .network-buttons.focused,
 .protocol-buttons.focused,
 .inboundtag-buttons.focused {
@@ -3137,7 +3133,7 @@ textarea {
 
 .log-path-btn:hover {
   background: rgba(59, 130, 246, 0.1);
-  border-color: #3b82f6;
+  border-color: #60a5fa;
   color: #60a5fa;
 }
 
@@ -3769,12 +3765,6 @@ textarea {
     font-size: 14px;
   }
 
-  /*.settings-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }*/
-
   .settings-item-label {
     font-size: 12px;
   }
@@ -3809,7 +3799,7 @@ textarea {
     width: max-content;
   }
 
-  .tag-input,
+  .badge-input,
   .rule-name-input {
     font-size: 16px !important;
   }
@@ -3820,7 +3810,7 @@ textarea {
     box-sizing: border-box;
   }
 
-  .tag-input-container,
+  .badge-input-container,
   .custom-select {
     flex: 1;
     min-width: 0;

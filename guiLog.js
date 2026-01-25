@@ -1,4 +1,4 @@
-let logGUIState = {
+let guiLogState = {
   enabled: false,
   config: {
     access: "",
@@ -30,7 +30,7 @@ function parseLogJSON(content) {
   try {
     const json = JSON.parse(content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
     if (json.log) {
-      logGUIState.config = {
+      guiLogState.config = {
         access: json.log.access || "",
         error: json.log.error || "",
         loglevel: json.log.loglevel || "warning",
@@ -51,20 +51,20 @@ async function buildLogJSON() {
 
     json.log = {}
 
-    if (logGUIState.config.access && logGUIState.config.access !== "") {
-      json.log.access = logGUIState.config.access
+    if (guiLogState.config.access && guiLogState.config.access !== "") {
+      json.log.access = guiLogState.config.access
     } else {
       json.log.access = "none"
     }
 
-    if (logGUIState.config.error && logGUIState.config.error !== "") {
-      json.log.error = logGUIState.config.error
+    if (guiLogState.config.error && guiLogState.config.error !== "") {
+      json.log.error = guiLogState.config.error
     } else {
       json.log.error = "none"
     }
 
-    json.log.loglevel = logGUIState.config.loglevel
-    json.log.dnsLog = logGUIState.config.dnsLog
+    json.log.loglevel = guiLogState.config.loglevel
+    json.log.dnsLog = guiLogState.config.dnsLog
 
     const preFormatted = JSON.stringify(json, null, 2)
 
@@ -90,13 +90,13 @@ async function buildLogJSON() {
   }
 }
 
-function syncJSONToLogGUI() {
+function syncJSONToguiLog() {
   const content = monacoEditor.getValue()
   parseLogJSON(content)
-  renderLogGUI()
+  renderGuiLog()
 }
 
-function syncLogGUIToJSON() {
+function syncguiLogToJSON() {
   buildLogJSON()
     .then((newContent) => {
       monacoEditor.setValue(newContent)
@@ -109,66 +109,43 @@ function syncLogGUIToJSON() {
     })
 }
 
-function applyLogGUIState() {
+function applyGuiLogState() {
   if (!monacoEditor) return
   const editorContainer = document.getElementById("editorContainer")
   if (!editorContainer) return
 
-  if (!logGUIState.enabled) {
-    if (typeof routingGUIState !== "undefined" && routingGUIState.enabled) {
-      const config = configs[activeConfigIndex]
-      if (config && config.filename.toLowerCase().includes("routing")) {
-        // if (typeof applyRoutingGUIState === "function") {
-        //   applyRoutingGUIState()
-        // }
-        return
-      }
-    }
-
-    editorContainer.style.display = "block"
-    const logGuiContainer = document.getElementById("logGUIContainer")
-    if (logGuiContainer) logGuiContainer.style.display = "none"
-    document.querySelector(".tabs-content")?.classList.remove("no-border")
-    return
-  }
-
   const config = configs[activeConfigIndex]
   if (!config) return
 
-  const isLog = isLogFile()
+  if (!isLogFile()) return
 
-  if (isLog) {
-    editorContainer.style.display = "none"
+  const isLogActive = guiLogState.enabled
 
-    let guiContainer = document.getElementById("logGUIContainer")
+  editorContainer.style.display = "none"
+  const guiLogContainer = document.getElementById("guiLogContainer")
+  if (guiLogContainer) guiLogContainer.style.display = "none"
+  document.querySelector(".tabs-content")?.classList.remove("no-border")
+
+  if (isLogActive) {
+    let guiContainer = document.getElementById("guiLogContainer")
     if (!guiContainer) {
       guiContainer = document.createElement("div")
-      guiContainer.id = "logGUIContainer"
+      guiContainer.id = "guiLogContainer"
       guiContainer.className = "log-gui-container"
       editorContainer.parentNode.appendChild(guiContainer)
     }
-
     guiContainer.style.display = "block"
-    syncJSONToLogGUI()
-    renderLogGUI()
+    syncJSONToguiLog()
+    renderGuiLog()
     document.querySelector(".tabs-content")?.classList.add("no-border")
-  } else {
-    if (typeof routingGUIState !== "undefined" && routingGUIState.enabled) {
-      if (typeof applyRoutingGUIState === "function") {
-        applyRoutingGUIState()
-      }
-    } else {
-      editorContainer.style.display = "block"
-      document.querySelector(".tabs-content")?.classList.remove("no-border")
-    }
   }
 }
 
-function renderLogGUI() {
-  let container = document.getElementById("logGUIContainer")
+function renderGuiLog() {
+  let container = document.getElementById("guiLogContainer")
   if (!container) return
 
-  const cfg = logGUIState.config
+  const cfg = guiLogState.config
   const idx = LOG_LEVELS.indexOf(cfg.loglevel)
   const pct = (idx / (LOG_LEVELS.length - 1)) * 100
   const clr = LOG_COLORS[cfg.loglevel]
@@ -234,9 +211,9 @@ function renderLogGUI() {
 }
 
 function setLogPath(type, path) {
-  logGUIState.config[type] = path === "" ? "none" : path
-  syncLogGUIToJSON()
-  renderLogGUI()
+  guiLogState.config[type] = path === "" ? "none" : path
+  syncguiLogToJSON()
+  renderGuiLog()
 
   if (autoApply) {
     setTimeout(() => {
@@ -248,8 +225,8 @@ function setLogPath(type, path) {
 }
 
 function setLogLevel(level) {
-  logGUIState.config.loglevel = level
-  syncLogGUIToJSON()
+  guiLogState.config.loglevel = level
+  syncguiLogToJSON()
 
   const idx = LOG_LEVELS.indexOf(level)
   const pct = (idx / (LOG_LEVELS.length - 1)) * 100
@@ -278,8 +255,8 @@ function setLogLevel(level) {
 
 function toggleDNSLog() {
   const cb = document.getElementById("dnsLogCheckbox")
-  logGUIState.config.dnsLog = cb.checked
-  syncLogGUIToJSON()
+  guiLogState.config.dnsLog = cb.checked
+  syncguiLogToJSON()
 
   const label = document.querySelector(".log-dns-label")
   if (label) label.textContent = cb.checked ? "Включено" : "Выключено"
@@ -291,80 +268,19 @@ function toggleDNSLog() {
   }
 }
 
-function toggleLogGUI() {
-  const checkbox = document.getElementById("logGUICheckboxSettings")
+function toggleGuiLog() {
+  const checkbox = document.getElementById("guiLogCheckboxSettings")
   if (checkbox) {
-    logGUIState.enabled = checkbox.checked
-    localStorage.setItem("logGUI_enabled", logGUIState.enabled ? "1" : "0")
+    guiLogState.enabled = checkbox.checked
+    localStorage.setItem("guiLog_enabled", guiLogState.enabled ? "1" : "0")
   }
-
   const config = configs[activeConfigIndex]
-  if (!config) return
-
-  const isLog = isLogFile()
-  const isRouting = config.filename.toLowerCase().includes("routing")
-
-  if (isLog && logGUIState.enabled) {
-    const editorContainer = document.getElementById("editorContainer")
-    if (editorContainer) editorContainer.style.display = "none"
-
-    const routingGuiContainer = document.getElementById("routingGUIContainer")
-    if (routingGuiContainer) routingGuiContainer.style.display = "none"
-
-    let logGuiContainer = document.getElementById("logGUIContainer")
-    if (!logGuiContainer) {
-      logGuiContainer = document.createElement("div")
-      logGuiContainer.id = "logGUIContainer"
-      logGuiContainer.className = "log-gui-container"
-      editorContainer.parentNode.appendChild(logGuiContainer)
-    }
-
-    logGuiContainer.style.display = "block"
-    syncJSONToLogGUI()
-    renderLogGUI()
-    document.querySelector(".tabs-content")?.classList.add("no-border")
-  } else if (isLog && !logGUIState.enabled) {
-    const editorContainer = document.getElementById("editorContainer")
-    if (editorContainer) editorContainer.style.display = "block"
-
-    const logGuiContainer = document.getElementById("logGUIContainer")
-    if (logGuiContainer) logGuiContainer.style.display = "none"
-
-    const routingGuiContainer = document.getElementById("routingGUIContainer")
-    if (routingGuiContainer) routingGuiContainer.style.display = "none"
-
-    document.querySelector(".tabs-content")?.classList.remove("no-border")
-  } else if (isRouting && !logGUIState.enabled) {
-    if (typeof applyRoutingGUIState === "function") {
-      applyRoutingGUIState()
-    } else {
-      const editorContainer = document.getElementById("editorContainer")
-      if (editorContainer) editorContainer.style.display = "block"
-
-      const logGuiContainer = document.getElementById("logGUIContainer")
-      if (logGuiContainer) logGuiContainer.style.display = "none"
-
-      document.querySelector(".tabs-content")?.classList.remove("no-border")
-    }
+  if (config && config.filename.toLowerCase().includes("log") && typeof applyGUIState === "function") {
+    applyGUIState()
   }
 }
 
-function loadLogGUIState() {
-  const saved = localStorage.getItem("logGUI_enabled")
+function loadGuiLogState() {
+  const saved = localStorage.getItem("guiLog_enabled")
   return saved === "1"
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-  logGUIState.enabled = loadLogGUIState()
-
-  const logCheckboxSettings = document.getElementById("logGUICheckboxSettings")
-  if (logCheckboxSettings) {
-    logCheckboxSettings.checked = logGUIState.enabled
-  }
-
-  if (typeof applyLogGUIState === "function") {
-    setTimeout(() => {
-      applyLogGUIState()
-    }, 100)
-  }
-})
