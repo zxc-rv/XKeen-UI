@@ -21,6 +21,7 @@ let dashboardPort = null
 let dependenciesLoaded = false
 let toastStack = []
 let currentTimezone = 3
+let autoApply = false
 
 async function loadDependencies() {
   if (dependenciesLoaded) return
@@ -82,12 +83,12 @@ async function init() {
       routingCheckboxSettings.checked = routingGUIState.enabled
     }
 
-    const savedAutoApply = localStorage.getItem("autoApplyOutbound")
-    autoApplyOutbound = savedAutoApply === "1"
+    const savedAutoApply = localStorage.getItem("autoApply")
+    autoApply = savedAutoApply === "1"
 
-    const autoApplyCheckbox = document.getElementById("autoApplyOutboundCheckbox")
+    const autoApplyCheckbox = document.getElementById("autoApplyCheckbox")
     if (autoApplyCheckbox) {
-      autoApplyCheckbox.checked = autoApplyOutbound
+      autoApplyCheckbox.checked = autoApply
     }
 
     const logsContainer = document.getElementById("logsContainer")
@@ -943,9 +944,12 @@ async function saveAndSwitch() {
 function discardAndSwitch() {
   if (pendingSwitchIndex !== -1) {
     const config = configs[activeConfigIndex]
+
+    config.content = config.savedContent
     monacoEditor.setValue(config.savedContent)
     config.isDirty = false
     updateUIDirtyState()
+
     const targetIndex = pendingSwitchIndex
     pendingSwitchIndex = -1
     closeDirtyModal()
@@ -985,7 +989,24 @@ function switchTab(index) {
     config.isDirty = false
   }
 
-  applyRoutingGUIState()
+  const editorContainer = document.getElementById("editorContainer")
+  if (editorContainer) editorContainer.style.display = "block"
+
+  const routingGuiContainer = document.getElementById("routingGUIContainer")
+  if (routingGuiContainer) routingGuiContainer.style.display = "none"
+
+  const logGuiContainer = document.getElementById("logGUIContainer")
+  if (logGuiContainer) logGuiContainer.style.display = "none"
+
+  document.querySelector(".tabs-content")?.classList.remove("no-border")
+
+  if (typeof applyRoutingGUIState === "function") {
+    applyRoutingGUIState()
+  }
+  if (typeof applyLogGUIState === "function") {
+    applyLogGUIState()
+  }
+
   renderTabs()
   updateUIDirtyState()
 
@@ -2340,12 +2361,18 @@ document.addEventListener("click", (e) => {
     menu.classList.remove("show")
   }
 
-  const templateImportModal = document.getElementById("templateImportModal")
-  if (templateImportModal && templateImportModal.classList.contains("show")) {
-    const modalContent = templateImportModal.querySelector(".modal-content")
-    if (!modalContent.contains(e.target)) {
-      closeTemplateImportModal()
-    }
+  const tzSelect = document.getElementById("timezoneSelect")
+  if (tzSelect && !tzSelect.contains(e.target)) {
+    tzSelect.classList.remove("open")
+  }
+
+  if (e.target.classList.contains("modal-overlay")) {
+    const id = e.target.id
+    if (id === "settingsModal") closeSettingsModal()
+    else if (id === "dirtyModal") closeDirtyModal()
+    else if (id === "coreModal") closeCoreModal()
+    else if (id === "importModal") closeImportModal()
+    else if (id === "templateImportModal") closeTemplateImportModal()
   }
 })
 
@@ -2545,3 +2572,11 @@ document.addEventListener("click", (e) => {
     select.classList.remove("open")
   }
 })
+
+function toggleAutoApply() {
+  const checkbox = document.getElementById("autoApplyCheckbox")
+  if (checkbox) {
+    autoApply = checkbox.checked
+    localStorage.setItem("autoApply", autoApply ? "1" : "0")
+  }
+}

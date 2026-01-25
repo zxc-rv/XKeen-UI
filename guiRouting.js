@@ -11,6 +11,7 @@ let dragState = {
   shiftX: 0,
   shiftY: 0,
 }
+let restartDebounceTimer = null
 
 function startEditRuleName(e, index) {
   e.stopPropagation()
@@ -73,6 +74,7 @@ function isRoutingFile() {
 }
 
 function loadAvailableOutbounds() {
+  console.log("loadAvailableOutbounds called, stack:", new Error().stack)
   routingGUIState.availableOutbounds = []
   routingGUIState.availableBalancers = []
   routingGUIState.availableInbounds = []
@@ -229,63 +231,48 @@ function toggleRoutingGUI() {
 function applyRoutingGUIState() {
   if (!monacoEditor) return
   const editorContainer = document.getElementById("editorContainer")
+  const routingContainer = document.getElementById("routingGUIContainer")
+  const tabsContent = document.querySelector(".tabs-content")
+
   if (!editorContainer) return
-  if (!routingGUIState.enabled) {
-    editorContainer.style.display = "block"
-    const guiContainer = document.getElementById("routingGUIContainer")
-    if (guiContainer) guiContainer.style.display = "none"
-    document.querySelector(".tabs-content")?.classList.remove("no-border")
-    return
-  }
 
   const config = configs[activeConfigIndex]
   if (!config) return
 
-  let isRouting = config.filename.toLowerCase().includes("routing")
+  const isLogActive = typeof logGUIState !== "undefined" && logGUIState.enabled && config.filename.toLowerCase().includes("log")
+  let isRoutingActive = routingGUIState.enabled && config.filename.toLowerCase().includes("routing")
 
-  if (isRouting) {
+  if (isRoutingActive) {
     try {
-      const cleanContent = config.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "")
-      const json = JSON.parse(cleanContent)
-      if (!json || typeof json !== "object" || !json.routing) {
-        isRouting = false
-      }
-    } catch (e) {
-      isRouting = false
+      const json = JSON.parse(config.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""))
+      if (!json || typeof json !== "object" || !json.routing) isRoutingActive = false
+    } catch {
+      isRoutingActive = false
     }
   }
 
-  if (isRouting) {
-    editorContainer.style.display = "none"
+  editorContainer.style.display = "none"
+  if (routingContainer) routingContainer.style.display = "none"
+  if (tabsContent) tabsContent.classList.remove("no-border")
 
-    let guiContainer = document.getElementById("routingGUIContainer")
-    if (!guiContainer) {
-      guiContainer = document.createElement("div")
-      guiContainer.id = "routingGUIContainer"
-      guiContainer.className = "routing-gui-container"
-      editorContainer.parentNode.appendChild(guiContainer)
+  if (isRoutingActive && !isLogActive) {
+    let gui = routingContainer
+    if (!gui) {
+      gui = document.createElement("div")
+      gui.id = "routingGUIContainer"
+      gui.className = "routing-gui-container"
+      editorContainer.parentNode.appendChild(gui)
     }
+    gui.style.display = "block"
+    tabsContent?.classList.add("no-border")
 
-    guiContainer.style.display = "block"
-
-    if (typeof loadAvailableOutbounds === "function") {
-      loadAvailableOutbounds()
-    }
-
-    if (typeof syncJSONToGUI === "function") {
-      syncJSONToGUI()
-    }
-
-    if (typeof renderRoutingGUI === "function") {
-      renderRoutingGUI()
-    }
-
-    document.querySelector(".tabs-content")?.classList.add("no-border")
+    loadAvailableOutbounds()
+    syncJSONToGUI()
+    renderRoutingGUI()
+  } else if (isLogActive) {
+    if (typeof applyLogGUIState === "function") applyLogGUIState()
   } else {
     editorContainer.style.display = "block"
-    const guiContainer = document.getElementById("routingGUIContainer")
-    if (guiContainer) guiContainer.style.display = "none"
-    document.querySelector(".tabs-content")?.classList.remove("no-border")
   }
 }
 
@@ -719,13 +706,14 @@ function createFieldHTML(fieldName, value, ruleIndex) {
     inputHTML = `
       <div class="${lowerName}-buttons">
         ${availableValues
-          .map(
-            (val) => `
-          <button type="button" class="${lowerName}-btn ${currentValues.includes(val) ? "active" : ""}"
-                  onclick="toggleMultiField(${ruleIndex}, '${fieldName}', '${val}')">
-            ${val.toUpperCase()}
-          </button>`,
-          )
+          .map((val) => {
+            const displayValue = fieldName === "inboundTag" ? val : val.toUpperCase()
+            return `
+                <button type="button" class="${lowerName}-btn ${currentValues.includes(val) ? "active" : ""}"
+                        onclick="toggleMultiField(${ruleIndex}, '${fieldName}', '${val}')">
+                  ${displayValue}
+                </button>`
+          })
           .join("")}
       </div>`
   } else if (fieldConfig.type === "array" || ["port", "sourcePort"].includes(fieldName)) {
@@ -907,7 +895,7 @@ function updateRuleField(ruleIndex, fieldName, value) {
 
   if (["port", "sourcePort"].includes(fieldName)) {
     if (!validatePortList(value)) {
-      showToast("Неверный формат портов. Пример: 80,443,1000-2000", "error")
+      showToast("Неверный формат портов", "error")
       return
     }
   }
@@ -923,12 +911,15 @@ function updateRuleField(ruleIndex, fieldName, value) {
 
   syncGUIToJSON()
 
-  if (autoApplyOutbound && (fieldName === "outboundTag" || fieldName === "balancerTag")) {
-    setTimeout(() => {
+  if (autoApply && (fieldName === "outboundTag" || fieldName === "balancerTag")) {
+    if (restartDebounceTimer) clearTimeout(restartDebounceTimer)
+
+    restartDebounceTimer = setTimeout(() => {
       if (typeof saveAndRestart === "function") {
         saveAndRestart()
       }
-    }, 100)
+      restartDebounceTimer = null
+    }, 1000)
   }
 }
 
@@ -1109,17 +1100,17 @@ function onDragEnd() {
   renderRoutingGUI()
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  routingGUIState.enabled = loadGUIState()
+// document.addEventListener("DOMContentLoaded", () => {
+//   routingGUIState.enabled = loadGUIState()
 
-  const routingCheckboxSettings = document.getElementById("routingGUICheckboxSettings")
-  if (routingCheckboxSettings) {
-    routingCheckboxSettings.checked = routingGUIState.enabled
-  }
+//   const routingCheckboxSettings = document.getElementById("routingGUICheckboxSettings")
+//   if (routingCheckboxSettings) {
+//     routingCheckboxSettings.checked = routingGUIState.enabled
+//   }
 
-  if (typeof applyRoutingGUIState === "function") {
-    setTimeout(() => {
-      applyRoutingGUIState()
-    }, 100)
-  }
-})
+//   if (typeof applyRoutingGUIState === "function") {
+//     setTimeout(() => {
+//       applyRoutingGUIState()
+//     }, 100)
+//   }
+// })
