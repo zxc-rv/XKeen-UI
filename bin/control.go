@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
+	"syscall"
 )
 
 func ControlHandler(w http.ResponseWriter, r *http.Request) {
@@ -41,28 +43,25 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		envVars := ""
-		runCmd := ""
-		if req.Core == "xray" {
-			envVars = `export XRAY_LOCATION_CONFDIR="/opt/etc/xray/configs"
-            export XRAY_LOCATION_ASSET="/opt/etc/xray/dat"`
-			runCmd = "xray run"
-		} else {
-			runCmd = "mihomo -d /opt/etc/mihomo"
+		exec.Command("killall", "-q", "-9", req.Core).Run()
+
+		limit := 10000
+		if runtime.GOARCH == "arm64" {
+			limit = 40000
 		}
 
-		script := fmt.Sprintf(`
-        . "/opt/sbin/.xkeen/01_info/03_info_cpu.sh"
-        status_file="/opt/lib/opkg/status"
-        info_cpu
-        killall -q -9 %s
-        %s
-        limit=10000
-        [ "$architecture" = "arm64-v8a" ] && limit=40000
-        ulimit -SHn "$limit" && su -c "%s" "xkeen" /opt/var/log/xray/error.log 2>&1 &
-        `, req.Core, envVars, runCmd)
+		runCmd := ""
+		if req.Core == "xray" {
+			os.Setenv("XRAY_LOCATION_CONFDIR", "/opt/etc/xray/configs")
+			os.Setenv("XRAY_LOCATION_ASSET", "/opt/etc/xray/dat")
+			runCmd = fmt.Sprintf("ulimit -SHn %d && xray run >/dev/null 2>>/opt/var/log/xray/error.log", limit)
+		} else {
+			os.Setenv("CLASH_HOME_DIR", "/opt/etc/mihomo")
+			runCmd = fmt.Sprintf("ulimit -SHn %d && mihomo >>/opt/var/log/xray/error.log 2>&1", limit)
+		}
+		cmd = exec.Command("su", "xkeen", "-c", runCmd)
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
-		cmd = exec.Command("sh", "-c", script)
 	} else {
 		switch req.Action {
 		case "start", "stop", "restart":
@@ -74,19 +73,23 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	f, err := OpenLogFile()
-	if err != nil {
-		jsonResponse(w, Response{Success: false, Error: "Cannot open log file"}, 500)
-		return
-	}
-	defer f.Close()
-
-	cmd.Stdout = f
-	cmd.Stderr = f
-
-	if err := cmd.Run(); err != nil {
-		jsonResponse(w, Response{Success: false, Error: "Command failed"}, 500)
+	if req.Action != "restartCore" {
+		f, err := OpenLogFile()
+		if err == nil {
+			defer f.Close()
+			cmd.Stdout = f
+			cmd.Stderr = f
+		}
+		if err := cmd.Run(); err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Command failed"}, 500)
+		} else {
+			jsonResponse(w, Response{Success: true, Data: "Command executed"}, 200)
+		}
 	} else {
-		jsonResponse(w, Response{Success: true, Data: "Command executed"}, 200)
+		if err := cmd.Start(); err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Core start failed"}, 500)
+		} else {
+			jsonResponse(w, Response{Success: true, Data: "Core restarting"}, 200)
+		}
 	}
 }
