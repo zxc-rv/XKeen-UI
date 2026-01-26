@@ -9,7 +9,7 @@ let guiLogState = {
 }
 
 const LOG_LEVELS = ["none", "error", "warning", "info", "debug"]
-const LOG_COLORS = { none: "transparent", error: "#22c55e", warning: "#eab308", info: "#f97316", debug: "#ef4444" }
+const LOG_COLORS = { none: "#ffffff", error: "#22c55e", warning: "#eab308", info: "#f97316", debug: "#ef4444" }
 
 function isLogFile() {
   const config = configs[activeConfigIndex]
