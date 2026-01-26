@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"syscall"
 )
 
 func ControlHandler(w http.ResponseWriter, r *http.Request) {
@@ -103,17 +102,16 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 			limit = 40000
 		}
 
-		runCmd := ""
+		shellCmd := ""
 		if req.Core == "xray" {
 			os.Setenv("XRAY_LOCATION_CONFDIR", "/opt/etc/xray/configs")
 			os.Setenv("XRAY_LOCATION_ASSET", "/opt/etc/xray/dat")
-			runCmd = fmt.Sprintf("ulimit -SHn %d && xray run >/dev/null 2>>%s", limit, ErrorLogPath)
+			shellCmd = fmt.Sprintf("ulimit -SHn %d && su -c 'xray run' 'xkeen' >/dev/null 2>>%s", limit, ErrorLogPath)
 		} else {
 			os.Setenv("CLASH_HOME_DIR", "/opt/etc/mihomo")
-			runCmd = fmt.Sprintf("ulimit -SHn %d && mihomo >>%s 2>&1", limit, ErrorLogPath)
+			shellCmd = fmt.Sprintf("ulimit -SHn %d && su -c 'mihomo' 'xkeen' >>%s 2>&1", limit, ErrorLogPath)
 		}
-		cmd = exec.Command("su", "xkeen", "-c", runCmd)
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		cmd = exec.Command("sh", "-c", shellCmd)
 
 	} else {
 		switch req.Action {
