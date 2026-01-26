@@ -172,8 +172,9 @@ update_xkeenui() {
 
   if [ ! -f $xkeenui_init ]; then
     create_xkeenui_init
-  elif $xkeenui_init status >/dev/null 2>&1; then
-    $xkeenui_init stop
+  else
+    $xkeenui_init stop || :
+    killall -q -9 xkeen-ui || :
   fi
 
   legacy_installation_check
