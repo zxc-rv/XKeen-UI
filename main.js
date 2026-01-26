@@ -1356,7 +1356,7 @@ async function clearCurrentLog() {
 
 async function getAvailableCores() {
   try {
-    const result = await apiCall("core")
+    const result = await apiCall("control")
     if (result.success) {
       availableCores = result.cores || []
       currentCore = result.currentCore || "xray"
@@ -1413,7 +1413,7 @@ async function confirmCoreChange() {
 
   try {
     console.log("Sending API request with core:", selectedCore)
-    const result = await apiCall("core", { core: selectedCore })
+    const result = await apiCall("control", { action: "switchCore", core: selectedCore })
 
     console.log("API response:", result)
 

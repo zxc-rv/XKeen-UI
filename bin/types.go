@@ -50,11 +50,11 @@ type ClientType struct {
 }
 
 type LogCache struct {
-	Content  string
-	Lines    []string
-	LastSize int64
-	LastMod  time.Time
-	LastRead time.Time
+	Lines      []string
+	LastSize   int64
+	LastOffset int64
+	LastMod    time.Time
+	LastRead   time.Time
 }
 
 var clientTypes = map[string]ClientType{

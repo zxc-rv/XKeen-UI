@@ -31,7 +31,6 @@ func main() {
 	mux.HandleFunc("/cgi/logs", bin.LogsHandler)
 	mux.HandleFunc("/cgi/configs", bin.ConfigsHandler)
 	mux.HandleFunc("/cgi/control", bin.ControlHandler)
-	mux.HandleFunc("/cgi/core", bin.CoreHandler)
 	mux.HandleFunc("/cgi/settings", bin.SettingsHandler)
 	mux.HandleFunc("/cgi/version", func(w http.ResponseWriter, r *http.Request) {
 		bin.VersionHandler(w, r, version)

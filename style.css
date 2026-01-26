@@ -63,6 +63,7 @@
   padding: 0;
   box-sizing: border-box;
   scrollbar-color: #334155 transparent;
+  -webkit-text-size-adjust: none;
 }
 
 :root {
@@ -3399,7 +3400,11 @@ textarea {
   margin-top: 8px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 600px) {
+  .rule-name-input {
+    max-width: 120px;
+  }
+
   .log-gui-container {
     height: auto;
     min-height: 500px;
