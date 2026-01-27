@@ -40,9 +40,9 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		return conn.WriteJSON(v)
 	}
 	stateMutex.Lock()
-	logPath = ErrorLogPath
+	logPath = ErrorLog
 	if r.URL.Query().Get("file") == "access.log" {
-		logPath = AccessLogPath
+		logPath = AccessLog
 	}
 	lastOffset = 0
 	stateMutex.Unlock()
@@ -100,9 +100,9 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 				writeJSON(map[string]interface{}{"type": "filtered", "lines": matched})
 			case "switchFile":
 				stateMutex.Lock()
-				logPath = ErrorLogPath
+				logPath = ErrorLog
 				if msg.File == "access.log" {
-					logPath = AccessLogPath
+					logPath = AccessLog
 				}
 				lastOffset = 0
 				stateMutex.Unlock()

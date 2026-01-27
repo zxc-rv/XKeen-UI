@@ -2,32 +2,26 @@ package bin
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 )
 
-const AppConfigPath = "/opt/share/www/XKeen-UI/config.json"
-
 func InitAppConfig() {
-	data, err := os.ReadFile(AppConfigPath)
+	f, err := os.Open(AppConfigPath)
 	if err != nil {
-		log.Printf("Config file not found, creating with defaults")
-		if err := SaveAppConfig(); err != nil {
-			log.Printf("Failed to create config: %v", err)
-		}
+		SaveAppConfig()
 		return
 	}
+	defer f.Close()
+
 	var cfg AppConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		log.Printf("Failed to parse config, using defaults: %v", err)
+	if err := json.NewDecoder(f).Decode(&cfg); err != nil {
 		SaveAppConfig()
 		return
 	}
 	AppSettingsMutex.Lock()
 	AppSettings = cfg
 	AppSettingsMutex.Unlock()
-	log.Printf("Loaded timezone offset: %d", cfg.TimezoneOffset)
 }
 
 func SaveAppConfig() error {
@@ -35,56 +29,44 @@ func SaveAppConfig() error {
 	cfg := AppSettings
 	AppSettingsMutex.RUnlock()
 
-	data, err := json.Marshal(cfg)
+	f, err := os.Create(AppConfigPath)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(AppConfigPath, data, 0644); err != nil {
-		return err
-	}
-	log.Printf("Saved timezone offset: %d", cfg.TimezoneOffset)
-	return nil
+	defer f.Close()
+	return json.NewEncoder(f).Encode(cfg)
 }
 
 func SettingsHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
+	if r.Method == "GET" {
 		AppSettingsMutex.RLock()
-		offset := AppSettings.TimezoneOffset
+		off := AppSettings.TimezoneOffset
 		AppSettingsMutex.RUnlock()
-		jsonResponse(w, map[string]interface{}{"success": true, "timezoneOffset": offset}, 200)
-	case "POST":
-		var req struct {
-			TimezoneOffset int `json:"timezoneOffset"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			log.Printf("Failed to decode JSON: %v", err)
-			jsonResponse(w, Response{Success: false, Error: "Invalid JSON"}, 400)
-			return
-		}
-
-		offset := req.TimezoneOffset
-		if offset < -12 || offset > 14 {
-			jsonResponse(w, Response{Success: false, Error: "Некорректный часовой пояс"}, 400)
-			return
-		}
-
-		AppSettingsMutex.Lock()
-		AppSettings.TimezoneOffset = offset
-		AppSettingsMutex.Unlock()
-
-		if err := SaveAppConfig(); err != nil {
-			log.Printf("Failed to save config: %v", err)
-			jsonResponse(w, Response{Success: false, Error: "Ошибка сохранения"}, 500)
-			return
-		}
-
-		LogCacheMutex.Lock()
-		LogCacheMap = make(map[string]*LogCache)
-		LogCacheMutex.Unlock()
-
-		jsonResponse(w, Response{Success: true, Data: "Настройки сохранены"}, 200)
-	default:
-		jsonResponse(w, Response{Success: false, Error: "Method not allowed"}, 405)
+		jsonResponse(w, map[string]interface{}{"success": true, "timezoneOffset": off}, 200)
+		return
 	}
+
+	var req struct {
+		TimezoneOffset int `json:"timezoneOffset"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonResponse(w, Response{Success: false, Error: "Invalid JSON"}, 400)
+		return
+	}
+
+	if req.TimezoneOffset < -12 || req.TimezoneOffset > 14 {
+		jsonResponse(w, Response{Success: false, Error: "Bad timezone"}, 400)
+		return
+	}
+
+	AppSettingsMutex.Lock()
+	AppSettings.TimezoneOffset = req.TimezoneOffset
+	AppSettingsMutex.Unlock()
+
+	if err := SaveAppConfig(); err != nil {
+		jsonResponse(w, Response{Success: false, Error: "Save error"}, 500)
+		return
+	}
+
+	jsonResponse(w, Response{Success: true}, 200)
 }

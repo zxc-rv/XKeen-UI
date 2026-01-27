@@ -1,12 +1,23 @@
 package bin
 
 import (
-    "encoding/json"
-    "net/http"
-    "sync"
-    "time"
+	"encoding/json"
+	"net/http"
+	"sync"
+	"time"
 )
 
+const (
+	AppConfigPath = "/opt/share/www/XKeen-UI/config.json"
+	XrayConf      = "/opt/etc/xray/configs"
+	XrayAsset     = "/opt/etc/xray/dat"
+	MihomoConf    = "/opt/etc/mihomo"
+	XkeenConf     = "/opt/etc/xkeen"
+	S24xray       = "/opt/etc/init.d/S24xray"
+	S99xkeen      = "/opt/etc/init.d/S99xkeen"
+	AccessLog     = "/opt/var/log/xray/access.log"
+	ErrorLog      = "/opt/var/log/xray/error.log"
+)
 
 type AppConfig struct {
 	TimezoneOffset int `json:"timezoneOffset"`
@@ -58,39 +69,22 @@ type LogCache struct {
 }
 
 var clientTypes = map[string]ClientType{
-	"xray": {
-		Name:      "xray",
-		ConfigDir: "/opt/etc/xray/configs",
-		ConfigExt: "*.json",
-		IsJSON:    true,
-	},
-	"mihomo": {
-		Name:      "mihomo",
-		ConfigDir: "/opt/etc/mihomo",
-		ConfigExt: "config.yaml",
-		IsJSON:    false,
-	},
+	"xray":   {Name: "xray", ConfigDir: XrayConf, ConfigExt: "*.json", IsJSON: true},
+	"mihomo": {Name: "mihomo", ConfigDir: MihomoConf, ConfigExt: "config.yaml", IsJSON: false},
 }
 
 var (
-	CurrentClient ClientType
-	ClientMutex   sync.RWMutex
-
-	LogCacheMap   = make(map[string]*LogCache)
-	LogCacheMutex = &sync.RWMutex{}
-
+	CurrentClient    ClientType
+	ClientMutex      sync.RWMutex
+	LogCacheMap      = make(map[string]*LogCache)
+	LogCacheMutex    sync.RWMutex
 	AppSettings      = AppConfig{TimezoneOffset: 3}
 	AppSettingsMutex sync.RWMutex
 )
 
-func setCORSHeaders(w http.ResponseWriter) {
+func jsonResponse(w http.ResponseWriter, data interface{}, status int) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-}
-
-func jsonResponse(w http.ResponseWriter, data interface{}, status int) {
-	setCORSHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)

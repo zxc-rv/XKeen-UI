@@ -11,84 +11,39 @@ import (
 )
 
 func ConfigsHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		getConfigs(w, r)
-	case "POST":
+	if r.Method == "GET" {
+		getConfigs(w)
+	} else if r.Method == "POST" {
 		postConfigs(w, r)
-	default:
-		jsonResponse(w, Response{Success: false, Error: "Method not allowed"}, 405)
+	} else {
+		jsonResponse(w, Response{Success: false, Error: "405"}, 405)
 	}
 }
 
-func isValidYAML(content string) bool {
-	var data interface{}
-	return yaml.Unmarshal([]byte(content), &data) == nil
-}
-
-func getConfigs(w http.ResponseWriter, r *http.Request) {
+func getConfigs(w http.ResponseWriter) {
 	ClientMutex.RLock()
 	client := CurrentClient
 	ClientMutex.RUnlock()
 
-	if _, err := os.Stat(client.ConfigDir); os.IsNotExist(err) {
-		jsonResponse(w, ConfigsResponse{Success: false, Error: "Директория конфигов не найдена"}, 404)
-		return
-	}
-	var configs []Config
+	var patterns []string
 	if client.IsJSON {
-		files, err := filepath.Glob(filepath.Join(client.ConfigDir, client.ConfigExt))
-		if err != nil {
-			jsonResponse(w, ConfigsResponse{Success: false, Error: "Ошибка чтения директории конфигов"}, 500)
-			return
-		}
-		if len(files) == 0 {
-			jsonResponse(w, ConfigsResponse{Success: false, Error: "JSON конфиги не найдены"}, 404)
-			return
-		}
-		for _, file := range files {
-			content, err := os.ReadFile(file)
-			if err != nil {
-				continue
-			}
-			filename := filepath.Base(file)
-			configs = append(configs, Config{
-				Name:     strings.TrimSuffix(filename, ".json"),
-				Filename: filename,
-				Content:  string(content),
-			})
-		}
+		patterns = append(patterns, filepath.Join(client.ConfigDir, "*.json"))
 	} else {
-		configPath := filepath.Join(client.ConfigDir, client.ConfigExt)
-		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			jsonResponse(w, ConfigsResponse{Success: false, Error: "YAML конфиг не найден"}, 404)
-			return
-		}
-		content, err := os.ReadFile(configPath)
-		if err != nil {
-			jsonResponse(w, ConfigsResponse{Success: false, Error: "Ошибка чтения конфига"}, 500)
-			return
-		}
-		configs = append(configs, Config{
-			Name:     "config",
-			Filename: client.ConfigExt,
-			Content:  string(content),
-		})
+		patterns = append(patterns, filepath.Join(client.ConfigDir, client.ConfigExt))
 	}
-	xkeenDir := "/opt/etc/xkeen"
-	if _, err := os.Stat(xkeenDir); err == nil {
-		lstFiles, _ := filepath.Glob(filepath.Join(xkeenDir, "*.lst"))
-		for _, file := range lstFiles {
-			content, err := os.ReadFile(file)
-			if err != nil {
-				continue
+	patterns = append(patterns, filepath.Join(XkeenConf, "*.lst"))
+
+	var configs []Config
+	for _, pat := range patterns {
+		files, _ := filepath.Glob(pat)
+		for _, f := range files {
+			if content, err := os.ReadFile(f); err == nil {
+				configs = append(configs, Config{
+					Name:     strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)),
+					Filename: filepath.Base(f),
+					Content:  string(content),
+				})
 			}
-			filename := filepath.Base(file)
-			configs = append(configs, Config{
-				Name:     strings.TrimSuffix(filename, ".lst"),
-				Filename: filename,
-				Content:  string(content),
-			})
 		}
 	}
 	jsonResponse(w, ConfigsResponse{Success: true, Configs: configs}, 200)
@@ -97,7 +52,7 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 func postConfigs(w http.ResponseWriter, r *http.Request) {
 	var req ActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonResponse(w, Response{Success: false, Error: "Invalid JSON"}, 400)
+		jsonResponse(w, Response{Success: false, Error: "JSON error"}, 400)
 		return
 	}
 
@@ -105,40 +60,37 @@ func postConfigs(w http.ResponseWriter, r *http.Request) {
 	client := CurrentClient
 	ClientMutex.RUnlock()
 
-	var filePath string
-	filename := req.Filename
+	path := filepath.Join(client.ConfigDir, req.Filename)
+	isLst := strings.HasSuffix(req.Filename, ".lst")
 
-	if strings.HasSuffix(filename, ".lst") {
-		filePath = filepath.Join("/opt/etc/xkeen", filename)
+	if isLst {
+		path = filepath.Join(XkeenConf, req.Filename)
 		req.Content = strings.ReplaceAll(req.Content, "\r\n", "\n")
-	} else {
-		if client.IsJSON {
-			if !strings.HasSuffix(filename, ".json") {
-				filename += ".json"
-			}
-		} else {
-			if !isValidYAML(req.Content) {
-				jsonResponse(w, Response{Success: false, Error: "Невалидный YAML"}, 400)
-				return
-			}
+	} else if client.IsJSON {
+		if !strings.HasSuffix(path, ".json") {
+			path += ".json"
 		}
-		filePath = filepath.Join(client.ConfigDir, filename)
+	} else {
+		var y interface{}
+		if yaml.Unmarshal([]byte(req.Content), &y) != nil {
+			jsonResponse(w, Response{Success: false, Error: "Invalid YAML"}, 400)
+			return
+		}
 	}
 
-	switch req.Action {
-	case "save":
-		if err := os.WriteFile(filePath, []byte(req.Content), 0644); err != nil {
-			jsonResponse(w, Response{Success: false, Error: "Ошибка записи файла"}, 500)
-		} else {
-			jsonResponse(w, Response{Success: true}, 200)
+	if req.Action == "delete" {
+		if os.Remove(path) != nil {
+			jsonResponse(w, Response{Success: false, Error: "Delete error"}, 500)
+			return
 		}
-	case "delete":
-		if err := os.Remove(filePath); err != nil {
-			jsonResponse(w, Response{Success: false, Error: "Ошибка удаления файла"}, 500)
-		} else {
-			jsonResponse(w, Response{Success: true}, 200)
+	} else if req.Action == "save" {
+		if os.WriteFile(path, []byte(req.Content), 0644) != nil {
+			jsonResponse(w, Response{Success: false, Error: "Write error"}, 500)
+			return
 		}
-	default:
+	} else {
 		jsonResponse(w, Response{Success: false, Error: "Unknown action"}, 400)
+		return
 	}
+	jsonResponse(w, Response{Success: true}, 200)
 }

@@ -1231,11 +1231,22 @@ async function saveAndRestart() {
       return
     }
 
-    showToast(`Изменения успешно применены`)
+    showToast(`Изменения применены`)
 
     isActionInProgress = false
     isServiceRunning = true
     updateServiceStatus(true)
+
+    if ((language === "json" || language === "yaml") && !needsFullRestart) {
+      setTimeout(async () => {
+        const statusCheck = await apiCall("status")
+        if (!statusCheck.running) {
+          showToast("Ядро завершило работу с ошибкой, проверьте конфигурацию", "error")
+          isServiceRunning = false
+          updateServiceStatus(false)
+        }
+      }, 2000)
+    }
   } catch (e) {
     showToast("Ошибка перезапуска", "error")
     isActionInProgress = false
