@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"syscall"
 )
 
 func ControlHandler(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +80,7 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 
 	var cmd *exec.Cmd
 
-	if req.Action == "restartCore" {
+	if req.Action == "softRestart" {
 		if req.Core != "xray" && req.Core != "mihomo" {
 			jsonResponse(w, Response{Success: false, Error: "Invalid core"}, 400)
 			return
@@ -102,35 +103,51 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 			limit = 40000
 		}
 
-		shellCmd := ""
-		if req.Core == "xray" {
-			os.Setenv("XRAY_LOCATION_CONFDIR", "/opt/etc/xray/configs")
-			os.Setenv("XRAY_LOCATION_ASSET", "/opt/etc/xray/dat")
-			shellCmd = fmt.Sprintf("ulimit -SHn %d && su -c 'xray run' 'xkeen' >/dev/null 2>>%s", limit, ErrorLogPath)
-		} else {
-			os.Setenv("CLASH_HOME_DIR", "/opt/etc/mihomo")
-			shellCmd = fmt.Sprintf("ulimit -SHn %d && su -c 'mihomo' 'xkeen' >>%s 2>&1", limit, ErrorLogPath)
-		}
-		cmd = exec.Command("sh", "-c", shellCmd)
-
-	} else {
-		switch req.Action {
-		case "start", "stop", "restart":
-			cmd = exec.Command("xkeen", "-"+req.Action)
-			os.Truncate(ErrorLogPath, 0)
-		default:
-			jsonResponse(w, Response{Success: false, Error: "Unknown action"}, 400)
+		f, err := os.OpenFile(ErrorLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			jsonResponse(w, Response{Success: false, Error: "Log error"}, 500)
 			return
 		}
-	}
+		defer f.Close()
 
-	if req.Action == "restartCore" {
+		shellCmd := ""
+    if req.Core == "xray" {
+        shellCmd = fmt.Sprintf("ulimit -SHn %d && xray run", limit)
+        cmd = exec.Command("sh", "-c", shellCmd)
+        cmd.Env = append(os.Environ(), "XRAY_LOCATION_CONFDIR=/opt/etc/xray/configs", "XRAY_LOCATION_ASSET=/opt/etc/xray/dat")
+        cmd.Stderr = f
+    } else {
+        shellCmd = fmt.Sprintf("ulimit -SHn %d && mihomo", limit)
+        cmd = exec.Command("sh", "-c", shellCmd)
+        cmd.Env = append(os.Environ(), "CLASH_HOME_DIR=/opt/etc/mihomo")
+        cmd.Stdout = f
+        cmd.Stderr = f
+    }
+
+    cmd.SysProcAttr = &syscall.SysProcAttr{
+        Credential: &syscall.Credential{Gid: 11111},
+    }
+
 		if err := cmd.Start(); err != nil {
 			jsonResponse(w, Response{Success: false, Error: "Core start failed"}, 500)
 			return
 		}
 		go cmd.Wait()
 		jsonResponse(w, Response{Success: true, Data: "Core restarting"}, 200)
+		return
+	}
+
+	xkeenAction := req.Action
+	if req.Action == "hardRestart" {
+		xkeenAction = "restart"
+	}
+
+	switch req.Action {
+	case "start", "stop", "hardRestart":
+		cmd = exec.Command("xkeen", "-"+xkeenAction)
+		os.Truncate(ErrorLogPath, 0)
+	default:
+		jsonResponse(w, Response{Success: false, Error: "Unknown action"}, 400)
 		return
 	}
 

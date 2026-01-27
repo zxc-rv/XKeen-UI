@@ -29,7 +29,7 @@
               class="btn btn-primary btn-icon"
               id="restartBtn"
               style="display: none"
-              onclick="restartXKeen()"
+              onclick="hardRestart()"
               title="Перезапустить"
             ></button>
             <button class="btn btn-success btn-icon" id="startBtn" style="display: none" onclick="startXKeen()" title="Запустить"></button>
@@ -147,7 +147,7 @@
               <div id="saveBtn-skeleton" class="skeleton skeleton-btn" style="width: 125px"></div>
               <div id="formatBtn-skeleton" class="skeleton skeleton-btn" style="width: 106px"></div>
             </div>
-            <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>Сохр. и перезап.</button>
+            <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>Применить</button>
             <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()">Сохранить</button>
             <div class="btn-group">
               <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">Формат</button>
@@ -608,7 +608,7 @@
               </div>
             </div>
             <div class="settings-item">
-              <span class="settings-item-label">Автоприменение изменений</span>
+              <span class="settings-item-label">Автоприменение</span>
               <div class="routing-gui-toggle">
                 <input type="checkbox" id="autoApplyCheckbox" onchange="toggleAutoApply()" />
                 <label for="autoApplyCheckbox"></label>

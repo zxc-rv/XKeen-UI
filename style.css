@@ -3838,4 +3838,18 @@ textarea {
     height: auto;
     min-height: 500px;
   }
+
+  #formatBtn::before,
+  #saveBtn::before,
+  #saveRestartBtn::before {
+    display: none;
+  }
+
+  #formatBtn,
+  #saveBtn,
+  #saveRestartBtn {
+    padding: 15px;
+    min-width: auto;
+    flex: unset;
+  }
 }

@@ -1214,14 +1214,14 @@ async function saveAndRestart() {
     let restartResult
     if (language === "json" || language === "yaml") {
       if (needsFullRestart) {
-        setPendingState("Перезапуск сервиса...")
-        restartResult = await apiCall("control", { action: "restart" })
+        setPendingState("Перезапуск...")
+        restartResult = await apiCall("control", { action: "hardRestart" })
       } else {
-        restartResult = await apiCall("control", { action: "restartCore", core: currentCore })
+        restartResult = await apiCall("control", { action: "softRestart", core: currentCore })
       }
     } else {
-      setPendingState("Перезапуск сервиса...")
-      restartResult = await apiCall("control", { action: "restart" })
+      setPendingState("Перезапуск...")
+      restartResult = await apiCall("control", { action: "hardRestart" })
     }
 
     if (!restartResult || !restartResult.success) {
@@ -1269,7 +1269,7 @@ async function checkXKeenStatus() {
 
 async function startXKeen() {
   try {
-    setPendingState("Запуск сервиса...")
+    setPendingState("Запуск...")
     const result = await apiCall("control", { action: "start" })
     if (result.success) {
       showToast("XKeen запущен")
@@ -1289,7 +1289,7 @@ async function startXKeen() {
 
 async function stopXKeen() {
   try {
-    setPendingState("Остановка сервиса...")
+    setPendingState("Остановка...")
     const result = await apiCall("control", { action: "stop" })
     if (result.success) {
       showToast("XKeen остановлен")
@@ -1304,10 +1304,10 @@ async function stopXKeen() {
   }
 }
 
-async function restartXKeen() {
+async function hardRestart() {
   try {
-    setPendingState("Перезапуск сервиса...")
-    const result = await apiCall("control", { action: "restart" })
+    setPendingState("Перезапуск...")
+    const result = await apiCall("control", { action: "hardRestart" })
     if (result.success) {
       showToast("XKeen перезапущен")
       isActionInProgress = false
@@ -1409,7 +1409,7 @@ async function confirmCoreChange() {
     }
   })
   closeCoreModal()
-  setPendingState("Переключение ядра...")
+  setPendingState("Переключение...")
 
   try {
     console.log("Sending API request with core:", selectedCore)
