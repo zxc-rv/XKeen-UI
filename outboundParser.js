@@ -252,7 +252,8 @@ function convertToMihomoYaml(proxyConfig) {
       path: streamSettings.wsSettings?.path,
       headers: streamSettings.wsSettings?.host ? { Host: streamSettings.wsSettings.host } : undefined,
     }
-  else if (streamSettings.network === "grpc") common["grpc-opts"] = { "grpc-service-name": streamSettings.grpcSettings?.serviceName }
+  else if (streamSettings.network === "grpc" && streamSettings.grpcSettings?.serviceName)
+    common["grpc-opts"] = { "grpc-service-name": streamSettings.grpcSettings.serviceName }
   else if (streamSettings.network === "httpupgrade")
     common["http-upgrade-opts"] = {
       path: streamSettings.httpupgradeSettings?.path,
