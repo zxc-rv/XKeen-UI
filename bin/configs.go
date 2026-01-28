@@ -11,85 +11,88 @@ import (
 )
 
 func ConfigsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
+	switch r.Method {
+	case http.MethodGet:
 		getConfigs(w)
-	} else if r.Method == "POST" {
+	case http.MethodPost:
 		postConfigs(w, r)
-	} else {
-		jsonResponse(w, Response{Success: false, Error: "405"}, 405)
+	default:
+		http.Error(w, "405 Method Not Allowed", http.StatusMethodNotAllowed)
 	}
 }
 
 func getConfigs(w http.ResponseWriter) {
 	ClientMutex.RLock()
-	client := CurrentClient
+	c := CurrentClient
 	ClientMutex.RUnlock()
 
-	var patterns []string
-	if client.IsJSON {
-		patterns = append(patterns, filepath.Join(client.ConfigDir, "*.json"))
+	var paths []string
+	if c.IsJSON {
+		paths = append(paths, filepath.Join(c.ConfigDir, "*.json"))
 	} else {
-		patterns = append(patterns, filepath.Join(client.ConfigDir, client.ConfigExt))
+		paths = append(paths, filepath.Join(c.ConfigDir, c.ConfigExt))
 	}
-	patterns = append(patterns, filepath.Join(XkeenConf, "*.lst"))
+	paths = append(paths, filepath.Join(XkeenConf, "*.lst"))
 
-	var configs []Config
-	for _, pat := range patterns {
-		files, _ := filepath.Glob(pat)
-		for _, f := range files {
-			if content, err := os.ReadFile(f); err == nil {
-				configs = append(configs, Config{
+	var res []Config
+	for _, p := range paths {
+		m, _ := filepath.Glob(p)
+		for _, f := range m {
+			if d, err := os.ReadFile(f); err == nil {
+				res = append(res, Config{
 					Name:     strings.TrimSuffix(filepath.Base(f), filepath.Ext(f)),
 					Filename: filepath.Base(f),
-					Content:  string(content),
+					Content:  string(d),
 				})
 			}
 		}
 	}
-	jsonResponse(w, ConfigsResponse{Success: true, Configs: configs}, 200)
+	jsonResponse(w, ConfigsResponse{Success: true, Configs: res}, 200)
 }
 
 func postConfigs(w http.ResponseWriter, r *http.Request) {
 	var req ActionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		jsonResponse(w, Response{Success: false, Error: "JSON error"}, 400)
+	if json.NewDecoder(r.Body).Decode(&req) != nil {
+		http.Error(w, "JSON error", 400)
 		return
 	}
 
 	ClientMutex.RLock()
-	client := CurrentClient
+	c := CurrentClient
 	ClientMutex.RUnlock()
 
-	path := filepath.Join(client.ConfigDir, req.Filename)
-	isLst := strings.HasSuffix(req.Filename, ".lst")
+	name := filepath.Base(req.Filename)
+	path := filepath.Join(c.ConfigDir, name)
+	isLst := strings.HasSuffix(name, ".lst")
 
 	if isLst {
-		path = filepath.Join(XkeenConf, req.Filename)
+		path = filepath.Join(XkeenConf, name)
 		req.Content = strings.ReplaceAll(req.Content, "\r\n", "\n")
-	} else if client.IsJSON {
+	} else if c.IsJSON {
 		if !strings.HasSuffix(path, ".json") {
 			path += ".json"
 		}
 	} else {
-		var y interface{}
+		var y any
 		if yaml.Unmarshal([]byte(req.Content), &y) != nil {
-			jsonResponse(w, Response{Success: false, Error: "Invalid YAML"}, 400)
+			http.Error(w, "Invalid YAML", 400)
 			return
 		}
 	}
 
-	if req.Action == "delete" {
+	switch req.Action {
+	case "delete":
 		if os.Remove(path) != nil {
-			jsonResponse(w, Response{Success: false, Error: "Delete error"}, 500)
+			http.Error(w, "Delete error", 500)
 			return
 		}
-	} else if req.Action == "save" {
+	case "save":
 		if os.WriteFile(path, []byte(req.Content), 0644) != nil {
-			jsonResponse(w, Response{Success: false, Error: "Write error"}, 500)
+			http.Error(w, "Write error", 500)
 			return
 		}
-	} else {
-		jsonResponse(w, Response{Success: false, Error: "Unknown action"}, 400)
+	default:
+		http.Error(w, "Unknown action", 400)
 		return
 	}
 	jsonResponse(w, Response{Success: true}, 200)

@@ -1420,12 +1420,17 @@ async function confirmCoreChange() {
     }
   })
   closeCoreModal()
+
+  forceReloadConfigs()
+
   setPendingState("Переключение...")
 
+  console.time(`switchCore ${selectedCore}`)
   try {
     console.log("Sending API request with core:", selectedCore)
     const result = await apiCall("control", { action: "switchCore", core: selectedCore })
 
+    console.timeEnd(`switchCore ${selectedCore}`)
     console.log("API response:", result)
 
     if (result.success) {
@@ -1444,19 +1449,14 @@ async function confirmCoreChange() {
       })
 
       isActionInProgress = false
-
-      setTimeout(() => {
-        checkXKeenStatus().then(() => {
-          console.log("Status checked after core change")
-          forceReloadConfigs()
-        })
-      }, 100)
+      checkXKeenStatus()
     } else {
       showToast(`Ошибка смены ядра: ${result.error}`, "error")
       isActionInProgress = false
       checkXKeenStatus()
     }
   } catch (error) {
+    console.timeEnd(`switchCore ${selectedCore}`)
     console.error("Core change error:", error)
     showToast(`Ошибка: ${error.message}`, "error")
     isActionInProgress = false
@@ -1842,7 +1842,10 @@ async function forceReloadConfigs() {
     if (configs.length > 0) {
       isConfigsLoading = false
       if (tabsList) tabsList.classList.remove("empty")
-      switchTab(0)
+      const firstConfigIndex = configs.findIndex(
+        (c) => c.filename.endsWith(".json") || c.filename.endsWith(".yaml") || c.filename.endsWith(".yml"),
+      )
+      switchTab(firstConfigIndex >= 0 ? firstConfigIndex : 0)
       console.log("Configs reloaded successfully, count:", configs.length)
     } else {
       isConfigsLoading = false
