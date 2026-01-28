@@ -1239,7 +1239,7 @@ async function saveAndRestart() {
 
     if ((language === "json" || language === "yaml") && !needsFullRestart) {
       setTimeout(async () => {
-        const statusCheck = await apiCall("status")
+        const statusCheck = await apiCall("control")
         if (!statusCheck.running) {
           showToast("Ядро завершило работу с ошибкой, проверьте конфигурацию", "error")
           isServiceRunning = false
@@ -1274,7 +1274,7 @@ function formatCurrentConfig() {
 
 async function checkXKeenStatus() {
   if (isActionInProgress) return
-  const result = await apiCall("status")
+  const result = await apiCall("control")
   updateServiceStatus(result.running)
 }
 

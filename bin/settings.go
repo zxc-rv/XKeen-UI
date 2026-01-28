@@ -2,6 +2,7 @@ package bin
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 )
@@ -9,13 +10,16 @@ import (
 func InitAppConfig() {
 	f, err := os.Open(AppConfigPath)
 	if err != nil {
+		log.Println("Config not found, creating default")
 		SaveAppConfig()
 		return
 	}
 	defer f.Close()
 
+	log.Println("Reading config from", AppConfigPath)
 	var cfg AppConfig
 	if err := json.NewDecoder(f).Decode(&cfg); err != nil {
+		log.Println("Failed to parse config, creating default")
 		SaveAppConfig()
 		return
 	}
