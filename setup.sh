@@ -157,7 +157,7 @@ install_xkeenui() {
   fi
 
   local ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
-  local ip=${router_ip:-"IP_Роутера"}
+  local ip=${ip:-"IP_Роутера"}
   local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
   local port=${port:-1000}
 
@@ -200,7 +200,7 @@ update_xkeenui() {
   fi
 
   local ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
-  local ip=${router_ip:-"IP_Роутера"}
+  local ip=${ip:-"IP_Роутера"}
   local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
   local port=${port:-1000}
 
