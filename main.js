@@ -11,7 +11,6 @@ let logFilter = ""
 let isStatusLoading = true
 let ws = null
 let pingInterval = null
-let allLogLines = []
 let displayLines = []
 let availableCores = []
 let currentCore = ""
@@ -22,6 +21,9 @@ let dependenciesLoaded = false
 let toastStack = []
 let currentTimezone = 3
 let autoApply = false
+let statusWs = null
+let selectedTemplateUrl = null
+const MAX_DISPLAY_LINES = 1000
 
 async function loadDependencies() {
   if (dependenciesLoaded) return
@@ -67,11 +69,10 @@ async function init() {
       require(["vs/editor/editor.main"], resolve, reject)
     })
 
-    await checkXKeenStatus()
-    await getAvailableCores()
+    await checkStatus()
     await loadTimezone()
-    loadMonacoEditor()
     connectWebSocket()
+    loadMonacoEditor()
 
     const savedState = localStorage.getItem("guiRouting_enabled")
     if (typeof guiRoutingState !== "undefined") {
@@ -103,7 +104,7 @@ async function init() {
     logsContainer.innerHTML = '<div style="color: #6b7280;">Установка соединения...</div>'
 
     setInterval(() => {
-      if (!isActionInProgress) checkXKeenStatus()
+      if (!isActionInProgress) checkStatus()
     }, 15000)
   } catch (error) {
     console.error("Failed to initialize app:", error)
@@ -249,7 +250,7 @@ function setPendingState(actionText) {
   const indicator = document.getElementById("statusIndicator")
   const text = document.getElementById("statusText")
 
-  indicator.className = "status status-pending"
+  indicator.className = "status pending"
   text.textContent = actionText
   updateControlButtons()
 }
@@ -262,10 +263,10 @@ function updateServiceStatus(running) {
   isStatusLoading = false
 
   if (running) {
-    indicator.className = "status status-running"
+    indicator.className = "status running"
     text.textContent = "Сервис запущен"
   } else {
-    indicator.className = "status status-stopped"
+    indicator.className = "status stopped"
     text.textContent = "Сервис остановлен"
   }
 
@@ -282,38 +283,36 @@ function renderAllLogs(container, lines) {
 function appendLogLines(container, newLines) {
   if (newLines.length === 0) return
 
-  const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50
-  const htmlFragment = newLines.join("")
+  const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50
 
-  if (!htmlFragment) return
   if (container.firstElementChild && container.firstElementChild.innerText === "Журнал пуст") {
     container.innerHTML = ""
     container.classList.remove("centered")
   }
-  container.insertAdjacentHTML("beforeend", htmlFragment)
+
+  container.insertAdjacentHTML("beforeend", newLines.join(""))
 
   const maxLines = 1000
-  while (container.children.length > maxLines) {
-    container.firstElementChild.remove()
-  }
+  const linesToRemove = container.children.length - maxLines
 
-  if (wasAtBottom && !userScrolled) {
+  if (linesToRemove > 0) {
+    for (let i = 0; i < linesToRemove; i++) {
+      container.firstElementChild.remove()
+    }
+  }
+  if (isScrolledToBottom && !userScrolled) {
     container.scrollTop = container.scrollHeight
   }
 }
 
 function applyFilter() {
   if (!logFilter || logFilter.trim() === "") {
-    displayLines = allLogLines.slice(-1000)
-    renderAllLogs(document.getElementById("logsContainer"), displayLines)
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "reload" }))
+    }
   } else {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: "filter",
-          query: logFilter,
-        }),
-      )
+      ws.send(JSON.stringify({ type: "filter", query: logFilter }))
     }
   }
 }
@@ -414,8 +413,7 @@ function connectWebSocket() {
       return
     }
     if (data.type === "initial") {
-      allLogLines = data.allLines || []
-      displayLines = data.displayLines || []
+      displayLines = data.lines || []
       renderAllLogs(document.getElementById("logsContainer"), displayLines)
 
       if (logFilter && logFilter.trim() !== "") {
@@ -424,7 +422,6 @@ function connectWebSocket() {
       return
     }
     if (data.type === "clear") {
-      allLogLines = []
       displayLines = []
       const container = document.getElementById("logsContainer")
       container.classList.add("centered")
@@ -433,7 +430,6 @@ function connectWebSocket() {
     }
     if (data.type === "append") {
       const newLines = data.content.split("\n").filter((line) => line.trim())
-      allLogLines.push(...newLines)
 
       let linesToRender = []
 
@@ -448,8 +444,8 @@ function connectWebSocket() {
         }
       }
 
-      if (displayLines.length > 1000) {
-        displayLines = displayLines.slice(-1000)
+      if (displayLines.length > MAX_DISPLAY_LINES) {
+        displayLines = displayLines.slice(-MAX_DISPLAY_LINES)
       }
       if (linesToRender.length > 0) {
         appendLogLines(document.getElementById("logsContainer"), linesToRender)
@@ -1034,7 +1030,7 @@ async function apiCall(endpoint, data = null) {
     }
     if (data) options.body = JSON.stringify(data)
 
-    const response = await fetch(`/cgi/${endpoint}`, options)
+    const response = await fetch(`/api/${endpoint}`, options)
 
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}` }
@@ -1048,45 +1044,67 @@ async function apiCall(endpoint, data = null) {
   }
 }
 
-async function loadConfigs() {
+async function loadConfigs(core = null) {
   const tabsList = document.getElementById("tabsList")
   isConfigsLoading = true
   if (tabsList) tabsList.classList.add("empty")
   renderTabs()
-  const result = await apiCall("configs")
-  if (result.success && result.configs) {
-    configs = result.configs.map((c) => ({
-      ...c,
-      savedContent: c.content,
-      isDirty: false,
-    }))
-    if (configs.length > 0) {
-      isConfigsLoading = false
-      if (tabsList) tabsList.classList.remove("empty")
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          const savedIndex = loadLastSelectedTab()
-          switchTab(savedIndex)
-        }, 100)
+
+  try {
+    const url = core ? `/api/configs?core=${core}` : "/api/configs"
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    const result = await response.json()
+
+    if (result.success && result.configs) {
+      configs = result.configs.map((c) => ({
+        ...c,
+        savedContent: c.content,
+        isDirty: false,
+      }))
+
+      if (configs.length > 0) {
+        isConfigsLoading = false
+        if (tabsList) tabsList.classList.remove("empty")
+
+        if (core) {
+          activeConfigIndex = -1
+        }
+
+        renderTabs()
         requestAnimationFrame(() => {
-          updateActiveTabIndicator()
-          if (monacoEditor) {
-            monacoEditor.layout()
-          }
+          setTimeout(() => {
+            const index = core ? 0 : loadLastSelectedTab()
+            switchTab(index)
+          }, 100)
+          requestAnimationFrame(() => {
+            updateActiveTabIndicator()
+            if (monacoEditor) {
+              monacoEditor.layout()
+            }
+          })
         })
-      })
+      } else {
+        isConfigsLoading = false
+        renderTabs()
+        updateUIDirtyState()
+      }
     } else {
       isConfigsLoading = false
+      showToast("Ошибка загрузки конфигураций", "error")
       renderTabs()
       updateUIDirtyState()
     }
-  } else {
+    updateDashboardLink()
+  } catch (error) {
+    console.error("Error loading configs:", error)
     isConfigsLoading = false
-    showToast("Ошибка загрузки конфигураций", "error")
+    showToast(`Ошибка загрузки: ${error.message}`, "error")
     renderTabs()
     updateUIDirtyState()
   }
-  updateDashboardLink()
 }
 
 function isFileValid() {
@@ -1227,7 +1245,7 @@ async function saveAndRestart() {
     if (!restartResult || !restartResult.success) {
       showToast(`Ошибка перезапуска: ${restartResult?.error || "unknown"}`, "error")
       isActionInProgress = false
-      checkXKeenStatus()
+      checkStatus()
       return
     }
 
@@ -1250,7 +1268,7 @@ async function saveAndRestart() {
   } catch (e) {
     showToast("Ошибка перезапуска", "error")
     isActionInProgress = false
-    checkXKeenStatus()
+    checkStatus()
   }
 }
 
@@ -1261,21 +1279,6 @@ function formatCurrentConfig() {
   if (formatAction) {
     formatAction.run()
   }
-}
-
-function formatCurrentConfig() {
-  if (!monacoEditor) return
-
-  const formatAction = monacoEditor.getAction("editor.action.formatDocument")
-  if (formatAction) {
-    formatAction.run()
-  }
-}
-
-async function checkXKeenStatus() {
-  if (isActionInProgress) return
-  const result = await apiCall("control")
-  updateServiceStatus(result.running)
 }
 
 async function startXKeen() {
@@ -1285,16 +1288,15 @@ async function startXKeen() {
     if (result.success) {
       showToast("XKeen запущен")
       isActionInProgress = false
-      isServiceRunning = true
-      updateServiceStatus(true)
+      checkStatus()
     } else {
       showToast(`Ошибка запуска: ${result.output || result.error}`, "error")
       isActionInProgress = false
-      checkXKeenStatus()
+      checkStatus()
     }
   } catch (e) {
     isActionInProgress = false
-    checkXKeenStatus()
+    checkStatus()
   }
 }
 
@@ -1304,14 +1306,13 @@ async function stopXKeen() {
     const result = await apiCall("control", { action: "stop" })
     if (result.success) {
       showToast("XKeen остановлен")
-      isServiceRunning = false
-      updateServiceStatus(false)
+      checkStatus()
     } else {
       showToast(`Ошибка остановки: ${result.output || result.error}`, "error")
     }
   } finally {
     isActionInProgress = false
-    checkXKeenStatus()
+    checkStatus()
   }
 }
 
@@ -1322,73 +1323,46 @@ async function hardRestart() {
     if (result.success) {
       showToast("XKeen перезапущен")
       isActionInProgress = false
-      isServiceRunning = true
-      updateServiceStatus(true)
+      checkStatus()
       updateDashboardLink()
     } else {
       showToast(`Ошибка перезапуска: ${result.output || result.error}`, "error")
       isActionInProgress = false
-      checkXKeenStatus()
+      checkStatus()
     }
   } catch (e) {
     isActionInProgress = false
-    checkXKeenStatus()
+    checkStatus()
   }
 }
 
-async function clearCurrentLog() {
-  if (!currentLogFile) {
-    showToast("Не выбран файл журнала", "error")
-    return
+function clearCurrentLog() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "clear" }))
+  } else {
+    showToast("WebSocket не подключен", "error")
   }
+}
 
-  try {
-    const result = await apiCall("logs", {
-      action: "clear",
-      file: currentLogFile,
+async function checkStatus() {
+  if (isActionInProgress) return
+  const r = await apiCall("control")
+  if (!r.success) return
+
+  availableCores = r.cores || []
+  currentCore = r.currentCore || "xray"
+  updateServiceStatus(r.running)
+
+  const coreSelectRoot = document.getElementById("coreSelectRoot")
+  const coreSelectLabel = document.getElementById("coreSelectLabel")
+  coreSelectLabel.textContent = currentCore
+
+  if (availableCores.length >= 2) {
+    coreSelectRoot.style.display = "inline-block"
+    document.querySelectorAll("#coreSelectContent .select-item").forEach((i) => {
+      const v = i.getAttribute("data-value")
+      i.setAttribute("aria-selected", v === currentCore ? "true" : "false")
     })
-
-    if (result.success) {
-      allLogLines = []
-      displayLines = []
-
-      const container = document.getElementById("logsContainer")
-      container.classList.add("centered")
-      container.innerHTML = '<div style="color: #6b7280;">Лог очищен</div>'
-
-      showToast(`Лог ${currentLogFile} очищен`)
-    } else {
-      showToast(`Ошибка очистки лога: ${result.error}`, "error")
-    }
-  } catch (error) {
-    showToast(`Ошибка: ${error.message}`, "error")
-  }
-}
-
-async function getAvailableCores() {
-  try {
-    const result = await apiCall("control")
-    if (result.success) {
-      availableCores = result.cores || []
-      currentCore = result.currentCore || "xray"
-
-      const coreSelectRoot = document.getElementById("coreSelectRoot")
-      const coreSelectLabel = document.getElementById("coreSelectLabel")
-
-      coreSelectLabel.textContent = currentCore
-
-      if (availableCores.length >= 2) {
-        coreSelectRoot.style.display = "inline-block"
-
-        const items = document.querySelectorAll("#coreSelectContent .select-item")
-        items.forEach((item) => {
-          const value = item.getAttribute("data-value")
-          item.setAttribute("aria-selected", value === currentCore ? "true" : "false")
-        })
-      }
-    }
-  } catch (error) {
-    console.error("Error loading cores:", error)
   }
 }
 
@@ -1397,7 +1371,7 @@ function closeCoreModal() {
   document.getElementById("coreModal").classList.remove("show")
 }
 
-async function confirmCoreChange() {
+async function switchCore() {
   const selectedCoreElement = document.getElementById("selectedCore")
   const selectedCore = selectedCoreElement ? selectedCoreElement.textContent : ""
 
@@ -1405,6 +1379,13 @@ async function confirmCoreChange() {
     showToast("Ошибка: не выбрано ядро", "error")
     return
   }
+
+  if (selectedCore === currentCore) {
+    showToast("Это ядро уже выбрано", "error")
+    return
+  }
+
+  closeCoreModal()
 
   currentCore = selectedCore
   const coreSelectLabel = document.getElementById("coreSelectLabel")
@@ -1419,71 +1400,43 @@ async function confirmCoreChange() {
       item.setAttribute("aria-selected", value === currentCore ? "true" : "false")
     }
   })
-  closeCoreModal()
 
-  forceReloadConfigs()
+  await loadConfigs(selectedCore)
 
   setPendingState("Переключение...")
 
   console.time(`switchCore ${selectedCore}`)
   try {
-    console.log("Sending API request with core:", selectedCore)
     const result = await apiCall("control", { action: "switchCore", core: selectedCore })
-
     console.timeEnd(`switchCore ${selectedCore}`)
-    console.log("API response:", result)
 
     if (result.success) {
       showToast(`Ядро изменено на ${selectedCore}`)
-      const coreSelectLabel = document.getElementById("coreSelectLabel")
-      if (coreSelectLabel) {
-        coreSelectLabel.textContent = currentCore
-      }
-
-      const items = document.querySelectorAll("#coreSelectContent .select-item")
-      items.forEach((item) => {
-        const value = item.getAttribute("data-value")
-        if (item && value) {
-          item.setAttribute("aria-selected", value === currentCore ? "true" : "false")
-        }
-      })
-
       isActionInProgress = false
-      checkXKeenStatus()
+      checkStatus()
     } else {
       showToast(`Ошибка смены ядра: ${result.error}`, "error")
       isActionInProgress = false
-      checkXKeenStatus()
+      checkStatus()
     }
   } catch (error) {
     console.timeEnd(`switchCore ${selectedCore}`)
-    console.error("Core change error:", error)
-    showToast(`Ошибка: ${error.message}`, "error")
+    console.error("Error switching core:", error)
+    showToast(`Ошибка смены ядра: ${error.message}`, "error")
     isActionInProgress = false
-    checkXKeenStatus()
+    checkStatus()
   }
 }
 
-function parseDashboardPort(yamlContent) {
-  const match = yamlContent.match(/^external-controller:\s*[\w\.-]+:(\d+)/m)
-  return match ? match[1] : null
-}
+const updateDashboardLink = () => {
+  const link = document.getElementById("dashboardLink")
+  const config = configs.find((c) => c.filename === "config.yaml")
+  const port = config?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1]
 
-function updateDashboardLink() {
-  const dashboardLink = document.getElementById("dashboardLink")
-  if (currentCore === "mihomo") {
-    const mihomoConfig = configs.find((c) => c.filename === "config.yaml")
-    if (mihomoConfig) {
-      const port = parseDashboardPort(mihomoConfig.content)
-      if (port) {
-        dashboardPort = port
-        dashboardLink.style.display = "inline-flex"
-        dashboardLink.href = `http://${window.location.hostname}:${port}/ui`
-        return
-      }
-    }
-  }
-  dashboardLink.style.display = "none"
+  if (currentCore !== "mihomo" || !port) return (link.style.display = "none")
+
+  link.style.display = "inline-flex"
+  link.href = `http://${location.hostname}:${port}/ui`
 }
 
 const SUPPORTED_IMPORT_PROTOCOLS = ["ss://", "vless://", "vmess://", "hysteria2://", "http://", "https://", "trojan://"]
@@ -1822,48 +1775,6 @@ document.addEventListener("keydown", (e) => {
   }
 })
 
-async function forceReloadConfigs() {
-  console.log("Force reloading configs...")
-  isConfigsLoading = true
-  const tabsList = document.getElementById("tabsList")
-  if (tabsList) tabsList.classList.add("empty")
-  renderTabs()
-  configs = []
-  activeConfigIndex = -1
-  await new Promise((resolve) => setTimeout(resolve, 500))
-  const result = await apiCall("configs")
-  if (result.success && result.configs) {
-    configs = result.configs.map((c) => ({
-      ...c,
-      savedContent: c.content,
-      isDirty: false,
-    }))
-
-    if (configs.length > 0) {
-      isConfigsLoading = false
-      if (tabsList) tabsList.classList.remove("empty")
-      const firstConfigIndex = configs.findIndex(
-        (c) => c.filename.endsWith(".json") || c.filename.endsWith(".yaml") || c.filename.endsWith(".yml"),
-      )
-      switchTab(firstConfigIndex >= 0 ? firstConfigIndex : 0)
-      console.log("Configs reloaded successfully, count:", configs.length)
-    } else {
-      isConfigsLoading = false
-      renderTabs()
-      updateUIDirtyState()
-      console.log("No configs found after reload")
-    }
-  } else {
-    isConfigsLoading = false
-    showToast("Ошибка загрузки конфигов после смены ядра", "error")
-    renderTabs()
-    updateUIDirtyState()
-    console.error("Failed to reload configs:", result.error)
-  }
-  updateUIDirtyState()
-  updateDashboardLink()
-}
-
 function saveLastSelectedTab() {
   if (activeConfigIndex >= 0 && configs[activeConfigIndex]) {
     localStorage.setItem("lastSelectedTab", configs[activeConfigIndex].filename)
@@ -1920,8 +1831,6 @@ const configTemplates = {
     },
   ],
 }
-
-let selectedTemplateUrl = null
 
 function openTemplateImportModal() {
   const modal = document.getElementById("templateImportModal")

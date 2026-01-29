@@ -2,9 +2,8 @@ package bin
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
-	"net/http"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -12,114 +11,127 @@ import (
 )
 
 var (
-	reXray         = regexp.MustCompile(`\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}`)
-	reMihomo       = regexp.MustCompile(`time="(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)" level=(\w+) msg="(.+)"`)
+	reTimeMihomo   = regexp.MustCompile(`time="([^"]+)"`)
+	reLevelMihomo  = regexp.MustCompile(`level=(\w+)`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[\d+m`)
-	levelRegex     = regexp.MustCompile(`\[(DEBUG|INFO|WARN|ERROR|FATAL)\]`)
-	levelWordRegex = regexp.MustCompile(`\b(DEBUG|INFO|WARN|ERROR|FATAL)\b`)
-	mihomoLevelMap = map[string]string{"debug": "[DEBUG]", "info": "[INFO]", "warning": "[WARN]", "error": "[ERROR]", "fatal": "[FATAL]"}
-	ansiReplacer   = strings.NewReplacer("\u001b[32m", `<span style="color: #00cc00;">`, "\u001b[92m", `<span style="color: #00cc00;">`, "\u001b[31m", `<span style="color: #ef4444;">`, "\u001b[91m", `<span style="color: #ef4444;">`, "\u001b[33m", `<span style="color: #f59e0b;">`, "\u001b[93m", `<span style="color: #f59e0b;">`, "\u001b[96m", `<span style="color: #8BCEF7;">`, "\u001b[0m", "</span>")
-	xrayLevelReplacer = strings.NewReplacer("[Debug]", "[DEBUG]", "[Info]", "[INFO]", "[Warning]", "[WARN]", "[Error]", "[ERROR]")
+	levelRegex     = regexp.MustCompile(`(?i)\[(debug|info|warn|warning|error|fatal)\]`)
+	ansiReplacer   = strings.NewReplacer(
+		"\u001b[32m", `<span style="color: #00cc00;">`, "\u001b[92m", `<span style="color: #00cc00;">`,
+		"\u001b[31m", `<span style="color: #ef4444;">`, "\u001b[91m", `<span style="color: #ef4444;">`,
+		"\u001b[33m", `<span style="color: #f59e0b;">`, "\u001b[93m", `<span style="color: #f59e0b;">`,
+		"\u001b[96m", `<span style="color: #8BCEF7;">`, "\u001b[0m", "</span>",
+	)
+	levelBadgeMap = map[string]string{
+		"debug": "debug", "info": "info", "warn": "warn", "warning": "warn",
+		"error": "error", "fatal": "fatal",
+	}
 )
 
 func formatLevel(level string) string {
-	return fmt.Sprintf(`<span class="log-badge log-badge-%s" data-filter="%s">%s</span>`, strings.ToLower(level), level, level)
-}
-
-func adjustLineTimezone(line string, offset int) string {
-	if offset == 0 { return xrayLevelReplacer.Replace(line) }
-	d := time.Duration(offset) * time.Hour
-	line = reXray.ReplaceAllStringFunc(line, func(m string) string {
-		if t, err := time.Parse("2006/01/02 15:04:05", m); err == nil { return t.Add(d).Format("2006/01/02 15:04:05") }
-		return m
-	})
-	line = reMihomo.ReplaceAllStringFunc(line, func(m string) string {
-		p := reMihomo.FindStringSubmatch(m)
-		if len(p) != 4 { return m }
-		if t, err := time.Parse(time.RFC3339Nano, p[1]); err == nil {
-			lvl := mihomoLevelMap[p[2]]
-			if lvl == "" { lvl = "[INFO]" }
-			return t.Add(d).Format("2006/01/02 15:04:05.000000") + " " + lvl + " " + p[3]
-		}
-		return m
-	})
-	return xrayLevelReplacer.Replace(line)
-}
-
-func parseLogLine(line string) string {
-	if line == "" { return "" }
-	content := ansiRegex.ReplaceAllString(ansiReplacer.Replace(line), "")
-	hasBadge := false
-	content = levelRegex.ReplaceAllStringFunc(content, func(m string) string {
-		hasBadge = true
-		return formatLevel(strings.Trim(m, "[]"))
-	})
-	if !hasBadge {
-		content = levelWordRegex.ReplaceAllStringFunc(content, func(m string) string { return formatLevel(m) })
+	l := strings.ToLower(level)
+	if mapped, ok := levelBadgeMap[l]; ok {
+		l = mapped
 	}
+	return fmt.Sprintf(`<span class="log-badge log-badge-%s" data-filter="%s">%s</span>`, l, strings.ToUpper(l), strings.ToUpper(l))
+}
+
+func ProcessLogLine(line string, tzOffset int) string {
+	if line == "" { return "" }
+
+	d := time.Duration(tzOffset) * time.Hour
+
+	if reTimeMihomo.MatchString(line) {
+		timeMatch := reTimeMihomo.FindStringSubmatch(line)
+		levelMatch := reLevelMihomo.FindStringSubmatch(line)
+
+		if len(timeMatch) > 1 && len(levelMatch) > 1 {
+			ts := timeMatch[1]
+			if tzOffset != 0 {
+				if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+					ts = t.Add(d).Format("2006/01/02 15:04:05.000000")
+				}
+			} else if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+				ts = t.Format("2006/01/02 15:04:05.000000")
+			}
+
+			msgStart := strings.Index(line, `msg="`)
+			msg := ""
+			if msgStart != -1 {
+				msg = line[msgStart+5:]
+				if idx := strings.Index(msg, `"`); idx != -1 {
+					msg = msg[:idx]
+				}
+			}
+
+			line = fmt.Sprintf("%s [%s] %s", ts, strings.ToUpper(levelMatch[1]), msg)
+		}
+	} else if tzOffset != 0 {
+		if len(line) > 19 && line[4] == '/' && line[13] == ':' {
+			if t, err := time.Parse("2006/01/02 15:04:05", line[:19]); err == nil {
+				line = t.Add(d).Format("2006/01/02 15:04:05") + line[19:]
+			}
+		}
+	}
+
+	content := ansiRegex.ReplaceAllString(ansiReplacer.Replace(line), "")
+	content = levelRegex.ReplaceAllStringFunc(content, func(m string) string {
+		clean := strings.Trim(m, "[] ")
+		return formatLevel(clean)
+	})
+
 	return `<div class="log-line">` + content + `</div>`
 }
 
-func GetLogLines(logPath string) []string {
-	stat, err := os.Stat(logPath)
-	if err != nil { return []string{} }
-	LogCacheMutex.Lock()
-	cache := LogCacheMap[logPath]
-	if cache == nil { cache = &LogCache{}; LogCacheMap[logPath] = cache }
-	LogCacheMutex.Unlock()
-	if cache.LastSize == stat.Size() && cache.LastMod.Equal(stat.ModTime()) {
-		cache.LastRead = time.Now()
-		return cache.Lines
-	}
-	f, err := os.Open(logPath)
-	if err != nil { return []string{} }
+func GetLogs(path string, query string) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil { return nil, err }
 	defer f.Close()
-	if stat.Size() < cache.LastOffset { cache.LastOffset = 0; cache.Lines = nil }
-	f.Seek(cache.LastOffset, 0)
-	AppSettingsMutex.RLock()
-	offset := AppSettings.TimezoneOffset
-	AppSettingsMutex.RUnlock()
+
+	var lines []string
 	scanner := bufio.NewScanner(f)
+
+	AppSettingsMutex.RLock()
+	tz := AppSettings.TimezoneOffset
+	AppSettingsMutex.RUnlock()
+
+	if query == "" {
+		stat, _ := f.Stat()
+		if stat.Size() > 25000 {
+			f.Seek(-25000, io.SeekEnd)
+			scanner.Scan()
+		}
+
+		for scanner.Scan() {
+			if l := ProcessLogLine(scanner.Text(), tz); l != "" {
+				lines = append(lines, l)
+			}
+		}
+		if len(lines) > 500 { lines = lines[len(lines)-500:] }
+		return lines, nil
+	}
+
+	keywords := strings.Split(query, "|")
+
 	for scanner.Scan() {
-		if html := parseLogLine(adjustLineTimezone(scanner.Text(), offset)); html != "" {
-			cache.Lines = append(cache.Lines, html)
+		text := scanner.Text()
+		l := ProcessLogLine(text, tz)
+		if l == "" {
+			continue
+		}
+
+		match := false
+		for _, k := range keywords {
+			if k != "" && strings.Contains(l, k) {
+				match = true
+				break
+			}
+		}
+
+		if match {
+			lines = append(lines, l)
+			if len(lines) >= 1000 { break }
 		}
 	}
-	if len(cache.Lines) > 5000 { cache.Lines = cache.Lines[len(cache.Lines)-5000:] }
-	pos, _ := f.Seek(0, 1)
-	cache.LastOffset, cache.LastSize, cache.LastMod, cache.LastRead = pos, stat.Size(), stat.ModTime(), time.Now()
-	return cache.Lines
-}
 
-func CleanupLogCache() {
-	t := time.NewTicker(5 * time.Minute)
-	for range t.C {
-		LogCacheMutex.Lock()
-		now := time.Now()
-		for k, v := range LogCacheMap {
-			if now.Sub(v.LastRead) > 10*time.Minute { delete(LogCacheMap, k) }
-		}
-		LogCacheMutex.Unlock()
-	}
-}
-
-func LogsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" {
-		lp := ErrorLog
-		if r.URL.Query().Get("file") == "access.log" { lp = AccessLog }
-		jsonResponse(w, Response{Success: true, Data: strings.Join(GetLogLines(lp), "\n")}, 200)
-		return
-	}
-	var req struct { Action, File string }
-	if json.NewDecoder(r.Body).Decode(&req) == nil && req.Action == "clear" {
-		lp := ErrorLog
-		if req.File == "access.log" { lp = AccessLog }
-		LogCacheMutex.Lock()
-		delete(LogCacheMap, lp)
-		LogCacheMutex.Unlock()
-		os.Truncate(lp, 0)
-		jsonResponse(w, Response{Success: true, Data: "Log cleared"}, 200)
-		return
-	}
-	jsonResponse(w, Response{Success: false, Error: "Bad request"}, 400)
+	return lines, nil
 }

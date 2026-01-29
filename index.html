@@ -148,7 +148,7 @@
               <div id="formatBtn-skeleton" class="skeleton skeleton-btn" style="width: 106px"></div>
             </div>
             <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>Применить</button>
-            <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()">Сохранить</button>
+            <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()" disabled>Сохранить</button>
             <div class="btn-group">
               <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">Формат</button>
               <button
@@ -390,7 +390,7 @@
         <h3 class="modal-title">Смена ядра</h3>
         <p class="modal-body">Сменить ядро на <span id="selectedCore">xray</span>?</p>
         <div class="modal-actions">
-          <button class="btn btn-primary" id="confirmCoreBtn" onclick="confirmCoreChange()">Да</button>
+          <button class="btn btn-primary" id="confirmCoreBtn" onclick="switchCore()">Да</button>
           <button class="btn btn-secondary" id="cancelCoreBtn" onclick="closeCoreModal()">Отмена</button>
         </div>
       </div>

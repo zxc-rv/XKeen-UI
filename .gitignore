@@ -9,3 +9,4 @@ version.js.bak
 version.js.tmp
 *.bak
 *.tmp
+.zed

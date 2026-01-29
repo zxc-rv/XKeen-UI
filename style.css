@@ -440,6 +440,7 @@ textarea {
 
 .logs-container.centered {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
@@ -771,7 +772,7 @@ textarea {
   overflow: hidden;
 }
 
-.status-running {
+.running {
   background:
     linear-gradient(#19292c, #19292c) padding-box,
     linear-gradient(90deg, #195040 0%, #195040 30%, #34d399 50%, #195040 70%, #195040 100%) border-box;
@@ -783,13 +784,13 @@ textarea {
   animation: borderFlow 2s linear infinite;
 }
 
-.status-stopped {
+.stopped {
   background: #2a1215;
   color: #ef4444;
   border-color: #4a1f24;
 }
 
-.status-pending {
+.pending {
   background:
     linear-gradient(#2a1f0d, #2a1f0d) padding-box,
     linear-gradient(90deg, #4a3615 0%, #4a3615 30%, #fbbf24 50%, #4a3615 70%, #4a3615 100%) border-box;

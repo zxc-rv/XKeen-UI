@@ -162,7 +162,7 @@ function syncGUIToJSON() {
     .then((newContent) => {
       monacoEditor.setValue(newContent)
       configs[activeConfigIndex].content = newContent
-      configs[activeConfigIndex].isDirty = true
+      configs[activeConfigIndex].isDirty = newContent !== configs[activeConfigIndex].savedContent
       updateUIDirtyState()
     })
     .catch((err) => {

@@ -2,6 +2,7 @@ package bin
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -26,7 +27,7 @@ type AppConfig struct {
 type Response struct {
 	Success bool        `json:"success"`
 	Error   string      `json:"error,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
+	Data    any `json:"data,omitempty"`
 }
 
 type Config struct {
@@ -47,42 +48,38 @@ type ActionRequest struct {
 	Content  string `json:"content,omitempty"`
 }
 
-type WSMessage struct {
-	Type  string `json:"type"`
-	Query string `json:"query,omitempty"`
-	File  string `json:"file,omitempty"`
-}
-
 type ClientType struct {
-	Name      string
-	ConfigDir string
-	ConfigExt string
-	IsJSON    bool
+	Name, ConfigDir, ConfigExt string
+	IsJSON                     bool
 }
 
 type LogCache struct {
-	Lines      []string
-	LastSize   int64
-	LastOffset int64
-	LastMod    time.Time
-	LastRead   time.Time
-}
-
-var clientTypes = map[string]ClientType{
-	"xray":   {Name: "xray", ConfigDir: XrayConf, ConfigExt: "*.json", IsJSON: true},
-	"mihomo": {Name: "mihomo", ConfigDir: MihomoConf, ConfigExt: "config.yaml", IsJSON: false},
+	Lines                []string
+	LastSize, LastOffset int64
+	LastMod, LastRead    time.Time
 }
 
 var (
+	clientTypes = map[string]ClientType{
+		"xray":   {Name: "xray", ConfigDir: XrayConf, ConfigExt: "*.json", IsJSON: true},
+		"mihomo": {Name: "mihomo", ConfigDir: MihomoConf, ConfigExt: "config.yaml", IsJSON: false},
+	}
+	coreEnvs = map[string][]string{
+		"xray":   {"XRAY_LOCATION_CONFDIR=" + XrayConf, "XRAY_LOCATION_ASSET=" + XrayAsset},
+		"mihomo": {"CLASH_HOME_DIR=" + MihomoConf},
+	}
 	CurrentClient    ClientType
 	ClientMutex      sync.RWMutex
 	LogCacheMap      = make(map[string]*LogCache)
 	LogCacheMutex    sync.RWMutex
 	AppSettings      = AppConfig{TimezoneOffset: 3}
 	AppSettingsMutex sync.RWMutex
+	DebugMode        bool
 )
 
-func jsonResponse(w http.ResponseWriter, data interface{}, status int) {
+func DebugLog(format string, v ...any) { if DebugMode { log.Printf("[DEBUG] "+format, v...) }}
+
+func jsonResponse(w http.ResponseWriter, data any, status int) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE")
 	w.Header().Set("Content-Type", "application/json")

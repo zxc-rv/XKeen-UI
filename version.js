@@ -10,7 +10,7 @@ const APP_VERSION = "v0.4.0"
     if (!versionElement) return
 
     try {
-      const response = await fetch(`/cgi/version`)
+      const response = await fetch(`/api/version`)
       const data = await response.json()
       if (data.success && data.version) {
         versionElement.textContent = data.version

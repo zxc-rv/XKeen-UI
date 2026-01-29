@@ -156,12 +156,14 @@ install_xkeenui() {
     exit 1
   fi
 
-  router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
-  router_ip=${router_ip:-"IP_Роутера"}
+  local ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
+  local ip=${router_ip:-"IP_Роутера"}
+  local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
+  local port=${port:-1000}
 
   clear
   echo -e "${GREEN}\n XKeen UI успешно установлен!\n${NC}"
-  echo -e " Панель доступна по адресу: ${GREEN}http://$router_ip:1000\n${NC}"
+  echo -e " Панель доступна по адресу: ${GREEN}http://$ip:$port\n${NC}"
 }
 
 update_xkeenui() {
@@ -197,13 +199,15 @@ update_xkeenui() {
     exit 1
   fi
 
-  router_ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
-  router_ip=${router_ip:-"IP_Роутера"}
+  local ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
+  local ip=${router_ip:-"IP_Роутера"}
+  local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
+  local port=${port:-1000}
 
   clear
 
   echo -e "${GREEN}\n XKeen UI успешно обновлен!\n${NC}"
-  echo -e " Панель доступна по адресу: ${GREEN}http://$router_ip:1000\n${NC}"
+  echo -e " Панель доступна по адресу: ${GREEN}http://$ip:$port\n${NC}"
   echo -e " После перехода нажмите Ctrl+Shift+R для обновления кэша\n"
 }
 

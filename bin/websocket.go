@@ -3,13 +3,16 @@ package bin
 import (
 	"bufio"
 	"context"
-	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/gorilla/websocket"
 )
 
 var Upgrader = websocket.Upgrader{
@@ -17,162 +20,132 @@ var Upgrader = websocket.Upgrader{
 	HandshakeTimeout: 10 * time.Second,
 }
 
+var activeWSCount int32
+
 func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 	conn, err := Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("upgrade:", err)
 		return
 	}
-	defer conn.Close()
+	atomic.AddInt32(&activeWSCount, 1)
+	DebugLog("WebsocketHandler: connection opened, active=%d", atomic.LoadInt32(&activeWSCount))
+	defer func() {
+		conn.Close()
+		atomic.AddInt32(&activeWSCount, -1)
+	}()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	conn.SetReadDeadline(time.Now().Add(120 * time.Second))
+
 	var (
-		connMutex  sync.Mutex
-		stateMutex sync.RWMutex
-		logPath    string
+		mu         sync.Mutex
+		logPath    = ErrorLog
 		lastOffset int64
 	)
-	writeJSON := func(v interface{}) error {
-		connMutex.Lock()
-		defer connMutex.Unlock()
+
+	if r.URL.Query().Get("file") == "access.log" { logPath = AccessLog }
+
+	writeJSON := func(v any) error {
+		mu.Lock()
+		defer mu.Unlock()
 		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		return conn.WriteJSON(v)
 	}
-	stateMutex.Lock()
-	logPath = ErrorLog
-	if r.URL.Query().Get("file") == "access.log" {
-		logPath = AccessLog
-	}
-	lastOffset = 0
-	stateMutex.Unlock()
+
 	sendInitial := func() {
-		stateMutex.RLock()
-		lp := logPath
-		stateMutex.RUnlock()
-		lines := GetLogLines(lp)
-		dl := lines
-		if len(lines) > 1000 {
-			dl = lines[len(lines)-1000:]
-		}
-		if err := writeJSON(map[string]interface{}{
-			"type":         "initial",
-			"allLines":     lines,
-			"displayLines": dl,
-		}); err != nil {
-			return
-		}
-		if stat, err := os.Stat(lp); err == nil {
-			stateMutex.Lock()
-			lastOffset = stat.Size()
-			stateMutex.Unlock()
-		}
+		lines, _ := GetLogs(logPath, "")
+		writeJSON(map[string]any{"type": "initial", "lines": lines})
+		if stat, err := os.Stat(logPath); err == nil { lastOffset = stat.Size() }
 	}
+
 	sendInitial()
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil { return }
+	defer watcher.Close()
+	watcher.Add(logPath)
+
 	go func() {
 		defer cancel()
 		for {
 			var msg struct {
-				Type  string `json:"type"`
-				Query string `json:"query"`
-				File  string `json:"file"`
+				Type, Query, File string
 			}
 			if err := conn.ReadJSON(&msg); err != nil {
 				return
 			}
-			conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 			switch msg.Type {
 			case "filter":
-				stateMutex.RLock()
-				lp := logPath
-				stateMutex.RUnlock()
-				lines := GetLogLines(lp)
-				q := strings.Split(msg.Query, "|")
-				var matched []string
-				for _, l := range lines {
-					for _, k := range q {
-						if k != "" && strings.Contains(l, k) {
-							matched = append(matched, l)
-							break
-						}
-					}
-				}
-				writeJSON(map[string]interface{}{"type": "filtered", "lines": matched})
+				DebugLog("WebsocketHandler: filter query=%s", msg.Query)
+				lines, _ := GetLogs(logPath, msg.Query)
+				writeJSON(map[string]any{"type": "filtered", "lines": lines})
+
 			case "switchFile":
-				stateMutex.Lock()
+				DebugLog("WebsocketHandler: switching to %s", msg.File)
+				watcher.Remove(logPath)
 				logPath = ErrorLog
-				if msg.File == "access.log" {
-					logPath = AccessLog
-				}
+				if msg.File == "access.log" { logPath = AccessLog }
 				lastOffset = 0
-				stateMutex.Unlock()
+				watcher.Add(logPath)
 				sendInitial()
+
 			case "reload":
-				LogCacheMutex.Lock()
-				LogCacheMap = make(map[string]*LogCache)
-				LogCacheMutex.Unlock()
-				stateMutex.Lock()
+				DebugLog("WebsocketHandler: reloading logs")
 				lastOffset = 0
-				stateMutex.Unlock()
 				sendInitial()
+
+			case "clear":
+				os.Truncate(logPath, 0)
+				writeJSON(map[string]string{"type": "clear"})
 			}
 		}
 	}()
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
+
+	timer := time.NewTimer(0)
+	if !timer.Stop() { <-timer.C }
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			stateMutex.RLock()
-			lp := logPath
-			off := lastOffset
-			stateMutex.RUnlock()
-			stat, err := os.Stat(lp)
-			if err != nil || stat.Size() < off {
-				writeJSON(map[string]string{"type": "clear"})
-				stateMutex.Lock()
+		case event, ok := <-watcher.Events:
+			if !ok { return }
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				timer.Reset(100 * time.Millisecond)
+			}
+		case <-timer.C:
+			stat, err := os.Stat(logPath)
+			if err != nil || stat.Size() < lastOffset {
 				lastOffset = 0
-				stateMutex.Unlock()
-				if err == nil {
-					sendInitial()
-				}
+				writeJSON(map[string]string{"type": "clear"})
+				if err == nil { sendInitial() }
 				continue
 			}
-			if stat.Size() == off {
-				continue
-			}
-			f, err := os.Open(lp)
-			if err != nil {
-				continue
-			}
-			f.Seek(off, 0)
+			if stat.Size() == lastOffset { continue }
+
+			f, _ := os.Open(logPath)
+			f.Seek(lastOffset, 0)
+
 			AppSettingsMutex.RLock()
 			tz := AppSettings.TimezoneOffset
 			AppSettingsMutex.RUnlock()
+
 			scanner := bufio.NewScanner(f)
 			var out []string
 			for scanner.Scan() {
-				line := adjustLineTimezone(scanner.Text(), tz)
-				html := parseLogLine(line)
-				if html != "" {
+				if html := ProcessLogLine(scanner.Text(), tz); html != "" {
 					out = append(out, html)
 				}
 			}
-			pos, _ := f.Seek(0, 1)
+			lastOffset, _ = f.Seek(0, 1)
 			f.Close()
+
 			if len(out) > 0 {
-				if err := writeJSON(map[string]interface{}{
-					"type":    "append",
-					"content": strings.Join(out, "\n"),
-				}); err != nil {
-					return
-				}
+				writeJSON(map[string]any{"type": "append", "content": strings.Join(out, "\n")})
 			}
-			stateMutex.Lock()
-			lastOffset = pos
-			stateMutex.Unlock()
+		case <-watcher.Errors:
+			return
 		}
 	}
 }

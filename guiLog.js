@@ -90,18 +90,18 @@ async function buildLogJSON() {
   }
 }
 
-function syncJSONToguiLog() {
+function syncJSONToGuiLog() {
   const content = monacoEditor.getValue()
   parseLogJSON(content)
   renderGuiLog()
 }
 
-function syncguiLogToJSON() {
+function syncGuiLogToJSON() {
   buildLogJSON()
     .then((newContent) => {
       monacoEditor.setValue(newContent)
       configs[activeConfigIndex].content = newContent
-      configs[activeConfigIndex].isDirty = true
+      configs[activeConfigIndex].isDirty = newContent !== configs[activeConfigIndex].savedContent
       updateUIDirtyState()
     })
     .catch((err) => {
@@ -135,7 +135,7 @@ function applyGuiLogState() {
       editorContainer.parentNode.appendChild(guiContainer)
     }
     guiContainer.style.display = "block"
-    syncJSONToguiLog()
+    syncJSONToGuiLog()
     renderGuiLog()
     document.querySelector(".tabs-content")?.classList.add("no-border")
   }
@@ -212,7 +212,7 @@ function renderGuiLog() {
 
 function setLogPath(type, path) {
   guiLogState.config[type] = path === "" ? "none" : path
-  syncguiLogToJSON()
+  syncGuiLogToJSON()
   renderGuiLog()
 
   if (autoApply) {
@@ -226,7 +226,7 @@ function setLogPath(type, path) {
 
 function setLogLevel(level) {
   guiLogState.config.loglevel = level
-  syncguiLogToJSON()
+  syncGuiLogToJSON()
 
   const idx = LOG_LEVELS.indexOf(level)
   const pct = (idx / (LOG_LEVELS.length - 1)) * 100
@@ -256,7 +256,7 @@ function setLogLevel(level) {
 function toggleDNSLog() {
   const cb = document.getElementById("dnsLogCheckbox")
   guiLogState.config.dnsLog = cb.checked
-  syncguiLogToJSON()
+  syncGuiLogToJSON()
 
   const label = document.querySelector(".log-dns-label")
   if (label) label.textContent = cb.checked ? "Включено" : "Выключено"
