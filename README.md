@@ -1,7 +1,7 @@
 # ✨ XKeen UI
 Веб-панель с современным дизайном для управления сервисом **XKeen** 🚀
   
-<img width="2560" height="1362" alt="image" src="https://github.com/user-attachments/assets/934cc355-e17c-4b73-ace0-271149059b00" />
+![preview](https://github.com/user-attachments/assets/9572f58d-c256-4eb9-aa7e-eb34611b4215)
 
 
 <br>  
