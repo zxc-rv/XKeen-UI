@@ -541,6 +541,7 @@
     <script src="outboundParser.js"></script>
     <script>
       let currentCore = "xray"
+      let hasGenerated = false
       const uriInput = document.getElementById("uri")
       const clearBtn = document.getElementById("clearInput")
       const generateBtn = document.getElementById("generateBtn")
@@ -564,7 +565,7 @@
       })
 
       document.getElementById("fullConfig").addEventListener("change", () => {
-        if (!generateBtn.disabled) generate()
+        if (hasGenerated) toggleFullConfig()
       })
 
       window.addEventListener("pageshow", () => {
@@ -651,6 +652,7 @@
           output.className = "output success show"
 
           document.querySelector(".download-btn").classList.toggle("show", currentCore === "xray" && isFull)
+          hasGenerated = true
         } catch (e) {
           resultEl.textContent = `Ошибка: ${e.message}`
           output.className = "output error show"
@@ -672,6 +674,33 @@
             2000,
           )
         })
+      }
+
+      function toggleFullConfig() {
+        const resultEl = document.getElementById("result")
+        const isFull = document.getElementById("fullConfig").checked
+        let currentContent = resultEl.textContent
+
+        try {
+          if (isFull) {
+            const outbounds = JSON.parse(`[${currentContent}]`)
+            const config = {
+              outbounds: [...outbounds, { tag: "direct", protocol: "freedom" }, { tag: "block", protocol: "blackhole" }],
+            }
+            currentContent = JSON.stringify(config, null, 2)
+          } else {
+            const config = JSON.parse(currentContent)
+            currentContent = config.outbounds
+              .filter((o) => o.tag !== "direct" && o.tag !== "block")
+              .map((o) => JSON.stringify(o, null, 2))
+              .join(",\n")
+          }
+
+          resultEl.innerHTML = `<code class="language-json">${hljs.highlight(currentContent, { language: "json" }).value}</code>`
+          document.querySelector(".download-btn").classList.toggle("show", isFull)
+        } catch (e) {
+          console.error("Ошибка переключения конфига:", e)
+        }
       }
 
       function download() {
