@@ -24,35 +24,23 @@ func ConfigsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getConfigs(w http.ResponseWriter, r *http.Request) {
-	coreParam := r.URL.Query().Get("core")
-	DebugLog("getConfigs: coreParam=%s", coreParam)
+	ClientMutex.RLock()
+	c := CurrentCore
+	ClientMutex.RUnlock()
 
-	var c ClientType
-	if coreParam != "" {
-		if ct, ok := clientTypes[coreParam]; ok {
-			c = ct
-		} else {
-			ClientMutex.RLock()
-			c = CurrentClient
-			ClientMutex.RUnlock()
-		}
-	} else {
-		ClientMutex.RLock()
-		c = CurrentClient
-		ClientMutex.RUnlock()
-	}
+	if ct, ok := clientTypes[r.URL.Query().Get("core")]; ok { c = ct }
 	DebugLog("getConfigs: using client=%s", c.Name)
 
-	var paths []string
-	if c.IsJSON {
-		paths = append(paths, filepath.Join(c.ConfigDir, "*.json"))
-	} else {
-		paths = append(paths, filepath.Join(c.ConfigDir, c.ConfigExt))
+	ext := c.ConfigExt
+	if c.IsJSON { ext = "*.json" }
+
+	patterns := []string{
+		filepath.Join(c.ConfigDir, ext),
+		filepath.Join(XkeenConf, "*.lst"),
 	}
-	paths = append(paths, filepath.Join(XkeenConf, "*.lst"))
 
 	var res []Config
-	for _, p := range paths {
+	for _, p := range patterns {
 		m, _ := filepath.Glob(p)
 		for _, f := range m {
 			if d, err := os.ReadFile(f); err == nil {
@@ -71,56 +59,43 @@ func getConfigs(w http.ResponseWriter, r *http.Request) {
 func postConfigs(w http.ResponseWriter, r *http.Request) {
 	var req ActionRequest
 	if json.NewDecoder(r.Body).Decode(&req) != nil {
-		DebugLog("postConfigs: JSON decode error")
 		http.Error(w, "JSON error", 400)
 		return
 	}
-	DebugLog("postConfigs: action=%s filename=%s", req.Action, req.Filename)
+
+	DebugLog("postConfigs: saving file=%s (%d bytes)", req.Filename, len(req.Content))
 
 	ClientMutex.RLock()
-	c := CurrentClient
+	c := CurrentCore
 	ClientMutex.RUnlock()
 
 	name := filepath.Base(req.Filename)
-	path := filepath.Join(c.ConfigDir, name)
 	isLst := strings.HasSuffix(name, ".lst")
+	path := filepath.Join(c.ConfigDir, name)
 
 	if isLst {
 		path = filepath.Join(XkeenConf, name)
 		req.Content = strings.ReplaceAll(req.Content, "\r\n", "\n")
-	} else if c.IsJSON {
-		if !strings.HasSuffix(path, ".json") {
-			path += ".json"
-		}
 	} else {
-		var y any
-		if yaml.Unmarshal([]byte(req.Content), &y) != nil {
-			DebugLog("postConfigs: invalid YAML")
-			http.Error(w, "Invalid YAML", 400)
-			return
+		if c.IsJSON {
+			if !strings.HasSuffix(path, ".json") { path += ".json" }
+		} else {
+			var y any
+			if yaml.Unmarshal([]byte(req.Content), &y) != nil {
+				http.Error(w, "Invalid YAML", 400)
+				return
+			}
 		}
 	}
 
-	switch req.Action {
-	case "delete":
-		DebugLog("postConfigs: deleting %s", path)
-		if os.Remove(path) != nil {
-			DebugLog("postConfigs: delete error for %s", path)
-			http.Error(w, "Delete error", 500)
-			return
-		}
-	case "save":
-		DebugLog("postConfigs: saving %s (%d bytes)", path, len(req.Content))
+	if req.Action == "save" {
 		if os.WriteFile(path, []byte(req.Content), 0644) != nil {
-			DebugLog("postConfigs: write error for %s", path)
 			http.Error(w, "Write error", 500)
 			return
 		}
-	default:
-		DebugLog("postConfigs: unknown action %s", req.Action)
+	} else {
 		http.Error(w, "Unknown action", 400)
 		return
 	}
-	DebugLog("postConfigs: success")
 	jsonResponse(w, Response{Success: true}, 200)
 }

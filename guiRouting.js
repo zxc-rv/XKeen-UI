@@ -127,7 +127,6 @@ async function buildRoutingJSON() {
     json.routing.rules = guiRoutingState.rules
 
     const preFormatted = JSON.stringify(json, null, 2)
-
     const formatted = await window.prettier.format(preFormatted, {
       parser: "json",
       plugins: [window.prettierPlugins.babel],

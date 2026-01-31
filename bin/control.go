@@ -13,6 +13,21 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func GetNameClient() {
+	path := S24xray
+	if _, err := os.Stat(path); err != nil {
+		path = S99xkeen
+	}
+	b, _ := os.ReadFile(path)
+	name := "xray"
+	if strings.Contains(string(b), `name_client="mihomo"`) {
+		name = "mihomo"
+	}
+	ClientMutex.Lock()
+	CurrentCore = clientTypes[name]
+	ClientMutex.Unlock()
+}
+
 func getPid(name string) int {
 	ents, _ := os.ReadDir("/proc")
 	for _, e := range ents {
@@ -24,29 +39,50 @@ func getPid(name string) int {
 	return 0
 }
 
-func GetNameClient() {
-	path := S24xray
-	if _, err := os.Stat(path); err != nil { path = S99xkeen }
-	b, _ := os.ReadFile(path)
-	name := "xray"
-	if strings.Contains(string(b), `name_client="mihomo"`) { name = "mihomo" }
-	ClientMutex.Lock()
-	CurrentClient = clientTypes[name]
-	ClientMutex.Unlock()
+func getCoreVersion(name string) string {
+	arg := "version"
+	if name == "mihomo" { arg = "-v" }
+	out, err := exec.Command(name, arg).Output()
+	if err != nil { return "" }
+	s := string(out)
+	parts := strings.Fields(s)
+	if name == "xray" && len(parts) > 1 { return "v" + parts[1] }
+	if name == "mihomo" && len(parts) > 2 { return parts[2] }
+	return ""
 }
 
 func ControlHandler(w http.ResponseWriter, r *http.Request) {
 	DebugLog("ControlHandler: method=%s", r.Method)
 	if r.Method == http.MethodGet {
+		ClientMutex.RLock()
+		cur := CurrentCore.Name
+		ClientMutex.RUnlock()
+
+		if getPid(cur) == 0 {
+			alt := "mihomo"
+			if cur == "mihomo" { alt = "xray" }
+			if getPid(alt) > 0 {
+				ClientMutex.Lock()
+				CurrentCore = clientTypes[alt]
+				ClientMutex.Unlock()
+				cur = alt
+			}
+		}
+
 		cores, running := []string{}, false
 		for _, c := range []string{"xray", "mihomo"} {
 			if _, err := os.Stat("/opt/sbin/" + c); err == nil { cores = append(cores, c) }
 			if getPid(c) > 0 { running = true }
 		}
-		ClientMutex.RLock()
-		defer ClientMutex.RUnlock()
-		DebugLog("ControlHandler GET: cores=%v currentCore=%s running=%v", cores, CurrentClient.Name, running)
-		jsonResponse(w, map[string]any{"success": true, "cores": cores, "currentCore": CurrentClient.Name, "running": running}, 200)
+
+		ver := getCoreVersion(cur)
+		jsonResponse(w, map[string]any{
+			"success":     true,
+			"cores":       cores,
+			"currentCore": cur,
+			"running":     running,
+			"version":     ver,
+		}, 200)
 		return
 	}
 
@@ -65,7 +101,7 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 	case "switchCore":
 		DebugLog("ControlHandler: switching core to %s", req.Core)
 		ClientMutex.RLock()
-		oldCore := CurrentClient.Name
+		oldCore := CurrentCore.Name
 		if oldCore == req.Core {
 			ClientMutex.RUnlock()
 			DebugLog("ControlHandler: already on %s", req.Core)
@@ -79,14 +115,13 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 
 		path := S99xkeen
 		if _, err := os.Stat(path); err != nil { path = S24xray }
-
 		if data, err := os.ReadFile(path); err == nil {
 			out := strings.Replace(string(data), `name_client="`+oldCore+`"`, `name_client="`+req.Core+`"`, 1)
 			os.WriteFile(path, []byte(out), 0755)
 		}
 
 		ClientMutex.Lock()
-		if c, ok := clientTypes[req.Core]; ok { CurrentClient = c }
+		if c, ok := clientTypes[req.Core]; ok { CurrentCore = c }
 		ClientMutex.Unlock()
 
 		cmd := exec.Command("xkeen", "-start")

@@ -68,7 +68,7 @@ var (
 		"xray":   {"XRAY_LOCATION_CONFDIR=" + XrayConf, "XRAY_LOCATION_ASSET=" + XrayAsset},
 		"mihomo": {"CLASH_HOME_DIR=" + MihomoConf},
 	}
-	CurrentClient    ClientType
+	CurrentCore      ClientType
 	ClientMutex      sync.RWMutex
 	LogCacheMap      = make(map[string]*LogCache)
 	LogCacheMutex    sync.RWMutex
@@ -81,7 +81,7 @@ func DebugLog(format string, v ...any) { if DebugMode { log.Printf("[DEBUG] "+fo
 
 func jsonResponse(w http.ResponseWriter, data any, status int) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)

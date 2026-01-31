@@ -40,6 +40,7 @@
         <h1 class="title">XKeen UI</h1>
 
         <div class="statusBar-right">
+          <div id="coreSelectSkeleton" class="skeleton skeleton-btn" style="width: 150px; height: 36px; display: inline-block"></div>
           <div id="coreSelectRoot" class="select-root core-select" style="display: none" aria-label="Выбор ядра">
             <button id="coreSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
               <span class="core-icon" aria-hidden="true">
@@ -62,6 +63,7 @@
               </span>
 
               <span class="label" id="coreSelectLabel">xray</span>
+              <span id="coreVersion" style="opacity: 0.5; font-size: 0.8em"></span>
               <svg
                 class="chevron"
                 xmlns="http://www.w3.org/2000/svg"
@@ -85,7 +87,8 @@
               <div class="select-item" role="option" data-value="mihomo" aria-selected="false">mihomo <span class="check">✓</span></div>
             </div>
           </div>
-          <button id="settingsBtn" class="btn-icon btn-secondary" onclick="toggleSettingsModal()" title="Настройки">
+          <div id="settingsBtnSkeleton" class="skeleton skeleton-btn" style="width: 36px; height: 36px; display: inline-block"></div>
+          <button id="settingsBtn" class="btn-icon btn-secondary" style="display: none" onclick="toggleSettingsModal()" title="Настройки">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="18"
@@ -388,7 +391,7 @@
           </svg>
         </button>
         <h3 class="modal-title">Смена ядра</h3>
-        <p class="modal-body">Сменить ядро на <span id="selectedCore">xray</span>?</p>
+        <p class="modal-body">Сменить ядро на <span id="selectedCore">Xray</span>?</p>
         <div class="modal-actions">
           <button class="btn btn-primary" id="confirmCoreBtn" onclick="switchCore()">Да</button>
           <button class="btn btn-secondary" id="cancelCoreBtn" onclick="closeCoreModal()">Отмена</button>
@@ -588,10 +591,7 @@
                 <path d="M12 8v4"></path>
                 <path d="M12 16h.01"></path>
               </svg>
-              <span>
-                Функция является экспериментальной.<br />
-                Перед включением сделайте бэкап конфигураций.
-              </span>
+              <span> Функция является экспериментальной, перед включением сделайте бэкап конфигураций. Несовместимо с комментариями. </span>
             </div>
             <div class="settings-item">
               <span class="settings-item-label">Routing</span>
@@ -636,6 +636,54 @@
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" onclick="closeSettingsModal()">Закрыть</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-overlay" id="commentsWarningModal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeCommentsWarning()" aria-label="Закрыть">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+        <h3 class="modal-title">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="display: inline-block; vertical-align: middle; margin-right: 10px; margin-top: -2px; color: #f59e0b"
+          >
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          Предупреждение
+        </h3>
+        <p class="modal-body">
+          В конфигурации найдены комментарии.<br />
+          При сохранении через GUI они будут <b>утеряны</b>.<br /><br />
+          Продолжить?
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="confirmCommentsBtn">Продолжить</button>
+          <button class="btn btn-secondary" onclick="closeCommentsWarning()">Отмена</button>
         </div>
       </div>
     </div>

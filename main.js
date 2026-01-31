@@ -23,6 +23,7 @@ let currentTimezone = 3
 let autoApply = false
 let statusWs = null
 let selectedTemplateUrl = null
+let pendingSaveAction = null
 const MAX_DISPLAY_LINES = 1000
 
 async function loadDependencies() {
@@ -69,8 +70,8 @@ async function init() {
       require(["vs/editor/editor.main"], resolve, reject)
     })
 
-    await checkStatus()
-    await loadTimezone()
+    checkStatus()
+    loadTimezone()
     connectWebSocket()
     loadMonacoEditor()
 
@@ -608,7 +609,7 @@ function loadMonacoEditor() {
 
     const editorContainer = document.getElementById("editorContainer")
     editorContainer.innerHTML = ""
-
+    const isMobile = window.innerWidth < 768
     monacoEditor = monaco.editor.create(editorContainer, {
       value: "",
       language: "json",
@@ -617,8 +618,8 @@ function loadMonacoEditor() {
       formatOnPaste: false,
       formatOnType: false,
       scrollBeyondLastLine: false,
-      minimap: { enabled: true, showSlider: "always" },
-      fontSize: 14,
+      minimap: { enabled: isMobile ? false : true, showSlider: "always" },
+      fontSize: isMobile ? 13 : 14,
       fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
       fontWeight: 400,
       smoothScrolling: true,
@@ -627,8 +628,8 @@ function loadMonacoEditor() {
       tabSize: 2,
       insertSpaces: true,
       wordWrap: "off",
-      folding: true,
-      lineNumbers: "on",
+      folding: isMobile ? false : true,
+      lineNumbers: isMobile ? "off" : "on",
       glyphMargin: false,
       stickyScroll: { enabled: false },
       overviewRulerLanes: 0,
@@ -1133,27 +1134,20 @@ function isFileValid() {
   return true
 }
 
-async function saveCurrentConfig() {
+async function saveCurrentConfig(force = false) {
   if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return
-
   const config = configs[activeConfigIndex]
   const content = monacoEditor.getValue()
 
-  if (!content.trim()) {
-    showToast("Конфигурация пустая", "error")
+  if (!force && isCurrentGuiActive() && hasComments(config.savedContent)) {
+    showCommentsWarning(() => saveCurrentConfig(true))
     return
   }
 
-  if (!isFileValid()) {
-    showToast("Невозможно сохранить: файл содержит ошибки", "error")
-    return
-  }
+  if (!content.trim()) return showToast("Конфигурация пустая", "error")
+  if (!isFileValid()) return showToast("Невозможно сохранить: файл содержит ошибки", "error")
 
-  const result = await apiCall("configs", {
-    action: "save",
-    filename: config.filename,
-    content: content,
-  })
+  const result = await apiCall("configs", { action: "save", filename: config.filename, content })
 
   if (result.success) {
     config.content = content
@@ -1199,25 +1193,21 @@ function hasCriticalChanges(oldContent, newContent, language) {
   return false
 }
 
-async function saveAndRestart() {
+async function saveAndRestart(force = false) {
   if (activeConfigIndex < 0 || !configs[activeConfigIndex] || !monacoEditor) return
-
   const config = configs[activeConfigIndex]
   const content = monacoEditor.getValue()
 
-  if (!content.trim()) return showToast("Конфиг пустой", "error")
-  if (!isFileValid()) return showToast("Невозможно сохранить: файл содержит ошибки", "error")
-
-  const result = await apiCall("configs", {
-    action: "save",
-    filename: config.filename,
-    content: content,
-  })
-
-  if (!result.success) {
-    showToast(`Ошибка сохранения: ${result.error}`, "error")
+  if (!force && isCurrentGuiActive() && hasComments(config.savedContent)) {
+    showCommentsWarning(() => saveAndRestart(true))
     return
   }
+
+  if (!content.trim()) return showToast("Конфиг пустой", "error")
+  if (!isFileValid()) return showToast("Файл содержит ошибки", "error")
+
+  const result = await apiCall("configs", { action: "save", filename: config.filename, content })
+  if (!result.success) return showToast(`Ошибка сохранения: ${result.error}`, "error")
 
   const language = getFileLanguage(config.filename)
   const needsFullRestart = hasCriticalChanges(config.savedContent, content, language)
@@ -1230,19 +1220,14 @@ async function saveAndRestart() {
 
   try {
     let restartResult
-    if (language === "json" || language === "yaml") {
-      if (needsFullRestart) {
-        setPendingState("Перезапуск...")
-        restartResult = await apiCall("control", { action: "hardRestart" })
-      } else {
-        restartResult = await apiCall("control", { action: "softRestart", core: currentCore })
-      }
+    setPendingState("Перезапуск...")
+    if ((language === "json" || language === "yaml") && !needsFullRestart) {
+      restartResult = await apiCall("control", { action: "softRestart", core: currentCore })
     } else {
-      setPendingState("Перезапуск...")
       restartResult = await apiCall("control", { action: "hardRestart" })
     }
 
-    if (!restartResult || !restartResult.success) {
+    if (!restartResult?.success) {
       showToast(`Ошибка перезапуска: ${restartResult?.error || "unknown"}`, "error")
       isActionInProgress = false
       checkStatus()
@@ -1250,7 +1235,6 @@ async function saveAndRestart() {
     }
 
     showToast(`Изменения применены`)
-
     isActionInProgress = false
     isServiceRunning = true
     updateServiceStatus(true)
@@ -1259,7 +1243,7 @@ async function saveAndRestart() {
       setTimeout(async () => {
         const statusCheck = await apiCall("control")
         if (!statusCheck.running) {
-          showToast("Ядро завершило работу с ошибкой, проверьте конфигурацию", "error")
+          showToast("Ядро упало, чекай конфиг", "error")
           isServiceRunning = false
           updateServiceStatus(false)
         }
@@ -1352,18 +1336,38 @@ async function checkStatus() {
   availableCores = r.cores || []
   currentCore = r.currentCore || "xray"
   updateServiceStatus(r.running)
+  updateDashboardLink()
 
   const coreSelectRoot = document.getElementById("coreSelectRoot")
-  const coreSelectLabel = document.getElementById("coreSelectLabel")
-  coreSelectLabel.textContent = currentCore
+  const coreSelectTrigger = document.getElementById("coreSelectTrigger")
+  const coreSelectSkeleton = document.getElementById("coreSelectSkeleton")
+  const settingsBtn = document.getElementById("settingsBtn")
+  const settingsBtnSkeleton = document.getElementById("settingsBtnSkeleton")
+
+  document.getElementById("coreSelectLabel").textContent = currentCore
+
+  const verEl = document.getElementById("coreVersion")
+  if (verEl) verEl.textContent = r.version || ""
+
+  coreSelectSkeleton.style.display = "none"
+  coreSelectRoot.style.display = "inline-block"
+
+  settingsBtnSkeleton.style.display = "none"
+  settingsBtn.style.display = "inline-block"
 
   if (availableCores.length >= 2) {
-    coreSelectRoot.style.display = "inline-block"
-    document.querySelectorAll("#coreSelectContent .select-item").forEach((i) => {
-      const v = i.getAttribute("data-value")
-      i.setAttribute("aria-selected", v === currentCore ? "true" : "false")
-    })
+    coreSelectTrigger.disabled = false
+    coreSelectTrigger.style.cursor = "pointer"
+    coreSelectTrigger.style.opacity = "1"
+  } else {
+    coreSelectTrigger.disabled = true
+    coreSelectTrigger.style.cursor = "not-allowed"
+    coreSelectTrigger.style.opacity = "0.5"
   }
+  document.querySelectorAll("#coreSelectContent .select-item").forEach((i) => {
+    const v = i.getAttribute("data-value")
+    i.setAttribute("aria-selected", v === currentCore ? "true" : "false")
+  })
 }
 
 function closeCoreModal() {
@@ -1392,6 +1396,9 @@ async function switchCore() {
   if (coreSelectLabel) {
     coreSelectLabel.textContent = currentCore
   }
+
+  const verEl = document.getElementById("coreVersion")
+  if (verEl) verEl.textContent = ""
 
   const items = document.querySelectorAll("#coreSelectContent .select-item")
   items.forEach((item) => {
@@ -1473,6 +1480,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const importInput = document.getElementById("importInput")
   const importInputClear = document.getElementById("importInputClear")
   const scrollBtn = document.getElementById("scrollBottomBtn")
+  const confirmCommentsBtn = document.getElementById("confirmCommentsBtn")
+  if (confirmCommentsBtn) {
+    confirmCommentsBtn.addEventListener("click", () => {
+      if (typeof pendingSaveAction === "function") {
+        pendingSaveAction()
+      }
+      closeCommentsWarning()
+    })
+  }
 
   if (tabsList) tabsList.classList.add("empty")
   isConfigsLoading = true
@@ -1653,6 +1669,7 @@ document.addEventListener("DOMContentLoaded", () => {
   })
 
   coreSelectTrigger.addEventListener("click", (e) => {
+    if (coreSelectTrigger.disabled) return
     e.stopPropagation()
     const isOpen = coreSelectRoot.classList.contains("select-open")
     if (isOpen) {
@@ -2284,6 +2301,7 @@ document.addEventListener("click", (e) => {
     else if (id === "coreModal") closeCoreModal()
     else if (id === "importModal") closeImportModal()
     else if (id === "templateImportModal") closeTemplateImportModal()
+    else if (id === "commentsWarningModal") closeCommentsWarning()
   }
 })
 
@@ -2294,6 +2312,7 @@ document.addEventListener("keydown", (e) => {
     const importModal = document.getElementById("importModal")
     const templateImportModal = document.getElementById("templateImportModal")
     const logsPanel = document.getElementById("logsPanel")
+    const commentsModal = document.getElementById("commentsWarningModal")
 
     if (logsPanel && logsPanel.classList.contains("expanded-vertical")) {
       toggleLogFullscreen()
@@ -2314,6 +2333,9 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault()
     } else if (importModal && importModal.classList.contains("show")) {
       closeImportModal()
+      e.preventDefault()
+    } else if (commentsModal && commentsModal.classList.contains("show")) {
+      closeCommentsWarning()
       e.preventDefault()
     }
   }
@@ -2342,6 +2364,12 @@ document.addEventListener("keydown", (e) => {
           e.preventDefault()
         }
       }
+    } else if (commentsModal && commentsModal.classList.contains("show")) {
+      if (typeof pendingSaveAction === "function") {
+        pendingSaveAction()
+        closeCommentsWarning()
+      }
+      e.preventDefault()
     }
   }
 })
@@ -2521,4 +2549,25 @@ function applyGUIState() {
     editorContainer.style.display = "block"
     tabsContent?.classList.remove("no-border")
   }
+}
+
+function isCurrentGuiActive() {
+  if (typeof isRoutingFile === "function" && isRoutingFile() && guiRoutingState.enabled) return true
+  if (typeof isLogFile === "function" && isLogFile() && guiLogState.enabled) return true
+  return false
+}
+
+function hasComments(content) {
+  return /\/\/|\/\*[\s\S]*?\*\//.test(content)
+}
+
+function closeCommentsWarning() {
+  document.getElementById("commentsWarningModal").classList.remove("show")
+  pendingSaveAction = null
+}
+
+function showCommentsWarning(action) {
+  pendingSaveAction = action
+  document.getElementById("commentsWarningModal").classList.add("show")
+  setTimeout(() => document.getElementById("confirmCommentsBtn").focus(), 50)
 }

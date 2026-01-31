@@ -952,9 +952,9 @@ textarea {
   backdrop-filter: blur(20px);
   border-radius: 12px;
   padding: 24px;
-  width: fit-content;
+  width: auto;
   min-width: 460px;
-  max-width: 90vw;
+  max-width: 560px;
   display: inline-block;
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.4),
@@ -2970,7 +2970,7 @@ textarea {
 .network-buttons.focused,
 .protocol-buttons.focused,
 .inboundtag-buttons.focused {
-  border-color: #3b82f6;
+  border-color: #60a5fa;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
@@ -3383,7 +3383,7 @@ textarea {
   color: #fbbf24;
   background: #2a1f0d;
   border: 1px solid #4a3615;
-  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   white-space: normal !important;
   letter-spacing: 0.3px;
@@ -3399,6 +3399,10 @@ textarea {
 .settings-warning svg {
   flex-shrink: 0;
   margin-top: 8px;
+}
+
+#coreVersion {
+  margin-top: 2px;
 }
 
 @media (max-width: 600px) {
@@ -3835,10 +3839,10 @@ textarea {
     overflow-y: visible;
   }
 
-  .editor-container {
+  /*.editor-container {
     height: auto;
     min-height: 500px;
-  }
+  }*/
 
   #formatBtn::before,
   #saveBtn::before,
