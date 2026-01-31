@@ -3405,6 +3405,11 @@ textarea {
   margin-top: 2px;
 }
 
+.monaco-editor .iPadShowKeyboard,
+.monaco-editor .showKeyboard {
+  display: none !important;
+}
+
 @media (max-width: 600px) {
   .rule-name-input {
     max-width: 120px;
@@ -3623,11 +3628,6 @@ textarea {
     width: 260px;
     padding: 2px 12px 2px 32px;
     background-position: 10px calc(50% + 2px);
-  }
-
-  .monaco-editor .iPadShowKeyboard,
-  .monaco-editor .showKeyboard {
-    display: none !important;
   }
 
   .log-filter .input {
