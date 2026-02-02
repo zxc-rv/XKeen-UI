@@ -283,24 +283,14 @@ function renderAllLogs(container, lines) {
 
 function appendLogLines(container, newLines) {
   if (newLines.length === 0) return
-
   const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50
 
-  if (container.firstElementChild && container.firstElementChild.innerText === "Журнал пуст") {
+  if (container.classList.contains("centered")) {
     container.innerHTML = ""
     container.classList.remove("centered")
   }
 
   container.insertAdjacentHTML("beforeend", newLines.join(""))
-
-  const maxLines = 1000
-  const linesToRemove = container.children.length - maxLines
-
-  if (linesToRemove > 0) {
-    for (let i = 0; i < linesToRemove; i++) {
-      container.firstElementChild.remove()
-    }
-  }
   if (isScrolledToBottom && !userScrolled) {
     container.scrollTop = container.scrollHeight
   }
@@ -445,12 +435,11 @@ function connectWebSocket() {
         }
       }
 
-      if (displayLines.length > MAX_DISPLAY_LINES) {
-        displayLines = displayLines.slice(-MAX_DISPLAY_LINES)
-      }
       if (linesToRender.length > 0) {
-        appendLogLines(document.getElementById("logsContainer"), linesToRender)
+        const container = document.getElementById("logsContainer")
+        appendLogLines(container, linesToRender)
       }
+
       return
     }
 
@@ -1505,6 +1494,21 @@ document.addEventListener("DOMContentLoaded", () => {
         logFilter = filterText
         logFilterClear.classList.add("show")
         applyFilter()
+      }
+    }
+  })
+
+  logsContainer.setAttribute("tabindex", "0")
+
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.code === "KeyA") {
+      if (logsContainer.contains(document.activeElement) || document.activeElement === logsContainer) {
+        e.preventDefault()
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.selectNodeContents(logsContainer)
+        selection.removeAllRanges()
+        selection.addRange(range)
       }
     }
   })

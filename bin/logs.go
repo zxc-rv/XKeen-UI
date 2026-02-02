@@ -25,6 +25,13 @@ var (
 		"debug": "debug", "info": "info", "warn": "warn", "warning": "warn",
 		"error": "error", "fatal": "fatal",
 	}
+	levelNormalizer = strings.NewReplacer(
+		"[Info]", "[INFO]", "[info]", "[INFO]",
+		"[Warning]", "[WARN]", "[warning]", "[WARN]",
+		"[Error]", "[ERROR]", "[error]", "[ERROR]",
+		"[Debug]", "[DEBUG]", "[debug]", "[DEBUG]",
+		"[Fatal]", "[FATAL]", "[fatal]", "[FATAL]",
+	)
 )
 
 func formatLevel(level string) string {
@@ -86,50 +93,46 @@ func GetLogs(path string, query string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil { return nil, err }
 	defer f.Close()
-
 	var lines []string
 	scanner := bufio.NewScanner(f)
-
 	AppSettingsMutex.RLock()
 	tz := AppSettings.TimezoneOffset
 	AppSettingsMutex.RUnlock()
 
 	if query == "" {
 		stat, _ := f.Stat()
-		if stat.Size() > 25000 {
-			f.Seek(-25000, io.SeekEnd)
+		if stat.Size() > 128000 {
+			f.Seek(-128000, io.SeekEnd)
 			scanner.Scan()
 		}
-
 		for scanner.Scan() {
 			if l := ProcessLogLine(scanner.Text(), tz); l != "" {
 				lines = append(lines, l)
 			}
 		}
-		if len(lines) > 500 { lines = lines[len(lines)-500:] }
 		return lines, nil
 	}
 
 	keywords := strings.Split(query, "|")
+	totalBytes := 0
 
 	for scanner.Scan() {
 		text := scanner.Text()
-		l := ProcessLogLine(text, tz)
-		if l == "" {
-			continue
-		}
-
+		normalized := levelNormalizer.Replace(text)
 		match := false
 		for _, k := range keywords {
-			if k != "" && strings.Contains(l, k) {
+			if k != "" && strings.Contains(normalized, k) {
 				match = true
 				break
 			}
 		}
-
 		if match {
-			lines = append(lines, l)
-			if len(lines) >= 1000 { break }
+			l := ProcessLogLine(text, tz)
+			if l != "" {
+				lines = append(lines, l)
+				totalBytes += len(text) + 1
+				if totalBytes >= 128000 { break }
+			}
 		}
 	}
 

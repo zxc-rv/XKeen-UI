@@ -102,19 +102,14 @@ func WebsocketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	timer := time.NewTimer(0)
-	if !timer.Stop() { <-timer.C }
-
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case event, ok := <-watcher.Events:
 			if !ok { return }
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				timer.Reset(100 * time.Millisecond)
-			}
-		case <-timer.C:
+			if event.Op&fsnotify.Write != fsnotify.Write { continue }
+
 			stat, err := os.Stat(logPath)
 			if err != nil || stat.Size() < lastOffset {
 				lastOffset = 0

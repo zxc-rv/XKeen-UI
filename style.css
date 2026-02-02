@@ -3410,6 +3410,10 @@ textarea {
   display: none !important;
 }
 
+#logsContainer:focus {
+  outline: none;
+}
+
 @media (max-width: 600px) {
   .rule-name-input {
     max-width: 120px;
