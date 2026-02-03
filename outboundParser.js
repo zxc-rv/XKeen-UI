@@ -122,6 +122,12 @@ const protocols = {
       password: decodeURIComponent(url.username),
       sni: params.sni,
       insecure: params.insecure === "1" || params.allowInsecure === "1",
+      obfs: params.obfs,
+      obfsPassword: params["obfs-password"],
+      fingerprint: params.fp || params.fingerprint,
+      alpn: params.alpn?.split(","),
+      up: params.up,
+      down: params.down,
     })),
 
   ss: (uri) => {
@@ -219,7 +225,14 @@ function convertToMihomoYaml(proxyConfig) {
     common.password = settings.password
   } else if (proxyConfig.protocol === "hysteria2") {
     common.password = settings.password
-    common["fast-open"] = true
+    if (settings.sni) common.sni = settings.sni
+    if (settings.insecure) common["skip-cert-verify"] = true
+    if (settings.obfs) common.obfs = settings.obfs
+    if (settings.obfsPassword) common["obfs-password"] = settings.obfsPassword
+    if (settings.fingerprint) common.fingerprint = settings.fingerprint
+    if (settings.alpn) common.alpn = settings.alpn
+    if (settings.up) common.up = settings.up
+    if (settings.down) common.down = settings.down
   } else if (proxyConfig.protocol === "shadowsocks") Object.assign(common, { cipher: settings.method, password: settings.password })
 
   if (streamSettings.network) common.network = streamSettings.network
@@ -304,4 +317,8 @@ function generateConfigForCore(uri, core = "xray", existingConfig = "") {
   return core === "mihomo"
     ? { type: "proxy", content: convertToMihomoYaml(config) + "\n" }
     : { type: "outbound", content: JSON.stringify(config, null, 2) }
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { generateConfigForCore, parseProxyUri, convertToMihomoYaml }
 }
