@@ -1981,6 +1981,7 @@ textarea {
   transition: all 0.2s ease;
   text-decoration: none;
   cursor: pointer;
+  display: none;
 }
 
 .app-version:hover {

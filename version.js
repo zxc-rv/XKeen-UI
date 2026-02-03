@@ -1,4 +1,3 @@
-const APP_VERSION = "dev"
 ;(function () {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initVersion)
@@ -6,18 +5,15 @@ const APP_VERSION = "dev"
     initVersion()
   }
   async function initVersion() {
-    const versionElement = document.getElementById("versionText")
+    const versionElement = document.getElementById("appVersion")
     if (!versionElement) return
-
     try {
-      const response = await fetch(`/api/version`)
+      const response = await fetch("/api/version")
       const data = await response.json()
       if (data.success && data.version) {
-        versionElement.textContent = data.version
-        return
+        versionElement.querySelector("#versionText").textContent = data.version
+        versionElement.style.display = "block"
       }
     } catch (e) {}
-
-    versionElement.textContent = APP_VERSION
   }
 })()
