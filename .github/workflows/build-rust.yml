@@ -14,14 +14,17 @@ jobs:
         include:
           - target: aarch64-unknown-linux-musl
             name: arm64-v8a
+            toolchain: stable
           - target: mips-unknown-linux-musl
             name: mips32
+            toolchain: nightly
           - target: mipsel-unknown-linux-musl
             name: mips32le
+            toolchain: nightly
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
-        run: rustup toolchain install stable
+        run: rustup toolchain install ${{ matrix.toolchain }}
       - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
       - name: Setup Cross.toml
@@ -39,7 +42,7 @@ jobs:
         env:
           CROSS_NO_WARNINGS: 0
         run: |
-          cross build --release --target ${{ matrix.target }}
+          cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/xkeen-ui xkeen-ui-${{ matrix.name }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
