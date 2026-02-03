@@ -17,7 +17,7 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
     let mut port = "1000".to_string();
     let mut _debug = false;
-    let version = "dev";
+    let version = env!("CARGO_PKG_VERSION");
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
