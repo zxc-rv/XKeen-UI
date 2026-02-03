@@ -1,0 +1,79 @@
+name: Build Rust binaries
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. v1.0.0)"
+        required: true
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-unknown-linux-musl
+            name: arm64-v8a
+          - target: mips-unknown-linux-musl
+            name: mips32
+          - target: mipsel-unknown-linux-musl
+            name: mips32le
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup toolchain install stable
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+      - name: Build binary
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/xkeen-ui xkeen-ui-${{ matrix.name }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xkeen-ui-${{ matrix.name }}
+          path: xkeen-ui-${{ matrix.name }}
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update version in version.js
+        run: |
+          sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"${{ inputs.version }}"'"/' version.js
+          echo "Updated version to: ${{ inputs.version }}"
+      - name: Pack static files
+        run: |
+          tar -czf xkeen-ui-static.tar.gz *.js *.css index.html favicon.png assets
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xkeen-ui-static
+          path: xkeen-ui-static.tar.gz
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, static]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -n1)
+          CHANGELOG=$(git log --reverse --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD -- script.js index.html style.css src/)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version }}
+          prerelease: true
+          files: artifacts/**
+          body: |
+            ## Изменения:
+            ${{ steps.changelog.outputs.changelog }}
