@@ -23,6 +23,10 @@ jobs:
             toolchain: nightly
     steps:
       - uses: actions/checkout@v4
+      - name: Set version
+        run: |
+          sed -i 's/^version = .*/version = "'"${{ inputs.version#v }}"'"/' Cargo.toml
+          grep '^version =' Cargo.toml
       - name: Install Rust
         run: rustup toolchain install ${{ matrix.toolchain }}
       - name: Install cross

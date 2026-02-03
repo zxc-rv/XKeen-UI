@@ -10,3 +10,5 @@ version.js.tmp
 *.bak
 *.tmp
 .zed
+target
+Cargo.lock

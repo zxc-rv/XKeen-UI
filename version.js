@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.4.0"
+const APP_VERSION = "dev"
 ;(function () {
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initVersion)
