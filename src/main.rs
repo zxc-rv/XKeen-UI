@@ -17,7 +17,6 @@ async fn main() {
     let args: Vec<String> = env::args().collect();
     let mut port = "1000".to_string();
     let mut _debug = false;
-    let version = env!("CARGO_PKG_VERSION");
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
@@ -29,7 +28,7 @@ async fn main() {
             }
             "-d" => _debug = true,
             "-v" | "-V" => {
-                println!("XKeen UI {} ({}/{})", version, std::env::consts::OS, std::env::consts::ARCH);
+                println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, std::env::consts::ARCH);
                 std::process::exit(0);
             }
             _ => {}
@@ -37,7 +36,7 @@ async fn main() {
         i += 1;
     }
 
-    let info = format!("XKeen UI {} ({}/{})", version, std::env::consts::OS, std::env::consts::ARCH);
+    let info = format!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, std::env::consts::ARCH);
     println!("{}", info);
     if _debug { println!("Debug mode enabled"); }
 
