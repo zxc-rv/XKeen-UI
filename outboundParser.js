@@ -187,7 +187,7 @@ const protocols = {
 }
 
 function parseProxyUri(uri) {
-  const protocol = uri.split(":")[0]
+  const protocol = uri.split(":")[0].replace("hy2", "hysteria2")
   if (!protocols[protocol]) throw new Error("Неизвестная ссылка")
   return protocols[protocol](uri)
 }
@@ -296,7 +296,7 @@ function generateConfigForCore(uri, core = "xray", existingConfig = "") {
 
   if (core === "mihomo" && uri.includes("type=xhttp")) throw new Error("XHTTP в Mihomo не поддерживается")
   if (core !== "mihomo" && uri.startsWith("http")) throw new Error("Подписки в Xray не поддерживаются")
-  if (core !== "mihomo" && uri.startsWith("hysteria2")) throw new Error("Hysteria2 в Xray не поддерживается")
+  if ((core !== "mihomo" && uri.startsWith("hysteria2")) || uri.startsWith("hy2")) throw new Error("Hysteria2 в Xray не поддерживается")
 
   const config = parseProxyUri(uri)
   if (config.tag === "PROXY" || existingConfig.includes(config.tag)) config.tag = generateName(config.protocol)
