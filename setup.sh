@@ -17,6 +17,9 @@ lighttpd_init="/opt/etc/init.d/S80lighttpd"
 lighttpd_dir="/opt/etc/lighttpd"
 lighttpd_conf="$lighttpd_dir/conf.d/90-xkeenui.conf"
 
+beta=false
+[ "$1" = "beta" ] && beta=true
+
 detect_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
 
@@ -58,7 +61,14 @@ detect_arch() {
 
 download_files() {
 
-  download_url="https://github.com/zxc-rv/XKeen-UI/releases/latest/download"
+  local base_url="https://github.com/zxc-rv/XKeen-UI/releases"
+  local download_url="$base_url/latest/download"
+
+  if [ "$beta" = true ]; then
+    echo -e "${YELLOW}:: Поиск бета-релиза...${NC}"
+    local tag=$(curl -s https://api.github.com/repos/zxc-rv/XKeen-UI/releases | grep -m1 '"tag_name":' | cut -d'"' -f4)
+    download_url="$base_url/download/$tag"
+  fi
 
   local bin_name="xkeen-ui-$arch"
   local static_name="xkeen-ui-static.tar.gz"
