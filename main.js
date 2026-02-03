@@ -14,6 +14,7 @@ let pingInterval = null
 let displayLines = []
 let availableCores = []
 let currentCore = ""
+let coreVersions = { xray: "", mihomo: "" }
 let pendingCoreChange = ""
 let isCurrentFileJson = false
 let dashboardPort = null
@@ -21,6 +22,7 @@ let dependenciesLoaded = false
 let toastStack = []
 let currentTimezone = 3
 let autoApply = false
+let backupCore = true
 let statusWs = null
 let selectedTemplateUrl = null
 let pendingSaveAction = null
@@ -100,6 +102,13 @@ async function init() {
       autoApplyCheckbox.checked = autoApply
     }
 
+    const savedBackupCore = localStorage.getItem("backupCore")
+    backupCore = savedBackupCore !== "0"
+    const backupCoreCheckbox = document.getElementById("backupCoreCheckbox")
+    if (backupCoreCheckbox) {
+      backupCoreCheckbox.checked = backupCore
+    }
+
     const logsContainer = document.getElementById("logsContainer")
     logsContainer.classList.add("centered")
     logsContainer.innerHTML = '<div style="color: #6b7280;">Установка соединения...</div>'
@@ -109,7 +118,7 @@ async function init() {
     }, 15000)
   } catch (error) {
     console.error("Failed to initialize app:", error)
-    showToast("Ошибка инициализации приложения", "error")
+    showToast("Ошибка инициализации", "error")
   }
 }
 
@@ -1232,11 +1241,11 @@ async function saveAndRestart(force = false) {
       setTimeout(async () => {
         const statusCheck = await apiCall("control")
         if (!statusCheck.running) {
-          showToast("Ядро упало, чекай конфиг", "error")
+          showToast("Ядро завершило работу с ошибкой, проверьте конфигурацию", "error")
           isServiceRunning = false
           updateServiceStatus(false)
         }
-      }, 2000)
+      }, 3000)
     }
   } catch (e) {
     showToast("Ошибка перезапуска", "error")
@@ -1319,16 +1328,21 @@ function clearCurrentLog() {
 
 async function checkStatus() {
   if (isActionInProgress) return
+
   const r = await apiCall("control")
   if (!r.success) return
 
   availableCores = r.cores || []
   currentCore = r.currentCore || "xray"
+
+  if (r.versions) {
+    coreVersions = r.versions
+  }
+
   updateServiceStatus(r.running)
   updateDashboardLink()
 
-  const coreSelectRoot = document.getElementById("coreSelectRoot")
-  const coreSelectTrigger = document.getElementById("coreSelectTrigger")
+  const coreSelectBtn = document.getElementById("coreSelectBtn")
   const coreSelectSkeleton = document.getElementById("coreSelectSkeleton")
   const settingsBtn = document.getElementById("settingsBtn")
   const settingsBtnSkeleton = document.getElementById("settingsBtnSkeleton")
@@ -1336,78 +1350,103 @@ async function checkStatus() {
   document.getElementById("coreSelectLabel").textContent = currentCore
 
   const verEl = document.getElementById("coreVersion")
-  if (verEl) verEl.textContent = r.version || ""
+  if (verEl) verEl.textContent = coreVersions[currentCore] || ""
 
   coreSelectSkeleton.style.display = "none"
-  coreSelectRoot.style.display = "inline-block"
-
+  coreSelectBtn.style.display = "inline-flex"
   settingsBtnSkeleton.style.display = "none"
   settingsBtn.style.display = "inline-block"
+}
 
-  if (availableCores.length >= 2) {
-    coreSelectTrigger.disabled = false
-    coreSelectTrigger.style.cursor = "pointer"
-    coreSelectTrigger.style.opacity = "1"
+let selectedUpdateCore = ""
+let selectedUpdateVersion = ""
+
+function openCoreManageModal() {
+  const modal = document.getElementById("coreManageModal")
+  modal.classList.add("show")
+  const xrayStatus = document.getElementById("xrayStatus")
+  const mihomoStatus = document.getElementById("mihomoStatus")
+  const xraySwitchBtn = document.getElementById("xraySwitchBtn")
+  const mihomoSwitchBtn = document.getElementById("mihomoSwitchBtn")
+  const xrayUpdateBtn = document.getElementById("xrayUpdateBtn")
+  const mihomoUpdateBtn = document.getElementById("mihomoUpdateBtn")
+
+  const hasXray = availableCores.includes("xray")
+  const hasMihomo = availableCores.includes("mihomo")
+
+  if (currentCore === "xray") {
+    xrayStatus.textContent = coreVersions.xray || ""
+    xrayStatus.className = "core-manage-status active"
+    if (hasMihomo) {
+      mihomoStatus.textContent = coreVersions.mihomo || ""
+      mihomoStatus.className = "core-manage-status"
+    } else {
+      mihomoStatus.textContent = "Не установлено"
+      mihomoStatus.className = "core-manage-status not-installed"
+    }
   } else {
-    coreSelectTrigger.disabled = true
-    coreSelectTrigger.style.cursor = "not-allowed"
-    coreSelectTrigger.style.opacity = "0.5"
+    mihomoStatus.textContent = coreVersions.mihomo || ""
+    mihomoStatus.className = "core-manage-status active"
+    if (hasXray) {
+      xrayStatus.textContent = coreVersions.xray || ""
+      xrayStatus.className = "core-manage-status"
+    } else {
+      xrayStatus.textContent = "Не установлено"
+      xrayStatus.className = "core-manage-status not-installed"
+    }
   }
-  document.querySelectorAll("#coreSelectContent .select-item").forEach((i) => {
-    const v = i.getAttribute("data-value")
-    i.setAttribute("aria-selected", v === currentCore ? "true" : "false")
-  })
+
+  if (currentCore === "xray") {
+    xraySwitchBtn.disabled = true
+    xraySwitchBtn.style.display = "inline-flex"
+    mihomoSwitchBtn.style.display = hasMihomo ? "inline-flex" : "none"
+    mihomoSwitchBtn.disabled = !hasMihomo
+  } else {
+    mihomoSwitchBtn.disabled = true
+    mihomoSwitchBtn.style.display = "inline-flex"
+    xraySwitchBtn.style.display = hasXray ? "inline-flex" : "none"
+    xraySwitchBtn.disabled = !hasXray
+  }
+
+  if (xrayUpdateBtn) {
+    xrayUpdateBtn.textContent = hasXray ? "Обновить" : "Установить"
+  }
+
+  if (mihomoUpdateBtn) {
+    mihomoUpdateBtn.textContent = hasMihomo ? "Обновить" : "Установить"
+  }
 }
 
-function closeCoreModal() {
-  pendingCoreChange = ""
-  document.getElementById("coreModal").classList.remove("show")
+function closeCoreManageModal() {
+  document.getElementById("coreManageModal").classList.remove("show")
 }
 
-async function switchCore() {
-  const selectedCoreElement = document.getElementById("selectedCore")
-  const selectedCore = selectedCoreElement ? selectedCoreElement.textContent : ""
-
-  if (!selectedCore || (selectedCore !== "xray" && selectedCore !== "mihomo")) {
-    showToast("Ошибка: не выбрано ядро", "error")
+async function switchCore(core) {
+  if (core === currentCore) {
+    showToast("Это ядро уже активно", "error")
     return
   }
 
-  if (selectedCore === currentCore) {
-    showToast("Это ядро уже выбрано", "error")
-    return
-  }
+  closeCoreManageModal()
+  currentCore = core
 
-  closeCoreModal()
-
-  currentCore = selectedCore
   const coreSelectLabel = document.getElementById("coreSelectLabel")
-  if (coreSelectLabel) {
-    coreSelectLabel.textContent = currentCore
-  }
+  if (coreSelectLabel) coreSelectLabel.textContent = currentCore
 
   const verEl = document.getElementById("coreVersion")
   if (verEl) verEl.textContent = ""
 
-  const items = document.querySelectorAll("#coreSelectContent .select-item")
-  items.forEach((item) => {
-    const value = item.getAttribute("data-value")
-    if (item && value) {
-      item.setAttribute("aria-selected", value === currentCore ? "true" : "false")
-    }
-  })
-
-  await loadConfigs(selectedCore)
+  await loadConfigs(core)
 
   setPendingState("Переключение...")
+  console.time(`switchCore ${core}`)
 
-  console.time(`switchCore ${selectedCore}`)
   try {
-    const result = await apiCall("control", { action: "switchCore", core: selectedCore })
-    console.timeEnd(`switchCore ${selectedCore}`)
+    const result = await apiCall("control", { action: "switchCore", core: core })
+    console.timeEnd(`switchCore ${core}`)
 
     if (result.success) {
-      showToast(`Ядро изменено на ${selectedCore}`)
+      showToast(`Ядро изменено на ${core}`)
       isActionInProgress = false
       checkStatus()
     } else {
@@ -1416,11 +1455,176 @@ async function switchCore() {
       checkStatus()
     }
   } catch (error) {
-    console.timeEnd(`switchCore ${selectedCore}`)
+    console.timeEnd(`switchCore ${core}`)
     console.error("Error switching core:", error)
     showToast(`Ошибка смены ядра: ${error.message}`, "error")
     isActionInProgress = false
     checkStatus()
+  }
+}
+
+async function openUpdateModal(core) {
+  selectedUpdateCore = core
+  selectedUpdateVersion = ""
+
+  const modal = document.getElementById("updateModal")
+  const coreTitle = document.getElementById("updateModalCore")
+  const list = document.getElementById("updateList")
+  const badge = document.getElementById("updateCountBadge")
+  const installBtn = document.getElementById("installVersionBtn")
+
+  if (installBtn) {
+    installBtn.disabled = true
+    installBtn.textContent = "Установить"
+  }
+
+  coreTitle.textContent = core.charAt(0).toUpperCase() + core.slice(1)
+  list.innerHTML = '<div class="template-loading">Загрузка версий...</div>'
+  badge.textContent = "0"
+
+  modal.classList.add("show")
+
+  try {
+    const response = await fetch(`/api/update?core=${core}`)
+    const data = await response.json()
+
+    if (!data.success || !data.releases || data.releases.length === 0) {
+      list.innerHTML = '<div class="template-loading">Не удалось загрузить список версий</div>'
+      return
+    }
+
+    badge.textContent = data.releases.length
+
+    list.innerHTML = data.releases
+      .map(
+        (rel, idx) => `
+      <div class="template-item" data-version="${rel.version}" data-index="${idx}">
+        <input type="radio" name="updateVersion" id="version-${idx}" value="${rel.version}" />
+        <label for="version-${idx}">
+          <div class="template-info">
+            <span class="template-name">${rel.name || rel.version}</span>
+            ${rel.isPrerelease ? '<span class="version-prerelease">Pre-release</span>' : ""}
+          </div>
+          <div class="template-meta">
+            <span class="template-version">v${rel.version}</span>
+            <span class="template-date">${rel.publishedAt}</span>
+          </div>
+        </label>
+      </div>
+    `,
+      )
+      .join("")
+
+    list.querySelectorAll(".template-item").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        e.stopPropagation()
+
+        const radio = item.querySelector('input[type="radio"]')
+        if (radio) {
+          radio.checked = true
+
+          selectedUpdateVersion = radio.value
+
+          if (installBtn) {
+            installBtn.disabled = false
+          }
+
+          list.querySelectorAll(".template-item").forEach((el) => {
+            el.classList.remove("selected")
+          })
+          item.classList.add("selected")
+        }
+      })
+    })
+
+    list.querySelectorAll('input[type="radio"]').forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        selectedUpdateVersion = e.target.value
+        if (installBtn) {
+          installBtn.disabled = false
+        }
+        list.querySelectorAll(".template-item").forEach((el) => {
+          el.classList.remove("selected")
+          const itemRadio = el.querySelector('input[type="radio"]')
+          if (itemRadio && itemRadio.checked) {
+            el.classList.add("selected")
+          }
+        })
+      })
+    })
+
+    if (data.releases.length > 0) {
+      setTimeout(() => {
+        const firstRadio = list.querySelector('input[type="radio"]')
+        if (firstRadio) {
+          firstRadio.checked = true
+          selectedUpdateVersion = firstRadio.value
+          if (installBtn) {
+            installBtn.disabled = false
+          }
+          const firstItem = list.querySelector(".template-item")
+          if (firstItem) {
+            firstItem.classList.add("selected")
+          }
+        }
+      }, 100)
+    }
+  } catch (error) {
+    console.error("Failed to fetch releases:", error)
+    list.innerHTML = '<div class="template-loading">Ошибка загрузки версий</div>'
+  }
+}
+
+function closeUpdateModal() {
+  document.getElementById("updateModal").classList.remove("show")
+  selectedUpdateVersion = ""
+}
+
+async function installSelectedVersion() {
+  if (!selectedUpdateVersion) return showToast("Не выбрана версия", "error")
+
+  const payload = {
+    core: selectedUpdateCore,
+    version: selectedUpdateVersion,
+    backupCore: backupCore,
+  }
+
+  closeCoreManageModal()
+  closeUpdateModal()
+
+  setPendingState("Обновление...")
+  const installBtn = document.getElementById("installVersionBtn")
+  if (installBtn) {
+    installBtn.disabled = true
+    installBtn.textContent = "Установка..."
+  }
+
+  try {
+    const response = await fetch("/api/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    const data = await response.json()
+
+    if (data.success) {
+      showToast({
+        title: "Обновление завершено",
+        body: `Установлен ${payload.core} v${payload.version}`,
+      })
+      isActionInProgress = false
+      checkStatus()
+    } else {
+      showToast(`Ошибка: ${data.error}`, "error")
+    }
+  } catch (error) {
+    console.error("Install error:", error)
+    showToast("Ошибка установки", "error")
+  } finally {
+    if (installBtn) {
+      installBtn.disabled = false
+      installBtn.textContent = "Установить"
+    }
   }
 }
 
@@ -1462,9 +1666,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const logSelectLabel = document.getElementById("logSelectLabel")
   const logFilterInput = document.getElementById("logFilterInput")
   const tabsList = document.getElementById("tabsList")
-  const coreSelectRoot = document.getElementById("coreSelectRoot")
-  const coreSelectTrigger = document.getElementById("coreSelectTrigger")
-  const coreSelectContent = document.getElementById("coreSelectContent")
   const logFilterClear = document.getElementById("logFilterClear")
   const importInput = document.getElementById("importInput")
   const importInputClear = document.getElementById("importInputClear")
@@ -1621,32 +1822,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setActiveLogItem(value)
   }
 
-  function closeCoreMenu() {
-    coreSelectRoot.classList.remove("select-open")
-    coreSelectTrigger.setAttribute("aria-expanded", "false")
-  }
-
-  function openCoreMenu() {
-    coreSelectRoot.classList.add("select-open")
-    coreSelectTrigger.setAttribute("aria-expanded", "true")
-  }
-
-  function applyCoreSelection(value) {
-    if (!value) {
-      console.error("Empty value provided to applyCoreSelection")
-      return
-    }
-
-    if (value === currentCore) {
-      console.log("Same core selected, ignoring")
-      return
-    }
-
-    pendingCoreChange = value
-    document.getElementById("selectedCore").textContent = value
-    document.getElementById("coreModal").classList.add("show")
-  }
-
   logSelectTrigger.addEventListener("click", (e) => {
     e.stopPropagation()
     const isOpen = logSelectRoot.classList.contains("select-open")
@@ -1672,40 +1847,9 @@ document.addEventListener("DOMContentLoaded", () => {
     logSelectRoot.classList.remove("select-hovering")
   })
 
-  coreSelectTrigger.addEventListener("click", (e) => {
-    if (coreSelectTrigger.disabled) return
-    e.stopPropagation()
-    const isOpen = coreSelectRoot.classList.contains("select-open")
-    if (isOpen) {
-      closeCoreMenu()
-    } else {
-      openCoreMenu()
-    }
-  })
-
-  coreSelectContent.addEventListener("click", (e) => {
-    const target = e.target.closest(".select-item")
-    if (!target) return
-
-    const value = target.getAttribute("data-value")
-
-    applyCoreSelection(value)
-    closeCoreMenu()
-  })
-
-  coreSelectContent.addEventListener("mouseenter", () => {
-    coreSelectRoot.classList.add("select-hovering")
-  })
-  coreSelectContent.addEventListener("mouseleave", () => {
-    coreSelectRoot.classList.remove("select-hovering")
-  })
-
   document.addEventListener("click", (e) => {
     if (!logSelectRoot.contains(e.target)) {
       closeLogMenu()
-    }
-    if (!coreSelectRoot.contains(e.target)) {
-      closeCoreMenu()
     }
   })
 
@@ -2306,6 +2450,8 @@ document.addEventListener("click", (e) => {
     else if (id === "importModal") closeImportModal()
     else if (id === "templateImportModal") closeTemplateImportModal()
     else if (id === "commentsWarningModal") closeCommentsWarning()
+    else if (id === "coreManageModal") closeCoreManageModal()
+    else if (id === "updateModal") closeUpdateModal()
   }
 })
 
@@ -2317,6 +2463,8 @@ document.addEventListener("keydown", (e) => {
     const templateImportModal = document.getElementById("templateImportModal")
     const logsPanel = document.getElementById("logsPanel")
     const commentsModal = document.getElementById("commentsWarningModal")
+    const coreManageModal = document.getElementById("coreManageModal")
+    const updateModal = document.getElementById("updateModal")
 
     if (logsPanel && logsPanel.classList.contains("expanded-vertical")) {
       toggleLogFullscreen()
@@ -2340,6 +2488,12 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault()
     } else if (commentsModal && commentsModal.classList.contains("show")) {
       closeCommentsWarning()
+      e.preventDefault()
+    } else if (coreManageModal && coreManageModal.classList.contains("show")) {
+      closeCoreManageModal()
+      e.preventDefault()
+    } else if (updateModal && updateModal.classList.contains("show")) {
+      closeUpdateModal()
       e.preventDefault()
     }
   }
@@ -2521,6 +2675,14 @@ function toggleAutoApply() {
   if (checkbox) {
     autoApply = checkbox.checked
     localStorage.setItem("autoApply", autoApply ? "1" : "0")
+  }
+}
+
+function toggleBackupCore() {
+  const checkbox = document.getElementById("backupCoreCheckbox")
+  if (checkbox) {
+    backupCore = checkbox.checked
+    localStorage.setItem("backupCore", backupCore ? "1" : "0")
   }
 }
 

@@ -21,17 +21,8 @@ detect_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
 
   case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
-    *'armv5tel'* | *'armv6l'* | *'armv7'*)
-      arch='arm32-v5'
-      ;;
     *'armv8'* | *'aarch64'* | *'cortex-a'* )
       arch='arm64-v8a'
-      ;;
-    *'mips64le'* )
-      arch='mips64le'
-      ;;
-    *'mips64'* )
-      arch='mips64'
       ;;
     *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* )
       arch='mips32le'
@@ -42,10 +33,6 @@ detect_arch() {
     *)
       if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
           arch='arm64-v8a'
-      elif echo "${cpuinfo}" | grep -q 'mips64le'; then
-          arch='mips64le'
-      elif echo "${cpuinfo}" | grep -q 'mips64'; then
-          arch='mips64'
       elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
           arch='mips32le'
       elif echo "${cpuinfo}" | grep -q 'mips'; then

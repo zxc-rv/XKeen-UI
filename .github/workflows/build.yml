@@ -12,19 +12,14 @@ jobs:
         include:
           - GOARCH: arm64
             name: arm64-v8a
-          - GOARCH: mipsle
-            GOMIPS: softfloat
-            name: mips32le
+
           - GOARCH: mips
             GOMIPS: softfloat
             name: mips32
-          - GOARCH: mips64
-            name: mips64
-          - GOARCH: mips64le
-            name: mips64le
-          - GOARCH: arm
-            GOARM: 5
-            name: arm32-v5
+
+          - GOARCH: mipsle
+            GOMIPS: softfloat
+            name: mips32le
 
     steps:
       - uses: actions/checkout@v4

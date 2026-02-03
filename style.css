@@ -724,6 +724,10 @@ textarea {
   color: #0f172a;
 }
 
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
 .btn-success {
   background: #10b981;
   color: white;
@@ -1003,7 +1007,7 @@ textarea {
 .modal-title {
   font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 20px;
+  margin-bottom: 30px;
   text-align: left;
   color: #f8fafc;
   letter-spacing: -0.02em;
@@ -2857,6 +2861,10 @@ textarea {
   transition: all 0.15s;
 }
 
+#settingsBtn svg {
+  margin-top: 3px;
+}
+
 .settings-item {
   display: flex;
   align-items: center;
@@ -3402,7 +3410,8 @@ textarea {
 }
 
 #coreVersion {
-  margin-top: 2px;
+  margin-top: 1px;
+  margin-right: 1px;
 }
 
 .monaco-editor .iPadShowKeyboard,
@@ -3412,6 +3421,40 @@ textarea {
 
 #logsContainer:focus {
   outline: none;
+}
+
+.core-manage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.core-manage-header h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.core-manage-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.core-manage-status.active {
+  background: #19292c;
+  color: #10b981;
+}
+
+.core-manage-status.not-installed {
+  background: #2a1215;
+  color: #ef4444;
 }
 
 @media (max-width: 600px) {
@@ -3861,4 +3904,186 @@ textarea {
     min-width: auto;
     flex: unset;
   }
+}
+
+#updateCountBadge {
+  margin-left: auto !important;
+}
+
+#updateModal .template-item {
+  min-height: 60px;
+}
+
+#coreManageModal .modal-content {
+  min-width: 500px !important ;
+}
+
+.btn-core-select {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  /*background: rgba(255, 255, 255, 0.05);*/
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+span#coreSelectLabel {
+  margin-bottom: 2px;
+}
+
+.btn-core-select:hover {
+  background: #1e293b;
+  /*border-color: rgba(255, 255, 255, 0.15);*/
+}
+
+.btn-core-select .core-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  margin-bottom: 1px;
+}
+
+.core-manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.core-manage-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.core-manage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.core-manage-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.core-manage-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.version-prerelease {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+}
+
+#updateModal .template-item label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+  justify-content: center;
+}
+
+.template-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.template-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.template-version {
+  font-weight: 500;
+}
+
+.template-date {
+  opacity: 0.8;
+}
+
+.core-manage-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.core-version {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.core-manage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.core-manage-header h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.core-version {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.core-manage-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.core-manage-actions {
+  display: flex;
+  gap: 8px;
 }

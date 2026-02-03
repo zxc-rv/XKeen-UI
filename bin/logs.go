@@ -26,19 +26,17 @@ var (
 		"error": "error", "fatal": "fatal",
 	}
 	levelNormalizer = strings.NewReplacer(
-		"[Info]", "[INFO]", "[info]", "[INFO]",
-		"[Warning]", "[WARN]", "[warning]", "[WARN]",
-		"[Error]", "[ERROR]", "[error]", "[ERROR]",
-		"[Debug]", "[DEBUG]", "[debug]", "[DEBUG]",
-		"[Fatal]", "[FATAL]", "[fatal]", "[FATAL]",
+		"[Debug]", "[DEBUG]", "level=debug", "level=DEBUG",
+		"[Warning]", "[WARN]", "level=warn", "level=WARN",
+		"[Info]", "[INFO]", "level=info", "level=INFO",
+		"[Error]", "[ERROR]", "level=error", "level=ERROR",
+		"[Fatal]", "[FATAL]", "level=fatal", "level=FATAL",
 	)
 )
 
 func formatLevel(level string) string {
 	l := strings.ToLower(level)
-	if mapped, ok := levelBadgeMap[l]; ok {
-		l = mapped
-	}
+	if mapped, ok := levelBadgeMap[l]; ok { l = mapped }
 	return fmt.Sprintf(`<span class="log-badge log-badge-%s" data-filter="%s">%s</span>`, l, strings.ToUpper(l), strings.ToUpper(l))
 }
 

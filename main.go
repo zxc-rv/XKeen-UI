@@ -41,6 +41,7 @@ func main() {
 	mux.HandleFunc("/api/control", bin.ControlHandler)
 	mux.HandleFunc("/api/configs", bin.ConfigsHandler)
 	mux.HandleFunc("/api/settings", bin.SettingsHandler)
+	mux.HandleFunc("/api/update", bin.UpdateHandler)
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) { bin.VersionHandler(w, r, version) })
 	mux.HandleFunc("/ws", bin.WebsocketHandler)
 

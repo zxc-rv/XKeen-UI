@@ -40,53 +40,29 @@
         <h1 class="title">XKeen UI</h1>
 
         <div class="statusBar-right">
-          <div id="coreSelectSkeleton" class="skeleton skeleton-btn" style="width: 150px; height: 36px; display: inline-block"></div>
-          <div id="coreSelectRoot" class="select-root core-select" style="display: none" aria-label="Выбор ядра">
-            <button id="coreSelectTrigger" class="select-trigger" aria-haspopup="listbox" aria-expanded="false">
-              <span class="core-icon" aria-hidden="true">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="core-icon" aria-hidden="true" focusable="false">
-                  <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
-                  <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
-                  <path d="M12 2v2" />
-                  <path d="M12 22v-2" />
-                  <path d="m17 20.66-1-1.73" />
-                  <path d="M11 10.27 7 3.34" />
-                  <path d="m20.66 17-1.73-1" />
-                  <path d="m3.34 7 1.73 1" />
-                  <path d="M14 12h8" />
-                  <path d="M2 12h2" />
-                  <path d="m20.66 7-1.73 1" />
-                  <path d="m3.34 17 1.73-1" />
-                  <path d="m17 3.34-1 1.73" />
-                  <path d="m11 13.73-4 6.93" />
-                </svg>
-              </span>
-
-              <span class="label" id="coreSelectLabel">xray</span>
-              <span id="coreVersion" style="opacity: 0.5; font-size: 0.8em"></span>
-              <svg
-                class="chevron"
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="lucide lucide-chevrons-up-down ml-2 h-4 w-4 shrink-0 opacity-50"
-                aria-hidden="true"
-              >
-                <path d="m7 15 5 5 5-5"></path>
-                <path d="m7 9 5-5 5 5"></path>
+          <div id="coreSelectSkeleton" class="skeleton skeleton-btn" style="width: 130px; height: 36px; display: inline-block"></div>
+          <button id="coreSelectBtn" class="btn-core-select" style="display: none" onclick="openCoreManageModal()">
+            <span class="core-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="core-icon" aria-hidden="true" focusable="false">
+                <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
+                <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+                <path d="M12 2v2" />
+                <path d="M12 22v-2" />
+                <path d="m17 20.66-1-1.73" />
+                <path d="M11 10.27 7 3.34" />
+                <path d="m20.66 17-1.73-1" />
+                <path d="m3.34 7 1.73 1" />
+                <path d="M14 12h8" />
+                <path d="M2 12h2" />
+                <path d="m20.66 7-1.73 1" />
+                <path d="m3.34 17 1.73-1" />
+                <path d="m17 3.34-1 1.73" />
+                <path d="m11 13.73-4 6.93" />
               </svg>
-            </button>
-            <div id="coreSelectContent" class="select-content">
-              <div class="select-item" role="option" data-value="xray" aria-selected="false">xray <span class="check">✓</span></div>
-              <div class="select-item" role="option" data-value="mihomo" aria-selected="false">mihomo <span class="check">✓</span></div>
-            </div>
-          </div>
+            </span>
+            <span class="label" id="coreSelectLabel">xray</span>
+            <span id="coreVersion" style="opacity: 0.5; font-size: 0.8em"></span>
+          </button>
           <div id="settingsBtnSkeleton" class="skeleton skeleton-btn" style="width: 36px; height: 36px; display: inline-block"></div>
           <button id="settingsBtn" class="btn-icon btn-secondary" style="display: none" onclick="toggleSettingsModal()" title="Настройки">
             <svg
@@ -372,9 +348,9 @@
         </div>
       </div>
     </div>
-    <div class="modal-overlay" id="coreModal">
+    <div class="modal-overlay" id="coreManageModal">
       <div class="modal-content">
-        <button class="modal-close" onclick="closeCoreModal()" aria-label="Закрыть">
+        <button class="modal-close" onclick="closeCoreManageModal()" aria-label="Закрыть">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             width="20"
@@ -390,11 +366,110 @@
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </button>
-        <h3 class="modal-title">Смена ядра</h3>
-        <p class="modal-body">Сменить ядро на <span id="selectedCore">Xray</span>?</p>
+        <h3 class="modal-title">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="display: inline-block; vertical-align: middle; margin-right: 10px; margin-top: -2px"
+          >
+            <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
+            <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+            <path d="M12 2v2" />
+            <path d="M12 22v-2" />
+            <path d="m17 20.66-1-1.73" />
+            <path d="M11 10.27 7 3.34" />
+            <path d="m20.66 17-1.73-1" />
+            <path d="m3.34 7 1.73 1" />
+            <path d="M14 12h8" />
+            <path d="M2 12h2" />
+            <path d="m20.66 7-1.73 1" />
+            <path d="m3.34 17 1.73-1" />
+            <path d="m17 3.34-1 1.73" />
+            <path d="m11 13.73-4 6.93" />
+          </svg>
+          Управление ядром
+        </h3>
+        <div class="modal-body">
+          <div class="core-manage-list">
+            <div class="core-manage-item">
+              <div class="core-manage-header">
+                <h4>Xray</h4>
+                <span class="core-manage-status" id="xrayStatus"></span>
+              </div>
+              <div class="core-manage-actions">
+                <button class="btn btn-primary" id="xraySwitchBtn" onclick="switchCore('xray')">Переключить</button>
+                <button class="btn btn-secondary" id="xrayUpdateBtn" onclick="openUpdateModal('xray')">Обновить</button>
+              </div>
+            </div>
+            <div class="core-manage-item">
+              <div class="core-manage-header">
+                <h4>Mihomo</h4>
+                <span class="core-manage-status" id="mihomoStatus"></span>
+              </div>
+              <div class="core-manage-actions">
+                <button class="btn btn-primary" id="mihomoSwitchBtn" onclick="switchCore('mihomo')">Переключить</button>
+                <button class="btn btn-secondary" id="mihomoUpdateBtn" onclick="openUpdateModal('mihomo')">Обновить</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="modal-actions">
-          <button class="btn btn-primary" id="confirmCoreBtn" onclick="switchCore()">Да</button>
-          <button class="btn btn-secondary" id="cancelCoreBtn" onclick="closeCoreModal()">Отмена</button>
+          <button class="btn btn-secondary" onclick="closeCoreManageModal()">Закрыть</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-overlay modal-template" id="updateModal">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeUpdateModal()" aria-label="Закрыть">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+        <h3 class="modal-title">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="display: inline-block; vertical-align: middle; margin-right: 10px; margin-top: -2px"
+          >
+            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+          </svg>
+          Обновление&nbsp;<span id="updateModalCore"></span>
+        </h3>
+        <p class="template-modal-desc">
+          <span id="updateModalDescription">Выберите версию для установки</span>
+          <span class="template-count-badge" id="updateCountBadge">0</span>
+        </p>
+        <div class="modal-body">
+          <div id="updateList" class="template-list"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="installVersionBtn" onclick="installSelectedVersion()" disabled>Установить</button>
+          <button class="btn btn-secondary" onclick="closeUpdateModal()">Закрыть</button>
         </div>
       </div>
     </div>
@@ -612,6 +687,17 @@
               <div class="routing-gui-toggle">
                 <input type="checkbox" id="autoApplyCheckbox" onchange="toggleAutoApply()" />
                 <label for="autoApplyCheckbox"></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h4 class="settings-section-title">Обновление ядра</h4>
+            <div class="settings-item">
+              <span class="settings-item-label">Создавать бэкап ядра при обновлении</span>
+              <div class="routing-gui-toggle">
+                <input type="checkbox" id="backupCoreCheckbox" onchange="toggleBackupCore()" checked />
+                <label for="backupCoreCheckbox"></label>
               </div>
             </div>
           </div>

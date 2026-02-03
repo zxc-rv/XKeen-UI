@@ -69,6 +69,7 @@ var (
 		"mihomo": {"CLASH_HOME_DIR=" + MihomoConf},
 	}
 	CurrentCore      ClientType
+	InitFile         string
 	ClientMutex      sync.RWMutex
 	LogCacheMap      = make(map[string]*LogCache)
 	LogCacheMutex    sync.RWMutex

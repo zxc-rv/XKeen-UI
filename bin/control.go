@@ -14,15 +14,12 @@ import (
 )
 
 func GetNameClient() {
-	path := S24xray
-	if _, err := os.Stat(path); err != nil {
-		path = S99xkeen
-	}
+	path := S99xkeen
+	if _, err := os.Stat(S24xray); err == nil { path = S24xray }
+	InitFile = path
 	b, _ := os.ReadFile(path)
 	name := "xray"
-	if strings.Contains(string(b), `name_client="mihomo"`) {
-		name = "mihomo"
-	}
+	if strings.Contains(string(b), `name_client="mihomo"`) { name = "mihomo" }
 	ClientMutex.Lock()
 	CurrentCore = clientTypes[name]
 	ClientMutex.Unlock()
@@ -70,18 +67,21 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		cores, running := []string{}, false
+		versions := make(map[string]string)
 		for _, c := range []string{"xray", "mihomo"} {
-			if _, err := os.Stat("/opt/sbin/" + c); err == nil { cores = append(cores, c) }
+			if _, err := os.Stat("/opt/sbin/" + c); err == nil {
+				cores = append(cores, c)
+				versions[c] = getCoreVersion(c)
+			}
 			if getPid(c) > 0 { running = true }
 		}
 
-		ver := getCoreVersion(cur)
 		jsonResponse(w, map[string]any{
 			"success":     true,
 			"cores":       cores,
 			"currentCore": cur,
 			"running":     running,
-			"version":     ver,
+			"versions":    versions,
 		}, 200)
 		return
 	}
@@ -97,6 +97,12 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 	f, _ := os.OpenFile(ErrorLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	defer f.Close()
 
+	ClientMutex.RLock()
+	curName := CurrentCore.Name
+	ClientMutex.RUnlock()
+
+	if curName == "mihomo" && (req.Action == "start" || req.Action == "hardRestart") { os.Truncate(ErrorLog, 0) }
+
 	switch req.Action {
 	case "switchCore":
 		DebugLog("ControlHandler: switching core to %s", req.Core)
@@ -110,21 +116,21 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		ClientMutex.RUnlock()
 
-		os.Truncate(ErrorLog, 0)
-		exec.Command("xkeen", "-stop").Run()
+		exec.Command(InitFile, "stop").Run()
 
-		path := S99xkeen
-		if _, err := os.Stat(path); err != nil { path = S24xray }
-		if data, err := os.ReadFile(path); err == nil {
+		if _, err := os.Stat(S99xkeen); err == nil { InitFile = S99xkeen } else { InitFile = S24xray }
+		if data, err := os.ReadFile(InitFile); err == nil {
 			out := strings.Replace(string(data), `name_client="`+oldCore+`"`, `name_client="`+req.Core+`"`, 1)
-			os.WriteFile(path, []byte(out), 0755)
+			os.WriteFile(InitFile, []byte(out), 0755)
 		}
 
 		ClientMutex.Lock()
 		if c, ok := clientTypes[req.Core]; ok { CurrentCore = c }
 		ClientMutex.Unlock()
 
-		cmd := exec.Command("xkeen", "-start")
+		if CurrentCore.Name != "xray" { os.Truncate(ErrorLog, 0) }
+
+		cmd := exec.Command(InitFile, "start")
 		cmd.Stdout, cmd.Stderr = f, f
 		cmd.Run()
 		DebugLog("ControlHandler: core switched to %s", req.Core)
@@ -154,14 +160,13 @@ func ControlHandler(w http.ResponseWriter, r *http.Request) {
 		DebugLog("ControlHandler: soft restart done, pid=%d", cmd.Process.Pid)
 
 	case "start", "stop", "hardRestart":
-		arg := "-" + req.Action
-		if req.Action == "hardRestart" { arg = "-restart" }
-		DebugLog("ControlHandler: executing xkeen %s", arg)
-		os.Truncate(ErrorLog, 0)
-		c := exec.Command("xkeen", arg)
+		arg := req.Action
+		if req.Action == "hardRestart" { arg = "restart" }
+		DebugLog("ControlHandler: executing %s %s", InitFile, arg)
+		c := exec.Command(InitFile, arg)
 		c.Stdout, c.Stderr = f, f
 		c.Run()
-		DebugLog("ControlHandler: xkeen %s done", arg)
+		DebugLog("ControlHandler: %s %s done", InitFile, arg)
 
 	default:
 		DebugLog("ControlHandler: bad action %s", req.Action)
