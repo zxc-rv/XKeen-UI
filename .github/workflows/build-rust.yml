@@ -24,7 +24,18 @@ jobs:
         run: rustup toolchain install stable
       - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
+      - name: Setup Cross.toml
+        run: |
+          cat <<EOF > Cross.toml
+          [target.mips-unknown-linux-musl]
+          image = "rustembedded/cross:mips-unknown-linux-musl"
+
+          [target.mipsel-unknown-linux-musl]
+          image = "rustembedded/cross:mipsel-unknown-linux-musl"
+          EOF
       - name: Build binary
+        env:
+          CROSS_NO_WARNINGS: 0
         run: |
           cross build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/xkeen-ui xkeen-ui-${{ matrix.name }}
