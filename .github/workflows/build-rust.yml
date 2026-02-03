@@ -29,9 +29,11 @@ jobs:
           cat <<EOF > Cross.toml
           [target.mips-unknown-linux-musl]
           image = "rustembedded/cross:mips-unknown-linux-musl"
+          build-std = ["core", "alloc", "std"]
 
           [target.mipsel-unknown-linux-musl]
           image = "rustembedded/cross:mipsel-unknown-linux-musl"
+          build-std = ["core", "alloc", "std"]
           EOF
       - name: Build binary
         env:
