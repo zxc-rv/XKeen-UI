@@ -25,7 +25,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Set version
         run: |
-          sed -i 's/^version = .*/version = "'"${{ inputs.version#v }}"'"/' Cargo.toml
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          sed -i 's/^version = .*/version = "'"$VERSION"'"/' Cargo.toml
           grep '^version =' Cargo.toml
       - name: Install Rust
         run: rustup toolchain install ${{ matrix.toolchain }}
