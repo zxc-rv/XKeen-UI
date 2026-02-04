@@ -80,10 +80,16 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         eprintln!("{}", msg);
     };
 
-    log("INFO", format!("Запуск обновления {} до версии {}", req.core, req.version));
-
-    let ver = if req.version.starts_with('v') { req.version.clone() } else { format!("v{}", req.version) };
+    let ver = if req.version.starts_with('v') {
+        req.version.clone()
+    } else if req.version.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+        format!("v{}", req.version)
+    } else {
+        req.version.clone()
+    };
     let arch = std::env::consts::ARCH;
+
+    log("INFO", format!("Запуск обновления {} до версии {}", req.core, ver));
 
     let asset = match (req.core.as_str(), arch) {
         ("xray", "aarch64") => Some("Xray-linux-arm64-v8a.zip"),
@@ -119,10 +125,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             Ok(r) if r.status().is_success() => {
                 match r.json::<Vec<GhReleaseDetail>>().await {
                     Ok(releases) => {
-                        let target_release = releases.iter().find(|rel| {
-                            rel.tag_name == ver || rel.tag_name == format!("v{}", ver) ||
-                            rel.name.contains(&req.version) || rel.tag_name.contains(&req.version)
-                        });
+                        let target_release = releases.iter().find(|rel| rel.tag_name == ver);
 
                         match target_release {
                             Some(rel) => {
@@ -301,6 +304,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         }
     }
 
-    log("INFO", format!("Обновление {} до версии {} успешно выполнено", req.core, req.version));
+    log("INFO", format!("Обновление {} до версии {} успешно выполнено", req.core, ver));
     Json(json!({ "success": true }))
 }
