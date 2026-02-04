@@ -76,14 +76,18 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     if req.core == "xray" {
         let n = match arch {
-            "aarch64" => "Xray-linux-arm64-v8a.zip", "mips" => "Xray-linux-mips32.zip", "mipsle" => "Xray-linux-mips32le.zip",
+            "aarch64" => "Xray-linux-arm64-v8a.zip",
+            "mips" => "Xray-linux-mips32.zip",
+            "mipsle" => "Xray-linux-mips32le.zip",
             _ => return make_res(false, Some("Архитектура не поддерживается".into()))
         };
         asset_name = n.to_string();
         url = format!("https://github.com/XTLS/Xray-core/releases/download/{}/{}", ver, n);
     } else if req.core == "mihomo" {
         let pat = match arch {
-            "aarch64" => "arm64", "mips" => "mips-softfloat", "mipsle" => "mipsle-softfloat",
+            "aarch64" => "arm64",
+            "mips" => "mips-softfloat",
+            "mipsle" => "mipsle-softfloat",
             _ => return make_res(false, Some("Архитектура не поддерживается".into()))
         };
         let client = reqwest::Client::builder().user_agent("XKeen").build().unwrap();
@@ -165,12 +169,12 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let _ = fs::rename(&target, &backup).await;
     }
 
-    log("INFO", format!("Перемещение {} в /opt/sbin...", core_name_cap)).await;
+    log("INFO", format!("Установка {}...", core_name_cap)).await;
     if let Err(e) = fs::rename(&bin_path, &target).await {
-        return make_res(false, Some(format!("Ошибка перемещения: {}", e)));
+        return make_res(false, Some(format!("Ошибка установки: {}", e)));
     }
     let _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
-    log("INFO", format!("{} успешно перемещен", core_name_cap)).await;
+    log("INFO", format!("Установка {} успешно выполнена", core_name_cap)).await;
 
     if is_running {
         log("INFO", "Запуск XKeen...".into()).await;

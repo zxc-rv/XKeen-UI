@@ -64,6 +64,7 @@
   box-sizing: border-box;
   scrollbar-color: #334155 transparent;
   -webkit-text-size-adjust: none;
+  scrollbar-width: thin;
 }
 
 :root {
@@ -308,6 +309,12 @@ textarea {
 @keyframes skeleton-shimmer {
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

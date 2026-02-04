@@ -1479,7 +1479,12 @@ async function openUpdateModal(core) {
   }
 
   coreTitle.textContent = core.charAt(0).toUpperCase() + core.slice(1)
-  list.innerHTML = '<div class="template-loading">Загрузка версий...</div>'
+  list.innerHTML = `
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 16px;">
+      <div style="width: 40px; height: 40px; border: 3px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      <div style="color: #94a3b8; font-size: 14px;">Загрузка версий...</div>
+    </div>
+  `
   badge.textContent = "0"
 
   modal.classList.add("show")
@@ -2061,7 +2066,7 @@ function selectTemplate(url, index) {
   const importBtn = document.getElementById("importTemplateBtn")
   importBtn.disabled = false
 
-  const items = document.querySelectorAll(".template-item")
+  const items = document.getElementById("templateList").querySelectorAll(".template-item")
   items.forEach((item, i) => {
     if (i === index) {
       item.classList.add("selected")
