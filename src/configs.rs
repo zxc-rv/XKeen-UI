@@ -1,7 +1,6 @@
 use axum::{extract::{Query, State}, response::{IntoResponse, Json}};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::PathBuf};
-use walkdir::WalkDir;
 use crate::types::*;
 
 #[derive(Serialize)]
@@ -12,31 +11,46 @@ pub struct ConfigReq { action: String, filename: String, content: String }
 
 pub async fn get_configs(State(state): State<AppState>, Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
     let core = state.core.read().unwrap();
-    let target = params.get("core").map(|s| s.as_str()).unwrap_or(core.name.as_str());
+    let target = params.get("core").map(|s| s.as_str()).unwrap_or(&core.name);
     let (cdir, ext) = if target == "mihomo" { (MIHOMO_CONF, "config.yaml") } else { (XRAY_CONF, "json") };
 
     let mut res = Vec::new();
-    let walker = WalkDir::new(cdir).max_depth(1);
-    for e in walker.into_iter().filter_map(|e| e.ok()) {
-        if e.path().extension().map_or(false, |x| if target == "xray" { x == ext } else { e.file_name().to_str().unwrap() == ext }) {
-            if let Ok(c) = fs::read_to_string(e.path()) {
-                res.push(ConfigItem {
-                    name: e.path().file_stem().unwrap().to_string_lossy().into(),
-                    filename: e.file_name().to_string_lossy().into(), content: c
-                });
+
+    if let Ok(entries) = fs::read_dir(cdir) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            let matches = if target == "xray" {
+                path.extension().map_or(false, |x| x == ext)
+            } else {
+                entry.file_name().to_str().map_or(false, |n| n == ext)
+            };
+            if matches {
+                if let Ok(c) = fs::read_to_string(&path) {
+                    res.push(ConfigItem {
+                        name: path.file_stem().unwrap().to_string_lossy().into(),
+                        filename: entry.file_name().to_string_lossy().into(),
+                        content: c
+                    });
+                }
             }
         }
     }
-    for e in WalkDir::new(XKEEN_CONF).max_depth(1).into_iter().filter_map(|e| e.ok()) {
-         if e.path().extension().map_or(false, |x| x == "lst") {
-            if let Ok(c) = fs::read_to_string(e.path()) {
-                res.push(ConfigItem {
-                    name: e.path().file_stem().unwrap().to_string_lossy().into(),
-                    filename: e.file_name().to_string_lossy().into(), content: c
-                });
+
+    if let Ok(entries) = fs::read_dir(XKEEN_CONF) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().map_or(false, |x| x == "lst") {
+                if let Ok(c) = fs::read_to_string(&path) {
+                    res.push(ConfigItem {
+                        name: path.file_stem().unwrap().to_string_lossy().into(),
+                        filename: entry.file_name().to_string_lossy().into(),
+                        content: c
+                    });
+                }
             }
-         }
+        }
     }
+
     res.sort_by(|a, b| a.name.cmp(&b.name));
     Json(serde_json::json!({ "success": true, "configs": res }))
 }
@@ -48,14 +62,16 @@ pub async fn post_configs(State(state): State<AppState>, Json(req): Json<ConfigR
     path.push(&req.filename);
 
     let content = if is_lst { req.content.replace("\r\n", "\n") } else { req.content };
-    if !is_lst {
-        if core.is_json { if !path.to_string_lossy().ends_with(".json") { path.set_extension("json"); } }
-        else if serde_yaml::from_str::<serde_yaml::Value>(&content).is_err() {
-             return Json(ApiResponse::<()> { success: false, error: Some("Invalid YAML".into()), data: None });
+
+    if !is_lst && core.is_json && !path.to_string_lossy().ends_with(".json") {
+        path.set_extension("json");
+    }
+
+    if req.action == "save" {
+        if fs::write(path, content).is_err() {
+            return Json(ApiResponse::<()> { success: false, error: Some("Write error".into()), data: None });
         }
     }
-    if req.action == "save" {
-        if fs::write(path, content).is_err() { return Json(ApiResponse::<()> { success: false, error: Some("Write error".into()), data: None }); }
-    }
+
     Json(ApiResponse::<()> { success: true, error: None, data: None })
 }

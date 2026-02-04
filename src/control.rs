@@ -1,9 +1,8 @@
 use axum::{extract::State, response::{IntoResponse, Json}};
 use serde::Deserialize;
-use std::{collections::HashMap, path::Path, os::unix::fs::PermissionsExt};
+use std::{collections::HashMap, path::Path, os::unix::fs::PermissionsExt, fs::Permissions, io::Read};
 use nix::{sys::signal::{kill, Signal}, unistd::Pid};
 use tokio::{fs::{self, set_permissions}, process::Command};
-use std::fs::Permissions;
 use crate::types::*;
 
 #[derive(Deserialize)]
@@ -21,10 +20,13 @@ fn get_core_info(name: &str) -> CoreInfo {
 }
 
 pub fn get_pid(name: &str) -> Option<i32> {
+    let mut buf = Vec::new();
     std::fs::read_dir("/proc").ok()?.filter_map(|e| {
         let p = e.ok()?.path();
         let pid = p.file_name()?.to_str()?.parse::<i32>().ok()?;
-        (std::fs::read_to_string(p.join("comm")).ok()?.trim() == name).then_some(pid)
+        buf.clear();
+        std::fs::File::open(p.join("comm")).ok()?.read_to_end(&mut buf).ok()?;
+        (buf.strip_suffix(b"\n")? == name.as_bytes()).then_some(pid)
     }).next()
 }
 
