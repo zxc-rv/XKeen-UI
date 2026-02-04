@@ -65,7 +65,7 @@ download_files() {
   local download_url="$base_url/latest/download"
 
   if [ "$beta" = true ]; then
-    echo -e "${YELLOW}:: Поиск бета-релиза...${NC}"
+    echo -e "${BLUE}\n:: Поиск бета-релиза...${NC}"
     local tag=$(curl -s https://api.github.com/repos/zxc-rv/XKeen-UI/releases | grep -m1 '"tag_name":' | cut -d'"' -f4)
     download_url="$base_url/download/$tag"
   fi
