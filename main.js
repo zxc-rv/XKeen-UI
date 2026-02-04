@@ -1506,7 +1506,6 @@ async function openUpdateModal(core) {
             ${rel.isPrerelease ? '<span class="version-prerelease">Pre-release</span>' : ""}
           </div>
           <div class="template-meta">
-            <span class="template-version">v${rel.version}</span>
             <span class="template-date">${rel.publishedAt}</span>
           </div>
         </label>
