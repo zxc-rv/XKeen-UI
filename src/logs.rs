@@ -6,6 +6,11 @@ static ANSI_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\x1b\[\d+m").unwrap());
 static LVL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[(debug|info|warn|warning|error|fatal)\]").unwrap());
 static XRAY_TIME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"time="([^"]+)" level=(\w+) msg="?(.*?)""#).unwrap());
 
+pub fn format_plain_log(level: &str, msg: &str) -> String {
+    let timestamp = chrono::Local::now().format("%Y/%m/%d %H:%M:%S.%6f").to_string();
+    format!("{} [{}] {}\n", timestamp, level.to_uppercase(), msg)
+}
+
 pub fn process_log_line(line: String, tz: i32) -> String {
     if line.is_empty() { return String::new(); }
     let mut out = line;

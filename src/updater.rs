@@ -19,6 +19,19 @@ struct GhRelease {
     prerelease: bool,
 }
 
+#[derive(Deserialize)]
+struct GhReleaseDetail {
+    tag_name: String,
+    name: String,
+    assets: Vec<GhAsset>,
+}
+
+#[derive(Deserialize)]
+struct GhAsset {
+    name: String,
+    browser_download_url: String,
+}
+
 pub async fn get_releases(Query(q): Query<ReleaseQuery>) -> impl IntoResponse {
     let url = match q.core.as_str() {
         "xray" => "https://api.github.com/repos/XTLS/Xray-core/releases",
@@ -59,16 +72,15 @@ pub async fn get_releases(Query(q): Query<ReleaseQuery>) -> impl IntoResponse {
 }
 
 pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
-    let log = |msg: String| {
-        let timestamp = Local::now().format("%Y/%m/%d %H:%M:%S.%6f").to_string();
-        let log_msg = format!("{} <span class=\"log-badge log-badge-info\" data-filter=\"INFO\">INFO</span> {}\n", timestamp, msg);
+    let log = |level: &str, msg: String| {
+        let log_msg = crate::logs::format_plain_log(level, &msg);
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
             let _ = file.write_all(log_msg.as_bytes());
         }
         eprintln!("{}", msg);
     };
 
-    log(format!("Запуск обновления {} до версии {}", req.core, req.version));
+    log("INFO", format!("Запуск обновления {} до версии {}", req.core, req.version));
 
     let ver = if req.version.starts_with('v') { req.version.clone() } else { format!("v{}", req.version) };
     let arch = std::env::consts::ARCH;
@@ -84,7 +96,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     };
 
     let Some(asset_base) = asset else {
-        log("Архитектура не поддерживается".to_string());
+        log("ERROR", "Архитектура не поддерживается".to_string());
         return Json(json!({ "success": false, "error": "Неподдерживаемая архитектура" }));
     };
 
@@ -97,7 +109,60 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let url = if req.core == "xray" {
         format!("https://github.com/XTLS/Xray-core/releases/download/{}/{}", ver, asset_name)
     } else {
-        format!("https://github.com/MetaCubeX/mihomo/releases/download/{}/{}", ver, asset_name)
+        let api_url = "https://api.github.com/repos/MetaCubeX/mihomo/releases";
+        let client = reqwest::Client::builder()
+            .user_agent("XKeen")
+            .timeout(std::time::Duration::from_secs(10))
+            .build().unwrap();
+
+        match client.get(api_url).send().await {
+            Ok(r) if r.status().is_success() => {
+                match r.json::<Vec<GhReleaseDetail>>().await {
+                    Ok(releases) => {
+                        let target_release = releases.iter().find(|rel| {
+                            rel.tag_name == ver || rel.tag_name == format!("v{}", ver) ||
+                            rel.name.contains(&req.version) || rel.tag_name.contains(&req.version)
+                        });
+
+                        match target_release {
+                            Some(rel) => {
+                                let arch_pattern = match arch {
+                                    "aarch64" => "arm64",
+                                    "mips" => "mips-softfloat",
+                                    "mipsle" => "mipsle-softfloat",
+                                    _ => ""
+                                };
+                                let pattern = format!("mihomo-linux-{}", arch_pattern);
+
+                                match rel.assets.iter().find(|a| a.name.starts_with(&pattern) && a.name.ends_with(".gz")) {
+                                    Some(asset) => asset.browser_download_url.clone(),
+                                    None => {
+                                        log("ERROR", "Ошибка определения архитектуры".to_string());
+                                        return Json(json!({ "success": false, "error": "Asset не найден" }));
+                                    }
+                                }
+                            },
+                            None => {
+                                log("ERROR", format!("Релиз {} не найден", req.version));
+                                return Json(json!({ "success": false, "error": "Релиз не найден" }));
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        log("ERROR", format!("Ошибка получения данных релизов: {}", e));
+                        return Json(json!({ "success": false, "error": "Ошибка API" }));
+                    }
+                }
+            },
+            Ok(r) => {
+                log("ERROR", format!("Ошибка GitHub API: {}", r.status()));
+                return Json(json!({ "success": false, "error": format!("Ошибка GitHub API: {}", r.status()) }));
+            },
+            Err(e) => {
+                log("ERROR", format!("Ошибка запроса GitHub API: {}", e));
+                return Json(json!({ "success": false, "error": format!("Сетевая ошибка: {}", e) }));
+            }
+        }
     };
 
     let tmp_dir = Path::new("/opt/tmp");
@@ -106,37 +171,30 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     }
 
     let archive_path = tmp_dir.join(&asset_name);
-    log(format!("Скачивание: {}", url));
+    log("INFO", format!("Скачивание: {}", url));
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build().unwrap();
 
-    let resp = match tokio::time::timeout(
-        std::time::Duration::from_secs(120),
-        client.get(&url).send()
-    ).await {
-        Ok(Ok(r)) => r,
-        Ok(Err(e)) => {
-            log(format!("Ошибка HTTP запроса: {}", e));
+    let resp = match client.get(&url).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            log("ERROR", format!("Ошибка HTTP запроса: {}", e));
             return Json(json!({ "success": false, "error": format!("Ошибка запроса: {}", e) }));
-        },
-        Err(_) => {
-            log("Превышен таймаут скачивания (120 сек)".to_string());
-            return Json(json!({ "success": false, "error": "Таймаут скачивания" }));
         }
     };
 
     if !resp.status().is_success() {
         let status = resp.status();
-        log(format!("HTTP ошибка: {}", status));
+        log("ERROR", format!("HTTP ошибка: {}", status));
         return Json(json!({ "success": false, "error": format!("Файл не найден ({})", status) }));
     }
 
     let mut file = match tokio::fs::File::create(&archive_path).await {
         Ok(f) => f,
         Err(e) => {
-            log(format!("Ошибка создания файла: {}", e));
+            log("ERROR", format!("Ошибка создания файла: {}", e));
             return Json(json!({ "success": false, "error": "Ошибка создания файла" }));
         }
     };
@@ -147,25 +205,25 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let bytes = match chunk_result {
             Ok(b) => b,
             Err(e) => {
-                log(format!("Ошибка чтения данных: {}", e));
+                log("ERROR", format!("Ошибка чтения данных: {}", e));
                 return Json(json!({ "success": false, "error": "Ошибка скачивания" }));
             }
         };
         downloaded += bytes.len() as u64;
         if file.write_all(&bytes).await.is_err() {
-            log("Ошибка записи в файл".to_string());
+            log("ERROR", "Ошибка записи в файл".to_string());
             return Json(json!({ "success": false, "error": "Ошибка записи файла" }));
         }
     }
 
-    log(format!("Загрузка завершена ({:.2} МБ)", downloaded as f64 / 1024.0 / 1024.0));
+    log("INFO", format!("Загрузка завершена ({:.2} МБ)", downloaded as f64 / 1024.0 / 1024.0));
 
     let bin_path = tmp_dir.join(&req.core);
     let is_zip = asset_name.ends_with(".zip");
     let archive_p = archive_path.clone();
     let bin_p = bin_path.clone();
 
-    log("Распаковка архива...".to_string());
+    log("INFO", "Распаковка архива...".to_string());
     let extract_res = tokio::task::spawn_blocking(move || -> io::Result<()> {
         let f = File::open(&archive_p)?;
         let mut out = File::create(&bin_p)?;
@@ -179,10 +237,10 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     }).await.unwrap();
 
     if let Err(e) = extract_res {
-        log(format!("Ошибка распаковки: {}", e));
+        log("ERROR", format!("Ошибка распаковки: {}", e));
         return Json(json!({ "success": false, "error": format!("Ошибка распаковки: {}", e) }));
     }
-    log("Распаковка завершена успешно".to_string());
+    log("INFO", "Распаковка завершена".to_string());
     let _ = tokio::fs::remove_file(&archive_path).await;
 
     let init_file = state.init_file.read().unwrap().clone();
@@ -202,7 +260,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     let is_running = crate::control::get_pid(&req.core).is_some();
     if is_running {
-        log("Остановка сервиса...".to_string());
+        log("INFO", "Остановка сервиса...".to_string());
         if let Err(e) = run_svc("stop").await {
               return Json(json!({ "success": false, "error": format!("Ошибка остановки: {}", e) }));
         }
@@ -213,36 +271,36 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let backup_dir = "/opt/sbin/core-backup";
         let _ = tokio::fs::create_dir_all(backup_dir).await;
         let backup = format!("{}/{}-{}", backup_dir, req.core, Local::now().format("%Y%m%d-%H%M%S"));
-        log(format!("Создание бэкапа в {}", backup));
+        log("INFO", format!("Создание бэкапа в {}", backup));
         if let Err(e) = tokio::fs::rename(&target_path, &backup).await {
-            log(format!("Ошибка создания бэкапа: {}", e));
+            log("ERROR", format!("Ошибка создания бэкапа: {}", e));
             return Json(json!({ "success": false, "error": format!("Ошибка бэкапа: {}", e) }));
         }
-        log("Бэкап создан успешно".to_string());
+        log("INFO", "Бэкап создан успешно".to_string());
     } else {
         let _ = tokio::fs::remove_file(&target_path).await;
     }
 
-    log("Установка нового бинарника...".to_string());
+    log("INFO", "Перемещение ядра в /opt/sbin...".to_string());
     if let Err(e) = tokio::fs::rename(&bin_path, &target_path).await {
-        log(format!("Ошибка перемещения файла: {}", e));
-         return Json(json!({ "success": false, "error": format!("Ошибка перемещения бинарника: {}", e) }));
+        log("ERROR", format!("Ошибка перемещения ядра: {}", e));
+        return Json(json!({ "success": false, "error": format!("Ошибка перемещения ядра: {}", e) }));
     }
 
     if let Err(e) = std::fs::set_permissions(&target_path, std::fs::Permissions::from_mode(0o755)) {
-        log(format!("Ошибка установки прав: {}", e));
+        log("ERROR", format!("Ошибка установки прав: {}", e));
         return Json(json!({ "success": false, "error": format!("Ошибка прав доступа: {}", e) }));
     }
-    log("Бинарник установлен успешно".to_string());
+    log("INFO", "Ядро успешно перемещено".to_string());
 
     if is_running {
-        log("Запуск сервиса...".to_string());
+        log("INFO", "Запуск сервиса...".to_string());
         if let Err(e) = run_svc("start").await {
-            log(format!("Ошибка запуска сервиса: {}", e));
+            log("ERROR", format!("Ошибка запуска сервиса: {}", e));
             return Json(json!({ "success": false, "error": format!("Ошибка запуска: {}", e) }));
         }
     }
 
-    log(format!("Обновление {} завершено успешно", req.core));
+    log("INFO", format!("Обновление {} до версии {} успешно выполнено", req.core, req.version));
     Json(json!({ "success": true }))
 }

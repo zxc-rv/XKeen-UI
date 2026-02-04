@@ -1,7 +1,7 @@
 mod types;
 mod settings;
 mod logs;
-mod control;
+mod controller;
 mod configs;
 mod version;
 mod websocket;

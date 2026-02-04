@@ -1610,16 +1610,20 @@ async function installSelectedVersion() {
     if (data.success) {
       showToast({
         title: "Обновление завершено",
-        body: `Установлен ${payload.core} v${payload.version}`,
+        body: `Установлен ${payload.core} ${payload.version}`,
       })
       isActionInProgress = false
       checkStatus()
     } else {
       showToast(`Ошибка: ${data.error}`, "error")
+      isActionInProgress = false
+      checkStatus()
     }
   } catch (error) {
     console.error("Install error:", error)
     showToast("Ошибка установки", "error")
+    isActionInProgress = false
+    checkStatus()
   } finally {
     if (installBtn) {
       installBtn.disabled = false
