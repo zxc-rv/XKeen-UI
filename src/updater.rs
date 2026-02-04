@@ -258,7 +258,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         }
     };
 
-    let is_running = crate::control::get_pid(&req.core).is_some();
+    let is_running = crate::controller::get_pid(&req.core).is_some();
     if is_running {
         log("INFO", "Остановка сервиса...".to_string());
         if let Err(e) = run_svc("stop").await {

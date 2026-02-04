@@ -50,7 +50,7 @@ async fn main() {
     };
 
     let app = Router::new()
-        .route("/api/control", get(control::get_control).post(control::post_control))
+        .route("/api/control", get(controller::get_control).post(controller::post_control))
         .route("/api/configs", get(configs::get_configs).post(configs::post_configs))
         .route("/api/settings", get(settings::get_settings).post(settings::post_settings))
         .route("/api/version", get(version::version_handler))
