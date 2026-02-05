@@ -30,6 +30,27 @@ pub fn get_pid(name: &str) -> Option<i32> {
     }).next()
 }
 
+pub async fn soft_restart(core: &str) {
+    if let Some(pid) = get_pid(core) { let _ = kill(Pid::from_raw(pid), Signal::SIGKILL); }
+    let mut cmd = Command::new(core);
+    match core {
+        "xray" => cmd.envs([("XRAY_LOCATION_CONFDIR", XRAY_CONF), ("XRAY_LOCATION_ASSET", XRAY_ASSET)]),
+        _ => cmd.env("CLASH_HOME_DIR", MIHOMO_CONF)
+    };
+    unsafe { cmd.pre_exec(|| { nix::libc::setsid(); nix::libc::setgid(11111); Ok(()) }); }
+
+    if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
+        cmd.stdout(f.try_clone().unwrap()).stderr(f);
+    }
+    if let Ok(mut child) = cmd.spawn() {
+        if let Some(id) = child.id() {
+            let limit = if cfg!(target_arch = "aarch64") { 40000 } else { 10000 };
+            unsafe { nix::libc::prlimit(id as i32, nix::libc::RLIMIT_NOFILE, &nix::libc::rlimit { rlim_cur: limit, rlim_max: limit }, std::ptr::null_mut()); }
+        }
+        tokio::spawn(async move { let _ = child.wait().await; });
+    }
+}
+
 pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     let mut core = state.core.read().unwrap().clone();
     if get_pid(&core.name).is_none() {
@@ -99,26 +120,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 let _ = Command::new(&new_init_file).arg("start").status().await;
             }
         },
-        "softRestart" => {
-            if let Some(pid) = get_pid(&req.core) { let _ = kill(Pid::from_raw(pid), Signal::SIGKILL); }
-            let mut cmd = Command::new(&req.core);
-            match req.core.as_str() {
-                "xray" => cmd.envs([("XRAY_LOCATION_CONFDIR", XRAY_CONF), ("XRAY_LOCATION_ASSET", XRAY_ASSET)]),
-                _ => cmd.env("CLASH_HOME_DIR", MIHOMO_CONF)
-            };
-            unsafe { cmd.pre_exec(|| { nix::libc::setsid(); nix::libc::setgid(11111); Ok(()) }); }
-
-            if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
-                cmd.stdout(f.try_clone().unwrap()).stderr(f);
-            }
-            if let Ok(mut child) = cmd.spawn() {
-                if let Some(id) = child.id() {
-                    let limit = if cfg!(target_arch = "aarch64") { 40000 } else { 10000 };
-                    unsafe { nix::libc::prlimit(id as i32, nix::libc::RLIMIT_NOFILE, &nix::libc::rlimit { rlim_cur: limit, rlim_max: limit }, std::ptr::null_mut()); }
-                }
-                tokio::spawn(async move { let _ = child.wait().await; });
-            }
-        },
+        "softRestart" => soft_restart(&req.core).await,
         a if ["start", "stop", "hardRestart"].contains(&a) => {
             let arg = match a {
                 "start" => "start",

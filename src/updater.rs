@@ -144,45 +144,50 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     }).await.unwrap().is_err() { return make_res(false, Some("Ошибка распаковки".into())); }
 
     let target = format!("/opt/sbin/{}", req.core);
-    let init = state.init_file.read().unwrap().clone();
-    let xkeen = |act: &str| {
-        let cmd = init.clone();
-        let arg = act.to_string();
-        async move {
-            let log_file = OpenOptions::new().create(true).append(true).open(ERROR_LOG);
-            let mut c = Command::new(&cmd);
-            c.arg(&arg);
-            if let Ok(f) = log_file {
-                c.stdout(Stdio::from(f.try_clone().unwrap())).stderr(Stdio::from(f));
-            }
-            c.status().await
-        }
-    };
-
-    if is_running {
-        log("INFO", format!("Остановка XKeen...")).await;
-        if let Err(e) = xkeen("stop").await {
-          log("ERROR", e.to_string()).await;
-        }
-    }
 
     if req.backup_core && Path::new(&target).exists() {
         let backup = format!("/opt/sbin/core-backup/{}-{}", req.core, Local::now().format("%Y%m%d-%H%M%S"));
         let _ = fs::create_dir_all("/opt/sbin/core-backup").await;
         log("INFO", format!("Создание бэкапа: {}", backup)).await;
-        let _ = fs::rename(&target, &backup).await;
+        let _ = fs::copy(&target, &backup).await;
     }
 
     log("INFO", format!("Установка {}...", core_name_cap)).await;
-    if let Err(e) = fs::rename(&bin_path, &target).await {
-        return make_res(false, Some(format!("Ошибка установки: {}", e)));
-    }
-    let _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
 
-    if is_running {
-        log("INFO", "Запуск XKeen...".into()).await;
-        if let Err(e) = xkeen("start").await {
-          log("ERROR", e.to_string()).await;
+    if fs::rename(&bin_path, &target).await.is_ok() {
+        let _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
+        if is_running {
+          log("INFO", format!("Перезапуск {}...", core_name_cap)).await;
+            crate::controller::soft_restart(&req.core).await;
+        }
+    } else {
+        log("WARN", "Атомарная замена не удалась, использую fallback...".into()).await;
+        let init = state.init_file.read().unwrap().clone();
+        let xkeen = |act: &str| {
+            let cmd = init.clone();
+            let arg = act.to_string();
+            async move {
+                let log_file = OpenOptions::new().create(true).append(true).open(ERROR_LOG);
+                let mut c = Command::new(&cmd);
+                c.arg(&arg);
+                if let Ok(f) = log_file {
+                    c.stdout(Stdio::from(f.try_clone().unwrap())).stderr(Stdio::from(f));
+                }
+                c.status().await
+            }
+        };
+
+        if is_running { let _ = xkeen("stop").await; }
+
+        if let Err(e) = fs::copy(&bin_path, &target).await {
+            return make_res(false, Some(format!("Ошибка установки: {}", e)));
+        }
+        let _ = fs::remove_file(&bin_path).await;
+        let _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
+
+        if is_running {
+            log("INFO", "Запуск XKeen...".into()).await;
+            let _ = xkeen("start").await;
         }
     }
 
