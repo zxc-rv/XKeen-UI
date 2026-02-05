@@ -120,11 +120,16 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     };
 
     let mut stream = resp.bytes_stream();
+    let mut downloaded: u64 = 0;
     while let Some(chunk) = stream.next().await {
-        if let Ok(b) = chunk { let _ = file.write_all(&b).await; }
+        if let Ok(b) = chunk {
+            downloaded += b.len() as u64;
+            let _ = file.write_all(&b).await;
+        }
     }
     let _ = file.flush().await; drop(file);
-    log("INFO", "Файл успешно загружен".into()).await;
+    let size_mb = downloaded as f64 / 1024.0 / 1024.0;
+    log("INFO", format!("Файл загружен ({:.1} МБ)", size_mb)).await;
 
     let (ap, bp, core_name) = (archive_path.clone(), bin_path.clone(), req.core.clone());
     let is_zip = asset_name.ends_with(".zip");
@@ -137,7 +142,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         else { std::io::copy(&mut flate2::read::GzDecoder::new(f), &mut out)?; }
         Ok(())
     }).await.unwrap().is_err() { return make_res(false, Some("Ошибка распаковки".into())); }
-    log("INFO", "Распаковка завершена".into()).await;
 
     let target = format!("/opt/sbin/{}", req.core);
     let init = state.init_file.read().unwrap().clone();
@@ -174,7 +178,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         return make_res(false, Some(format!("Ошибка установки: {}", e)));
     }
     let _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
-    log("INFO", format!("Установка {} успешно выполнена", core_name_cap)).await;
 
     if is_running {
         log("INFO", "Запуск XKeen...".into()).await;
