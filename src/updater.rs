@@ -109,7 +109,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let bin_path = tmp.join(&req.core);
 
     log("INFO", format!("Загрузка: {}", url)).await;
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build().unwrap();
+    let client = reqwest::Client::builder().build().unwrap();
     let resp = match client.get(&url).send().await {
         Ok(r) if r.status().is_success() => r,
         _ => return make_res(false, Some("Ошибка при скачивании файла".into()))
