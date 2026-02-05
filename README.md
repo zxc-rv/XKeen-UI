@@ -43,7 +43,7 @@
 
 ### Установка/обновление/удаление:
 ```SH
-curl -Ls https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh
+curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh
 ```
 <br>
 
