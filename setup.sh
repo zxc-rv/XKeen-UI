@@ -165,8 +165,9 @@ install_xkeenui() {
 }
 
 update_xkeenui() {
+  echo
   if [ ! -f $xkeenui_bin ]; then
-    echo -e "${RED}\n ❌ Ошибка: XKeen UI не установлен!\n${NC}"
+    echo -e "${RED}❌ Ошибка: XKeen UI не установлен!\n${NC}"
     exit 1
   fi
 
@@ -202,7 +203,7 @@ update_xkeenui() {
   local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
   local port=${port:-1000}
 
-  # clear
+  clear
 
   echo -e "${GREEN}\n ✅ XKeen UI успешно обновлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN}http://$ip:$port${NC}"
