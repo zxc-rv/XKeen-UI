@@ -4,7 +4,6 @@ use serde_json::json;
 use std::{path::Path, process::Stdio, os::unix::fs::PermissionsExt};
 use std::fs::OpenOptions;
 use tokio::{process::Command, io::AsyncWriteExt, fs};
-use futures_util::StreamExt;
 use chrono::Local;
 use crate::types::*;
 
@@ -71,8 +70,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     let is_running = crate::controller::get_pid(&req.core).is_some();
     let arch = std::env::consts::ARCH;
-    let mut asset_name = String::new();
-    let mut url = String::new();
+    let (mut asset_name, mut url) = (String::new(), String::new());
 
     if req.core == "xray" {
         let n = match arch {
@@ -93,8 +91,8 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let client = reqwest::Client::builder().user_agent("XKeen").build().unwrap();
         if let Ok(r) = client.get("https://api.github.com/repos/MetaCubeX/mihomo/releases").send().await {
             let rels: Vec<GhRelease> = r.json().await.unwrap_or_default();
-            if let Some(release) = rels.into_iter().find(|r| r.tag_name == ver) {
-                if let Some(a) = release.assets.into_iter().find(|a| a.name.contains(&format!("mihomo-linux-{}", pat)) && a.name.ends_with(".gz")) {
+            if let Some(rel) = rels.into_iter().find(|r| r.tag_name == ver) {
+                if let Some(a) = rel.assets.into_iter().find(|a| a.name.contains(&format!("mihomo-linux-{}", pat)) && a.name.ends_with(".gz")) {
                     asset_name = format!("mihomo-{}.gz", ver);
                     url = a.browser_download_url;
                 }
@@ -103,45 +101,35 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         if url.is_empty() { return make_res(false, Some("Релиз или ассет не найден".into())); }
     }
 
-    let tmp = Path::new("/opt/tmp");
-    let _ = fs::create_dir_all(tmp).await;
-    let archive_path = tmp.join(&asset_name);
-    let bin_path = tmp.join(&req.core);
-
     log("INFO", format!("Загрузка: {}", url)).await;
     let client = reqwest::Client::builder().build().unwrap();
-    let resp = match client.get(&url).send().await {
-        Ok(r) if r.status().is_success() => r,
+    let bytes = match client.get(&url).send().await {
+        Ok(r) if r.status().is_success() => match r.bytes().await {
+            Ok(b) => b,
+            Err(_) => return make_res(false, Some("Ошибка при скачивании файла".into()))
+        },
         _ => return make_res(false, Some("Ошибка при скачивании файла".into()))
     };
 
-    let mut file = match fs::File::create(&archive_path).await {
-        Ok(f) => f, Err(e) => return make_res(false, Some(format!("Ошибка создания файла: {}", e)))
-    };
-
-    let mut stream = resp.bytes_stream();
-    let mut downloaded: u64 = 0;
-    while let Some(chunk) = stream.next().await {
-        if let Ok(b) = chunk {
-            downloaded += b.len() as u64;
-            let _ = file.write_all(&b).await;
-        }
-    }
-    let _ = file.flush().await; drop(file);
-    let size_mb = downloaded as f64 / 1024.0 / 1024.0;
+    let size_mb = bytes.len() as f64 / 1024.0 / 1024.0;
     log("INFO", format!("Файл загружен ({:.1} МБ)", size_mb)).await;
 
-    let (ap, bp, core_name) = (archive_path.clone(), bin_path.clone(), req.core.clone());
+    let tmp_dir = Path::new("/opt/tmp");
+    let _ = fs::create_dir_all(tmp_dir).await;
+    let bin_path = tmp_dir.join(&req.core);
+    let (bp, cn) = (bin_path.clone(), req.core.clone());
     let is_zip = asset_name.ends_with(".zip");
 
     log("INFO", "Распаковка...".into()).await;
-    if tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        let f = std::fs::File::open(&ap)?;
+    let extract_res = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        let cur = std::io::Cursor::new(bytes);
         let mut out = std::fs::File::create(&bp)?;
-        if is_zip { std::io::copy(&mut zip::ZipArchive::new(f)?.by_name(&core_name)?, &mut out)?; }
-        else { std::io::copy(&mut flate2::read::GzDecoder::new(f), &mut out)?; }
+        if is_zip { std::io::copy(&mut zip::ZipArchive::new(cur)?.by_name(&cn)?, &mut out)?; }
+        else { std::io::copy(&mut flate2::read::GzDecoder::new(cur), &mut out)?; }
         Ok(())
-    }).await.unwrap().is_err() { return make_res(false, Some("Ошибка распаковки".into())); }
+    }).await.unwrap();
+
+    if extract_res.is_err() { return make_res(false, Some("Ошибка распаковки".into())); }
 
     let target = format!("/opt/sbin/{}", req.core);
 
@@ -178,7 +166,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         };
 
         if is_running { let _ = xkeen("stop").await; }
-
         if let Err(e) = fs::copy(&bin_path, &target).await {
             return make_res(false, Some(format!("Ошибка установки: {}", e)));
         }
@@ -190,10 +177,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             let _ = xkeen("start").await;
         }
     }
-
-    let ap_bg = archive_path.clone();
-    tokio::spawn(async move { let _ = fs::remove_file(ap_bg).await; });
-
     log("INFO", format!("Обновление {} до {} завершено", core_name_cap, ver)).await;
     make_res(true, None)
 }
