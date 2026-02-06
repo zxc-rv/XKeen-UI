@@ -15,6 +15,6 @@ pub async fn post_settings(State(state): State<AppState>, Json(req): Json<AppSet
         let mut s = state.settings.write().unwrap();
         s.timezone_offset = req.timezone_offset;
     }
-    let _ = fs::write(APP_CONFIG, serde_json::to_string(&req).unwrap());
+    _ = fs::write(APP_CONFIG, serde_json::to_string(&req).unwrap());
     Json(ApiResponse::<()> { success: true, error: None, data: None })
 }

@@ -1,7 +1,7 @@
 use axum::{extract::State, response::{IntoResponse, Json}};
 use serde::Deserialize;
 use std::{collections::HashMap, path::Path, os::unix::fs::PermissionsExt, fs::Permissions, io::Read};
-use nix::{sys::signal::{kill, Signal}, unistd::Pid};
+use nix::{sys::{signal::{kill, Signal}, resource::{setrlimit, Resource}}, unistd::{Gid, Pid, setgid, setsid}};
 use tokio::{fs::{self, set_permissions}, process::Command};
 use crate::types::*;
 
@@ -31,24 +31,18 @@ pub fn get_pid(name: &str) -> Option<i32> {
 }
 
 pub async fn soft_restart(core: &str) {
-    if let Some(pid) = get_pid(core) { let _ = kill(Pid::from_raw(pid), Signal::SIGKILL); }
+    if let Some(p) = get_pid(core) { _ = kill(Pid::from_raw(p), Signal::SIGKILL); }
     let mut cmd = Command::new(core);
     match core {
-        "xray" => cmd.envs([("XRAY_LOCATION_CONFDIR", XRAY_CONF), ("XRAY_LOCATION_ASSET", XRAY_ASSET)]),
-        _ => cmd.env("CLASH_HOME_DIR", MIHOMO_CONF)
-    };
-    unsafe { cmd.pre_exec(|| { nix::libc::setsid(); nix::libc::setgid(11111); Ok(()) }); }
-
-    if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
+        "mihomo" => { cmd.env("CLASH_HOME_DIR", MIHOMO_CONF); }
+        _ => { cmd.envs([("XRAY_LOCATION_CONFDIR", XRAY_CONF), ("XRAY_LOCATION_ASSET", XRAY_ASSET)]); }
+    }
+    let lim = if cfg!(target_arch = "aarch64") { 40000 } else { 10000 };
+    unsafe { cmd.pre_exec(move || { setsid()?; setgid(Gid::from_raw(11111))?; setrlimit(Resource::RLIMIT_NOFILE, lim, lim)?; Ok(()) }); }
+    if let Ok(f) = std::fs::File::options().append(true).create(true).open(ERROR_LOG) {
         cmd.stdout(f.try_clone().unwrap()).stderr(f);
     }
-    if let Ok(mut child) = cmd.spawn() {
-        if let Some(id) = child.id() {
-            let limit = if cfg!(target_arch = "aarch64") { 40000 } else { 10000 };
-            unsafe { nix::libc::prlimit(id as i32, nix::libc::RLIMIT_NOFILE, &nix::libc::rlimit { rlim_cur: limit, rlim_max: limit }, std::ptr::null_mut()); }
-        }
-        tokio::spawn(async move { let _ = child.wait().await; });
-    }
+    if let Ok(mut c) = cmd.spawn() { tokio::spawn(async move { _ = c.wait().await; }); }
 }
 
 pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
@@ -102,26 +96,26 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             if old == req.core { return Json(ApiResponse { success: true, error: None, data: None }); }
 
             let init_file = state.init_file.read().unwrap().clone();
-            let _ = Command::new(&init_file).arg("stop").status().await;
+            _ = Command::new(&init_file).arg("stop").status().await;
 
             let new_init_file = if Path::new(S99XKEEN).exists() { S99XKEEN.to_string() } else { S24XRAY.to_string() };
             *state.init_file.write().unwrap() = new_init_file.clone();
 
             if let Ok(content) = fs::read_to_string(&new_init_file).await {
                 let new_content = content.replace(&format!("name_client=\"{}\"", old), &format!("name_client=\"{}\"", req.core));
-                let _ = fs::write(&new_init_file, new_content).await;
+                _ = fs::write(&new_init_file, new_content).await;
                 let permissions = Permissions::from_mode(0o755);
-                let _ = set_permissions(&new_init_file, permissions).await;
+                _ = set_permissions(&new_init_file, permissions).await;
             }
 
             *state.core.write().unwrap() = get_core_info(&req.core);
 
-            if req.core != "xray" { let _ = fs::write(ERROR_LOG, b"").await; }
+            if req.core != "xray" { _ = fs::write(ERROR_LOG, b"").await; }
 
             if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
-                let _ = Command::new(&new_init_file).arg("start").stdout(f.try_clone().unwrap()).stderr(f).status().await;
+                _ = Command::new(&new_init_file).arg("start").stdout(f.try_clone().unwrap()).stderr(f).status().await;
             } else {
-                let _ = Command::new(&new_init_file).arg("start").status().await;
+                _ = Command::new(&new_init_file).arg("start").status().await;
             }
         },
         "softRestart" => soft_restart(&req.core).await,
@@ -134,7 +128,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
 
             let cur_name = state.core.read().unwrap().name.clone();
             if cur_name == "mihomo" && (a == "start" || a == "hardRestart") {
-                let _ = fs::write(ERROR_LOG, b"").await;
+                _ = fs::write(ERROR_LOG, b"").await;
             }
 
             let init_file = state.init_file.read().unwrap().clone();
@@ -144,7 +138,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                     return Json(ApiResponse { success: false, error: Some("Process error".into()), data: None });
                 }
             } else {
-                let _ = Command::new(&init_file).arg(arg).status().await;
+                _ = Command::new(&init_file).arg(arg).status().await;
             }
         },
         _ => return Json(ApiResponse { success: false, error: Some("Bad action".into()), data: None }),

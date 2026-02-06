@@ -26,7 +26,7 @@ async fn log(lvl: &str, msg: String) {
     let line = crate::logs::format_plain_log(lvl, &msg);
     if lvl == "ERROR" { eprintln!("{}", msg); } else { println!("{}", msg); }
     if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG).await {
-        let _ = f.write_all(line.as_bytes()).await;
+        _ = f.write_all(line.as_bytes()).await;
     }
 }
 
@@ -115,7 +115,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     log("INFO", format!("Файл загружен ({:.1} МБ)", size_mb)).await;
 
     let tmp_dir = Path::new("/opt/tmp");
-    let _ = fs::create_dir_all(tmp_dir).await;
+    _ = fs::create_dir_all(tmp_dir).await;
     let bin_path = tmp_dir.join(&req.core);
     let (bp, cn) = (bin_path.clone(), req.core.clone());
     let is_zip = asset_name.ends_with(".zip");
@@ -135,15 +135,15 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     if req.backup_core && Path::new(&target).exists() {
         let backup = format!("/opt/sbin/core-backup/{}-{}", req.core, Local::now().format("%Y%m%d-%H%M%S"));
-        let _ = fs::create_dir_all("/opt/sbin/core-backup").await;
+        _ = fs::create_dir_all("/opt/sbin/core-backup").await;
         log("INFO", format!("Создание бэкапа: {}", backup)).await;
-        let _ = fs::copy(&target, &backup).await;
+        _ = fs::copy(&target, &backup).await;
     }
 
     log("INFO", format!("Установка {}...", core_name_cap)).await;
 
     if fs::rename(&bin_path, &target).await.is_ok() {
-        let _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
+        _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if is_running {
           log("INFO", format!("Перезапуск {}...", core_name_cap)).await;
             crate::controller::soft_restart(&req.core).await;
@@ -165,16 +165,16 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             }
         };
 
-        if is_running { let _ = xkeen("stop").await; }
+        if is_running { _ = xkeen("stop").await; }
         if let Err(e) = fs::copy(&bin_path, &target).await {
             return make_res(false, Some(format!("Ошибка установки: {}", e)));
         }
-        let _ = fs::remove_file(&bin_path).await;
-        let _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
+        _ = fs::remove_file(&bin_path).await;
+        _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
 
         if is_running {
             log("INFO", "Запуск XKeen...".into()).await;
-            let _ = xkeen("start").await;
+            _ = xkeen("start").await;
         }
     }
     log("INFO", format!("Обновление {} до {} завершено", core_name_cap, ver)).await;

@@ -40,7 +40,7 @@ async fn main() {
     println!("{}", info);
     if _debug { println!("Debug mode enabled"); }
 
-    let init_file = if Path::new(S24XRAY).exists() { S24XRAY.to_string() } else { S99XKEEN.to_string() };
+    let init_file = if Path::new(S99XKEEN).exists() { S99XKEEN.to_string() } else { S24XRAY.to_string() };
 
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(&init_file))),

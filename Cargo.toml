@@ -9,7 +9,7 @@ tokio = { version = "1",  features = ["rt-multi-thread", "macros", "fs", "proces
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.6", features = ["fs", "cors"] }
-nix = { version = "0.31", features = ["signal", "resource"] }
+nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource"] }
 notify = "8"
 chrono = "0.4"
 regex = { version = "1", default-features = false, features = ["std", "perf", "unicode-perl", "unicode-case"] }
@@ -17,7 +17,7 @@ once_cell = "1"
 futures = "0.3"
 futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-zip = "7.3"
+zip = "7.4"
 flate2 = "1.1"
 
 [profile.release]

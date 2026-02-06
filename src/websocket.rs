@@ -17,7 +17,7 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
 
     if full && query.is_empty() && len > 128000 {
         let seek_pos = len - 128000;
-        let _ = f.seek(SeekFrom::Start(seek_pos));
+        _ = f.seek(SeekFrom::Start(seek_pos));
         let mut reader = BufReader::new(&mut f);
         let mut discard = String::new();
         let skipped = reader.read_line(&mut discard).unwrap_or(0);
@@ -28,7 +28,7 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
         current_pos = 0;
     }
 
-    let _ = f.seek(SeekFrom::Start(current_pos));
+    _ = f.seek(SeekFrom::Start(current_pos));
     let mut lines = Vec::new();
     let mut total_bytes = 0usize;
     let mut bytes_read = current_pos;
@@ -70,11 +70,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (mut tx, mut rx) = socket.split();
     let (msg_tx, mut msg_rx) = tokio::sync::mpsc::unbounded_channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
-        if let Ok(e) = res { if e.kind.is_modify() { let _ = msg_tx.send(()); } }
+        if let Ok(e) = res { if e.kind.is_modify() { _ = msg_tx.send(()); } }
     }).unwrap();
 
     let mut path = ERROR_LOG.to_string();
-    let _ = watcher.watch(Path::new(&path), RecursiveMode::NonRecursive);
+    _ = watcher.watch(Path::new(&path), RecursiveMode::NonRecursive);
     let tz = state.settings.read().unwrap().timezone_offset;
     let p_clone = path.clone();
     let (t, l, mut offset) = tokio::task::spawn_blocking(move ||
@@ -93,9 +93,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         let tz = state.settings.read().unwrap().timezone_offset;
                         match v["type"].as_str() {
                             Some("switchFile") => {
-                                let _ = watcher.unwatch(Path::new(&path));
+                                _ = watcher.unwatch(Path::new(&path));
                                 path = if v["file"] == "access.log" { ACCESS_LOG.into() } else { ERROR_LOG.into() };
-                                let _ = watcher.watch(Path::new(&path), RecursiveMode::NonRecursive);
+                                _ = watcher.watch(Path::new(&path), RecursiveMode::NonRecursive);
 
                                 let p = path.clone();
                                 let (t, l, off) = tokio::task::spawn_blocking(move || read_log_file(p, 0, "".into(), true, tz)).await.unwrap();
