@@ -40,14 +40,12 @@
 * Требуется дополнительно **~40 МБ** свободного места на диске.
     
 &nbsp;
-## ⚡️ Быстрый старт
-
-### Установка/обновление/удаление (стабильная/latest версия):
+## ⚡️ Быстрый старт (установка/обновление/удаление):
+### Cтабильная/Latest версия:
 ```SH
 curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh
 ```
-
-### Установка/обновление/удаление (бета/pre-release версия):
+### Бета/Pre-release версия:
 ```SH
 curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh -s -- beta
 ```
