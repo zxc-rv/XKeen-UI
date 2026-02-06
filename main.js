@@ -1362,59 +1362,26 @@ let selectedUpdateCore = ""
 let selectedUpdateVersion = ""
 
 function openCoreManageModal() {
-  const modal = document.getElementById("coreManageModal")
-  modal.classList.add("show")
-  const xrayStatus = document.getElementById("xrayStatus")
-  const mihomoStatus = document.getElementById("mihomoStatus")
-  const xraySwitchBtn = document.getElementById("xraySwitchBtn")
-  const mihomoSwitchBtn = document.getElementById("mihomoSwitchBtn")
-  const xrayUpdateBtn = document.getElementById("xrayUpdateBtn")
-  const mihomoUpdateBtn = document.getElementById("mihomoUpdateBtn")
+  const hasX = availableCores.includes("xray"),
+    hasM = availableCores.includes("mihomo")
+  const xS = document.getElementById("xrayStatus"),
+    mS = document.getElementById("mihomoStatus")
+  const xB = document.getElementById("xraySwitchBtn"),
+    mB = document.getElementById("mihomoSwitchBtn")
+  const xU = document.getElementById("xrayUpdateBtn"),
+    mU = document.getElementById("mihomoUpdateBtn")
 
-  const hasXray = availableCores.includes("xray")
-  const hasMihomo = availableCores.includes("mihomo")
+  xS.textContent = currentCore === "xray" ? coreVersions.xray || "" : hasX ? coreVersions.xray || "" : "Не установлено"
+  xS.className = `core-manage-status ${currentCore === "xray" ? "active" : hasX ? "" : "not-installed"}`
+  xB.style.display = currentCore !== "xray" && hasX ? "inline-flex" : "none"
 
-  if (currentCore === "xray") {
-    xrayStatus.textContent = coreVersions.xray || ""
-    xrayStatus.className = "core-manage-status active"
-    if (hasMihomo) {
-      mihomoStatus.textContent = coreVersions.mihomo || ""
-      mihomoStatus.className = "core-manage-status"
-    } else {
-      mihomoStatus.textContent = "Не установлено"
-      mihomoStatus.className = "core-manage-status not-installed"
-    }
-  } else {
-    mihomoStatus.textContent = coreVersions.mihomo || ""
-    mihomoStatus.className = "core-manage-status active"
-    if (hasXray) {
-      xrayStatus.textContent = coreVersions.xray || ""
-      xrayStatus.className = "core-manage-status"
-    } else {
-      xrayStatus.textContent = "Не установлено"
-      xrayStatus.className = "core-manage-status not-installed"
-    }
-  }
+  mS.textContent = currentCore === "mihomo" ? coreVersions.mihomo || "" : hasM ? coreVersions.mihomo || "" : "Не установлено"
+  mS.className = `core-manage-status ${currentCore === "mihomo" ? "active" : hasM ? "" : "not-installed"}`
+  mB.style.display = currentCore !== "mihomo" && hasM ? "inline-flex" : "none"
 
-  if (currentCore === "xray") {
-    xraySwitchBtn.disabled = true
-    xraySwitchBtn.style.display = "inline-flex"
-    mihomoSwitchBtn.style.display = hasMihomo ? "inline-flex" : "none"
-    mihomoSwitchBtn.disabled = !hasMihomo
-  } else {
-    mihomoSwitchBtn.disabled = true
-    mihomoSwitchBtn.style.display = "inline-flex"
-    xraySwitchBtn.style.display = hasXray ? "inline-flex" : "none"
-    xraySwitchBtn.disabled = !hasXray
-  }
-
-  if (xrayUpdateBtn) {
-    xrayUpdateBtn.textContent = hasXray ? "Обновить" : "Установить"
-  }
-
-  if (mihomoUpdateBtn) {
-    mihomoUpdateBtn.textContent = hasMihomo ? "Обновить" : "Установить"
-  }
+  if (xU) xU.textContent = hasX ? "Обновить" : "Установить"
+  if (mU) mU.textContent = hasM ? "Обновить" : "Установить"
+  document.getElementById("coreManageModal").classList.add("show")
 }
 
 function closeCoreManageModal() {
