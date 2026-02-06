@@ -122,7 +122,7 @@ setup_local_editor() {
 install_xkeenui() {
 
   if [ -d $static_dir ] || [ -f $xkeenui_bin ] || [ -f $xkeenui_init ] || [ -f $lighttpd_conf ]; then
-    echo -e "${YELLOW}\n ⚠️ Обнаружены файлы XKeen UI, запуск переустановки...${NC}"
+    echo -e "${YELLOW}\n  ⚠️ Обнаружены файлы XKeen UI, запуск переустановки...${NC}"
     uninstall_xkeenui
   fi
 
