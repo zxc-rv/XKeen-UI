@@ -55,10 +55,14 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     let mut core = state.core.read().unwrap().clone();
     if get_pid(&core.name).is_none() {
         let alt = if core.name == "mihomo" { "xray" } else { "mihomo" };
-        if get_pid(alt).is_some() {
-            core = get_core_info(alt);
-            *state.core.write().unwrap() = core.clone();
-        }
+        core = if get_pid(alt).is_some() {
+            get_core_info(alt)
+        } else {
+            let path = state.init_file.read().unwrap();
+            let conf = std::fs::read_to_string(&*path).unwrap_or_default();
+            get_core_info(if conf.contains("name_client=\"mihomo\"") { "mihomo" } else { "xray" })
+        };
+        *state.core.write().unwrap() = core.clone();
     }
 
     let mut versions = HashMap::new();
