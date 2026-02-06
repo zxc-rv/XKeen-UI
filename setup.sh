@@ -121,7 +121,7 @@ setup_local_editor() {
 install_xkeenui() {
 
   if [ -d $static_dir ] || [ -f $xkeenui_bin ] || [ -f $xkeenui_init ] || [ -f $lighttpd_conf ]; then
-    echo -e "${BLUE}\n:: Обнаружены файлы XKeen UI, запуск переустановки...${NC}"
+    echo -e "${YELLOW}\n⚠️ Обнаружены файлы XKeen UI, запуск переустановки...${NC}"
     uninstall_xkeenui
   fi
 
@@ -147,9 +147,9 @@ install_xkeenui() {
     setup_local_editor
   fi
 
-  echo -e "${BLUE}\n:: Запуск XKeen UI...${NC}"
+  echo -e "${BLUE}\n ℹ️ Запуск XKeen UI...${NC}"
   if ! $xkeenui_init start; then
-    echo -e "${RED}\n Не удалось запустить XKeen UI.\n${NC}"
+    echo -e "${RED}\n ❌ Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
 
@@ -159,7 +159,7 @@ install_xkeenui() {
   local port=${port:-1000}
 
   clear
-  echo -e "${GREEN}\n XKeen UI успешно установлен!\n${NC}"
+  echo -e "${GREEN}\n ✅ XKeen UI успешно установлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN}http://$ip:$port\n${NC}"
 }
 
@@ -190,7 +190,7 @@ update_xkeenui() {
     fi
   fi
 
-  echo -e "${BLUE}\n:: Запуск XKeen UI...${NC}"
+  echo -e "${BLUE}\n ℹ️ Запуск XKeen UI...${NC}"
   if ! $xkeenui_init start; then
     echo -e "${RED}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
@@ -203,7 +203,7 @@ update_xkeenui() {
 
   clear
 
-  echo -e "${GREEN}\n XKeen UI успешно обновлен!\n${NC}"
+  echo -e "${GREEN}\n ✅ XKeen UI успешно обновлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN}http://$ip:$port\n${NC}"
   echo -e " После перехода нажмите Ctrl+Shift+R для обновления кэша\n"
 }
@@ -214,7 +214,7 @@ uninstall_xkeenui() {
   case "$response" in
     [Yy])
         clear
-        echo -e "${GREEN}\n:: Начинаем удаление...${NC}"
+        echo -e "${GREEN}\n ℹ️ Начинаем удаление...${NC}"
         ;;
     *)
         echo -e "${RED}\n Отмена операции.\n${NC}"
@@ -234,20 +234,21 @@ uninstall_xkeenui() {
 
   if [ -f $xkeenui_init ]; then
     if $xkeenui_init status >/dev/null 2>&1; then
-        $xkeenui_init stop
+      $xkeenui_init stop || :
+      killall -q -9 xkeen-ui || :
     fi
   fi
 
   rm -rf $static_dir
   rm -f $xkeenui_bin $xkeenui_init
-  echo -e "${GREEN}\nУдаление XKeen-UI завершено\n${NC}"
+  echo -e "${GREEN}\n ✅ Удаление XKeen-UI завершено\n${NC}"
 }
 
 legacy_installation_check() {
   if [ -f "$lighttpd_conf" ]; then
     $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
     rm -f "$lighttpd_conf"
-    echo -e "${YELLOW}\n Веб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
+    echo -e "${YELLOW}\n ℹ️ Веб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
     read -p " Удалить его? [Y/n]: " response < /dev/tty
 
     case "$response" in
@@ -290,22 +291,22 @@ get_editor_mode() {
 
 toggle_editor_mode() {
   if [ ! -f "$local_mode_path" ]; then
-    echo -e "${RED}\n Ошибка: XKeen UI не установлен\n${NC}"
+    echo -e "${RED}\n ❌ Ошибка: XKeen UI не установлен\n${NC}"
     exit 1
   fi
 
   if grep -q "const LOCAL = true" "$local_mode_path"; then
     echo "const LOCAL = false" > "$local_mode_path"
-    echo -e "${GREEN}\n Режим редактора переключен на CDN\n${NC}"
+    echo -e "${GREEN}\n ✅ Режим редактора переключен на CDN\n${NC}"
   else
     if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
-      echo -e "\n Будет выполнена загрузка файлов редактора.\n"
+      echo -e "\n ℹ️ Будет выполнена загрузка файлов редактора.\n"
       read -p " Продолжить? [Y/n]: " response < /dev/tty
       [[ ! $response =~ ^[Yy]?$ ]] && echo && return
       setup_local_editor
     fi
     echo "const LOCAL = true" > "$local_mode_path"
-    echo -e "${GREEN}\n Режим редактора переключен на Local\n${NC}"
+    echo -e "${GREEN}\n ✅ Режим редактора переключен на Local\n${NC}"
   fi
 }
 
@@ -348,7 +349,7 @@ case $response in
     exit
     ;;
   *)
-    echo -e "${RED}\n Неверный выбор.\n${NC}"
+    echo -e "${RED}\n ❌ Неверный выбор.\n${NC}"
     exit 1
     ;;
 esac
