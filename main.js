@@ -6,7 +6,6 @@ let configs = []
 let coreVersions = { xray: "", mihomo: "" }
 let currentCore = ""
 let currentLogFile = "error.log"
-let currentTimezone = 3
 let dashboardPort = null
 let dependenciesLoaded = false
 let displayLines = []
@@ -2617,17 +2616,16 @@ function renderGithubProxies() {
 
 function addGithubProxy() {
   const input = document.getElementById("newProxyInput")
-  const url = input.value.trim()
+  let url = input.value.trim().replace(/\/+$/, "")
 
-  if (!url) {
-    showToast("Введите URL прокси", "error")
-    return
+  if (!url) return showToast("Введите URL прокси", "error")
+
+  if (!/^https?:\/\//i.test(url)) {
+    url = "https://" + url.replace(/^:\/\//, "")
   }
 
-  // Проверка на дубликат
   if (github_proxy.includes(url)) {
-    showToast("Этот прокси уже добавлен", "error")
-    return
+    return showToast("Этот прокси уже добавлен", "error")
   }
 
   github_proxy.push(url)

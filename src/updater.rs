@@ -261,7 +261,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     log("INFO", format!("Загрузка: {}", url)).await;
 
-    let proxies = state.settings.read().unwrap().github_proxy.clone();
+    let proxies = state.settings.read().unwrap().updater.github_proxy.clone();
     let data = match download(&url, &proxies).await {
         Ok(d) => d,
         Err(e) => return make_res(false, Some(e))
@@ -317,7 +317,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     let target = format!("/opt/sbin/{}", req.core);
     if req.backup_core && Path::new(&target).exists() {
-        let tz = state.settings.read().unwrap().timezone;
+        let tz = state.settings.read().unwrap().logs.timezone;
         let now = chrono::Utc::now() + chrono::Duration::hours(tz as i64);
         let backup = format!("/opt/sbin/core-backup/{}-{}", req.core, now.format("%Y%m%d-%H%M%S"));
         _ = fs::create_dir_all("/opt/sbin/core-backup").await;

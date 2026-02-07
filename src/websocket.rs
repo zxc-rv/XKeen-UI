@@ -75,7 +75,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let mut path = ERROR_LOG.to_string();
     _ = watcher.watch(Path::new(&path), RecursiveMode::NonRecursive);
-    let tz = state.settings.read().unwrap().timezone;
+    let tz = state.settings.read().unwrap().logs.timezone;
     let p_clone = path.clone();
     let (t, l, mut offset) = tokio::task::spawn_blocking(move ||
             read_log_file(p_clone, 0, "".into(), true, tz)
@@ -90,7 +90,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 match msg {
                     Ok(Message::Text(txt)) => {
                         let v: serde_json::Value = serde_json::from_str(&txt).unwrap_or_default();
-                        let tz = state.settings.read().unwrap().timezone;
+                        let tz = state.settings.read().unwrap().logs.timezone;
                         match v["type"].as_str() {
                             Some("switchFile") => {
                                 _ = watcher.unwatch(Path::new(&path));
@@ -127,7 +127,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 }
             }
             Some(_) = msg_rx.recv() => {
-                let tz = state.settings.read().unwrap().timezone;
+                let tz = state.settings.read().unwrap().logs.timezone;
                 let p = path.clone();
                 let off_curr = offset;
                 let (t, l, new_off) = tokio::task::spawn_blocking(move || read_log_file(p, off_curr, "".into(), false, tz)).await.unwrap();

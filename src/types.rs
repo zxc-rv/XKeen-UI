@@ -27,45 +27,72 @@ pub struct CoreInfo {
     pub is_json: bool,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct AppSettings {
-    #[serde(alias = "timezoneOffset", alias = "timezone-offset")]
-    pub timezone: i32,
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct GuiSettings { pub auto_apply: bool }
 
-    #[serde(alias = "githubProxy", alias = "github-proxy")]
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct UpdaterSettings {
     pub github_proxy: Vec<String>,
-
-    #[serde(alias = "autoApply", alias = "auto-apply")]
-    pub auto_apply: bool,
-
-    #[serde(alias = "backupCore", alias = "backup-core")]
     pub backup_core: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct LogSettings { pub timezone: i32 }
+
+#[derive(Clone, Serialize)]
+pub struct AppSettings {
+    pub gui: GuiSettings,
+    pub updater: UpdaterSettings,
+    pub logs: LogSettings,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ConfigMigration {
+    New {
+        gui: GuiSettings,
+        updater: UpdaterSettings,
+        logs: LogSettings,
+    },
+    Legacy {
+        #[serde(rename = "timezoneOffset")]
+        timezone_offset: i32,
+    },
+}
+
+impl<'de> Deserialize<'de> for AppSettings {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        match ConfigMigration::deserialize(deserializer)? {
+            ConfigMigration::New { logs, gui, updater } => Ok(Self { logs, gui, updater }),
+            ConfigMigration::Legacy { timezone_offset } => {
+                let mut s = Self::default();
+                s.logs.timezone = timezone_offset;
+                Ok(s)
+            }
+        }
+    }
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            timezone: 3,
-            github_proxy: vec![
-                "https://gh-proxy.com".to_string(),
-                "https://ghfast.top".to_string(),
-            ],
-            auto_apply: false,
-            backup_core: true,
+            gui: GuiSettings { auto_apply: false },
+            updater: UpdaterSettings {
+                github_proxy: vec!["https://gh-proxy.com".into(), "https://ghfast.top".into()],
+                backup_core: true,
+            },
+            logs: LogSettings { timezone: 3 },
         }
     }
 }
 
 impl AppSettings {
     pub fn normalize_proxies(&mut self) {
-        self.github_proxy = self.github_proxy.iter().map(|p| {
+        self.updater.github_proxy = self.updater.github_proxy.iter().map(|p| {
             let p = p.trim();
-            if p.starts_with("http://") || p.starts_with("https://") {
-                p.to_string()
-            } else {
-                format!("https://{}", p.trim_start_matches("://"))
-            }
+            if p.starts_with("http") { p.to_string() }
+            else { format!("https://{}", p.trim_start_matches("://")) }
         }).collect();
     }
 }
