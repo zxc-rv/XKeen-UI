@@ -1,32 +1,32 @@
-let monacoEditor
-let configs = []
 let activeConfigIndex = -1
-let isServiceRunning = false
-let isActionInProgress = false
-let userScrolled = false
-let pendingSwitchIndex = -1
-let currentLogFile = "error.log"
-let isConfigsLoading = true
-let logFilter = ""
-let isStatusLoading = true
-let ws = null
-let pingInterval = null
-let displayLines = []
+let autoApply = false
 let availableCores = []
-let currentCore = ""
+let backupCore = true
+let configs = []
 let coreVersions = { xray: "", mihomo: "" }
-let pendingCoreChange = ""
-let isCurrentFileJson = false
+let currentCore = ""
+let currentLogFile = "error.log"
+let currentTimezone = 3
 let dashboardPort = null
 let dependenciesLoaded = false
-let toastStack = []
-let currentTimezone = 3
-let autoApply = false
-let backupCore = true
-let statusWs = null
-let selectedTemplateUrl = null
+let displayLines = []
+let githubProxies = []
+let isActionInProgress = false
+let isConfigsLoading = true
+let isCurrentFileJson = false
+let isServiceRunning = false
+let isStatusLoading = true
+let logFilter = ""
+let monacoEditor
+let pendingCoreChange = ""
 let pendingSaveAction = null
-const MAX_DISPLAY_LINES = 1000
+let pendingSwitchIndex = -1
+let pingInterval = null
+let selectedTemplateUrl = null
+let statusWs = null
+let toastStack = []
+let userScrolled = false
+let ws = null
 
 async function loadDependencies() {
   if (dependenciesLoaded) return
@@ -72,8 +72,8 @@ async function init() {
       require(["vs/editor/editor.main"], resolve, reject)
     })
 
+    loadSettings()
     checkStatus()
-    loadTimezone()
     connectWebSocket()
     loadMonacoEditor()
 
@@ -1475,10 +1475,10 @@ async function openUpdateModal(core) {
         <label for="version-${idx}">
           <div class="template-info">
             <span class="template-name">${rel.name || rel.version}</span>
-            ${rel.isPrerelease ? '<span class="version-prerelease">Pre-release</span>' : ""}
+            ${rel.is_prerelease ? '<span class="version-prerelease">Pre-release</span>' : ""}
           </div>
           <div class="template-meta">
-            <span class="template-date">${rel.publishedAt}</span>
+            <span class="template-date">${rel.published_at}</span>
           </div>
         </label>
       </div>
@@ -1557,7 +1557,7 @@ async function installSelectedVersion() {
   const payload = {
     core: selectedUpdateCore,
     version: selectedUpdateVersion,
-    backupCore: backupCore,
+    backup_core: backupCore,
   }
 
   closeCoreManageModal()
@@ -2551,21 +2551,118 @@ function loadGUIState() {
   return saved === "1"
 }
 
-async function loadTimezone() {
+async function loadSettings() {
   try {
     const result = await apiCall("settings")
-    if (result.success && result.timezoneOffset !== undefined) {
-      currentTimezone = result.timezoneOffset
+    if (result.success) {
+      currentTimezone = result.timezone || 3
       updateTimezoneLabel()
-    } else {
-      console.error("Failed to load timezone:", result)
-      currentTimezone = 3
-      updateTimezoneLabel()
+
+      github_proxy = result.github_proxy || []
+      renderGithubProxies()
+
+      autoApply = result.auto_apply || false
+      const autoApplyCheckbox = document.getElementById("autoApplyCheckbox")
+      if (autoApplyCheckbox) {
+        autoApplyCheckbox.checked = autoApply
+      }
+
+      backupCore = result.backup_core !== false
+      const backupCoreCheckbox = document.getElementById("backupCoreCheckbox")
+      if (backupCoreCheckbox) {
+        backupCoreCheckbox.checked = backupCore
+      }
     }
-  } catch (e) {
-    console.error("Error loading timezone:", e)
-    currentTimezone = 3
-    updateTimezoneLabel()
+  } catch (error) {
+    console.error("Failed to load settings:", error)
+  }
+}
+
+function renderGithubProxies() {
+  const proxyList = document.getElementById("githubProxyList")
+  if (!proxyList) return
+
+  proxyList.innerHTML = ""
+
+  if (github_proxy.length === 0) {
+    const emptyMessage = document.createElement("div")
+    emptyMessage.className = "proxy-empty"
+    emptyMessage.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" x2="12" y1="8" y2="12"></line>
+        <line x1="12" x2="12.01" y1="16" y2="16"></line>
+      </svg>
+      <span>Нет добавленных прокси</span>
+    `
+    proxyList.appendChild(emptyMessage)
+    return
+  }
+
+  github_proxy.forEach((proxy, index) => {
+    const proxyItem = document.createElement("div")
+    proxyItem.className = "proxy-item"
+    proxyItem.innerHTML = `
+      <div class="proxy-url">${proxy}</div>
+      <button class="btn btn-icon btn-danger" onclick="removeGithubProxy(${index})" title="Удалить">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    `
+    proxyList.appendChild(proxyItem)
+  })
+}
+
+function addGithubProxy() {
+  const input = document.getElementById("newProxyInput")
+  const url = input.value.trim()
+
+  if (!url) {
+    showToast("Введите URL прокси", "error")
+    return
+  }
+
+  // Проверка на дубликат
+  if (github_proxy.includes(url)) {
+    showToast("Этот прокси уже добавлен", "error")
+    return
+  }
+
+  github_proxy.push(url)
+  renderGithubProxies()
+  saveSettings()
+  input.value = ""
+}
+
+function removeGithubProxy(index) {
+  github_proxy.splice(index, 1)
+  renderGithubProxies()
+  saveSettings()
+}
+
+async function saveSettings() {
+  try {
+    const result = await apiCall("settings", {
+      timezone: currentTimezone,
+      github_proxy: github_proxy,
+      auto_apply: autoApply,
+      backup_core: backupCore,
+    })
+
+    if (result.success) {
+      if (result.github_proxy) {
+        github_proxy = result.github_proxy
+        renderGithubProxies()
+      }
+      showToast("Настройки сохранены")
+    } else {
+      showToast(`Ошибка сохранения: ${result.error}`, "error")
+    }
+  } catch (error) {
+    console.error("Error saving settings:", error)
+    showToast("Ошибка сохранения настроек", "error")
   }
 }
 
@@ -2606,32 +2703,21 @@ function toggleTimezoneSelect() {
 
 async function selectTimezone(offset) {
   try {
-    console.log("Selecting timezone:", offset)
-    const result = await apiCall("settings", { timezoneOffset: offset })
+    currentTimezone = offset
+    updateTimezoneLabel()
 
-    if (result.success) {
-      currentTimezone = offset
-      updateTimezoneLabel()
+    const options = document.querySelectorAll("#timezoneDropdown .custom-select-option")
+    options.forEach((opt) => {
+      opt.classList.toggle("selected", parseInt(opt.dataset.value) === offset)
+    })
 
-      const options = document.querySelectorAll("#timezoneDropdown .custom-select-option")
-      options.forEach((opt) => {
-        opt.classList.toggle("selected", parseInt(opt.dataset.value) === offset)
-      })
+    await saveSettings()
 
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "reload",
-          }),
-        )
-      }
-
-      showToast("Часовой пояс обновлён")
-      document.getElementById("timezoneSelect").classList.remove("open")
-    } else {
-      console.error("Timezone update failed:", result)
-      showToast(result.error || "Ошибка обновления", "error")
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "reload" }))
     }
+
+    document.getElementById("timezoneSelect").classList.remove("open")
   } catch (e) {
     console.error("Error updating timezone:", e)
     showToast("Ошибка обновления часового пояса", "error")
@@ -2649,7 +2735,7 @@ function toggleAutoApply() {
   const checkbox = document.getElementById("autoApplyCheckbox")
   if (checkbox) {
     autoApply = checkbox.checked
-    localStorage.setItem("autoApply", autoApply ? "1" : "0")
+    saveSettings()
   }
 }
 
@@ -2657,7 +2743,7 @@ function toggleBackupCore() {
   const checkbox = document.getElementById("backupCoreCheckbox")
   if (checkbox) {
     backupCore = checkbox.checked
-    localStorage.setItem("backupCore", backupCore ? "1" : "0")
+    saveSettings()
   }
 }
 
@@ -2712,3 +2798,14 @@ function showCommentsWarning(action) {
   document.getElementById("commentsWarningModal").classList.add("show")
   setTimeout(() => document.getElementById("confirmCommentsBtn").focus(), 50)
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+  const newProxyInput = document.getElementById("newProxyInput")
+  if (newProxyInput) {
+    newProxyInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        addGithubProxy()
+      }
+    })
+  }
+})

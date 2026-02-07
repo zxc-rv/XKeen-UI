@@ -77,7 +77,25 @@ fn detect_core(init_file: &str) -> CoreInfo {
 }
 
 fn load_settings() -> AppSettings {
-    fs::read_to_string(APP_CONFIG)
-        .ok().and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(AppSettings { timezone_offset: 3 })
+    let config_path = Path::new(APP_CONFIG);
+
+    if !config_path.exists() {
+        let default_settings = AppSettings::default();
+        if let Ok(json) = serde_json::to_string_pretty(&default_settings) {
+            if let Some(parent) = config_path.parent() {
+                _ = fs::create_dir_all(parent);
+            }
+            _ = fs::write(config_path, json);
+        }
+        return default_settings;
+    }
+
+    let content = match fs::read_to_string(APP_CONFIG) {
+        Ok(c) => c,
+        Err(_) => return AppSettings::default(),
+    };
+
+    let mut settings: AppSettings = serde_json::from_str(&content).unwrap_or_else(|_| AppSettings::default());
+    settings.normalize_proxies();
+    settings
 }

@@ -28,9 +28,46 @@ pub struct CoreInfo {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default)]
 pub struct AppSettings {
-    pub timezone_offset: i32,
+    #[serde(alias = "timezoneOffset", alias = "timezone-offset")]
+    pub timezone: i32,
+
+    #[serde(alias = "githubProxy", alias = "github-proxy")]
+    pub github_proxy: Vec<String>,
+
+    #[serde(alias = "autoApply", alias = "auto-apply")]
+    pub auto_apply: bool,
+
+    #[serde(alias = "backupCore", alias = "backup-core")]
+    pub backup_core: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            timezone: 3,
+            github_proxy: vec![
+                "https://gh-proxy.com".to_string(),
+                "https://ghfast.top".to_string(),
+            ],
+            auto_apply: false,
+            backup_core: true,
+        }
+    }
+}
+
+impl AppSettings {
+    pub fn normalize_proxies(&mut self) {
+        self.github_proxy = self.github_proxy.iter().map(|p| {
+            let p = p.trim();
+            if p.starts_with("http://") || p.starts_with("https://") {
+                p.to_string()
+            } else {
+                format!("https://{}", p.trim_start_matches("://"))
+            }
+        }).collect();
+    }
 }
 
 #[derive(Serialize)]
@@ -46,7 +83,6 @@ pub struct ApiResponse<T> {
 pub struct UpdateReq {
     pub core: String,
     pub version: String,
-    #[serde(rename = "backupCore")]
     pub backup_core: bool,
 }
 
@@ -54,8 +90,6 @@ pub struct UpdateReq {
 pub struct ReleaseInfo {
     pub version: String,
     pub name: String,
-    #[serde(rename = "publishedAt")]
     pub published_at: String,
-    #[serde(rename = "isPrerelease")]
     pub is_prerelease: bool,
 }

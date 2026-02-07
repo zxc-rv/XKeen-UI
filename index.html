@@ -694,10 +694,28 @@
           <div class="settings-section">
             <h4 class="settings-section-title">Обновление ядра</h4>
             <div class="settings-item">
-              <span class="settings-item-label">Создавать бэкап ядра при обновлении</span>
+              <span class="settings-item-label">Создавать бэкап</span>
               <div class="routing-gui-toggle">
                 <input type="checkbox" id="backupCoreCheckbox" onchange="toggleBackupCore()" checked />
                 <label for="backupCoreCheckbox"></label>
+              </div>
+            </div>
+
+            <div class="proxy-settings">
+              <span class="settings-item-label">GitHub Proxy</span>
+              <div class="proxy-list-container">
+                <div id="githubProxyList" class="proxy-list"></div>
+
+                <div class="proxy-add-form">
+                  <input
+                    type="text"
+                    id="newProxyInput"
+                    class="input proxy-input"
+                    placeholder="gh-proxy.com"
+                    aria-label="URL GitHub прокси"
+                  />
+                  <button class="btn btn-primary" onclick="addGithubProxy()">Добавить</button>
+                </div>
               </div>
             </div>
           </div>
