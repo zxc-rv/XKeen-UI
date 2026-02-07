@@ -216,7 +216,7 @@ uninstall_xkeenui() {
   case "$response" in
     [Yy])
         clear
-        echo -e "${GREEN}\n ℹ️  Начинаем удаление...${NC}"
+        echo -e "${CYAN}\n ℹ️  Начинаем удаление...${NC}"
         ;;
     *)
         echo -e "${RED}\n ❌ Отмена операции.\n${NC}"
