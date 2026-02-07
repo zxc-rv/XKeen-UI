@@ -250,7 +250,7 @@ legacy_installation_check() {
   if [ -f "$lighttpd_conf" ]; then
     $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
     rm -f "$lighttpd_conf"
-    echo -e "${YELLOW}\n ℹ️ Веб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
+    echo -e "${YELLOW}\n ⚠️ Веб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
     read -p " Удалить его? [Y/n]: " response < /dev/tty
 
     case "$response" in
@@ -302,7 +302,7 @@ toggle_editor_mode() {
     echo -e "${GREEN}\n ✅ Режим редактора переключен на CDN\n${NC}"
   else
     if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
-      echo -e "\n ℹ️ Будет выполнена загрузка файлов редактора.\n"
+      echo -e "${CYAN}\n ℹ️  Будет выполнена загрузка файлов редактора.\n"
       read -p " Продолжить? [Y/n]: " response < /dev/tty
       [[ ! $response =~ ^[Yy]?$ ]] && echo && return
       setup_local_editor
