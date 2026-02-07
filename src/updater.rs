@@ -1,8 +1,7 @@
 use axum::{extract::{Query, State}, response::{IntoResponse, Json}, http::{header, HeaderMap}};
 use serde::Deserialize;
 use serde_json::json;
-use std::{path::Path, process::Stdio, os::unix::fs::PermissionsExt};
-use std::fs::OpenOptions;
+use std::{path::Path, os::unix::fs::PermissionsExt};
 use tokio::{process::Command, io::AsyncWriteExt, fs};
 use chrono::Local;
 use crate::types::*;
@@ -60,18 +59,23 @@ pub async fn get_releases(Query(q): Query<ReleaseQuery>) -> impl IntoResponse {
 }
 
 pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
-    let ver = if req.version.chars().next().map_or(false, |c| c.is_ascii_digit()) { format!("v{}", req.version) } else { req.version.clone() };
+    let ver = if req.version.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+        format!("v{}", req.version)
+    } else {
+        req.version.clone()
+    };
     let mut c = req.core.chars();
     let core_name_cap = match c.next() {
         None => String::new(),
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     };
+
     log("INFO", format!("Запущено обновление {} до {}", core_name_cap, ver)).await;
 
     let is_running = crate::controller::get_pid(&req.core).is_some();
     let arch = std::env::consts::ARCH;
-    let (mut asset_name, mut url) = (String::new(), String::new());
-
+    let mut asset_name = String::new();
+    let mut url = String::new();
     if req.core == "xray" {
         let n = match arch {
             "aarch64" => "Xray-linux-arm64-v8a.zip",
@@ -88,51 +92,97 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             "mipsle" => "mipsle-softfloat",
             _ => return make_res(false, Some("Архитектура не поддерживается".into()))
         };
-        let client = reqwest::Client::builder().user_agent("XKeen").build().unwrap();
+
+        let client = reqwest::Client::builder().user_agent("XKeen").timeout(std::time::Duration::from_secs(15)).build().unwrap_or_default();
         if let Ok(r) = client.get("https://api.github.com/repos/MetaCubeX/mihomo/releases").send().await {
-            let rels: Vec<GhRelease> = r.json().await.unwrap_or_default();
-            if let Some(rel) = rels.into_iter().find(|r| r.tag_name == ver) {
-                if let Some(a) = rel.assets.into_iter().find(|a| a.name.contains(&format!("mihomo-linux-{}", pat)) && a.name.ends_with(".gz")) {
-                    asset_name = format!("mihomo-{}.gz", ver);
-                    url = a.browser_download_url;
+            if let Ok(rels) = r.json::<Vec<GhRelease>>().await {
+                if let Some(rel) = rels.into_iter().find(|r| r.tag_name == ver) {
+                    if let Some(a) = rel.assets.into_iter().find(|a| a.name.contains(&format!("mihomo-linux-{}", pat)) && a.name.ends_with(".gz")) {
+                        asset_name = a.name.clone();
+                        url = a.browser_download_url;
+                    }
                 }
             }
         }
-        if url.is_empty() { return make_res(false, Some("Релиз или ассет не найден".into())); }
     }
 
+    if url.is_empty() { return make_res(false, Some("Релиз или ассет не найден".into())); }
+
     log("INFO", format!("Загрузка: {}", url)).await;
-    let client = reqwest::Client::builder().build().unwrap();
-    let bytes = match client.get(&url).send().await {
-        Ok(r) if r.status().is_success() => match r.bytes().await {
-            Ok(b) => b,
-            Err(_) => return make_res(false, Some("Ошибка при скачивании файла".into()))
-        },
-        _ => return make_res(false, Some("Ошибка при скачивании файла".into()))
+
+    let client = reqwest::Client::new();
+    let res = match client.get(&url).send().await {
+        Ok(r) if r.status().is_success() => r,
+        Ok(r) => return make_res(false, Some(format!("HTTP {}", r.status()))),
+        Err(_) => return make_res(false, Some("Ошибка загрузки файла".into()))
     };
 
-    let size_mb = bytes.len() as f64 / 1024.0 / 1024.0;
-    log("INFO", format!("Файл загружен ({:.1} МБ)", size_mb)).await;
-
+    let size = res.content_length().unwrap_or(0);
+    let size_mb = size as f64 / 1024.0 / 1024.0;
     let tmp_dir = Path::new("/opt/tmp");
-    _ = fs::create_dir_all(tmp_dir).await;
+    if fs::create_dir_all(tmp_dir).await.is_err() { return make_res(false, Some("Ошибка создания tmp директории".into())); }
+    let dl_tmp = tmp_dir.join("download.tmp");
     let bin_path = tmp_dir.join(&req.core);
-    let (bp, cn) = (bin_path.clone(), req.core.clone());
+    let is_large = size > 50 * 1024 * 1024 || size == 0;
     let is_zip = asset_name.ends_with(".zip");
+    let data = if is_large {
+        let mut f = match fs::File::create(&dl_tmp).await { Ok(f) => f, Err(_) => return make_res(false, Some("Ошибка создания temp файла".into())) };
+        let mut stream = res.bytes_stream();
+        use futures_util::StreamExt;
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(c) => if f.write_all(&c).await.is_err() {
+                    _ = fs::remove_file(&dl_tmp).await;
+                    return make_res(false, Some("Ошибка записи на диск".into()));
+                },
+                Err(_) => {
+                    _ = fs::remove_file(&dl_tmp).await;
+                    return make_res(false, Some("Ошибка стриминга".into()));
+                }
+            }
+        }
+        None
+    } else {
+        match res.bytes().await {
+            Ok(b) => Some(b),
+            Err(_) => return make_res(false, Some("Ошибка скачивания".into()))
+        }
+    };
 
+    log("INFO", format!("Файл загружен{} ({:.1} МБ)", if is_large { " на диск" } else { " в ОЗУ" }, size_mb)).await;
     log("INFO", "Распаковка...".into()).await;
-    let extract_res = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        let cur = std::io::Cursor::new(bytes);
-        let mut out = std::fs::File::create(&bp)?;
-        if is_zip { std::io::copy(&mut zip::ZipArchive::new(cur)?.by_name(&cn)?, &mut out)?; }
-        else { std::io::copy(&mut flate2::read::GzDecoder::new(cur), &mut out)?; }
-        Ok(())
-    }).await.unwrap();
 
-    if extract_res.is_err() { return make_res(false, Some("Ошибка распаковки".into())); }
+    let (ap, bp, cn) = (dl_tmp.clone(), bin_path.clone(), req.core.clone());
+    let extract_res = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        let mut out = std::fs::File::create(&bp)?;
+        if is_zip {
+            if let Some(b) = data {
+                let mut arc = zip::ZipArchive::new(std::io::Cursor::new(b))?;
+                std::io::copy(&mut arc.by_name(&cn)?, &mut out)?;
+            } else {
+                let mut arc = zip::ZipArchive::new(std::fs::File::open(&ap)?)?;
+                std::io::copy(&mut arc.by_name(&cn)?, &mut out)?;
+            }
+        } else {
+            let r: Box<dyn std::io::Read> = if let Some(ref b) = data {
+                Box::new(std::io::Cursor::new(b))
+            } else {
+                Box::new(std::fs::File::open(&ap)?)
+            };
+            std::io::copy(&mut flate2::read::GzDecoder::new(r), &mut out)?;
+        }
+        Ok(())
+    }).await;
+
+    _ = fs::remove_file(&dl_tmp).await;
+
+    match extract_res {
+        Ok(Ok(())) => {},
+        Ok(Err(e)) => return make_res(false, Some(format!("Ошибка распаковки: {}", e))),
+        Err(_) => return make_res(false, Some("Ошибка распаковки (panic)".into()))
+    }
 
     let target = format!("/opt/sbin/{}", req.core);
-
     if req.backup_core && Path::new(&target).exists() {
         let backup = format!("/opt/sbin/core-backup/{}-{}", req.core, Local::now().format("%Y%m%d-%H%M%S"));
         _ = fs::create_dir_all("/opt/sbin/core-backup").await;
@@ -145,38 +195,31 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     if fs::rename(&bin_path, &target).await.is_ok() {
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if is_running {
-          log("INFO", format!("Перезапуск {}...", core_name_cap)).await;
+            log("INFO", format!("Перезапуск {}...", core_name_cap)).await;
             crate::controller::soft_restart(&req.core).await;
         }
     } else {
         log("WARN", "Атомарная замена не удалась, использую fallback...".into()).await;
         let init = state.init_file.read().unwrap().clone();
-        let xkeen = |act: &str| {
-            let cmd = init.clone();
-            let arg = act.to_string();
-            async move {
-                let log_file = OpenOptions::new().create(true).append(true).open(ERROR_LOG);
-                let mut c = Command::new(&cmd);
-                c.arg(&arg);
-                if let Ok(f) = log_file {
-                    c.stdout(Stdio::from(f.try_clone().unwrap())).stderr(Stdio::from(f));
-                }
-                c.status().await
-            }
-        };
 
-        if is_running { _ = xkeen("stop").await; }
+        if is_running {
+            _ = Command::new(&init).arg("stop").status().await;
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
         if let Err(e) = fs::copy(&bin_path, &target).await {
             return make_res(false, Some(format!("Ошибка установки: {}", e)));
         }
+
         _ = fs::remove_file(&bin_path).await;
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
 
         if is_running {
             log("INFO", "Запуск XKeen...".into()).await;
-            _ = xkeen("start").await;
+            _ = Command::new(&init).arg("start").status().await;
         }
     }
+
     log("INFO", format!("Обновление {} до {} завершено", core_name_cap, ver)).await;
     make_res(true, None)
 }
