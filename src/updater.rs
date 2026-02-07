@@ -317,7 +317,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     let target = format!("/opt/sbin/{}", req.core);
     if req.backup_core && Path::new(&target).exists() {
-        let tz = state.settings.read().unwrap().logs.timezone;
+        let tz = state.settings.read().unwrap().log.timezone;
         let now = chrono::Utc::now() + chrono::Duration::hours(tz as i64);
         let backup = format!("/opt/sbin/core-backup/{}-{}", req.core, now.format("%Y%m%d-%H%M%S"));
         _ = fs::create_dir_all("/opt/sbin/core-backup").await;

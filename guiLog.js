@@ -272,15 +272,10 @@ function toggleGuiLog() {
   const checkbox = document.getElementById("guiLogCheckboxSettings")
   if (checkbox) {
     guiLogState.enabled = checkbox.checked
-    localStorage.setItem("guiLog_enabled", guiLogState.enabled ? "1" : "0")
+    saveSettings()
   }
   const config = configs[activeConfigIndex]
   if (config && config.filename.toLowerCase().includes("log") && typeof applyGUIState === "function") {
     applyGUIState()
   }
-}
-
-function loadGuiLogState() {
-  const saved = localStorage.getItem("guiLog_enabled")
-  return saved === "1"
 }

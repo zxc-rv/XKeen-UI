@@ -169,24 +169,11 @@ function syncGUIToJSON() {
     })
 }
 
-function saveGUIState() {
-  if (!configs[activeConfigIndex]) return
-  const filename = configs[activeConfigIndex].filename
-  localStorage.setItem(`guiRouting_${filename}`, guiRoutingState.enabled ? "1" : "0")
-}
-
-function loadGUIState() {
-  if (!configs[activeConfigIndex]) return false
-  const filename = configs[activeConfigIndex].filename
-  const saved = localStorage.getItem(`guiRouting_${filename}`)
-  return saved === "1"
-}
-
 function toggleGuiRouting() {
   const checkbox = document.getElementById("guiRoutingCheckboxSettings")
   if (checkbox) {
     guiRoutingState.enabled = checkbox.checked
-    localStorage.setItem("guiRouting_enabled", guiRoutingState.enabled ? "1" : "0")
+    saveSettings()
   }
   const config = configs[activeConfigIndex]
   if (config && config.filename.toLowerCase().includes("routing") && typeof applyGUIState === "function") {

@@ -8,12 +8,12 @@ pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
         "success": true,
         "gui": s.gui,
         "updater": s.updater,
-        "logs": s.logs
+        "log": s.log
     }))
 }
 
 pub async fn post_settings(State(state): State<AppState>, Json(mut req): Json<AppSettings>) -> impl IntoResponse {
-    if req.logs.timezone < -12 || req.logs.timezone > 14 {
+    if req.log.timezone < -12 || req.log.timezone > 14 {
         return Json(serde_json::json!({"success": false, "error": "Неверный часовой пояс"}));
     }
     req.normalize_proxies();

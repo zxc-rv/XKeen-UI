@@ -67,46 +67,23 @@ async function loadDependencies() {
 async function init() {
   try {
     await loadDependencies()
-    await new Promise((resolve, reject) => {
-      require(["vs/editor/editor.main"], resolve, reject)
-    })
+    await new Promise((res, rej) => require(["vs/editor/editor.main"], res, rej))
+    await loadSettings()
 
-    loadSettings()
     checkStatus()
     connectWebSocket()
     loadMonacoEditor()
 
-    const savedState = localStorage.getItem("guiRouting_enabled")
-    if (typeof guiRoutingState !== "undefined") {
-      guiRoutingState.enabled = savedState === "1"
+    const map = {
+      guiRoutingCheckboxSettings: guiRoutingState.enabled,
+      guiLogCheckboxSettings: guiLogState.enabled,
+      autoApplyCheckbox: autoApply,
+      backupCoreCheckbox: backupCore,
     }
-    const routingCheckboxSettings = document.getElementById("guiRoutingCheckboxSettings")
-    if (routingCheckboxSettings) {
-      routingCheckboxSettings.checked = guiRoutingState.enabled
-    }
-
-    const savedLogState = localStorage.getItem("guiLog_enabled")
-    if (typeof guiLogState !== "undefined") {
-      guiLogState.enabled = savedLogState === "1"
-    }
-    const logCheckboxSettings = document.getElementById("guiLogCheckboxSettings")
-    if (logCheckboxSettings) {
-      logCheckboxSettings.checked = guiLogState.enabled
-    }
-
-    const savedAutoApply = localStorage.getItem("autoApply")
-    autoApply = savedAutoApply === "1"
-    const autoApplyCheckbox = document.getElementById("autoApplyCheckbox")
-    if (autoApplyCheckbox) {
-      autoApplyCheckbox.checked = autoApply
-    }
-
-    const savedBackupCore = localStorage.getItem("backupCore")
-    backupCore = savedBackupCore !== "0"
-    const backupCoreCheckbox = document.getElementById("backupCoreCheckbox")
-    if (backupCoreCheckbox) {
-      backupCoreCheckbox.checked = backupCore
-    }
+    Object.entries(map).forEach(([id, val]) => {
+      const el = document.getElementById(id)
+      if (el) el.checked = val
+    })
 
     const logsContainer = document.getElementById("logsContainer")
     logsContainer.classList.add("centered")
@@ -116,7 +93,6 @@ async function init() {
       if (!isActionInProgress) checkStatus()
     }, 15000)
   } catch (error) {
-    console.error("Failed to initialize app:", error)
     showToast("Ошибка инициализации", "error")
   }
 }
@@ -2525,56 +2501,12 @@ document.addEventListener("mousedown", (e) => {
 function toggleSettingsModal() {
   const modal = document.getElementById("settingsModal")
   modal.classList.add("show")
-
-  const routingCheckboxSettings = document.getElementById("guiRoutingCheckboxSettings")
-  if (routingCheckboxSettings) {
-    routingCheckboxSettings.checked = guiRoutingState.enabled
-  }
-
-  const autoApplyCheckbox = document.getElementById("autoApplyOutboundCheckbox")
-  if (autoApplyCheckbox) {
-    autoApplyCheckbox.checked = autoApplyOutbound
-  }
+  renderGithubProxies()
+  updateTimezoneLabel()
 }
 
 function closeSettingsModal() {
   document.getElementById("settingsModal").classList.remove("show")
-}
-
-function saveGUIState() {
-  localStorage.setItem("guiRouting_enabled", guiRoutingState.enabled ? "1" : "0")
-}
-
-function loadGUIState() {
-  const saved = localStorage.getItem("guiRouting_enabled")
-  return saved === "1"
-}
-
-async function loadSettings() {
-  try {
-    const result = await apiCall("settings")
-    if (result.success) {
-      currentTimezone = result.timezone || 3
-      updateTimezoneLabel()
-
-      github_proxy = result.github_proxy || []
-      renderGithubProxies()
-
-      autoApply = result.auto_apply || false
-      const autoApplyCheckbox = document.getElementById("autoApplyCheckbox")
-      if (autoApplyCheckbox) {
-        autoApplyCheckbox.checked = autoApply
-      }
-
-      backupCore = result.backup_core !== false
-      const backupCoreCheckbox = document.getElementById("backupCoreCheckbox")
-      if (backupCoreCheckbox) {
-        backupCoreCheckbox.checked = backupCore
-      }
-    }
-  } catch (error) {
-    console.error("Failed to load settings:", error)
-  }
 }
 
 function renderGithubProxies() {
@@ -2641,27 +2573,32 @@ function removeGithubProxy(index) {
 }
 
 async function saveSettings() {
-  try {
-    const result = await apiCall("settings", {
-      timezone: currentTimezone,
-      github_proxy: github_proxy,
-      auto_apply: autoApply,
-      backup_core: backupCore,
-    })
-
-    if (result.success) {
-      if (result.github_proxy) {
-        github_proxy = result.github_proxy
-        renderGithubProxies()
-      }
-      showToast("Настройки сохранены")
-    } else {
-      showToast(`Ошибка сохранения: ${result.error}`, "error")
-    }
-  } catch (error) {
-    console.error("Error saving settings:", error)
-    showToast("Ошибка сохранения настроек", "error")
+  const body = {
+    gui: { auto_apply: autoApply, routing: guiRoutingState.enabled, log: guiLogState.enabled },
+    updater: { github_proxy: github_proxy, backup_core: backupCore },
+    log: { timezone: parseInt(currentTimezone) },
   }
+  const data = await apiCall("settings", body)
+  if (data.success) {
+    showToast("Настройки сохранены", "success")
+  } else {
+    showToast("Ошибка сохранения: " + data.error, "error")
+  }
+}
+
+async function loadSettings() {
+  const data = await apiCall("settings")
+  if (data.success) {
+    currentTimezone = data.log.timezone
+    autoApply = data.gui.auto_apply
+    guiRoutingState.enabled = data.gui.routing
+    guiLogState.enabled = data.gui.log
+    github_proxy = data.updater.github_proxy
+    backupCore = data.updater.backup_core
+    return true
+  }
+  showToast("Ошибка загрузки настроек: " + data.error, "error")
+  return false
 }
 
 function updateTimezoneLabel() {

@@ -28,7 +28,11 @@ pub struct CoreInfo {
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
-pub struct GuiSettings { pub auto_apply: bool }
+pub struct GuiSettings {
+    pub routing: bool,
+    pub log: bool,
+    pub auto_apply: bool,
+}
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct UpdaterSettings {
@@ -43,7 +47,7 @@ pub struct LogSettings { pub timezone: i32 }
 pub struct AppSettings {
     pub gui: GuiSettings,
     pub updater: UpdaterSettings,
-    pub logs: LogSettings,
+    pub log: LogSettings,
 }
 
 #[derive(Deserialize)]
@@ -52,7 +56,7 @@ enum ConfigMigration {
     New {
         gui: GuiSettings,
         updater: UpdaterSettings,
-        logs: LogSettings,
+        log: LogSettings,
     },
     Legacy {
         #[serde(rename = "timezoneOffset")]
@@ -64,10 +68,10 @@ impl<'de> Deserialize<'de> for AppSettings {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         match ConfigMigration::deserialize(deserializer)? {
-            ConfigMigration::New { logs, gui, updater } => Ok(Self { logs, gui, updater }),
+            ConfigMigration::New { log, gui, updater } => Ok(Self { log, gui, updater }),
             ConfigMigration::Legacy { timezone_offset } => {
                 let mut s = Self::default();
-                s.logs.timezone = timezone_offset;
+                s.log.timezone = timezone_offset;
                 Ok(s)
             }
         }
@@ -77,12 +81,16 @@ impl<'de> Deserialize<'de> for AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            gui: GuiSettings { auto_apply: false },
+            gui: GuiSettings {
+              auto_apply: false,
+              routing: false,
+              log: false,
+            },
             updater: UpdaterSettings {
                 github_proxy: vec!["https://gh-proxy.com".into(), "https://ghfast.top".into()],
                 backup_core: true,
             },
-            logs: LogSettings { timezone: 3 },
+            log: LogSettings { timezone: 3 },
         }
     }
 }
