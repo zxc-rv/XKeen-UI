@@ -1449,7 +1449,7 @@ async function openUpdateModal(core) {
   list.innerHTML = `
     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 16px;">
       <div style="width: 40px; height: 40px; border: 3px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-      <div style="color: #94a3b8; font-size: 14px;">Загрузка версий...</div>
+      <div style="color: #94a3b8; font-size: 14px;">Загрузка релизов...</div>
     </div>
   `
   badge.textContent = "0"
@@ -1461,7 +1461,7 @@ async function openUpdateModal(core) {
     const data = await response.json()
 
     if (!data.success || !data.releases || data.releases.length === 0) {
-      list.innerHTML = '<div class="template-loading">Не удалось загрузить список версий</div>'
+      list.innerHTML = '<div class="template-loading">Не удалось загрузить список релизов</div>'
       return
     }
 
@@ -1542,7 +1542,7 @@ async function openUpdateModal(core) {
     }
   } catch (error) {
     console.error("Failed to fetch releases:", error)
-    list.innerHTML = '<div class="template-loading">Ошибка загрузки версий</div>'
+    list.innerHTML = '<div class="template-loading">Ошибка загрузки релизов</div>'
   }
 }
 
