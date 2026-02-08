@@ -28,7 +28,7 @@ async fn main() {
             }
             "-d" => _debug = true,
             "-v" | "-V" => {
-                println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, std::env::consts::ARCH);
+                println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, get_arch());
                 std::process::exit(0);
             }
             _ => {}
@@ -36,7 +36,7 @@ async fn main() {
         i += 1;
     }
 
-    let info = format!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, std::env::consts::ARCH);
+    let info = format!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, get_arch());
     println!("{}", info);
     if _debug { println!("Debug mode enabled"); }
 
@@ -65,6 +65,15 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+fn get_arch() -> &'static str {
+    let arch = std::env::consts::ARCH;
+    if arch == "mips" && cfg!(target_endian = "little") {
+        "mipsle"
+    } else {
+        arch
+    }
 }
 
 fn detect_core(init_file: &str) -> CoreInfo {

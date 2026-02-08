@@ -211,8 +211,13 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     if req.core == "xray" {
         let n = match arch {
             "aarch64" => "Xray-linux-arm64-v8a.zip",
-            "mips" => "Xray-linux-mips32.zip",
-            "mipsle" => "Xray-linux-mips32le.zip",
+            "mips" => {
+                if cfg!(target_endian = "little") {
+                    "Xray-linux-mips32le.zip"
+                } else {
+                    "Xray-linux-mips32.zip"
+                }
+            },
             _ => return make_res(false, Some("Архитектура не поддерживается".into()))
         };
         asset_name = n.to_string();
