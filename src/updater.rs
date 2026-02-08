@@ -225,8 +225,13 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     } else if req.core == "mihomo" {
         let pat = match arch {
             "aarch64" => "arm64",
-            "mips" => "mips-softfloat",
-            "mipsle" => "mipsle-softfloat",
+            "mips" => {
+                if cfg!(target_endian = "little") {
+                    "mipsle-softfloat"
+                } else {
+                    "mips-softfloat"
+                }
+            },
             _ => return make_res(false, Some("Архитектура не поддерживается".into()))
         };
 
