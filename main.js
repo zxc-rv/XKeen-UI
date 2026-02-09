@@ -1561,7 +1561,7 @@ async function installSelectedVersion() {
       isActionInProgress = false
       checkStatus()
     } else {
-      showToast(`Ошибка: ${data.error}`, "error")
+      showToast(`${data.error}`, "error")
       isActionInProgress = false
       checkStatus()
     }

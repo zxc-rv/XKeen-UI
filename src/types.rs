@@ -17,6 +17,7 @@ pub struct AppState {
     pub core: Arc<RwLock<CoreInfo>>,
     pub settings: Arc<RwLock<AppSettings>>,
     pub init_file: Arc<RwLock<String>>,
+    pub http_client: reqwest::Client,
     pub _debug: bool,
 }
 

@@ -41,11 +41,12 @@ async fn main() {
     if _debug { println!("Debug mode enabled"); }
 
     let init_file = if Path::new(S99XKEEN).exists() { S99XKEEN.to_string() } else { S24XRAY.to_string() };
-
+    let http_client = reqwest::Client::builder().user_agent("XKeen-UI").timeout(std::time::Duration::from_secs(120)).build().unwrap();
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(&init_file))),
         settings: Arc::new(RwLock::new(load_settings())),
         init_file: Arc::new(RwLock::new(init_file)),
+        http_client,
         _debug,
     };
 
@@ -69,11 +70,7 @@ async fn main() {
 
 fn get_arch() -> &'static str {
     let arch = std::env::consts::ARCH;
-    if arch == "mips" && cfg!(target_endian = "little") {
-        "mipsle"
-    } else {
-        arch
-    }
+    if arch == "mips" && cfg!(target_endian = "little") { "mipsle" } else { arch }
 }
 
 fn detect_core(init_file: &str) -> CoreInfo {
