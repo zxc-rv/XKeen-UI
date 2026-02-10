@@ -7,8 +7,8 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <script>
-      if (localStorage.getItem("xkeen_force_reload") === "true") {
-        localStorage.removeItem("xkeen_force_reload")
+      if (localStorage.getItem("appForceReload") === "true") {
+        localStorage.removeItem("appForceReload")
         if ("serviceWorker" in navigator) {
           navigator.serviceWorker.getRegistrations().then(function (registrations) {
             for (let registration of registrations) {
