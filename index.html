@@ -3,6 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <script>
+      if (localStorage.getItem("xkeen_force_reload") === "true") {
+        localStorage.removeItem("xkeen_force_reload")
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (registrations) {
+            for (let registration of registrations) {
+              registration.unregister()
+            }
+          })
+        }
+        if ("caches" in window) {
+          caches.keys().then(function (names) {
+            for (let name of names) caches.delete(name)
+          })
+        }
+      }
+    </script>
     <title>XKeen UI</title>
     <link rel="icon" type="image/png" href="favicon.png" />
     <link rel="apple-touch-icon" href="favicon.png" />
@@ -603,9 +623,7 @@
         </div>
       </div>
     </div>
-    <a href="https://github.com/zxc-rv/XKeen-UI/releases" target="_blank" class="app-version" id="appVersion"
-      ><span id="versionText">dev</span></a
-    >
+    <a href="javascript:void(0)" onclick="openUpdateModal('self')" class="app-version" id="appVersion"><span id="versionText">dev</span></a>
     <div class="fullscreen-backdrop" id="fullscreenBackdrop"></div>
     <div class="modal-overlay" id="settingsModal">
       <div class="modal-content">

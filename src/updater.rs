@@ -11,6 +11,7 @@ const GITHUB_RELEASE: &str = "https://github.com";
 const JSDELIVR_API: &str = "https://data.jsdelivr.com/v1/package/gh";
 const XRAY_REPO: &str = "XTLS/Xray-core";
 const MIHOMO_REPO: &str = "MetaCubeX/mihomo";
+const XKEEN_UI_REPO: &str = "zxc-rv/XKeen-UI";
 
 #[derive(Deserialize)]
 pub struct ReleaseQuery { core: String }
@@ -36,7 +37,7 @@ struct JsdResponse { versions: Vec<String> }
 enum DownloadResult { RAM(Vec<u8>), Disk(PathBuf) }
 
 fn get_repo(core: &str) -> Option<&'static str> {
-    match core { "xray" => Some(XRAY_REPO), "mihomo" => Some(MIHOMO_REPO), _ => None }
+    match core { "xray" => Some(XRAY_REPO), "mihomo" => Some(MIHOMO_REPO), "self" => Some(XKEEN_UI_REPO), _ => None }
 }
 
 async fn log(lvl: &str, msg: String) {
@@ -146,6 +147,107 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let core_cap = req.core.chars().next().map(|c| c.to_uppercase().to_string() + &req.core[1..]).unwrap_or_default();
 
     log("INFO", format!("Запущено обновление {} до {}", core_cap, ver)).await;
+
+    if req.core == "self" {
+        let arch = std::env::consts::ARCH;
+        let bin_name = match arch {
+            "aarch64" => "xkeen-ui-arm64-v8a",
+            "mips" if cfg!(target_endian = "little") => "xkeen-ui-mips32le",
+            "mips" => "xkeen-ui-mips32",
+            _ => return response(false, Some("Архитектура не поддерживается".into()))
+        };
+
+        let bin_url = format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, bin_name);
+        let static_url = format!("{}/{}/releases/download/{}/xkeen-ui-static.tar.gz", GITHUB_RELEASE, repo, ver);
+
+        let tmp_dir = Path::new("/opt/tmp");
+        _ = fs::create_dir_all(tmp_dir).await;
+        let proxies = state.settings.read().unwrap().updater.github_proxy.clone();
+
+        log("INFO", format!("Загрузка: {}", bin_url)).await;
+        let bin_tmp = tmp_dir.join("xkeen-ui.bin.tmp");
+        let bin_res = match download(&state.http_client, &bin_url, &proxies, &bin_tmp).await {
+            Ok(r) => r, Err(e) => return response(false, Some(e))
+        };
+
+        log("INFO", format!("Загрузка: {}", static_url)).await;
+        let static_tmp = tmp_dir.join("static.tar.gz.tmp");
+        let static_res = match download(&state.http_client, &static_url, &proxies, &static_tmp).await {
+            Ok(r) => r, Err(e) => return response(false, Some(e))
+        };
+
+        let bin_file = tmp_dir.join("xkeen-ui");
+        match bin_res {
+            DownloadResult::RAM(data) => {
+                if fs::write(&bin_file, data).await.is_err() {
+                    return response(false, Some("Ошибка записи бинарника".into()));
+                }
+            }
+            DownloadResult::Disk(p) => {
+                if fs::rename(&p, &bin_file).await.is_err() {
+                    return response(false, Some("Ошибка перемещения бинарника".into()));
+                }
+            }
+        }
+
+        log("INFO", "Распаковка static файлов...".into()).await;
+        let www_dir = PathBuf::from("/opt/share/www/XKeen-UI");
+        let unpack_result = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+            use flate2::read::GzDecoder;
+            use tar::Archive;
+            let reader: Box<dyn Read> = match &static_res {
+                DownloadResult::RAM(data) => Box::new(Cursor::new(data.clone())),
+                DownloadResult::Disk(p) => Box::new(File::open(p)?)
+            };
+            let gz = GzDecoder::new(reader);
+            let mut archive = Archive::new(gz);
+            archive.unpack(&www_dir)?;
+            if let DownloadResult::Disk(p) = &static_res {
+                _ = std::fs::remove_file(p);
+            }
+            Ok(())
+        }).await;
+
+        if let Ok(Err(e)) = unpack_result {
+            return response(false, Some(format!("Ошибка распаковки static: {}", e)));
+        }
+        if unpack_result.is_err() {
+            return response(false, Some("Ошибка распаковки static (panic)".into()));
+        }
+
+        let target = "/opt/sbin/xkeen-ui";
+        if req.backup_core && Path::new(target).exists() {
+            let tz = state.settings.read().unwrap().log.timezone as i64;
+            let now = chrono::Utc::now() + chrono::Duration::hours(tz);
+            let bk = format!("/opt/sbin/core-backup/xkeen-ui-{}", now.format("%Y%m%d-%H%M%S"));
+            _ = fs::create_dir_all("/opt/sbin/core-backup").await;
+            log("INFO", format!("Создание бэкапа: {}", bk)).await;
+            _ = fs::copy(target, &bk).await;
+        }
+
+        log("INFO", "Установка обновления...".into()).await;
+        if fs::rename(&bin_file, target).await.is_err() {
+            if let Err(e) = fs::copy(&bin_file, target).await {
+                return response(false, Some(format!("Ошибка установки: {}", e)));
+            }
+            _ = fs::remove_file(&bin_file).await;
+        }
+        _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
+
+        log("INFO", format!("Обновление панели до {} завершено", ver)).await;
+
+        let init_script = "/opt/etc/init.d/S99xkeen-ui";
+        if Path::new(init_script).exists() {
+            let restart_cmd = format!("sleep 1 && {} start > /dev/null 2>&1 &", init_script);
+            log("INFO", "Перезапуск панели...".into()).await;
+            _ = Command::new("sh").args(&["-c", &restart_cmd]).spawn();
+            tokio::spawn(async { std::process::exit(0); });
+        } else {
+            log("WARN", "Init скрипт панели не найден, требуется ручной перезапуск".into()).await;
+        }
+
+        return response(true, None);
+    }
 
     let arch = std::env::consts::ARCH;
     let (asset_name, url) = match req.core.as_str() {

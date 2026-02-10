@@ -19,6 +19,7 @@ futures-util = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 zip = "7.4"
 flate2 = "1.1"
+tar = "0.4.44"
 
 [profile.release]
 opt-level = "z"
