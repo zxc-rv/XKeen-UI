@@ -236,16 +236,14 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
         log("INFO", format!("Обновление панели до {} завершено", ver)).await;
 
-        let init_script = "/opt/etc/init.d/S99xkeen-ui";
-        if Path::new(init_script).exists() {
-            let restart_cmd = format!("sleep 1 && {} start > /dev/null 2>&1 &", init_script);
+        if Path::new(S99XKEEN_UI).exists() {
+            let restart_cmd = format!("sleep 1 && {} start > /dev/null 2>&1 &", S99XKEEN_UI);
             log("INFO", "Перезапуск панели...".into()).await;
             _ = Command::new("sh").args(&["-c", &restart_cmd]).spawn();
             tokio::spawn(async { std::process::exit(0); });
         } else {
             log("WARN", "Init скрипт панели не найден, требуется ручной перезапуск".into()).await;
         }
-
         return response(true, None);
     }
 

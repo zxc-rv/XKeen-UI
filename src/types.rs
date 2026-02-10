@@ -10,6 +10,7 @@ pub const XKEEN_CONF: &str = "/opt/etc/xkeen";
 pub const ERROR_LOG: &str = "/opt/var/log/xray/error.log";
 pub const ACCESS_LOG: &str = "/opt/var/log/xray/access.log";
 pub const S99XKEEN: &str = "/opt/etc/init.d/S99xkeen";
+pub const S99XKEEN_UI: &str = "/opt/etc/init.d/S99xkeen-ui";
 pub const S24XRAY: &str = "/opt/etc/init.d/S24xray";
 
 #[derive(Clone)]
