@@ -117,7 +117,6 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
 
 pub async fn get_releases(State(state): State<AppState>, Query(q): Query<ReleaseQuery>) -> impl IntoResponse {
     let Some(repo) = get_repo(&q.core) else { return response(false, Some("Неизвестное ядро".into())); };
-
     if let Ok(r) = state.http_client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await {
         if let Ok(rels) = r.json::<Vec<GhRelease>>().await {
             let releases = rels.into_iter().map(|r| ReleaseInfo {
@@ -129,11 +128,11 @@ pub async fn get_releases(State(state): State<AppState>, Query(q): Query<Release
             return (HeaderMap::new(), Json(json!({ "success": true, "releases": releases })));
         }
     }
-
     if let Ok(r) = state.http_client.get(format!("{}/{}", JSDELIVR_API, repo)).send().await {
         if let Ok(jsd) = r.json::<JsdResponse>().await {
-            let releases = jsd.versions.into_iter().take(10).map(|v| ReleaseInfo {
-                version: v.clone(), name: format!("Release {}", v), published_at: String::new(), is_prerelease: false
+            let releases = jsd.versions.into_iter().take(10).map(|v| {
+                let name = format!("Release {}", v);
+                ReleaseInfo { version: v, name, published_at: String::new(), is_prerelease: false }
             }).collect::<Vec<_>>();
             return (HeaderMap::new(), Json(json!({ "success": true, "releases": releases })));
         }
@@ -153,28 +152,35 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         "xray" => {
             let x = match arch {
                 "aarch64" => "Xray-linux-arm64-v8a.zip",
-                "mips" => if cfg!(target_endian = "little") { "Xray-linux-mips32le.zip" } else { "Xray-linux-mips32.zip" },
+                "mips" if cfg!(target_endian = "little") => "Xray-linux-mips32le.zip",
+                "mips" => "Xray-linux-mips32.zip",
                 _ => return response(false, Some("Архитектура не поддерживается".into()))
             };
-            (x.to_string(), format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, x))
+            (x.into(), format!("{GITHUB_RELEASE}/{repo}/releases/download/{ver}/{x}"))
         }
         "mihomo" => {
             let m = match arch {
                 "aarch64" => "arm64",
-                "mips" => if cfg!(target_endian = "little") { "mipsle-softfloat" } else { "mips-softfloat" },
+                "mips" if cfg!(target_endian = "little") => "mipsle-softfloat",
+                "mips" => "mips-softfloat",
                 _ => return response(false, Some("Архитектура не поддерживается".into()))
             };
-            let mut found_asset = None;
-            if let Ok(r) = state.http_client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await {
-                if let Ok(rels) = r.json::<Vec<GhRelease>>().await {
-                    found_asset = rels.into_iter().find(|r| r.tag_name == ver)
-                        .and_then(|r| r.assets.into_iter().find(|a| a.name.contains(&format!("mihomo-linux-{}", m)) && a.name.ends_with(".gz")));
+            if ver == "Prerelease-Alpha" {
+              let mut found = None;
+                if let Ok(r) = state.http_client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await {
+                    if let Ok(rels) = r.json::<Vec<GhRelease>>().await {
+                        found = rels.into_iter().find(|r| r.tag_name == ver)
+                            .and_then(|r| r.assets.into_iter().find(|a| a.name.contains(&format!("mihomo-linux-{}", m)) && a.name.ends_with(".gz")));
+                    }
                 }
-            }
-
-            match found_asset {
-                Some(a) => (a.name, a.browser_download_url),
-                None => { let n = format!("mihomo-linux-{}-v{}.gz", m, req.version); (n.clone(), format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, n)) }
+                match found {
+                    Some(a) => (a.name, a.browser_download_url),
+                    None => return response(false, Some("Релиз или ассет не найден".into()))
+                }
+            } else {
+                let n = format!("mihomo-linux-{}-{}.gz", m, ver);
+                let url = format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, n);
+                (n, url)
             }
         }
         _ => return response(false, Some("Неизвестное ядро".into()))
@@ -250,7 +256,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             _ = Command::new(&init).arg("start").status().await;
         }
     }
-
     log("INFO", format!("Обновление {} до {} завершено", core_cap, ver)).await;
     response(true, None)
 }
