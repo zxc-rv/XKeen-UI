@@ -200,6 +200,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         } else {
             std::io::copy(&mut flate2::read::GzDecoder::new(rdr), &mut out)?;
         }
+        out.sync_data()?;
         Ok(())
     }
 
@@ -233,7 +234,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     if fs::rename(&src, &target).await.is_ok() {
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
-        if let Ok(f) = fs::File::open(&target).await { _ = f.sync_all().await; }
         if running {
             log("INFO", format!("Перезапуск {}...", core_cap)).await;
             crate::controller::soft_restart(&req.core).await;
@@ -245,7 +245,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         if let Err(e) = fs::copy(&src, &target).await { return response(false, Some(format!("Ошибка установки: {}", e))); }
         _ = fs::remove_file(&src).await;
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
-        if let Ok(f) = fs::File::open(&target).await { _ = f.sync_all().await; }
         if running {
             log("INFO", "Запуск XKeen...".into()).await;
             _ = Command::new(&init).arg("start").status().await;
