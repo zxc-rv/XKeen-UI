@@ -30,6 +30,9 @@ pub struct UpdateChecker {
     pub core_outdated: Arc<RwLock<bool>>,
     pub last_ui_check: Arc<RwLock<Option<Instant>>>,
     pub last_core_check: Arc<RwLock<Option<Instant>>>,
+    // Новые поля для кулдауна тостов
+    pub last_ui_toast: Arc<RwLock<Option<Instant>>>,
+    pub last_core_toast: Arc<RwLock<Option<Instant>>>,
 }
 
 impl Default for UpdateChecker {
@@ -39,6 +42,8 @@ impl Default for UpdateChecker {
             core_outdated: Arc::new(RwLock::new(false)),
             last_ui_check: Arc::new(RwLock::new(None)),
             last_core_check: Arc::new(RwLock::new(None)),
+            last_ui_toast: Arc::new(RwLock::new(None)),
+            last_core_toast: Arc::new(RwLock::new(None)),
         }
     }
 }

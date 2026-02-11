@@ -3,12 +3,34 @@ use std::time::{Duration, Instant};
 use crate::{types::{VERSION, AppState}, updater};
 
 pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse {
+    // Логика кулдауна для тостов (24 часа)
+    let should_show_toast = |outdated: bool, last_toast: &std::sync::RwLock<Option<Instant>>| -> bool {
+        if !outdated { return false; }
+        let mut last = last_toast.write().unwrap();
+        if last.map_or(true, |t| t.elapsed() > Duration::from_secs(24 * 3600)) {
+            *last = Some(Instant::now());
+            true
+        } else {
+            false
+        }
+    };
+
+    let ui_outdated = *state.update_checker.ui_outdated.read().unwrap();
+    let core_outdated = *state.update_checker.core_outdated.read().unwrap();
+
+    let show_ui_toast = should_show_toast(ui_outdated, &state.update_checker.last_ui_toast);
+    let show_core_toast = should_show_toast(core_outdated, &state.update_checker.last_core_toast);
+
     Json(serde_json::json!({
         "success": true,
         "version": VERSION,
         "outdated": {
-            "ui": *state.update_checker.ui_outdated.read().unwrap(),
-            "core": *state.update_checker.core_outdated.read().unwrap()
+            "ui": ui_outdated,
+            "core": core_outdated
+        },
+        "show_toast": {
+            "ui": show_ui_toast,
+            "core": show_core_toast
         }
     }))
 }
@@ -27,7 +49,7 @@ pub fn start_update_checker(state: AppState) {
             }
 
             let check_core = state.update_checker.last_core_check.read().unwrap()
-                .map_or(true, |t| t.elapsed() > Duration::from_secs(24 * 3600));
+                .map_or(true, |t| t.elapsed() > Duration::from_secs(12 * 3600));
 
             if check_core {
                 let core = state.core.read().unwrap().name.clone();

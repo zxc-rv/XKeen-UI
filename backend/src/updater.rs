@@ -364,5 +364,12 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         }
     }
     log("INFO", format!("Обновление {} до {} завершено", core_cap, ver)).await;
+
+    if !req.core.eq("self") {
+         *state.update_checker.core_outdated.write().unwrap() = false;
+         *state.update_checker.last_core_check.write().unwrap() = None;
+         *state.update_checker.last_core_toast.write().unwrap() = None;
+    }
+
     response(true, None)
 }

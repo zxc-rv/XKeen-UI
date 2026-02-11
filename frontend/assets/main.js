@@ -71,8 +71,6 @@ async function init() {
     await new Promise((res, rej) => require(["vs/editor/editor.main"], res, rej))
     await loadSettings()
 
-    checkForUpdates()
-
     checkStatus()
     connectWebSocket()
     loadMonacoEditor()
@@ -172,41 +170,6 @@ function showToast(message, type = "success") {
       }, 300)
     }, 3000)
   })
-}
-
-async function checkForUpdates() {
-  try {
-    const r = await fetch("/api/version")
-    if (!r.ok) return
-    const data = await r.json()
-
-    const appVersion = document.getElementById("appVersion")
-    const versionText = document.getElementById("versionText")
-    if (versionText) versionText.textContent = data.version
-
-    const storageKey = `update_toast_shown_${data.version}`
-    const shownData = JSON.parse(localStorage.getItem(storageKey) || "{}")
-
-    if (data.outdated?.ui && !shownData.ui) {
-      updateToastShown.ui = true
-      shownData.ui = true
-      localStorage.setItem(storageKey, JSON.stringify(shownData))
-      showToast({ title: "Доступно обновление", body: "Для панели XKeen-UI доступна новая версия" })
-    }
-
-    if (data.outdated?.core && !shownData.core) {
-      updateToastShown.core = true
-      shownData.core = true
-      localStorage.setItem(storageKey, JSON.stringify(shownData))
-      showToast({ title: "Доступно обновление", body: `Для ядра ${currentCore} доступна новая версия` })
-    }
-
-    if (data.outdated?.ui) {
-      appVersion?.classList.add("outdated")
-    }
-  } catch (e) {
-    console.error("Ошибка проверки обновлений:", e)
-  }
 }
 
 function updateValidationInfo(isValid, error = null) {
