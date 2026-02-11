@@ -257,7 +257,6 @@ async function checkVersion() {
       versionText.textContent = data.version
       appVersion.style.display = "block"
     }
-    console.log("ui toast", data.show_toast.ui)
     if (data.show_toast?.ui) showToast({ title: "Доступно обновление", body: "Доступна новая версия XKeen UI" })
     if (data.show_toast?.core) showToast({ title: "Доступно обновление", body: `Доступная новая версия ${currentCore}` })
     appVersion.classList.toggle("outdated", !!data.outdated?.ui)
