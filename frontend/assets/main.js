@@ -201,7 +201,7 @@ async function checkForUpdates() {
       showToast({ title: "Доступно обновление", body: `Для ядра ${currentCore} доступна новая версия` })
     }
 
-    if (data.outdated?.ui || data.outdated?.core) {
+    if (data.outdated?.ui) {
       appVersion?.classList.add("outdated")
     }
   } catch (e) {
