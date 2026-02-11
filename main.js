@@ -1558,7 +1558,13 @@ async function installSelectedVersion() {
         title: "Обновление завершено",
         body: `Установлен ${payload.core} ${payload.version}`,
       })
+
       isActionInProgress = false
+      if (payload.core === "self") {
+        setTimeout(() => location.reload(), 1500)
+        return
+      }
+
       checkStatus()
     } else {
       showToast(`${data.error}`, "error")
