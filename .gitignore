@@ -4,9 +4,6 @@ monaco-editor
 prettier
 local_mode.js
 config.json
-version.js
-version.js.bak
-version.js.tmp
 *.bak
 *.tmp
 .zed
