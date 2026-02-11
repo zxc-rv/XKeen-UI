@@ -30,7 +30,6 @@ pub struct UpdateChecker {
     pub core_outdated: Arc<RwLock<bool>>,
     pub last_ui_check: Arc<RwLock<Option<Instant>>>,
     pub last_core_check: Arc<RwLock<Option<Instant>>>,
-    // Новые поля для кулдауна тостов
     pub last_ui_toast: Arc<RwLock<Option<Instant>>>,
     pub last_core_toast: Arc<RwLock<Option<Instant>>>,
 }
@@ -64,10 +63,10 @@ pub struct GuiSettings {
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct UpdaterSettings {
-    pub github_proxy: Vec<String>,
-    pub backup_core: bool,
     pub auto_check_ui: bool,
     pub auto_check_core: bool,
+    pub backup_core: bool,
+    pub github_proxy: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]

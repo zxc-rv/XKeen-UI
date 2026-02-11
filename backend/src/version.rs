@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 use crate::{types::{VERSION, AppState}, updater};
 
 pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse {
-    // Логика кулдауна для тостов (24 часа)
     let should_show_toast = |outdated: bool, last_toast: &std::sync::RwLock<Option<Instant>>| -> bool {
         if !outdated { return false; }
         let mut last = last_toast.write().unwrap();
@@ -17,7 +16,6 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 
     let ui_outdated = *state.update_checker.ui_outdated.read().unwrap();
     let core_outdated = *state.update_checker.core_outdated.read().unwrap();
-
     let show_ui_toast = should_show_toast(ui_outdated, &state.update_checker.last_ui_toast);
     let show_core_toast = should_show_toast(core_outdated, &state.update_checker.last_core_toast);
 

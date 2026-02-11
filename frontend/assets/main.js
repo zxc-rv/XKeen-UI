@@ -173,7 +173,7 @@ function showToast(message, type = "success") {
           item.element.style.bottom = `${offset}px`
         })
       }, 300)
-    }, 3000)
+    }, 5000)
   })
 }
 
@@ -1585,12 +1585,14 @@ async function installSelectedVersion() {
         body: `Установлен ${payload.core} ${payload.version}`,
       })
 
-      isActionInProgress = false
       if (payload.core === "self") {
-        location.reload()
+        setTimeout(() => {
+          location.reload()
+        }, 500)
         return
       }
 
+      isActionInProgress = false
       checkStatus()
     } else {
       showToast(`${data.error}`, "error")
@@ -2607,7 +2609,7 @@ function removeGithubProxy(index) {
 async function saveSettings() {
   const body = {
     gui: { auto_apply: autoApply, routing: guiRoutingState.enabled, log: guiLogState.enabled },
-    updater: { github_proxy: github_proxy, backup_core: backupCore, auto_check_ui: autoCheckUI, auto_check_core: autoCheckCore },
+    updater: { auto_check_ui: autoCheckUI, auto_check_core: autoCheckCore, backup_core: backupCore, github_proxy: github_proxy },
     log: { timezone: parseInt(currentTimezone) },
   }
   const data = await apiCall("settings", body)
@@ -2625,10 +2627,10 @@ async function loadSettings() {
     autoApply = data.gui.auto_apply
     guiRoutingState.enabled = data.gui.routing
     guiLogState.enabled = data.gui.log
-    github_proxy = data.updater.github_proxy
-    backupCore = data.updater.backup_core
     autoCheckUI = data.updater.auto_check_ui ?? true
     autoCheckCore = data.updater.auto_check_core ?? true
+    backupCore = data.updater.backup_core
+    github_proxy = data.updater.github_proxy
     return true
   }
   showToast("Ошибка загрузки настроек: " + data.error, "error")
