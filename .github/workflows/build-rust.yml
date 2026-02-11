@@ -70,7 +70,7 @@ jobs:
             sed -i "s|assets/$f|assets/$nf|g" ../index.html
           done
       - name: Pack static files
-        run: tar --exclude='outboundGenerator.html' -czf xkeen-ui-static.tar.gz -C frontend .
+        run: tar --exclude='outboundGenerator.html' --exclude='generator-favicon.png' -czf xkeen-ui-static.tar.gz -C frontend .
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

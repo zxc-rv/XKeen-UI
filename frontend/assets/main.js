@@ -1561,7 +1561,7 @@ async function installSelectedVersion() {
 
       isActionInProgress = false
       if (payload.core === "self") {
-        setTimeout(() => location.reload(), 1500)
+        setTimeout(() => location.reload(), 1000)
         return
       }
 

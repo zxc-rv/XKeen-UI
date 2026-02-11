@@ -149,85 +149,77 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     log("INFO", format!("Запущено обновление {} до {}", core_cap, ver)).await;
 
     if req.core == "self" {
-        let arch = std::env::consts::ARCH;
-        let bin_name = match arch {
-            "aarch64" => "xkeen-ui-arm64-v8a",
-            "mips" if cfg!(target_endian = "little") => "xkeen-ui-mips32le",
-            "mips" => "xkeen-ui-mips32",
+        let arch = match std::env::consts::ARCH {
+            "aarch64" => "arm64-v8a",
+            "mips" if cfg!(target_endian = "little") => "mips32le",
+            "mips" => "mips32",
             _ => return response(false, Some("Архитектура не поддерживается".into()))
         };
-
-        let bin_url = format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, bin_name);
+        let bin_url = format!("{}/{}/releases/download/{}/xkeen-ui-{}", GITHUB_RELEASE, repo, ver, arch);
         let static_url = format!("{}/{}/releases/download/{}/xkeen-ui-static.tar.gz", GITHUB_RELEASE, repo, ver);
-
         let tmp_dir = Path::new("/opt/tmp");
         _ = fs::create_dir_all(tmp_dir).await;
         let proxies = state.settings.read().unwrap().updater.github_proxy.clone();
 
-        log("INFO", format!("Загрузка: {}", bin_url)).await;
-        let bin_tmp = tmp_dir.join("xkeen-ui.bin.tmp");
-        let bin_res = match download(&state.http_client, &bin_url, &proxies, &bin_tmp).await {
-            Ok(r) => r, Err(e) => return response(false, Some(e))
+        log("INFO", "Загрузка файлов...".into()).await;
+        let (bin_tmp, static_tmp) = (tmp_dir.join("bin.tmp"), tmp_dir.join("static.tmp"));
+        let (bin_res, static_res) = tokio::join!(
+            download(&state.http_client, &bin_url, &proxies, &bin_tmp),
+            download(&state.http_client, &static_url, &proxies, &static_tmp)
+        );
+        let (bin_data, static_data) = match (bin_res, static_res) {
+            (Ok(b), Ok(s)) => (b, s),
+            (Err(e), _) | (_, Err(e)) => return response(false, Some(e))
         };
 
-        log("INFO", format!("Загрузка: {}", static_url)).await;
-        let static_tmp = tmp_dir.join("static.tar.gz.tmp");
-        let static_res = match download(&state.http_client, &static_url, &proxies, &static_tmp).await {
-            Ok(r) => r, Err(e) => return response(false, Some(e))
-        };
-
+        log("INFO", "Сохранение и распаковка файлов...".into()).await;
         let bin_file = tmp_dir.join("xkeen-ui");
-        match bin_res {
-            DownloadResult::RAM(data) => {
-                if fs::write(&bin_file, data).await.is_err() {
-                    return response(false, Some("Ошибка записи бинарника".into()));
-                }
-            }
-            DownloadResult::Disk(p) => {
-                if fs::rename(&p, &bin_file).await.is_err() {
-                    return response(false, Some("Ошибка перемещения бинарника".into()));
-                }
-            }
-        }
 
-        log("INFO", "Распаковка static файлов...".into()).await;
-        let www_dir = PathBuf::from(STATIC_DIR);
-        let unpack_result = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-            let assets_dir = www_dir.join("assets");
-            if assets_dir.exists() { std::fs::remove_dir_all(&assets_dir)?; }
+        let unpack = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
             use flate2::read::GzDecoder;
             use tar::Archive;
-            let reader: Box<dyn Read> = match &static_res {
-                DownloadResult::RAM(data) => Box::new(Cursor::new(data.clone())),
+
+            if let Ok(entries) = std::fs::read_dir(STATIC_DIR) {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    let name_str = name.to_string_lossy();
+                    if name_str != "monaco-editor" && name_str != "local_mode.js" && name_str != "config.json" {
+                        _ = if entry.path().is_dir() {
+                            std::fs::remove_dir_all(entry.path())
+                        } else {
+                            std::fs::remove_file(entry.path())
+                        };
+                    }
+                }
+            }
+
+            let mut bin_out = File::create(&bin_file)?;
+            match bin_data {
+                DownloadResult::RAM(data) => {
+                    std::io::Write::write_all(&mut bin_out, &data)?;
+                }
+                DownloadResult::Disk(p) => {
+                    std::io::copy(&mut File::open(&p)?, &mut bin_out)?;
+                    _ = std::fs::remove_file(p);
+                }
+            }
+            bin_out.sync_data()?;
+
+            let static_rdr: Box<dyn Read> = match &static_data {
+                DownloadResult::RAM(d) => Box::new(Cursor::new(d.clone())),
                 DownloadResult::Disk(p) => Box::new(File::open(p)?)
             };
-            let gz = GzDecoder::new(reader);
-            let mut archive = Archive::new(gz);
-            archive.unpack(&www_dir)?;
-            if let DownloadResult::Disk(p) = &static_res {
-                _ = std::fs::remove_file(p);
-            }
+            Archive::new(GzDecoder::new(static_rdr)).unpack(STATIC_DIR)?;
+            if let DownloadResult::Disk(p) = static_data { _ = std::fs::remove_file(p); }
             Ok(())
         }).await;
 
-        if let Ok(Err(e)) = unpack_result {
-            return response(false, Some(format!("Ошибка распаковки static: {}", e)));
-        }
-        if unpack_result.is_err() {
-            return response(false, Some("Ошибка распаковки static (panic)".into()));
-        }
-
-        let target = "/opt/sbin/xkeen-ui";
-        if req.backup_core && Path::new(target).exists() {
-            let tz = state.settings.read().unwrap().log.timezone as i64;
-            let now = chrono::Utc::now() + chrono::Duration::hours(tz);
-            let bk = format!("/opt/sbin/core-backup/xkeen-ui-{}", now.format("%Y%m%d-%H%M%S"));
-            _ = fs::create_dir_all("/opt/sbin/core-backup").await;
-            log("INFO", format!("Создание бэкапа: {}", bk)).await;
-            _ = fs::copy(target, &bk).await;
-        }
+        if let Ok(Err(e)) = unpack { return response(false, Some(format!("Ошибка распаковки: {}", e))); }
+        if unpack.is_err() { return response(false, Some("Ошибка распаковки (panic)".into())); }
 
         log("INFO", "Установка обновления...".into()).await;
+        let target = "/opt/sbin/xkeen-ui";
+        let bin_file = tmp_dir.join("xkeen-ui");
         if fs::rename(&bin_file, target).await.is_err() {
             if let Err(e) = fs::copy(&bin_file, target).await {
                 return response(false, Some(format!("Ошибка установки: {}", e)));
@@ -235,13 +227,11 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             _ = fs::remove_file(&bin_file).await;
         }
         _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
-
         log("INFO", format!("Обновление панели до {} завершено", ver)).await;
 
         if Path::new(S99XKEEN_UI).exists() {
-            let restart_cmd = format!("sleep 1 && {} start > /dev/null 2>&1 &", S99XKEEN_UI);
             log("INFO", "Перезапуск панели...".into()).await;
-            _ = Command::new("sh").args(&["-c", &restart_cmd]).spawn();
+            _ = Command::new("sh").args(&["-c", &format!("sleep 1 && {} start > /dev/null 2>&1 &", S99XKEEN_UI)]).spawn();
             tokio::spawn(async { std::process::exit(0); });
         } else {
             log("WARN", "Init скрипт панели не найден, требуется ручной перезапуск".into()).await;
