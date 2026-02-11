@@ -247,7 +247,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
         if Path::new(S99XKEEN_UI).exists() {
             log("INFO", "Перезапуск панели...".into()).await;
-            Command::new(S99XKEEN_UI).arg("restart").stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+            _ Command::new(S99XKEEN_UI).arg("restart").stdout(Stdio::null()).stderr(Stdio::null()).spawn();
         } else {
             log("WARN", "Init скрипт панели не найден, требуется ручной перезапуск".into()).await;
         }
