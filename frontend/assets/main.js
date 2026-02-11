@@ -1,5 +1,7 @@
 let activeConfigIndex = -1
 let autoApply = false
+let autoCheckUI = true
+let autoCheckCore = true
 let availableCores = []
 let backupCore = true
 let configs = []
@@ -81,6 +83,8 @@ async function init() {
       guiLogCheckboxSettings: guiLogState.enabled,
       autoApplyCheckbox: autoApply,
       backupCoreCheckbox: backupCore,
+      autoCheckUICheckbox: autoCheckUI,
+      autoCheckCoreCheckbox: autoCheckCore,
     }
     Object.entries(map).forEach(([id, val]) => {
       const el = document.getElementById(id)
@@ -1442,7 +1446,7 @@ async function openUpdateModal(core) {
     installBtn.textContent = "Установить"
   }
 
-  coreTitle.textContent = core.charAt(0).toUpperCase() + core.slice(1)
+  coreTitle.textContent = core === "self" ? "XKeen UI" : core.charAt(0).toUpperCase() + core.slice(1)
   list.innerHTML = `
     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; gap: 16px;">
       <div style="width: 40px; height: 40px; border: 3px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
@@ -2603,7 +2607,7 @@ function removeGithubProxy(index) {
 async function saveSettings() {
   const body = {
     gui: { auto_apply: autoApply, routing: guiRoutingState.enabled, log: guiLogState.enabled },
-    updater: { github_proxy: github_proxy, backup_core: backupCore },
+    updater: { github_proxy: github_proxy, backup_core: backupCore, auto_check_ui: autoCheckUI, auto_check_core: autoCheckCore },
     log: { timezone: parseInt(currentTimezone) },
   }
   const data = await apiCall("settings", body)
@@ -2623,6 +2627,8 @@ async function loadSettings() {
     guiLogState.enabled = data.gui.log
     github_proxy = data.updater.github_proxy
     backupCore = data.updater.backup_core
+    autoCheckUI = data.updater.auto_check_ui ?? true
+    autoCheckCore = data.updater.auto_check_core ?? true
     return true
   }
   showToast("Ошибка загрузки настроек: " + data.error, "error")
@@ -2706,6 +2712,22 @@ function toggleBackupCore() {
   const checkbox = document.getElementById("backupCoreCheckbox")
   if (checkbox) {
     backupCore = checkbox.checked
+    saveSettings()
+  }
+}
+
+function toggleAutoCheckUI() {
+  const checkbox = document.getElementById("autoCheckUICheckbox")
+  if (checkbox) {
+    autoCheckUI = checkbox.checked
+    saveSettings()
+  }
+}
+
+function toggleAutoCheckCore() {
+  const checkbox = document.getElementById("autoCheckCoreCheckbox")
+  if (checkbox) {
+    autoCheckCore = checkbox.checked
     saveSettings()
   }
 }

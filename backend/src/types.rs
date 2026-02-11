@@ -66,6 +66,8 @@ pub struct GuiSettings {
 pub struct UpdaterSettings {
     pub github_proxy: Vec<String>,
     pub backup_core: bool,
+    pub auto_check_ui: bool,
+    pub auto_check_core: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
@@ -117,6 +119,8 @@ impl Default for AppSettings {
             updater: UpdaterSettings {
                 github_proxy: vec!["https://gh-proxy.com".into(), "https://ghfast.top".into()],
                 backup_core: true,
+                auto_check_ui: true,
+                auto_check_core: true,
             },
             log: LogSettings { timezone: 3 },
         }

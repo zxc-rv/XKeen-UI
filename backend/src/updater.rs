@@ -48,11 +48,6 @@ pub async fn fetch_latest_version(client: &reqwest::Client, core: &str) -> Optio
             return rels.into_iter().find(|r| !r.prerelease).map(|r| r.tag_name.trim_start_matches('v').to_string());
         }
     }
-    if let Ok(r) = client.get(format!("{}/{}", JSDELIVR_API, repo)).send().await {
-        if let Ok(jsd) = r.json::<JsdResponse>().await {
-            return jsd.versions.into_iter().next();
-        }
-    }
     None
 }
 

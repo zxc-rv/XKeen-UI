@@ -38,7 +38,8 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 pub fn start_update_checker(state: AppState) {
     tokio::spawn(async move {
         loop {
-            let check_ui = state.update_checker.last_ui_check.read().unwrap()
+            let auto_check_ui = state.settings.read().unwrap().updater.auto_check_ui;
+            let check_ui = auto_check_ui && state.update_checker.last_ui_check.read().unwrap()
                 .map_or(true, |t| t.elapsed() > Duration::from_secs(4 * 3600));
 
             if check_ui {
@@ -48,7 +49,8 @@ pub fn start_update_checker(state: AppState) {
                 *state.update_checker.last_ui_check.write().unwrap() = Some(Instant::now());
             }
 
-            let check_core = state.update_checker.last_core_check.read().unwrap()
+            let auto_check_core = state.settings.read().unwrap().updater.auto_check_core;
+            let check_core = auto_check_core && state.update_checker.last_core_check.read().unwrap()
                 .map_or(true, |t| t.elapsed() > Duration::from_secs(12 * 3600));
 
             if check_core {
