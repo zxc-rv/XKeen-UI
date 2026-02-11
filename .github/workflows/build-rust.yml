@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Update version
         run: sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"${{ inputs.version }}"'"/' frontend/assets/version.js
-      - name: Cache-bust
+      - name: Generate Hash
         run: |
           cd frontend/assets
           for f in main.js outboundParser.js version.js guiRouting.js guiLog.js style.css; do
@@ -70,7 +70,7 @@ jobs:
             sed -i "s|assets/$f|assets/$nf|g" ../index.html
           done
       - name: Pack static files
-        run: tar -czf xkeen-ui-static.tar.gz -C frontend .
+        run: tar --exclude='outboundGenerator.html' -czf xkeen-ui-static.tar.gz -C frontend .
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
