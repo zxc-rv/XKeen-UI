@@ -40,6 +40,21 @@ fn get_repo(core: &str) -> Option<&'static str> {
     match core { "xray" => Some(XRAY_REPO), "mihomo" => Some(MIHOMO_REPO), "self" => Some(XKEEN_UI_REPO), _ => None }
 }
 
+pub async fn fetch_latest_version(client: &reqwest::Client, core: &str) -> Option<String> {
+    let repo = get_repo(core)?;
+    if let Ok(r) = client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await {
+        if let Ok(rels) = r.json::<Vec<GhRelease>>().await {
+            return rels.into_iter().find(|r| !r.prerelease).map(|r| r.tag_name.trim_start_matches('v').to_string());
+        }
+    }
+    if let Ok(r) = client.get(format!("{}/{}", JSDELIVR_API, repo)).send().await {
+        if let Ok(jsd) = r.json::<JsdResponse>().await {
+            return jsd.versions.into_iter().next();
+        }
+    }
+    None
+}
+
 async fn log(lvl: &str, msg: String) {
     let line = crate::logs::format_plain_log(lvl, &msg);
     if lvl == "ERROR" { eprintln!("{}", msg); } else { println!("{}", msg); }

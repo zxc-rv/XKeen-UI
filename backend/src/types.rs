@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::{sync::{Arc, RwLock}, time::Instant};
 
 pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 pub const APP_CONFIG: &str = "/opt/share/www/XKeen-UI/config.json";
@@ -20,7 +20,27 @@ pub struct AppState {
     pub settings: Arc<RwLock<AppSettings>>,
     pub init_file: Arc<RwLock<String>>,
     pub http_client: reqwest::Client,
+    pub update_checker: UpdateChecker,
     pub _debug: bool,
+}
+
+#[derive(Clone)]
+pub struct UpdateChecker {
+    pub ui_outdated: Arc<RwLock<bool>>,
+    pub core_outdated: Arc<RwLock<bool>>,
+    pub last_ui_check: Arc<RwLock<Option<Instant>>>,
+    pub last_core_check: Arc<RwLock<Option<Instant>>>,
+}
+
+impl Default for UpdateChecker {
+    fn default() -> Self {
+        Self {
+            ui_outdated: Arc::new(RwLock::new(false)),
+            core_outdated: Arc::new(RwLock::new(false)),
+            last_ui_check: Arc::new(RwLock::new(None)),
+            last_core_check: Arc::new(RwLock::new(None)),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
