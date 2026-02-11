@@ -182,7 +182,7 @@ async function checkForUpdates() {
 
     const appVersion = document.getElementById("appVersion")
     const versionText = document.getElementById("versionText")
-    if (versionText) versionText.textContent = data.version || "dev"
+    if (versionText) versionText.textContent = data.version
 
     const storageKey = `update_toast_shown_${data.version}`
     const shownData = JSON.parse(localStorage.getItem(storageKey) || "{}")
