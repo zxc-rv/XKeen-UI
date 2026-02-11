@@ -27,29 +27,26 @@ jobs:
         run: |
           VERSION="${{ inputs.version }}"
           VERSION="${VERSION#v}"
-          sed -i 's/^version = .*/version = "'"$VERSION"'"/' Cargo.toml
-          grep '^version =' Cargo.toml
+          sed -i 's/^version = .*/version = "'"$VERSION"'"/' backend/Cargo.toml
       - name: Install Rust
         run: rustup toolchain install ${{ matrix.toolchain }}
       - name: Install cross
         run: cargo install cross --git https://github.com/cross-rs/cross
       - name: Setup Cross.toml
         run: |
-          cat <<EOF > Cross.toml
+          cat <<EOF > backend/Cross.toml
           [target.mips-unknown-linux-musl]
           image = "rustembedded/cross:mips-unknown-linux-musl"
           build-std = ["core", "alloc", "std", "panic_abort"]
-
           [target.mipsel-unknown-linux-musl]
           image = "rustembedded/cross:mipsel-unknown-linux-musl"
           build-std = ["core", "alloc", "std", "panic_abort"]
           EOF
       - name: Build binary
-        env:
-          CROSS_NO_WARNINGS: 0
+        working-directory: backend
         run: |
           cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/xkeen-ui xkeen-ui-${{ matrix.name }}
+          cp target/${{ matrix.target }}/release/xkeen-ui ../xkeen-ui-${{ matrix.name }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -59,24 +56,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update version in version.js
+      - name: Update version
+        run: sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"${{ inputs.version }}"'"/' frontend/assets/version.js
+      - name: Cache-bust
         run: |
-          sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"${{ inputs.version }}"'"/' version.js
-          echo "Updated version to: ${{ inputs.version }}"
-      - name: Cache-bust static files
-        run: |
-          set -e
+          cd frontend/assets
           for f in main.js outboundParser.js version.js guiRouting.js guiLog.js style.css; do
             h=$(sha1sum "$f" | cut -c1-8)
             ext="${f##*.}"
             base="${f%.*}"
             nf="$base.$h.$ext"
             mv "$f" "$nf"
-            sed -i "s|$f|$nf|g" index.html
+            sed -i "s|assets/$f|assets/$nf|g" ../index.html
           done
       - name: Pack static files
-        run: |
-          tar -czf xkeen-ui-static.tar.gz *.js *.css index.html favicon.png assets
+        run: tar -czf xkeen-ui-static.tar.gz -C frontend .
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -93,7 +87,7 @@ jobs:
         id: changelog
         run: |
           PREVIOUS_TAG=$(git tag --sort=-version:refname | head -n1)
-          CHANGELOG=$(git log --reverse --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD -- script.js index.html style.css src/)
+          CHANGELOG=$(git log --reverse --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD -- frontend/ backend/src/)
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
