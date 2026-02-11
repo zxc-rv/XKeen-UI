@@ -1022,25 +1022,30 @@ function switchTab(index) {
   updateUIDirtyState()
 }
 
-async function apiCall(endpoint, data = null) {
-  try {
-    const options = {
-      method: data ? "POST" : "GET",
-      headers: { "Content-Type": "application/json" },
+async function apiCall(endpoint, body = null, maxRetries = 5) {
+  const delays = [500, 1000, 2000, 4000, 8000]
+
+  for (let i = 0; i <= maxRetries; i++) {
+    try {
+      const response = await fetch(`/api/${endpoint}`, {
+        method: body ? "POST" : "GET",
+        headers: body ? { "Content-Type": "application/json" } : {},
+        body: body ? JSON.stringify(body) : null,
+      })
+
+      if (!response.ok && i < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, delays[i]))
+        continue
+      }
+
+      return await response.json()
+    } catch (error) {
+      if (i === maxRetries) {
+        console.error(`API call failed after ${maxRetries} retries:`, error)
+        return { success: false, error: error.message }
+      }
+      await new Promise((resolve) => setTimeout(resolve, delays[i]))
     }
-    if (data) options.body = JSON.stringify(data)
-
-    const response = await fetch(`/api/${endpoint}`, options)
-
-    if (!response.ok) {
-      return { success: false, error: `HTTP ${response.status}` }
-    }
-
-    const result = await response.json()
-    return result
-  } catch (error) {
-    console.error("API Error:", error)
-    return { success: false, error: error.message }
   }
 }
 
@@ -1586,9 +1591,7 @@ async function installSelectedVersion() {
       })
 
       if (payload.core === "self") {
-        setTimeout(() => {
-          location.reload()
-        }, 500)
+        location.reload()
         return
       }
 
