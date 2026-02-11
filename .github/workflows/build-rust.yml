@@ -63,6 +63,17 @@ jobs:
         run: |
           sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"${{ inputs.version }}"'"/' version.js
           echo "Updated version to: ${{ inputs.version }}"
+      - name: Cache-bust static files
+        run: |
+          set -e
+          for f in main.js outboundParser.js version.js guiRouting.js guiLog.js style.css; do
+            h=$(sha1sum "$f" | cut -c1-8)
+            ext="${f##*.}"
+            base="${f%.*}"
+            nf="$base.$h.$ext"
+            mv "$f" "$nf"
+            sed -i "s|$f|$nf|g" index.html
+          done
       - name: Pack static files
         run: |
           tar -czf xkeen-ui-static.tar.gz *.js *.css index.html favicon.png assets

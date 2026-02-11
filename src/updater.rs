@@ -191,7 +191,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         }
 
         log("INFO", "Распаковка static файлов...".into()).await;
-        let www_dir = PathBuf::from("/opt/share/www/XKeen-UI");
+        let www_dir = PathBuf::from(STATIC_DIR);
         let unpack_result = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
             use flate2::read::GzDecoder;
             use tar::Archive;

@@ -7,9 +7,10 @@ mod version;
 mod websocket;
 mod updater;
 
-use axum::{routing::get, Router};
 use std::{env, fs, path::Path, sync::{Arc, RwLock}};
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use axum::{Router, routing::get};
+use axum::http::{header::CACHE_CONTROL, HeaderValue};
+use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
 
 #[tokio::main]
@@ -50,6 +51,20 @@ async fn main() {
         _debug,
     };
 
+    let serve_no_cache = |file: &str| {
+        axum::routing::get_service(ServeFile::new(format!("{}/{}", STATIC_DIR, file)))
+            .layer(SetResponseHeaderLayer::overriding(
+                CACHE_CONTROL,
+                HeaderValue::from_static("no-store"),
+            ))
+    };
+
+    let serve_assets = axum::routing::get_service(ServeDir::new(STATIC_DIR))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        ));
+
     let app = Router::new()
         .route("/api/control", get(controller::get_control).post(controller::post_control))
         .route("/api/configs", get(configs::get_configs).post(configs::post_configs))
@@ -57,7 +72,9 @@ async fn main() {
         .route("/api/version", get(version::version_handler))
         .route("/api/update", get(updater::get_releases).post(updater::post_update))
         .route("/ws", get(websocket::ws_handler))
-        .fallback_service(ServeDir::new("/opt/share/www/XKeen-UI"))
+        .route("/", serve_no_cache("index.html"))
+        .route("/local_mode.js", serve_no_cache("local_mode.js"))
+        .fallback_service(serve_assets)
         .layer(CorsLayer::permissive())
         .with_state(state);
 

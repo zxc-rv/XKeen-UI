@@ -1559,15 +1559,7 @@ async function installSelectedVersion() {
         body: `Установлен ${payload.core} ${payload.version}`,
       })
       isActionInProgress = false
-
-      if (payload.core === "self") {
-        localStorage.setItem("xkeen_force_reload", "true")
-        setTimeout(() => {
-          window.location.href = window.location.pathname + "?_=" + Date.now()
-        }, 3000)
-      } else {
-        checkStatus()
-      }
+      checkStatus()
     } else {
       showToast(`${data.error}`, "error")
       isActionInProgress = false

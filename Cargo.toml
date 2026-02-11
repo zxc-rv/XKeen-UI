@@ -1,6 +1,6 @@
 [package]
 name = "xkeen-ui"
-version = "0.5.3"
+version = "0.5.2"
 edition = "2024"
 
 [dependencies]
@@ -8,7 +8,7 @@ axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1",  features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "net"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tower-http = { version = "0.6", features = ["fs", "cors"] }
+tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
 nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource"] }
 notify = "8"
 chrono = "0.4"
@@ -20,6 +20,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 zip = "7.4"
 flate2 = "1.1"
 tar = "0.4.44"
+http = "1.4.0"
 
 [profile.release]
 opt-level = "z"
