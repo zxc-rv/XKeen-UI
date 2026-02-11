@@ -70,8 +70,9 @@ async function init() {
     await loadDependencies()
     await new Promise((res, rej) => require(["vs/editor/editor.main"], res, rej))
     await loadSettings()
+    await checkStatus()
 
-    checkStatus()
+    checkVersion()
     connectWebSocket()
     loadMonacoEditor()
 
@@ -239,6 +240,26 @@ function setPendingState(actionText) {
   indicator.className = "status pending"
   text.textContent = actionText
   updateControlButtons()
+}
+
+async function checkVersion() {
+  try {
+    const r = await fetch("/api/version")
+    if (!r.ok) return
+    const data = await r.json()
+    const appVersion = document.getElementById("appVersion")
+    const versionText = document.getElementById("versionText")
+    if (data.success && data.version) {
+      versionText.textContent = data.version
+      appVersion.style.display = "block"
+    }
+    console.log("ui toast", data.show_toast.ui)
+    if (data.show_toast?.ui) showToast({ title: "Доступно обновление", body: "Доступна новая версия XKeen UI" })
+    if (data.show_toast?.core) showToast({ title: "Доступно обновление", body: `Доступная новая версия ${currentCore}` })
+    appVersion.classList.toggle("outdated", !!data.outdated?.ui)
+  } catch (e) {
+    console.error("Ошибка проверки обновлений:", e)
+  }
 }
 
 function updateServiceStatus(running) {

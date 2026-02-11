@@ -56,12 +56,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update version
-        run: sed -i 's/const APP_VERSION = "dev"/const APP_VERSION = "'"${{ inputs.version }}"'"/' frontend/assets/version.js
       - name: Generate Hash
         run: |
           cd frontend/assets
-          for f in main.js outboundParser.js version.js guiRouting.js guiLog.js style.css; do
+          for f in main.js outboundParser.js guiRouting.js guiLog.js style.css; do
             h=$(sha1sum "$f" | cut -c1-8)
             ext="${f##*.}"
             base="${f%.*}"
