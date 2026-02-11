@@ -54,8 +54,11 @@ fn get_arch() -> &'static str {
 
 fn detect_core(init_file: &str) -> CoreInfo {
     let c = std::fs::read_to_string(init_file).unwrap_or_default();
-    if c.contains("mihomo") { CoreInfo { name: "mihomo".into(), conf_dir: MIHOMO_CONF.into(), is_json: false } }
-    else { CoreInfo { name: "xray".into(), conf_dir: XRAY_CONF.into(), is_json: true } }
+    if c.contains("name_client=\"mihomo\"") {
+        CoreInfo { name: "mihomo".into(), conf_dir: MIHOMO_CONF.into(), is_json: false }
+    } else {
+        CoreInfo { name: "xray".into(), conf_dir: XRAY_CONF.into(), is_json: true }
+    }
 }
 
 fn load_settings() -> AppSettings {
