@@ -260,7 +260,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let (run, src) = (crate::controller::get_pid(&req.core).is_some(), tmp_dir.join(&req.core));
     if fs::rename(&src, &tgt).await.is_ok() {
         _ = fs::set_permissions(&tgt, std::fs::Permissions::from_mode(0o755)).await;
-        if run { log("INFO", format!("Перезапуск {}...", req.core)).await; crate::controller::soft_restart(&req.core).await; }
+        if run { log("INFO", format!("Перезапуск {}...", core_cap)).await; crate::controller::soft_restart(&req.core).await; }
     } else {
         log("WARN", "Атомарная замена не удалась, использую fallback...".into()).await;
         let init = state.init_file.read().unwrap().clone();

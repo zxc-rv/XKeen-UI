@@ -1354,7 +1354,8 @@ async function checkStatus() {
   const settingsBtn = document.getElementById("settingsBtn")
   const settingsBtnSkeleton = document.getElementById("settingsBtnSkeleton")
 
-  document.getElementById("coreSelectLabel").textContent = currentCore
+  const coreLabel = currentCore ? currentCore[0].toUpperCase() + currentCore.slice(1) : ""
+  document.getElementById("coreSelectLabel").textContent = coreLabel
 
   const verEl = document.getElementById("coreVersion")
   if (verEl) verEl.textContent = coreVersions[currentCore] || ""
@@ -1405,7 +1406,7 @@ async function switchCore(core) {
   currentCore = core
 
   const coreSelectLabel = document.getElementById("coreSelectLabel")
-  if (coreSelectLabel) coreSelectLabel.textContent = currentCore
+  if (coreSelectLabel) coreSelectLabel.textContent = core[0].toUpperCase() + core.slice(1)
 
   const verEl = document.getElementById("coreVersion")
   if (verEl) verEl.textContent = ""
@@ -1420,7 +1421,7 @@ async function switchCore(core) {
     console.timeEnd(`switchCore ${core}`)
 
     if (result.success) {
-      showToast(`Ядро изменено на ${core}`)
+      showToast(`Ядро изменено на ${core[0].toUpperCase() + core.slice(1)}`)
       isActionInProgress = false
       checkStatus()
     } else {
@@ -1588,7 +1589,7 @@ async function installSelectedVersion() {
     if (data.success) {
       showToast({
         title: "Обновление завершено",
-        body: `Установлен ${payload.core} ${payload.version}`,
+        body: `Установлен ${payload.core[0].toUpperCase() + payload.core.slice(1)} ${payload.version}`,
       })
 
       if (payload.core === "self") {
