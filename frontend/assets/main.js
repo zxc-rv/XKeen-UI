@@ -258,7 +258,8 @@ async function checkVersion() {
       appVersion.style.display = "block"
     }
     if (data.show_toast?.ui) showToast({ title: "Доступно обновление", body: "Доступна новая версия XKeen UI" })
-    if (data.show_toast?.core) showToast({ title: "Доступно обновление", body: `Доступная новая версия ${currentCore}` })
+    if (data.show_toast?.core)
+      showToast({ title: "Доступно обновление", body: `Доступна новая версия ${currentCore[0].toUpperCase() + currentCore.slice(1)}` })
     appVersion.classList.toggle("outdated", !!data.outdated?.ui)
   } catch (e) {
     console.error("Ошибка проверки обновлений:", e)
@@ -1590,7 +1591,9 @@ async function installSelectedVersion() {
       })
 
       if (payload.core === "self") {
-        location.reload()
+        setTimeout(() => {
+          location.reload()
+        }, 100)
         return
       }
 
