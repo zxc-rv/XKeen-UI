@@ -7,7 +7,7 @@ pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     Json(serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log }))
 }
 
-pub async fn post_settings(State(state): State<AppState>, Json(patch): Json<serde_json::Value>) -> impl IntoResponse {
+pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<serde_json::Value>) -> impl IntoResponse {
     let mut file_json = fs::read_to_string(APP_CONFIG)
         .ok().and_then(|c| serde_json::from_str(&c).ok())
         .unwrap_or(serde_json::json!({}));

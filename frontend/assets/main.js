@@ -1022,28 +1022,27 @@ function switchTab(index) {
   updateUIDirtyState()
 }
 
-async function apiCall(endpoint, body = null, maxRetries = 5) {
+async function apiCall(method, endpoint, body = null) {
   const delays = [500, 1000, 2000, 4000, 8000]
-  const isPost = body !== null
-  const retries = isPost ? 0 : maxRetries
+  const maxRetries = method === "GET" ? 5 : 0
 
-  for (let i = 0; i <= retries; i++) {
+  for (let i = 0; i <= maxRetries; i++) {
     try {
       const response = await fetch(`/api/${endpoint}`, {
-        method: isPost ? "POST" : "GET",
-        headers: isPost ? { "Content-Type": "application/json" } : {},
-        body: isPost ? JSON.stringify(body) : null,
+        method,
+        headers: method !== "GET" ? { "Content-Type": "application/json" } : {},
+        body: method !== "GET" ? JSON.stringify(body) : null,
       })
 
-      if (!response.ok && i < retries) {
+      if (!response.ok && i < maxRetries) {
         await new Promise((resolve) => setTimeout(resolve, delays[i]))
         continue
       }
 
       return await response.json()
     } catch (error) {
-      if (i === retries) {
-        console.error(`API call failed after ${retries} retries:`, error)
+      if (i === maxRetries) {
+        console.error(`API call failed after ${maxRetries} retries:`, error)
         return { success: false, error: error.message }
       }
       await new Promise((resolve) => setTimeout(resolve, delays[i]))
@@ -1153,7 +1152,7 @@ async function saveCurrentConfig(force = false) {
   if (!content.trim()) return showToast("Конфигурация пустая", "error")
   if (!isFileValid()) return showToast("Невозможно сохранить: файл содержит ошибки", "error")
 
-  const result = await apiCall("configs", { action: "save", filename: config.filename, content })
+  const result = await apiCall("PUT", "configs", { action: "save", filename: config.filename, content })
 
   if (result.success) {
     config.content = content
@@ -1212,7 +1211,7 @@ async function saveAndRestart(force = false) {
   if (!content.trim()) return showToast("Конфиг пустой", "error")
   if (!isFileValid()) return showToast("Файл содержит ошибки", "error")
 
-  const result = await apiCall("configs", { action: "save", filename: config.filename, content })
+  const result = await apiCall("PUT", "configs", { action: "save", filename: config.filename, content })
   if (!result.success) return showToast(`Ошибка сохранения: ${result.error}`, "error")
 
   const language = getFileLanguage(config.filename)
@@ -1228,9 +1227,9 @@ async function saveAndRestart(force = false) {
     let restartResult
     setPendingState("Перезапуск...")
     if ((language === "json" || language === "yaml") && !needsFullRestart) {
-      restartResult = await apiCall("control", { action: "softRestart", core: currentCore })
+      restartResult = await apiCall("POST", "control", { action: "softRestart", core: currentCore })
     } else {
-      restartResult = await apiCall("control", { action: "hardRestart" })
+      restartResult = await apiCall("POST", "control", { action: "hardRestart" })
     }
 
     if (!restartResult?.success) {
@@ -1247,7 +1246,7 @@ async function saveAndRestart(force = false) {
 
     if ((language === "json" || language === "yaml") && !needsFullRestart) {
       setTimeout(async () => {
-        const statusCheck = await apiCall("control")
+        const statusCheck = await apiCall("GET", "control")
         if (!statusCheck.running) {
           showToast("Ядро завершило работу с ошибкой, проверьте конфигурацию", "error")
           isServiceRunning = false
@@ -1274,7 +1273,7 @@ function formatCurrentConfig() {
 async function startXKeen() {
   try {
     setPendingState("Запуск...")
-    const result = await apiCall("control", { action: "start" })
+    const result = await apiCall("POST", "control", { action: "start" })
     if (result.success) {
       showToast("XKeen запущен")
       isActionInProgress = false
@@ -1293,7 +1292,7 @@ async function startXKeen() {
 async function stopXKeen() {
   try {
     setPendingState("Остановка...")
-    const result = await apiCall("control", { action: "stop" })
+    const result = await apiCall("POST", "control", { action: "stop" })
     if (result.success) {
       showToast("XKeen остановлен")
       checkStatus()
@@ -1309,7 +1308,7 @@ async function stopXKeen() {
 async function hardRestart() {
   try {
     setPendingState("Перезапуск...")
-    const result = await apiCall("control", { action: "hardRestart" })
+    const result = await apiCall("POST", "control", { action: "hardRestart" })
     if (result.success) {
       showToast("XKeen перезапущен")
       isActionInProgress = false
@@ -1337,7 +1336,7 @@ function clearCurrentLog() {
 async function checkStatus() {
   if (isActionInProgress) return
 
-  const r = await apiCall("control")
+  const r = await apiCall("GET", "control")
   if (!r.success) return
 
   availableCores = r.cores || []
@@ -1417,7 +1416,7 @@ async function switchCore(core) {
   console.time(`switchCore ${core}`)
 
   try {
-    const result = await apiCall("control", { action: "switchCore", core: core })
+    const result = await apiCall("POST", "control", { action: "switchCore", core: core })
     console.timeEnd(`switchCore ${core}`)
 
     if (result.success) {
@@ -2642,7 +2641,7 @@ async function saveSettings(path, value) {
     }
   }
 
-  const data = await apiCall("settings", body)
+  const data = await apiCall("PATCH", "settings", body)
   if (!data.success) {
     showToast("Ошибка сохранения: " + data.error, "error")
   }
@@ -2650,7 +2649,7 @@ async function saveSettings(path, value) {
 }
 
 async function loadSettings() {
-  const data = await apiCall("settings")
+  const data = await apiCall("GET", "settings")
   if (data.success) {
     currentTimezone = data.log.timezone
     autoApply = data.gui.auto_apply

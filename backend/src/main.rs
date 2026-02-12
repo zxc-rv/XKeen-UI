@@ -1,6 +1,6 @@
 mod types; mod settings; mod logs; mod controller; mod configs; mod version; mod websocket; mod updater;
 use std::{env, path::Path, sync::{Arc, RwLock}, net::SocketAddr, process::exit};
-use axum::{Router, routing::{get, get_service}};
+use axum::{Router, routing::{get, get_service, patch, put}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
@@ -35,8 +35,8 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/control", get(controller::get_control).post(controller::post_control))
-        .route("/api/configs", get(configs::get_configs).post(configs::post_configs))
-        .route("/api/settings", get(settings::get_settings).post(settings::post_settings))
+        .route("/api/configs", get(configs::get_configs).put(configs::put_configs))
+        .route("/api/settings", get(settings::get_settings).patch(settings::patch_settings))
         .route("/api/version", get(version::version_handler))
         .route("/api/update", get(updater::get_releases).post(updater::post_update))
         .route("/ws", get(websocket::ws_handler))

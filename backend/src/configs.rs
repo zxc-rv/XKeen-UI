@@ -55,7 +55,7 @@ pub async fn get_configs(State(state): State<AppState>, Query(params): Query<Has
     Json(serde_json::json!({ "success": true, "configs": res }))
 }
 
-pub async fn post_configs(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {
+pub async fn put_configs(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {
     let core = state.core.read().unwrap();
     let is_lst = req.filename.ends_with(".lst");
     let mut path = PathBuf::from(if is_lst { XKEEN_CONF } else { &core.conf_dir });
