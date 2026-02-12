@@ -68,7 +68,7 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
 
     let list = std::iter::once(url.to_string()).chain(proxies.iter().map(|p| format!("{}/{}", p, url)));
     for (i, u) in list.enumerate() {
-        let (src, is_proxy) = if i == 0 { ("direct", false) } else { ("proxy", true) };
+        let (src, is_proxy) = if i == 0 { ("напрямую", false) } else { ("прокси", true) };
         if is_proxy { log("INFO", format!("Попытка загрузки через прокси #{}: {}", i, proxies[i-1])).await; }
 
         match client.get(&u).send().await {
@@ -111,6 +111,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let Some(repo) = get_repo(&req.core) else { return response(false, Some("Неизвестное ядро".into())); };
     let ver = if req.version.chars().next().map_or(false, |c| c.is_ascii_digit()) { format!("v{}", req.version) } else { req.version.clone() };
     let core_cap = req.core.chars().next().map(|c| c.to_uppercase().to_string() + &req.core[1..]).unwrap_or_default();
+
     log("INFO", format!("Запущено обновление {} до {}", if req.core == "self" { "XKeen UI" } else { &core_cap }, ver)).await;
 
     let tmp_dir = Path::new("/opt/tmp"); _ = fs::create_dir_all(tmp_dir).await;
