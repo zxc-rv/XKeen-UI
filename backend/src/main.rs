@@ -1,6 +1,6 @@
 mod types; mod settings; mod logs; mod controller; mod configs; mod version; mod websocket; mod updater;
 use std::{env, path::Path, sync::{Arc, RwLock}, net::SocketAddr, process::exit};
-use axum::{Router, routing::{get, get_service, patch, put}};
+use axum::{Router, routing::{get, get_service}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
