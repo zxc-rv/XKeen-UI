@@ -24,7 +24,7 @@ pub struct AppState {
     pub _debug: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct UpdateChecker {
     pub ui_outdated: Arc<RwLock<bool>>,
     pub core_outdated: Arc<RwLock<bool>>,
@@ -32,19 +32,6 @@ pub struct UpdateChecker {
     pub last_core_check: Arc<RwLock<Option<Instant>>>,
     pub last_ui_toast: Arc<RwLock<Option<Instant>>>,
     pub last_core_toast: Arc<RwLock<Option<Instant>>>,
-}
-
-impl Default for UpdateChecker {
-    fn default() -> Self {
-        Self {
-            ui_outdated: Arc::new(RwLock::new(false)),
-            core_outdated: Arc::new(RwLock::new(false)),
-            last_ui_check: Arc::new(RwLock::new(None)),
-            last_core_check: Arc::new(RwLock::new(None)),
-            last_ui_toast: Arc::new(RwLock::new(None)),
-            last_core_toast: Arc::new(RwLock::new(None)),
-        }
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -55,13 +42,15 @@ pub struct CoreInfo {
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct GuiSettings {
     pub routing: bool,
     pub log: bool,
     pub auto_apply: bool,
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct UpdaterSettings {
     pub auto_check_ui: bool,
     pub auto_check_core: bool,
@@ -69,69 +58,56 @@ pub struct UpdaterSettings {
     pub github_proxy: Vec<String>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+impl Default for UpdaterSettings {
+    fn default() -> Self {
+        Self {
+            github_proxy: vec!["https://gh-proxy.com".into(), "https://ghfast.top".into()],
+            backup_core: true,
+            auto_check_ui: true,
+            auto_check_core: true,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LogSettings { pub timezone: i32 }
 
-#[derive(Clone, Serialize)]
+impl Default for LogSettings {
+    fn default() -> Self { Self { timezone: 3 } }
+}
+
+#[derive(Clone, Serialize, Default)]
 pub struct AppSettings {
     pub gui: GuiSettings,
     pub updater: UpdaterSettings,
     pub log: LogSettings,
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum ConfigMigration {
-    New {
-        gui: GuiSettings,
-        updater: UpdaterSettings,
-        log: LogSettings,
-    },
-    Legacy {
-        #[serde(rename = "timezoneOffset")]
-        timezone_offset: i32,
-    },
-}
-
 impl<'de> Deserialize<'de> for AppSettings {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
-        match ConfigMigration::deserialize(deserializer)? {
-            ConfigMigration::New { log, gui, updater } => Ok(Self { log, gui, updater }),
-            ConfigMigration::Legacy { timezone_offset } => {
-                let mut s = Self::default();
-                s.log.timezone = timezone_offset;
-                Ok(s)
-            }
+        #[derive(Deserialize)]
+        struct RawConfig {
+            #[serde(default)]
+            gui: GuiSettings,
+            #[serde(default)]
+            updater: UpdaterSettings,
+            #[serde(default)]
+            log: LogSettings,
+            #[serde(rename = "timezoneOffset")]
+            legacy_tz: Option<i32>,
         }
-    }
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            gui: GuiSettings {
-              auto_apply: false,
-              routing: false,
-              log: false,
-            },
-            updater: UpdaterSettings {
-                github_proxy: vec!["https://gh-proxy.com".into(), "https://ghfast.top".into()],
-                backup_core: true,
-                auto_check_ui: true,
-                auto_check_core: true,
-            },
-            log: LogSettings { timezone: 3 },
-        }
+        let mut raw = RawConfig::deserialize(deserializer)?;
+        if let Some(tz) = raw.legacy_tz { raw.log.timezone = tz; }
+        Ok(Self { gui: raw.gui, updater: raw.updater, log: raw.log })
     }
 }
 
 impl AppSettings {
     pub fn normalize_proxies(&mut self) {
         self.updater.github_proxy = self.updater.github_proxy.iter().map(|p| {
-            let p = p.trim();
-            if p.starts_with("http") { p.to_string() }
-            else { format!("https://{}", p.trim_start_matches("://")) }
+            if p.starts_with("http") { p.to_string() } else { format!("https://{}", p.trim_start_matches("://")) }
         }).collect();
     }
 }
