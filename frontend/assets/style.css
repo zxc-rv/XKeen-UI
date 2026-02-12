@@ -3499,7 +3499,7 @@ textarea {
 }
 
 span#coreSelectLabel {
-  margin-bottom: 2px;
+  font-size: 13px;
 }
 
 .btn-core-select:hover {
