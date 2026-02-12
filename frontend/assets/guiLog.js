@@ -268,14 +268,21 @@ function toggleDNSLog() {
   }
 }
 
-function toggleGuiLog() {
+async function toggleGuiLog() {
   const checkbox = document.getElementById("guiLogCheckboxSettings")
-  if (checkbox) {
-    guiLogState.enabled = checkbox.checked
-    saveSettings()
-  }
-  const config = configs[activeConfigIndex]
-  if (config && config.filename.toLowerCase().includes("log") && typeof applyGUIState === "function") {
-    applyGUIState()
+  if (!checkbox) return
+
+  const newValue = checkbox.checked
+  checkbox.checked = guiLogState.enabled
+
+  const success = await saveSettings("gui.log", newValue)
+  if (success) {
+    guiLogState.enabled = newValue
+    checkbox.checked = newValue
+
+    const config = configs[activeConfigIndex]
+    if (config && config.filename.toLowerCase().includes("log") && typeof applyGUIState === "function") {
+      applyGUIState()
+    }
   }
 }

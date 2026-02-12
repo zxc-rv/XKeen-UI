@@ -1024,24 +1024,26 @@ function switchTab(index) {
 
 async function apiCall(endpoint, body = null, maxRetries = 5) {
   const delays = [500, 1000, 2000, 4000, 8000]
+  const isPost = body !== null
+  const retries = isPost ? 0 : maxRetries
 
-  for (let i = 0; i <= maxRetries; i++) {
+  for (let i = 0; i <= retries; i++) {
     try {
       const response = await fetch(`/api/${endpoint}`, {
-        method: body ? "POST" : "GET",
-        headers: body ? { "Content-Type": "application/json" } : {},
-        body: body ? JSON.stringify(body) : null,
+        method: isPost ? "POST" : "GET",
+        headers: isPost ? { "Content-Type": "application/json" } : {},
+        body: isPost ? JSON.stringify(body) : null,
       })
 
-      if (!response.ok && i < maxRetries) {
+      if (!response.ok && i < retries) {
         await new Promise((resolve) => setTimeout(resolve, delays[i]))
         continue
       }
 
       return await response.json()
     } catch (error) {
-      if (i === maxRetries) {
-        console.error(`API call failed after ${maxRetries} retries:`, error)
+      if (i === retries) {
+        console.error(`API call failed after ${retries} retries:`, error)
         return { success: false, error: error.message }
       }
       await new Promise((resolve) => setTimeout(resolve, delays[i]))
@@ -2585,7 +2587,7 @@ function renderGithubProxies() {
   })
 }
 
-function addGithubProxy() {
+async function addGithubProxy() {
   const input = document.getElementById("newProxyInput")
   let url = input.value.trim().replace(/\/+$/, "")
 
@@ -2599,30 +2601,52 @@ function addGithubProxy() {
     return showToast("Этот прокси уже добавлен", "error")
   }
 
-  github_proxy.push(url)
-  renderGithubProxies()
-  saveSettings()
-  input.value = ""
-}
+  const newProxies = [...github_proxy, url]
+  const success = await saveSettings("updater.github_proxy", newProxies)
 
-function removeGithubProxy(index) {
-  github_proxy.splice(index, 1)
-  renderGithubProxies()
-  saveSettings()
-}
-
-async function saveSettings() {
-  const body = {
-    gui: { auto_apply: autoApply, routing: guiRoutingState.enabled, log: guiLogState.enabled },
-    updater: { auto_check_ui: autoCheckUI, auto_check_core: autoCheckCore, backup_core: backupCore, github_proxy: github_proxy },
-    log: { timezone: parseInt(currentTimezone) },
+  if (success) {
+    github_proxy = newProxies
+    renderGithubProxies()
+    input.value = ""
   }
-  const data = await apiCall("settings", body)
-  if (data.success) {
-    showToast("Настройки сохранены", "success")
+}
+
+async function removeGithubProxy(index) {
+  const newProxies = github_proxy.filter((_, i) => i !== index)
+  const success = await saveSettings("updater.github_proxy", newProxies)
+
+  if (success) {
+    github_proxy = newProxies
+    renderGithubProxies()
+  }
+}
+
+async function saveSettings(path, value) {
+  const [section, key] = path ? path.split(".") : []
+  let body = {}
+
+  if (key === "timezone") value = parseInt(value)
+  if (key === "github_proxy" && typeof value === "string")
+    value = value
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+  if (["gui", "updater", "log"].includes(section)) {
+    body[section] = key ? { [key]: value } : value
   } else {
+    body = {
+      gui: { auto_apply: !!autoApply, routing: !!guiRoutingState.enabled, log: !!guiLogState.enabled },
+      updater: { auto_check_ui: !!autoCheckUI, auto_check_core: !!autoCheckCore, backup_core: !!backupCore, github_proxy },
+      log: { timezone: parseInt(currentTimezone) },
+    }
+  }
+
+  const data = await apiCall("settings", body)
+  if (!data.success) {
     showToast("Ошибка сохранения: " + data.error, "error")
   }
+  return data.success
 }
 
 async function loadSettings() {
@@ -2679,21 +2703,23 @@ function toggleTimezoneSelect() {
 
 async function selectTimezone(offset) {
   try {
-    currentTimezone = offset
-    updateTimezoneLabel()
+    const success = await saveSettings("log.timezone", offset)
 
-    const options = document.querySelectorAll("#timezoneDropdown .custom-select-option")
-    options.forEach((opt) => {
-      opt.classList.toggle("selected", parseInt(opt.dataset.value) === offset)
-    })
+    if (success) {
+      currentTimezone = offset
+      updateTimezoneLabel()
 
-    await saveSettings()
+      const options = document.querySelectorAll("#timezoneDropdown .custom-select-option")
+      options.forEach((opt) => {
+        opt.classList.toggle("selected", parseInt(opt.dataset.value) === offset)
+      })
 
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "reload" }))
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "reload" }))
+      }
+
+      document.getElementById("timezoneSelect").classList.remove("open")
     }
-
-    document.getElementById("timezoneSelect").classList.remove("open")
   } catch (e) {
     console.error("Error updating timezone:", e)
     showToast("Ошибка обновления часового пояса", "error")
@@ -2707,35 +2733,59 @@ document.addEventListener("click", (e) => {
   }
 })
 
-function toggleAutoApply() {
+async function toggleAutoApply() {
   const checkbox = document.getElementById("autoApplyCheckbox")
-  if (checkbox) {
-    autoApply = checkbox.checked
-    saveSettings()
+  if (!checkbox) return
+
+  const newValue = checkbox.checked
+  checkbox.checked = autoApply
+
+  const success = await saveSettings("gui.auto_apply", newValue)
+  if (success) {
+    autoApply = newValue
+    checkbox.checked = newValue
   }
 }
 
-function toggleBackupCore() {
+async function toggleBackupCore() {
   const checkbox = document.getElementById("backupCoreCheckbox")
-  if (checkbox) {
-    backupCore = checkbox.checked
-    saveSettings()
+  if (!checkbox) return
+
+  const newValue = checkbox.checked
+  checkbox.checked = backupCore
+
+  const success = await saveSettings("updater.backup_core", newValue)
+  if (success) {
+    backupCore = newValue
+    checkbox.checked = newValue
   }
 }
 
-function toggleAutoCheckUI() {
+async function toggleAutoCheckUI() {
   const checkbox = document.getElementById("autoCheckUICheckbox")
-  if (checkbox) {
-    autoCheckUI = checkbox.checked
-    saveSettings()
+  if (!checkbox) return
+
+  const newValue = checkbox.checked
+  checkbox.checked = autoCheckUI
+
+  const success = await saveSettings("updater.auto_check_ui", newValue)
+  if (success) {
+    autoCheckUI = newValue
+    checkbox.checked = newValue
   }
 }
 
-function toggleAutoCheckCore() {
+async function toggleAutoCheckCore() {
   const checkbox = document.getElementById("autoCheckCoreCheckbox")
-  if (checkbox) {
-    autoCheckCore = checkbox.checked
-    saveSettings()
+  if (!checkbox) return
+
+  const newValue = checkbox.checked
+  checkbox.checked = autoCheckCore
+
+  const success = await saveSettings("updater.auto_check_core", newValue)
+  if (success) {
+    autoCheckCore = newValue
+    checkbox.checked = newValue
   }
 }
 

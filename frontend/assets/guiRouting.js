@@ -169,15 +169,22 @@ function syncGUIToJSON() {
     })
 }
 
-function toggleGuiRouting() {
+async function toggleGuiRouting() {
   const checkbox = document.getElementById("guiRoutingCheckboxSettings")
-  if (checkbox) {
-    guiRoutingState.enabled = checkbox.checked
-    saveSettings()
-  }
-  const config = configs[activeConfigIndex]
-  if (config && config.filename.toLowerCase().includes("routing") && typeof applyGUIState === "function") {
-    applyGUIState()
+  if (!checkbox) return
+
+  const newValue = checkbox.checked
+  checkbox.checked = guiRoutingState.enabled
+
+  const success = await saveSettings("gui.routing", newValue)
+  if (success) {
+    guiRoutingState.enabled = newValue
+    checkbox.checked = newValue
+
+    const config = configs[activeConfigIndex]
+    if (config && config.filename.toLowerCase().includes("routing") && typeof applyGUIState === "function") {
+      applyGUIState()
+    }
   }
 }
 
