@@ -8,14 +8,25 @@ pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 pub async fn post_settings(State(state): State<AppState>, Json(patch): Json<serde_json::Value>) -> impl IntoResponse {
-    let mut current_json = {
-        let s = state.settings.read().unwrap();
-        serde_json::to_value(&*s).unwrap()
-    };
+    let mut file_json = fs::read_to_string(APP_CONFIG)
+        .ok().and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or(serde_json::json!({}));
 
-    json_merge(&mut current_json, patch);
+    let patch_sets_tz = patch.get("log").and_then(|l| l.get("timezone")).is_some();
 
-    let mut settings: AppSettings = match serde_json::from_value(current_json) {
+    json_merge(&mut file_json, patch);
+
+    if let serde_json::Value::Object(ref mut map) = file_json {
+        if let Some(legacy) = map.remove("timezoneOffset") {
+            if !patch_sets_tz {
+                if let Some(log) = map.entry("log").or_insert(serde_json::json!({})).as_object_mut() {
+                    log.insert("timezone".into(), legacy);
+                }
+            }
+        }
+    }
+
+    let mut settings: AppSettings = match serde_json::from_value(file_json.clone()) {
         Ok(s) => s,
         Err(e) => return Json(serde_json::json!({"success": false, "error": e.to_string()})),
     };
@@ -25,8 +36,9 @@ pub async fn post_settings(State(state): State<AppState>, Json(patch): Json<serd
     }
     settings.normalize_proxies();
 
-    *state.settings.write().unwrap() = settings.clone();
-    match fs::write(APP_CONFIG, serde_json::to_string_pretty(&settings).unwrap()) {
+    *state.settings.write().unwrap() = settings;
+
+    match fs::write(APP_CONFIG, serde_json::to_string_pretty(&file_json).unwrap()) {
         Ok(_) => Json(serde_json::json!({"success": true})),
         Err(e) => Json(serde_json::json!({"success": false, "error": e.to_string()})),
     }
