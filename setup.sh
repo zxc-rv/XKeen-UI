@@ -172,6 +172,7 @@ update_xkeenui() {
   fi
 
   if [ ! -f $xkeenui_init ]; then
+    killall -q -9 xkeen-ui || :
     create_xkeenui_init
   else
     sed -i 's|^PROCS=/opt/sbin/xkeen-ui$|PROCS=xkeen-ui|' /opt/etc/init.d/S99xkeen-ui

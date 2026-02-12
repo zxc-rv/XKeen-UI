@@ -1353,8 +1353,8 @@ async function checkStatus() {
   const coreSelectSkeleton = document.getElementById("coreSelectSkeleton")
   const settingsBtn = document.getElementById("settingsBtn")
   const settingsBtnSkeleton = document.getElementById("settingsBtnSkeleton")
-
   const coreLabel = currentCore ? currentCore[0].toUpperCase() + currentCore.slice(1) : ""
+
   document.getElementById("coreSelectLabel").textContent = coreLabel
 
   const verEl = document.getElementById("coreVersion")
