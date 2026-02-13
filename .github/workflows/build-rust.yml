@@ -86,12 +86,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Generate changelog
-        id: changelog
-        run: |
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          git log --reverse --pretty=format:"- %s (%h)" $(git tag --sort=-version:refname | head -n1)..HEAD -- frontend/ backend/src/ >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -99,5 +93,4 @@ jobs:
         with:
           tag_name: ${{ inputs.version }}
           prerelease: true
-          body: ${{ steps.changelog.outputs.changelog }}
           files: artifacts/**/**
