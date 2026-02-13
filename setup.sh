@@ -148,6 +148,8 @@ install_xkeenui() {
     setup_local_editor
   fi
 
+  sync
+
   echo -e "${CYAN}\n ℹ️  Запуск XKeen UI...${NC}"
   if ! $xkeenui_init start; then
     echo -e "${RED}\n ❌ Не удалось запустить XKeen UI.\n${NC}"
@@ -193,6 +195,8 @@ update_xkeenui() {
       setup_local_editor
     fi
   fi
+
+  sync
 
   echo -e "${CYAN}\n ℹ️  Запуск XKeen UI...${NC}"
   if ! $xkeenui_init start; then
