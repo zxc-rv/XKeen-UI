@@ -42,7 +42,7 @@ fn response(success: bool, error: Option<String>) -> (HeaderMap, Json<Value>) {
 }
 
 async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_path: &Path) -> Result<DownloadResult, String> {
-    async fn load(r: reqwest::Response, path: &Path, src: &str) -> Option<DownloadResult> {
+    async fn load(r: reqwest::Response, path: &Path, source: &str) -> Option<DownloadResult> {
         let size = r.content_length().unwrap_or(0) as usize;
         let (mut stream, is_disk) = (r.bytes_stream(), size > 50 * 1024 * 1024);
         let mut file = if is_disk { Some(fs::File::create(path).await.ok()?) } else { None };
@@ -51,16 +51,15 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(5), stream.next()).await {
                 Ok(Some(Ok(chunk))) => if let Some(f) = &mut file {
-                    if f.write_all(&chunk).await.is_err() { log("WARN", format!("Ошибка записи на диск ({})", src)).await; _ = fs::remove_file(path).await; return None; }
+                    if f.write_all(&chunk).await.is_err() { log("WARN", format!("Ошибка записи на диск ({})", source)).await; _ = fs::remove_file(path).await; return None; }
                 } else { buf.extend_from_slice(&chunk); },
                 Ok(None) => {
-                    if !is_disk && buf.is_empty() { log("WARN", format!("Загрузка вернула 0 байт ({})", src)).await; return None; }
-                    if let Some(f) = &mut file { _ = f.sync_data().await; }
+                    if !is_disk && buf.is_empty() { log("WARN", format!("Загрузка вернула 0 байт ({})", source)).await; return None; }
                     log("INFO", format!("Файл загружен {} ({:.1} МБ)", if is_disk { "на диск" } else { "в ОЗУ" }, (if is_disk { size } else { buf.len() }) as f64 / 1048576.0)).await;
                     return Some(if is_disk { DownloadResult::Disk(path.to_path_buf()) } else { DownloadResult::RAM(buf) });
                 }
-                Ok(Some(Err(e))) => { log("WARN", format!("Соединение оборвалось ({}): {}", src, e)).await; break; }
-                Err(_) => { log("WARN", format!("Таймаут загрузки ({})", src)).await; break; }
+                Ok(Some(Err(e))) => { log("WARN", format!("Соединение оборвалось ({}): {}", source, e)).await; break; }
+                Err(_) => { log("WARN", format!("Таймаут загрузки ({})", source)).await; break; }
             }
         }
         if is_disk { _ = fs::remove_file(path).await; }
@@ -69,7 +68,7 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
 
     let list = std::iter::once(url.to_string()).chain(proxies.iter().map(|p| format!("{}/{}", p, url)));
     for (i, u) in list.enumerate() {
-        let (src, is_proxy) = if i == 0 { ("напрямую", false) } else { ("прокси", true) };
+        let (source, is_proxy) = if i == 0 { ("напрямую", false) } else { ("прокси", true) };
         if is_proxy { log("INFO", format!("Попытка загрузки через прокси #{}: {}", i, proxies[i-1])).await; }
 
         match client.get(&u).send().await {
@@ -77,7 +76,7 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
                 if is_proxy && r.headers().get("content-type").map_or(false, |v| v.to_str().unwrap_or("").contains("text/html")) {
                     log("WARN", format!("Прокси #{} вернул HTML", i)).await; continue;
                 }
-                if let Some(res) = load(r, tmp_path, &format!("{}{}", src, if is_proxy { format!(" #{}", i) } else { "".into() })).await { return Ok(res); }
+                if let Some(res) = load(r, tmp_path, &format!("{}{}", source, if is_proxy { format!(" #{}", i) } else { "".into() })).await { return Ok(res); }
             }
             Ok(r) => log("WARN", format!("Ошибка загрузки: {}", r.status())).await,
             Err(e) => log("WARN", format!("Ошибка загрузки: {}", e)).await,
@@ -154,20 +153,12 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
                 _ = std::fs::remove_file(p);
               }
             }
-            out.sync_data()?;
 
-            fn unpack_tar<R: Read>(r: R) -> std::io::Result<()> {
-                for entry in tar::Archive::new(flate2::read::GzDecoder::new(r)).entries()? {
-                    let mut e = entry?;
-                    e.unpack_in(STATIC_DIR)?;
-                    if let Ok(p) = e.path() { _ = File::open(Path::new(STATIC_DIR).join(p)).and_then(|f| f.sync_data()); }
-                }
-                Ok(())
-            }
+            fn unpack<R: Read>(r: R) -> std::io::Result<()> { tar::Archive::new(flate2::read::GzDecoder::new(r)).unpack(STATIC_DIR) }
 
             match &stat_d {
-                DownloadResult::RAM(d) => unpack_tar(Cursor::new(d.clone()))?,
-                DownloadResult::Disk(p) => unpack_tar(File::open(p)?)?
+                DownloadResult::RAM(d) => unpack(Cursor::new(d.clone()))?,
+                DownloadResult::Disk(p) => unpack(File::open(p)?)?
             };
             if let DownloadResult::Disk(p) = stat_d { _ = std::fs::remove_file(p); }
             Ok(())
@@ -176,9 +167,11 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         if let Ok(Err(e)) | Err(e) = unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) { return response(false, Some(format!("Ошибка распаковки: {}", e))); }
 
         log("INFO", "Установка обновления...".into()).await;
-        let (tgt, src) = ("/opt/sbin/xkeen-ui", tmp_dir.join("xkeen-ui"));
-        if fs::rename(&src, tgt).await.is_err() { if let Err(e) = fs::copy(&src, tgt).await { return response(false, Some(format!("Ошибка установки: {}", e))); } _ = fs::remove_file(&src).await; }
-        _ = fs::set_permissions(tgt, std::fs::Permissions::from_mode(0o755)).await;
+        let (target, source) = ("/opt/sbin/xkeen-ui", tmp_dir.join("xkeen-ui"));
+        if let Err(e) = fs::rename(&source, target).await { return response(false, Some(format!("Ошибка установки: {}", e))); }
+
+        _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
+        _ = tokio::task::spawn_blocking(rustix::fs::sync).await;
 
         log("INFO", format!("Обновление XKeen UI до {} завершено", ver)).await;
         if Path::new(S99XKEEN_UI).exists() {
@@ -232,7 +225,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     log("INFO", "Распаковка файла...".into()).await;
     let (core_name, is_zip) = (req.core.clone(), asset.ends_with(".zip"));
 
-    fn unpack_core<R: Read + Seek>(rdr: R, out_path: &Path, core: &str, is_zip: bool) -> std::io::Result<()> {
+    fn unpack<R: Read + Seek>(rdr: R, out_path: &Path, core: &str, is_zip: bool) -> std::io::Result<()> {
         let mut out = File::create(out_path)?;
         if is_zip { std::io::copy(&mut zip::ZipArchive::new(rdr)?.by_name(core)?, &mut out)?; }
         else { std::io::copy(&mut flate2::read::GzDecoder::new(rdr), &mut out)?; }
@@ -243,9 +236,9 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let unpack = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
         let bin = tmp_dir.join(&core_name);
         match dl_res {
-            DownloadResult::RAM(d) => unpack_core(Cursor::new(d), &bin, &core_name, is_zip)?,
+            DownloadResult::RAM(d) => unpack(Cursor::new(d), &bin, &core_name, is_zip)?,
             DownloadResult::Disk(p) => {
-              unpack_core(File::open(&p)?, &bin, &core_name, is_zip)?;
+              unpack(File::open(&p)?, &bin, &core_name, is_zip)?;
               _ = std::fs::remove_file(p);
             }
         };
@@ -254,25 +247,25 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     if let Ok(Err(e)) | Err(e) = unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) { return response(false, Some(format!("Ошибка распаковки: {}", e))); }
 
-    let tgt = format!("/opt/sbin/{}", req.core);
-    if req.backup_core && Path::new(&tgt).exists() {
+    let target = format!("/opt/sbin/{}", req.core);
+    if req.backup_core && Path::new(&target).exists() {
         let bk = format!("/opt/sbin/core-backup/{}-{}", req.core, (chrono::Utc::now() + chrono::Duration::hours(state.settings.read().unwrap().log.timezone as i64)).format("%Y%m%d-%H%M%S"));
         _ = fs::create_dir_all("/opt/sbin/core-backup").await;
         log("INFO", format!("Создание бэкапа: {}", bk)).await;
-        _ = fs::copy(&tgt, &bk).await;
+        _ = fs::copy(&target, &bk).await;
     }
 
     log("INFO", "Установка обновления...".into()).await;
-    let (run, src) = (crate::controller::get_pid(&req.core).is_some(), tmp_dir.join(&req.core));
-    if fs::rename(&src, &tgt).await.is_ok() {
-        _ = fs::set_permissions(&tgt, std::fs::Permissions::from_mode(0o755)).await;
+    let (run, source) = (crate::controller::get_pid(&req.core).is_some(), tmp_dir.join(&req.core));
+    if fs::rename(&source, &target).await.is_ok() {
+        _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run { log("INFO", format!("Перезапуск {}...", core_cap)).await; crate::controller::soft_restart(&req.core).await; }
     } else {
-        log("WARN", "Атомарная замена не удалась, использую fallback...".into()).await;
+        log("WARN", "Атомарная замена не удалась, фолбек на копирование...".into()).await;
         let init = state.init_file.read().unwrap().clone();
         if run { _ = Command::new(&init).arg("stop").status().await; }
-        if let Err(e) = fs::copy(&src, &tgt).await { return response(false, Some(format!("Ошибка установки: {}", e))); }
-        _ = fs::remove_file(&src).await; _ = fs::set_permissions(&tgt, std::fs::Permissions::from_mode(0o755)).await;
+        if let Err(e) = fs::copy(&source, &target).await { return response(false, Some(format!("Ошибка установки: {}", e))); }
+        _ = fs::remove_file(&source).await; _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run { log("INFO", "Запуск XKeen...".into()).await; _ = Command::new(&init).arg("start").status().await; }
     }
 
