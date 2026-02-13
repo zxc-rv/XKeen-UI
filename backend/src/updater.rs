@@ -55,6 +55,7 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
                 } else { buf.extend_from_slice(&chunk); },
                 Ok(None) => {
                     if !is_disk && buf.is_empty() { log("WARN", format!("Загрузка вернула 0 байт ({})", src)).await; return None; }
+                    if let Some(f) = &mut file { _ = f.sync_data().await; }
                     log("INFO", format!("Файл загружен {} ({:.1} МБ)", if is_disk { "на диск" } else { "в ОЗУ" }, (if is_disk { size } else { buf.len() }) as f64 / 1048576.0)).await;
                     return Some(if is_disk { DownloadResult::Disk(path.to_path_buf()) } else { DownloadResult::RAM(buf) });
                 }
@@ -156,7 +157,12 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             out.sync_data()?;
 
             fn unpack_tar<R: Read>(r: R) -> std::io::Result<()> {
-                tar::Archive::new(flate2::read::GzDecoder::new(r)).unpack(STATIC_DIR)
+                for entry in tar::Archive::new(flate2::read::GzDecoder::new(r)).entries()? {
+                    let mut e = entry?;
+                    e.unpack_in(STATIC_DIR)?;
+                    if let Ok(p) = e.path() { _ = File::open(Path::new(STATIC_DIR).join(p)).and_then(|f| f.sync_data()); }
+                }
+                Ok(())
             }
 
             match &stat_d {
