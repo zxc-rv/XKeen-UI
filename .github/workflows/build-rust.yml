@@ -24,17 +24,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set version
-        run: sed -i 's/^version = .*/version = "${{ inputs.version }}"/' backend/Cargo.toml | sed -i 's/v//' backend/Cargo.toml
+        run: |
+          sed -i 's/^version = .*/version = "${{ inputs.version }}"/' backend/Cargo.toml
+          sed -i 's/version = "v/version = "/' backend/Cargo.toml
       - name: Install Rust
         run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
       - uses: swatinem/rust-cache@v2
         with:
+          workspaces: backend
           key: ${{ matrix.target }}
       - name: Install cross
         run: type cross || cargo install cross --git https://github.com/cross-rs/cross
       - name: Setup Cross.toml
+        working-directory: backend
         run: |
-          cat <<EOF > backend/Cross.toml
+          cat <<EOF > Cross.toml
           [target.mips-unknown-linux-musl]
           image = "rustembedded/cross:mips-unknown-linux-musl"
           build-std = ["core", "alloc", "std", "panic_abort"]
@@ -43,9 +47,10 @@ jobs:
           build-std = ["core", "alloc", "std", "panic_abort"]
           EOF
       - name: Build binary
+        working-directory: backend
         run: |
-          cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }} --manifest-path backend/Cargo.toml
-          cp backend/target/${{ matrix.target }}/release/xkeen-ui xkeen-ui-${{ matrix.name }}
+          cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/xkeen-ui ../xkeen-ui-${{ matrix.name }}
       - uses: actions/upload-artifact@v4
         with:
           name: xkeen-ui-${{ matrix.name }}
@@ -60,8 +65,11 @@ jobs:
           cd assets
           for f in main.js outboundParser.js guiRouting.js guiLog.js style.css; do
             h=$(sha1sum "$f" | cut -c1-8)
-            mv "$f" "${f%.*}.$h.${f##*.}"
-            sed -i "s|assets/$f|assets/${f%.*}.$h.${f##*.}|g" ../index.html
+            ext="${f##*.}"
+            base="${f%.*}"
+            nf="$base.$h.$ext"
+            mv "$f" "$nf"
+            sed -i "s|assets/$f|assets/$nf|g" ../index.html
           done
       - name: Pack static files
         run: tar --exclude='outboundGenerator.html' --exclude='generator-favicon.png' -czf xkeen-ui-static.tar.gz -C frontend .
