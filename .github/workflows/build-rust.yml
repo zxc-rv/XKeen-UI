@@ -24,14 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set version
-        run: |
-          VERSION="${{ inputs.version }}"
-          VERSION="${VERSION#v}"
-          sed -i 's/^version = .*/version = "'"$VERSION"'"/' backend/Cargo.toml
+        run: sed -i 's/^version = .*/version = "${{ inputs.version }}"/' backend/Cargo.toml | sed -i 's/v//' backend/Cargo.toml
       - name: Install Rust
-        run: rustup toolchain install ${{ matrix.toolchain }}
+        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+          key: ${{ matrix.target }}
       - name: Install cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        run: type cross || cargo install cross --git https://github.com/cross-rs/cross
       - name: Setup Cross.toml
         run: |
           cat <<EOF > backend/Cross.toml
@@ -47,8 +48,7 @@ jobs:
         run: |
           cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/xkeen-ui ../xkeen-ui-${{ matrix.name }}
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: xkeen-ui-${{ matrix.name }}
           path: xkeen-ui-${{ matrix.name }}
@@ -57,26 +57,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Generate Hash
+        working-directory: frontend
         run: |
-          cd frontend/assets
+          cd assets
           for f in main.js outboundParser.js guiRouting.js guiLog.js style.css; do
             h=$(sha1sum "$f" | cut -c1-8)
-            ext="${f##*.}"
-            base="${f%.*}"
-            nf="$base.$h.$ext"
-            mv "$f" "$nf"
-            sed -i "s|assets/$f|assets/$nf|g" ../index.html
+            mv "$f" "${f%.*}.$h.${f##*.}"
+            sed -i "s|assets/$f|assets/${f%.*}.$h.${f##*.}|g" ../index.html
           done
       - name: Pack static files
         run: tar --exclude='outboundGenerator.html' --exclude='generator-favicon.png' -czf xkeen-ui-static.tar.gz -C frontend .
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: xkeen-ui-static
           path: xkeen-ui-static.tar.gz
   release:
     runs-on: ubuntu-latest
     needs: [build, static]
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,18 +83,14 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -n1)
-          CHANGELOG=$(git log --reverse --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD -- frontend/ backend/src/)
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          git log --reverse --pretty=format:"- %s (%h)" $(git tag --sort=-version:refname | head -n1)..HEAD -- frontend/ backend/src/ >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version }}
           prerelease: true
-          files: artifacts/**
+          files: artifacts/**/**
