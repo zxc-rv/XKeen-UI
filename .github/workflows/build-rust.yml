@@ -29,7 +29,6 @@ jobs:
         run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: backend
           key: ${{ matrix.target }}
       - name: Install cross
         run: type cross || cargo install cross --git https://github.com/cross-rs/cross
@@ -44,10 +43,9 @@ jobs:
           build-std = ["core", "alloc", "std", "panic_abort"]
           EOF
       - name: Build binary
-        working-directory: backend
         run: |
-          cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/xkeen-ui ../xkeen-ui-${{ matrix.name }}
+          cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }} --manifest-path backend/Cargo.toml
+          cp backend/target/${{ matrix.target }}/release/xkeen-ui xkeen-ui-${{ matrix.name }}
       - uses: actions/upload-artifact@v4
         with:
           name: xkeen-ui-${{ matrix.name }}
@@ -93,4 +91,5 @@ jobs:
         with:
           tag_name: ${{ inputs.version }}
           prerelease: true
+          body: ${{ steps.changelog.outputs.changelog }}
           files: artifacts/**/**
