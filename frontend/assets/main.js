@@ -2123,7 +2123,8 @@ function openImportModal() {
   document.getElementById("importResult").style.display = "none"
   document.getElementById("importInputClear").classList.remove("show")
   document.getElementById("copyBtn").style.display = "none"
-  document.getElementById("addBtn").style.display = "none"
+  document.getElementById("addBtnStart").style.display = "none"
+  document.getElementById("addBtnEnd").style.display = "none"
 
   const btn = document.getElementById("generateBtn")
   btn ? (btn.disabled = true) : null
@@ -2167,10 +2168,11 @@ function generateConfig() {
     }
 
     const copyBtn = document.getElementById("copyBtn")
+    const outputActions = document.querySelector(".output-actions")
     while (outputWrapper.firstChild) {
       outputWrapper.firstChild.remove()
     }
-    if (copyBtn) outputWrapper.appendChild(copyBtn)
+    if (outputActions) outputWrapper.appendChild(outputActions)
 
     outputWrapper.style.position = "relative"
     outputWrapper.style.height = "350px"
@@ -2218,9 +2220,11 @@ function generateConfig() {
 
     importEditor.getModel().resultType = result.type
 
+    const addBtnStart = document.getElementById("addBtnStart")
+    const addBtnEnd = document.getElementById("addBtnEnd")
     if (copyBtn) copyBtn.style.display = "inline-flex"
-    const addBtn = document.getElementById("addBtn")
-    if (addBtn) addBtn.style.display = "inline-flex"
+    if (addBtnStart) addBtnStart.style.display = "inline-flex"
+    if (addBtnEnd) addBtnEnd.style.display = "inline-flex"
   } catch (e) {
     showToast(e.message, "error")
   }
@@ -2257,7 +2261,7 @@ function copyImportResult() {
   document.body.removeChild(ta)
 }
 
-function addToOutbounds() {
+function addToOutbounds(position = "start") {
   try {
     if (activeConfigIndex < 0 || !configs[activeConfigIndex]) {
       showToast("Нет активной конфигурации", "error")
@@ -2299,7 +2303,11 @@ function addToOutbounds() {
         return
       }
 
-      config.outbounds.unshift(newOutbound)
+      if (position === "end") {
+        config.outbounds.push(newOutbound)
+      } else {
+        config.outbounds.unshift(newOutbound)
+      }
 
       const updatedConfig = JSON.stringify(config, null, 2)
       monacoEditor.setValue(updatedConfig)
@@ -2309,13 +2317,19 @@ function addToOutbounds() {
           formatAction.run().then(() => {
             configs[activeConfigIndex].content = monacoEditor.getValue()
             showToast("Outbound успешно добавлен", "success")
-            const model = monacoEditor.getModel()
-            const content = model.getValue()
-            const lines = content.split("\n")
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].includes('"outbounds"')) {
-                monacoEditor.revealLineInCenter(i + 1)
-                break
+
+            const searchText = newOutbound.tag || newOutbound.protocol || ""
+            if (searchText) {
+              const model = monacoEditor.getModel()
+              const content = model.getValue()
+              const lines = content.split("\n")
+
+              for (let i = 0; i < lines.length; i++) {
+                if (lines[i].includes(`"${searchText}"`)) {
+                  monacoEditor.revealLineInCenter(i + 1)
+                  monacoEditor.setPosition({ lineNumber: i + 1, column: 1 })
+                  break
+                }
               }
             }
           })
@@ -2331,6 +2345,7 @@ function addToOutbounds() {
       if (resultType === "proxy-provider") {
         const lines = updatedContent.split("\n")
         let insertIndex = -1
+        let startIndex = -1
         let indent = 0
         let foundProxyProviders = false
 
@@ -2338,6 +2353,7 @@ function addToOutbounds() {
           if (lines[i].trim().startsWith("#")) continue
           if (lines[i].match(/^proxy-providers:\s*($|#)/)) {
             foundProxyProviders = true
+            startIndex = i
             indent = lines[i].search(/\S/)
             for (let j = i + 1; j < lines.length; j++) {
               const line = lines[j]
@@ -2353,10 +2369,11 @@ function addToOutbounds() {
           }
         }
 
-        if (foundProxyProviders && insertIndex !== -1) {
-          lines.splice(insertIndex, 0, generatedConfig)
+        if (foundProxyProviders) {
+          const targetIndex = position === "end" ? insertIndex : startIndex + 1
+          lines.splice(targetIndex, 0, generatedConfig)
           updatedContent = lines.join("\n")
-          scrollToLine = insertIndex + 1
+          scrollToLine = targetIndex + 1
         } else {
           if (!updatedContent.endsWith("\n")) updatedContent += "\n"
           const beforeLength = updatedContent.split("\n").length
@@ -2368,6 +2385,7 @@ function addToOutbounds() {
       } else if (resultType === "proxy") {
         const lines = updatedContent.split("\n")
         let insertIndex = -1
+        let startIndex = -1
         let indent = 0
         let foundProxies = false
 
@@ -2376,6 +2394,7 @@ function addToOutbounds() {
           if (line.trim().startsWith("#")) continue
           if (line.match(/^proxies:\s*($|#|\[)/)) {
             foundProxies = true
+            startIndex = i
             indent = line.search(/\S/)
             for (let j = i + 1; j < lines.length; j++) {
               const nextLine = lines[j]
@@ -2391,10 +2410,11 @@ function addToOutbounds() {
           }
         }
 
-        if (foundProxies && insertIndex !== -1) {
-          lines.splice(insertIndex, 0, generatedConfig)
+        if (foundProxies) {
+          const targetIndex = position === "end" ? insertIndex : startIndex + 1
+          lines.splice(targetIndex, 0, generatedConfig)
           updatedContent = lines.join("\n")
-          scrollToLine = insertIndex + 1
+          scrollToLine = targetIndex + 1
         } else {
           if (!updatedContent.endsWith("\n")) updatedContent += "\n"
           const beforeLength = updatedContent.split("\n").length

@@ -522,32 +522,54 @@
           </div>
           <div id="importResult" style="display: none">
             <div class="output-wrapper">
-              <button class="copy-output-btn" id="copyBtn" onclick="copyImportResult()" title="Скопировать" style="display: none">
-                <svg class="copy-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                </svg>
-                <svg
-                  class="check-icon"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
+              <div class="output-actions">
+                <button class="copy-output-btn" id="copyBtn" onclick="copyImportResult()" title="Скопировать" style="display: none">
+                  <svg class="copy-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <svg
+                    class="check-icon"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    style="display: none"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </button>
+                <button
+                  class="copy-output-btn"
+                  id="addBtnStart"
+                  onclick="addToOutbounds('start')"
+                  title="Добавить в начало"
                   style="display: none"
                 >
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
-              </button>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 19V5M5 12l7-7 7 7" />
+                  </svg>
+                </button>
+                <button
+                  class="copy-output-btn"
+                  id="addBtnEnd"
+                  onclick="addToOutbounds('end')"
+                  title="Добавить в конец"
+                  style="display: none"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 5v14M5 12l7 7 7-7" />
+                  </svg>
+                </button>
+              </div>
               <textarea id="importOutput" readonly></textarea>
             </div>
           </div>
         </div>
         <div class="modal-actions">
-          <button class="btn btn-primary" id="generateBtn" onclick="generateConfig()" disabled>Сгенерировать</button>
-          <button class="btn btn-success" id="addBtn" onclick="addToOutbounds()" style="display: none">Добавить</button>
-          <button class="btn btn-secondary" onclick="closeImportModal()">Закрыть</button>
+          <button class="btn btn-primary" id="generateBtn" onclick="generateConfig()" disabled style="width: 100%">Сгенерировать</button>
         </div>
       </div>
     </div>
