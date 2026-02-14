@@ -5,12 +5,7 @@ use nix::{sys::{signal::{kill, Signal}, resource::{setrlimit, Resource}}, unistd
 use tokio::{fs::{self, set_permissions}, process::Command};
 use crate::types::*;
 
-#[derive(Deserialize)]
-pub struct ControlReq {
-    action: String,
-    #[serde(default)]
-    core: String
-}
+#[derive(Deserialize)] pub struct ControlReq { action: String, #[serde(default)] core: String }
 
 fn get_core_info(name: &str) -> CoreInfo {
     match name {
@@ -46,47 +41,55 @@ pub async fn soft_restart(core: &str) {
 }
 
 pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
-    let mut core = state.core.read().unwrap().clone();
-    if get_pid(&core.name).is_none() {
-        let alt = if core.name == "mihomo" { "xray" } else { "mihomo" };
-        core = if get_pid(alt).is_some() {
-            get_core_info(alt)
+    let mut current_core = state.core.read().unwrap().clone();
+    let core_name = current_core.name.clone();
+
+    if tokio::task::spawn_blocking(move || get_pid(&core_name)).await.unwrap_or(None).is_none() {
+        let alt_core = if current_core.name == "mihomo" { "xray" } else { "mihomo" };
+        let alt_string = alt_core.to_string();
+
+        current_core = if tokio::task::spawn_blocking(move || get_pid(&alt_string)).await.unwrap_or(None).is_some() {
+            get_core_info(alt_core)
         } else {
-            let path = state.init_file.read().unwrap();
-            let conf = std::fs::read_to_string(&*path).unwrap_or_default();
-            get_core_info(if conf.contains("name_client=\"mihomo\"") { "mihomo" } else { "xray" })
+            let init_file_path = state.init_file.read().unwrap().clone();
+            let configuration = tokio::fs::read_to_string(&init_file_path).await.unwrap_or_default();
+            get_core_info(if configuration.contains("name_client=\"mihomo\"") { "mihomo" } else { "xray" })
         };
-        *state.core.write().unwrap() = core.clone();
+        *state.core.write().unwrap() = current_core.clone();
     }
 
-    let mut versions = HashMap::new();
-    let mut cores = Vec::new();
-    let mut running = false;
+    let mut core_versions = HashMap::new();
+    let mut available_cores = Vec::new();
+    let mut running_status = false;
 
-    for c in ["xray", "mihomo"] {
-        if Path::new(&format!("/opt/sbin/{}", c)).exists() {
-            cores.push(c.to_string());
-            let out = Command::new(c)
-                .arg(if c == "mihomo" { "-v" } else { "version" })
+    for core_binary in ["xray", "mihomo"] {
+        if tokio::fs::metadata(format!("/opt/sbin/{}", core_binary)).await.is_ok() {
+            available_cores.push(core_binary.to_string());
+            let command_output = Command::new(core_binary)
+                .arg(if core_binary == "mihomo" { "-v" } else { "version" })
                 .output().await.ok();
 
-            if let Some(o) = out {
-                let s = String::from_utf8_lossy(&o.stdout);
-                let parts: Vec<&str> = s.split_whitespace().collect();
-                let v = match c {
+            if let Some(output) = command_output {
+                let output_string = String::from_utf8_lossy(&output.stdout);
+                let parts: Vec<&str> = output_string.split_whitespace().collect();
+                let version = match core_binary {
                     "xray" if parts.len() > 1 => {
                          if parts[1].starts_with('v') { parts[1].into() } else { format!("v{}", parts[1]) }
                     },
                     "mihomo" if parts.len() > 2 => parts[2].into(),
                     _ => "?".into()
                 };
-                versions.insert(c.to_string(), v);
+                core_versions.insert(core_binary.to_string(), version);
             }
         }
-        if get_pid(c).is_some() { running = true; }
+
+        let binary_string = core_binary.to_string();
+        if tokio::task::spawn_blocking(move || get_pid(&binary_string)).await.unwrap_or(None).is_some() {
+            running_status = true;
+        }
     }
 
-    Json(serde_json::json!({ "success": true, "cores": cores, "currentCore": core.name, "running": running, "versions": versions }))
+    Json(serde_json::json!({ "success": true, "cores": available_cores, "currentCore": current_core.name, "running": running_status, "versions": core_versions }))
 }
 
 pub async fn post_control(State(state): State<AppState>, Json(req): Json<ControlReq>) -> impl IntoResponse {

@@ -3,56 +3,52 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::PathBuf};
 use crate::types::*;
 
-#[derive(Serialize)]
-struct ConfigItem { name: String, filename: String, content: String }
+#[derive(Serialize)] struct ConfigItem { name: String, filename: String, content: String }
+#[derive(Deserialize)] pub struct ConfigReq { action: String, filename: String, content: String }
 
-#[derive(Deserialize)]
-pub struct ConfigReq { action: String, filename: String, content: String }
+pub async fn get_configs(State(state): State<AppState>, Query(parameters): Query<HashMap<String, String>>) -> impl IntoResponse {
+    let target_core = parameters.get("core").cloned().unwrap_or_else(|| state.core.read().unwrap().name.clone());
+    let (config_directory, extension) = if target_core == "mihomo" { (MIHOMO_CONF, "config.yaml") } else { (XRAY_CONF, "json") };
 
-pub async fn get_configs(State(state): State<AppState>, Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
-    let core = state.core.read().unwrap();
-    let target = params.get("core").map(|s| s.as_str()).unwrap_or(&core.name);
-    let (cdir, ext) = if target == "mihomo" { (MIHOMO_CONF, "config.yaml") } else { (XRAY_CONF, "json") };
+    let mut results = Vec::new();
 
-    let mut res = Vec::new();
-
-    if let Ok(entries) = fs::read_dir(cdir) {
-        for entry in entries.filter_map(|e| e.ok()) {
+    if let Ok(mut entries) = tokio::fs::read_dir(config_directory).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            let matches = if target == "xray" {
-                path.extension().map_or(false, |x| x == ext)
+            let matches_extension = if target_core == "xray" {
+                path.extension().map_or(false, |config_extension| config_extension == extension)
             } else {
-                entry.file_name().to_str().map_or(false, |n| n == ext)
+                entry.file_name().to_str().map_or(false, |file_name| file_name == extension)
             };
-            if matches {
-                if let Ok(c) = fs::read_to_string(&path) {
-                    res.push(ConfigItem {
+            if matches_extension {
+                if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                    results.push(ConfigItem {
                         name: path.file_stem().unwrap().to_string_lossy().into(),
                         filename: entry.file_name().to_string_lossy().into(),
-                        content: c
+                        content,
                     });
                 }
             }
         }
     }
 
-    if let Ok(entries) = fs::read_dir(XKEEN_CONF) {
-        for entry in entries.filter_map(|e| e.ok()) {
+    if let Ok(mut entries) = tokio::fs::read_dir(XKEEN_CONF).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.extension().map_or(false, |x| x == "lst") {
-                if let Ok(c) = fs::read_to_string(&path) {
-                    res.push(ConfigItem {
+            if path.extension().map_or(false, |config_extension| config_extension == "lst") {
+                if let Ok(content) = tokio::fs::read_to_string(&path).await {
+                    results.push(ConfigItem {
                         name: path.file_stem().unwrap().to_string_lossy().into(),
                         filename: entry.file_name().to_string_lossy().into(),
-                        content: c
+                        content,
                     });
                 }
             }
         }
     }
 
-    res.sort_by(|a, b| a.name.cmp(&b.name));
-    Json(serde_json::json!({ "success": true, "configs": res }))
+    results.sort_by(|first, second| first.name.cmp(&second.name));
+    Json(serde_json::json!({ "success": true, "configs": results }))
 }
 
 pub async fn put_configs(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {

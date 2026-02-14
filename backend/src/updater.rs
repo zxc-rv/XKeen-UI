@@ -12,14 +12,18 @@ const GITHUB_RELEASE: &str = "https://github.com";
 const JSDELIVR_API: &str = "https://data.jsdelivr.com/v1/package/gh";
 
 #[derive(Deserialize)] pub struct ReleaseQuery { core: String }
-
 #[derive(Deserialize)] struct GhRelease { tag_name: String, #[serde(default)] name: String, #[serde(default)] published_at: String, #[serde(default)] prerelease: bool, #[serde(default)] assets: Vec<GhAsset> }
 #[derive(Deserialize, Default)] struct GhAsset { #[serde(default)] name: String, #[serde(default)] browser_download_url: String }
 #[derive(Deserialize)] struct JsdResponse { versions: Vec<String> }
+
 enum DownloadResult { RAM(Vec<u8>), Disk(PathBuf) }
 
 fn get_repo(core: &str) -> Option<&'static str> {
-    match core { "xray" => Some("XTLS/Xray-core"), "mihomo" => Some("MetaCubeX/mihomo"), "self" => Some("zxc-rv/XKeen-UI"), _ => None }
+    match core {
+      "xray" => Some("XTLS/Xray-core"),
+      "mihomo" => Some("MetaCubeX/mihomo"),
+      "self" => Some("zxc-rv/XKeen-UI"),
+      _ => None }
 }
 
 pub async fn fetch_latest_version(client: &reqwest::Client, core: &str) -> Option<String> {
