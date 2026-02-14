@@ -279,7 +279,7 @@ ENABLED=yes
 PROCS=xkeen-ui
 ARGS="-p 1000"
 PREARGS=""
-DESC="XKeen UI"
+DESC="\$PROCS"
 PATH=/opt/sbin:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 . /opt/etc/init.d/rc.func
