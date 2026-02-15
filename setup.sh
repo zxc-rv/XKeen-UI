@@ -67,19 +67,16 @@ download_files() {
   local bin_name="xkeen-ui-$ARCH"
 
   if [ "$BETA" = true ]; then
-    local beta_tag="/tmp/xkeen_beta_tag"
+    local beta_tag="/tmp/xkeen_beta"
+    trap "rm -f $beta_tag" EXIT
     (curl -s https://api.github.com/repos/zxc-rv/XKeen-UI/releases | \
       jq -re '[.[] | select(.prerelease == true)][0].tag_name' > $beta_tag) &
-
     if ! spinner $! "Поиск бета-релиза..."; then
-      rm -f $beta_tag
       printf "${RED_BOLD}\n Нет актуального бета-релиза\n\n${NC}"
       $XKEENUI_INIT start >/dev/null 2>&1 || :
       exit 1
     fi
-
     beta_tag=$(cat $beta_tag)
-    rm -f $beta_tag
     download_url="$base_url/download/$beta_tag"
   fi
 
