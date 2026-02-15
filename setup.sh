@@ -151,6 +151,7 @@ setup_local_editor() {
   (
   tar xf $monaco_tmp_path --strip-components=2 -C $static_dir/monaco-editor package/min/vs 2>/dev/null
   sync
+  rm -f $monaco_tmp_path
   ) &
   spinner $! "Распаковка редактора..."
   if [ $? -ne 0 ]; then
@@ -158,7 +159,6 @@ setup_local_editor() {
     rm -f $monaco_tmp_path
     exit 1
   fi
-  rm -f $monaco_tmp_path
 }
 
 install_xkeenui() {
@@ -174,23 +174,19 @@ install_xkeenui() {
 
   mkdir -p $static_dir
 
-  if [ "$editor_choice" = "2" ]; then
-    echo "const LOCAL = true" > $local_mode_path
-  else
-    echo "const LOCAL = false" > $local_mode_path
-  fi
-
   echo -e "${CYAN}\n ℹ️  Начинаем установку...${NC}\n"
   detect_arch
   download_files
   create_xkeenui_init
 
-  if grep -q "LOCAL = true" "$local_mode_path"; then
+  if [ "$editor_choice" = "2" ]; then
+    echo "const LOCAL = true" > $local_mode_path
     setup_local_editor
+  else
+    echo "const LOCAL = false" > $local_mode_path
+    sync &
+    spinner $! "Синхронизация файлов..."
   fi
-
-  sync &
-  spinner $! "Синхронизация файлов..."
 
   ($xkeenui_init start >/dev/null 2>&1) &
   spinner $! "Запуск XKeen UI..."
@@ -204,7 +200,7 @@ install_xkeenui() {
   local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
   local port=${port:-1000}
 
-  echo -e "${GREEN}\n ✅ XKeen UI успешно установлен!\n${NC}"
+  echo -e "${GREEN}\n ✅${GREEN_BOLD} XKeen UI успешно установлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port\n${NC}"
 }
 
@@ -262,7 +258,7 @@ update_xkeenui() {
   local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
   local port=${port:-1000}
 
-  echo -e "${GREEN}\n ✅ XKeen UI успешно обновлен!\n${NC}"
+  echo -e "${GREEN}\n ✅${GREEN_BOLD} XKeen UI успешно обновлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port${NC}"
   echo -e " После перехода нажмите Ctrl+Shift+R для обновления кэша\n"
 }
@@ -366,6 +362,7 @@ toggle_editor_mode() {
       echo -e "${CYAN}\n ℹ️  Будет выполнена загрузка файлов редактора.\n"
       read -p " Продолжить? [Y/n]: " response < /dev/tty
       [[ ! $response =~ ^[Yy]?$ ]] && echo && return
+      echo
       setup_local_editor
     fi
     echo "const LOCAL = true" > "$local_mode_path"
