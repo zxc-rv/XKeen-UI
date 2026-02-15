@@ -278,7 +278,7 @@ toggle_editor_mode() {
     if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
       echo -e "${CYAN}\n ℹ️  Будет выполнена загрузка файлов редактора.\n"
       read -p " Продолжить? [Y/n]: " response < /dev/tty
-      [[ $response =~ ^[Yy]?$ ]] || { echo; return; }
+      [[ ! $response =~ ^[Yy]?$ ]] && { echo; return; }
       echo
       setup_local_editor
       sync & spinner $! "Запись данных..."
