@@ -281,13 +281,11 @@ EOF
 }
 
 get_editor_mode() {
-  if grep -q "const LOCAL = true" "$local_mode_path" 2>/dev/null; then
-    echo -e "${GREEN_BOLD}🏠 Local${NC}"
-  elif grep -q "const LOCAL = false" "$local_mode_path" 2>/dev/null; then
-    echo -e "${CYAN}🌐 CDN${NC}"
-  else
-    echo -e "${RED_BOLD}N/A${NC}"
-  fi
+  case "$(sed -n 's/.*LOCAL = \(true\|false\).*/\1/p' "$local_mode_path" 2>/dev/null)" in
+    true)  printf "${GREEN_BOLD}🏠 Local${NC}\n" ;;
+    false) printf "${CYAN}🌐 CDN${NC}\n" ;;
+    *)     printf "${RED_BOLD}N/A${NC}\n" ;;
+  esac
 }
 
 toggle_editor_mode() {
