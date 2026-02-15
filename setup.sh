@@ -96,67 +96,53 @@ download_files() {
   local download_url="$base_url/latest/download"
 
   if [ "$beta" = true ]; then
-    echo -e "${CYAN}\n ℹ️  Поиск бета-релиза...${NC}"
-    local tag=$(curl -s https://api.github.com/repos/zxc-rv/XKeen-UI/releases | grep -m1 '"tag_name":' | cut -d'"' -f4)
-    download_url="$base_url/download/$tag"
+    local beta_tag="/tmp/xkeen_beta_tag"
+    (curl -s https://api.github.com/repos/zxc-rv/XKeen-UI/releases | \
+      jq -re '[.[] | select(.prerelease == true)][0].tag_name' > $beta_tag) &
+
+    if ! spinner $! "Поиск бета-релиза..."; then
+      rm -f $beta_tag
+      echo -e "${RED_BOLD}\n Нет актуального бета-релиза\n${NC}"
+      $xkeenui_init start >/dev/null 2>&1 || :
+      exit 1
+    fi
+
+    beta_tag=$(cat $beta_tag)
+    rm -f $beta_tag
+    download_url="$base_url/download/$beta_tag"
   fi
 
   local bin_name="xkeen-ui-$arch"
   local static_name="xkeen-ui-static.tar.gz"
   local static_tmp_path=/opt/tmp/$static_name
 
-  curl -sLfo $static_tmp_path $download_url/xkeen-ui-static.tar.gz &
-  spinner $! "Загрузка статики..."
-  if [ $? -ne 0 ]; then
-    echo -e "${RED_BOLD}\n Не удалось скачать архив статики.\n${NC}"
-    exit 1
-  fi
-
   mkdir -p $static_dir
-  tar -xzf $static_tmp_path -C $static_dir 2>/dev/null &
-  spinner $! "Распаковка архива..."
-  if [ $? -ne 0 ]; then
-    echo -e "${RED_BOLD}\n Не удалось распаковать архив статики.\n${NC}"
-    rm -f $static_tmp_path
+  ( curl -Ls "$download_url/xkeen-ui-static.tar.gz" | tar -xz -C "$static_dir" ) &
+  if ! spinner $! "Загрузка статики..."; then
+    echo -e "${RED_BOLD}\n Не удалось загрузить статику.\n${NC}"
     exit 1
   fi
-  rm -f $static_tmp_path
 
-  (curl -sLfo $xkeenui_bin $download_url/$bin_name && chmod +x $xkeenui_bin) &
-  spinner $! "Загрузка бинарного файла xkeen-ui..."
-  if [ $? -ne 0 ]; then
-    echo -e "${RED_BOLD}\n Не удалось скачать бинарный файл.\n${NC}"
+  ( curl -Lsfo $xkeenui_bin $download_url/$bin_name && chmod +x $xkeenui_bin ) &
+  if ! spinner $! "Загрузка бинарника..."; then
+    echo -e "${RED_BOLD}\n Не удалось скачать бинарник.\n${NC}"
     exit 1
   fi
 }
 
 setup_local_editor() {
-  local monaco_tmp_path="/opt/tmp/monaco.tgz"
-  mkdir -p $monaco_dir
-
   (
-    curl -Lsfo $monaco_tmp_path https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.52.2.tgz
-    curl -Lsfo $monaco_dir/loader.min.js https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js
-    curl -Lsfo $monaco_dir/js-yaml.min.js https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js
-    curl -Lsfo $monaco_dir/standalone.min.js https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js
-    curl -Lsfo $monaco_dir/babel.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js
-    curl -Lsfo $monaco_dir/yaml.min.js https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js
+    mkdir -p $monaco_dir
+    curl -Lsf "https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.52.2.tgz" | tar -xz -C "$monaco_dir" --strip-components=2 package/min/vs
+    curl -Lsf \
+      "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js" -o "$monaco_dir/loader.min.js" \
+      "https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js" -o "$monaco_dir/js-yaml.min.js" \
+      "https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js" -o "$monaco_dir/standalone.min.js" \
+      "https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js" -o "$monaco_dir/babel.min.js" \
+      "https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js" -o "$monaco_dir/yaml.min.js"
   ) &
-  spinner $! "Загрузка Monaco Editor..."
-  if [ $? -ne 0 ]; then
+  if ! spinner $! "Загрузка файлов редактора..."; then
     echo -e "${RED_BOLD}\n Не удалось загрузить файлы редактора.\n${NC}"
-    exit 1
-  fi
-
-  (
-  tar xf $monaco_tmp_path --strip-components=2 -C $static_dir/monaco-editor package/min/vs 2>/dev/null
-  sync
-  rm -f $monaco_tmp_path
-  ) &
-  spinner $! "Распаковка редактора..."
-  if [ $? -ne 0 ]; then
-    echo -e "${RED_BOLD}\n Не удалось распаковать архив редактора.\n${NC}"
-    rm -f $monaco_tmp_path
     exit 1
   fi
 }
@@ -184,13 +170,11 @@ install_xkeenui() {
     setup_local_editor
   else
     echo "const LOCAL = false" > $local_mode_path
-    sync &
-    spinner $! "Синхронизация файлов..."
   fi
 
-  ($xkeenui_init start >/dev/null 2>&1) &
-  spinner $! "Запуск XKeen UI..."
-  if [ $? -ne 0 ]; then
+  sync & spinner $! "Запись данных..."
+
+  $xkeenui_init start >/dev/null 2>&1 & if ! spinner $! "Запуск XKeen UI..."; then
     echo -e "${RED_BOLD}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
@@ -243,12 +227,9 @@ update_xkeenui() {
     fi
   fi
 
-  sync &
-  spinner $! "Синхронизация файлов..."
+  sync & spinner $! "Запись данных..."
 
-  $xkeenui_init start >/dev/null 2>&1 &
-  spinner $! "Запуск XKeen UI..."
-  if [ $? -ne 0 ]; then
+  $xkeenui_init start >/dev/null 2>&1 & if ! spinner $! "Запуск XKeen UI..."; then
     echo -e "${RED_BOLD}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
@@ -364,6 +345,7 @@ toggle_editor_mode() {
       [[ ! $response =~ ^[Yy]?$ ]] && echo && return
       echo
       setup_local_editor
+      sync & spinner $! "Запись данных..."
     fi
     echo "const LOCAL = true" > "$local_mode_path"
     echo -e "${GREEN}\n ✅ Режим редактора переключен на Local\n${NC}"
