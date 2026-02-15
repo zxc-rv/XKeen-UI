@@ -28,15 +28,17 @@ BETA=false
 
 spinner() {
   local pid=$1 msg=$2
-  trap 'printf "\r ❌ %s\n" "$msg"; return 130' INT
+  trap 'kill "$pid" 2>/dev/null; printf "\r${RED} ❌ ${NC}%s\033[K\n" "$msg"; printf "\033[?25h"; return 130' INT
   set -- ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
+  printf "\033[?25l"
   while kill -0 "$pid" 2>/dev/null; do
-    printf "\r$GREEN %s $NC %s" "$1" "$msg"
+    printf "\r${GREEN} %s ${NC} %s\033[K" "$1" "$msg"
     set -- "$@" "$1"
     shift
     usleep 100000
   done
-  wait "$pid" && printf "\r ✔  %s\n" "$msg" || { printf "\r ❌ %s\n" "$msg"; return 1; }
+  printf "\033[?25h"
+  wait "$pid" && printf "\r ✔  %s\033[K\n" "$msg" || { printf "\r ❌ %s\033[K\n" "$msg"; return 1; }
 }
 
 get_arch() {
