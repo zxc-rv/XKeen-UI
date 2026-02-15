@@ -22,61 +22,35 @@ beta=false
 [ "$1" = "beta" ] && beta=true
 
 spinner() {
-  local pid="$1"
-  local msg="$2"
-  local i=0
+  local pid=$1 msg=$2
+  set -- ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
   while kill -0 "$pid" 2>/dev/null; do
-    case $i in
-      0) c=' ⠋ ' ;;
-      1) c=' ⠙ ' ;;
-      2) c=' ⠹ ' ;;
-      3) c=' ⠸ ' ;;
-      4) c=' ⠼ ' ;;
-      5) c=' ⠴ ' ;;
-      6) c=' ⠦ ' ;;
-      7) c=' ⠧ ' ;;
-      8) c=' ⠇ ' ;;
-      9) c=' ⠏ ' ;;
-    esac
-    printf "\r${GREEN}%s${NC} %s" "$c" "$msg"
-    i=$(( (i + 1) % 10 ))
+    printf "\r$GREEN %s $NC %s" "$1" "$msg"
+    set -- "$@" "$1"
+    shift
     usleep 100000
   done
-  wait "$pid"
-  status=$?
-  if [ $status -eq 0 ]; then
-    printf "\r ✔${NC}  %s\n" "$msg"
-  else
-    printf "\r ❌${NC} %s\n" "$msg"
-    return $status
-  fi
+  wait "$pid" && printf "\r ✔  %s\n" "$msg" || { printf "\r ❌ %s\n" "$msg"; return 1; }
 }
 
 detect_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
 
   case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
-    *'armv8'* | *'aarch64'* | *'cortex-a'* )
-      arch='arm64-v8a'
-      ;;
-    *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* )
-      arch='mips32le'
-      ;;
-    *'mips'* )
-      arch='mips32'
-      ;;
-    *)
-      if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
+    *'armv8'* | *'aarch64'* | *'cortex-a'* ) arch='arm64-v8a' ;;
+    *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* ) arch='mips32le' ;;
+    *'mips'* ) arch='mips32' ;;
+    *)  if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
           arch='arm64-v8a'
-      elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
-          arch='mips32le'
-      elif echo "${cpuinfo}" | grep -q 'mips'; then
-          arch='mips32'
-      else
-          echo -e "${RED_BOLD}\n Не удалось определить архитектуру.\n${NC}" >&2
-          exit 1
-      fi
-      ;;
+        elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
+            arch='mips32le'
+        elif echo "${cpuinfo}" | grep -q 'mips'; then
+            arch='mips32'
+        else
+            echo -e "${RED_BOLD}\n Не удалось определить архитектуру.\n${NC}" >&2
+            exit 1
+        fi
+        ;;
   esac
 
   if [ "${arch}" = 'mips64' ] || [ "${arch}" = 'mips32' ]; then
@@ -94,6 +68,7 @@ detect_arch() {
 download_files() {
   local base_url="https://github.com/zxc-rv/XKeen-UI/releases"
   local download_url="$base_url/latest/download"
+  local bin_name="xkeen-ui-$arch"
 
   if [ "$beta" = true ]; then
     local beta_tag="/tmp/xkeen_beta_tag"
@@ -111,10 +86,6 @@ download_files() {
     rm -f $beta_tag
     download_url="$base_url/download/$beta_tag"
   fi
-
-  local bin_name="xkeen-ui-$arch"
-  local static_name="xkeen-ui-static.tar.gz"
-  local static_tmp_path=/opt/tmp/$static_name
 
   mkdir -p $static_dir
   ( curl -Ls "$download_url/xkeen-ui-static.tar.gz" | tar -xz -C "$static_dir" ) &
@@ -179,10 +150,8 @@ install_xkeenui() {
     exit 1
   fi
 
-  local ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
-  local ip=${ip:-"IP_Роутера"}
-  local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
-  local port=${port:-1000}
+  local ip=$(ip -4 a s br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p'); ip=${ip:-"IP_Роутера"}
+  local port=$(sed -n 's/.*-p \([0-9]*\).*/\1/p' /opt/etc/init.d/S99xkeen-ui 2>/dev/null); port=${port:-1000}
 
   echo -e "${GREEN}\n ✅${GREEN_BOLD} XKeen UI успешно установлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port\n${NC}"
@@ -234,10 +203,8 @@ update_xkeenui() {
     exit 1
   fi
 
-  local ip=$(ip -f inet addr show dev br0 2>/dev/null | grep inet | sed -n 's/.*inet \([0-9.]\+\).*/\1/p')
-  local ip=${ip:-"IP_Роутера"}
-  local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
-  local port=${port:-1000}
+  local ip=$(ip -4 a s br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p'); ip=${ip:-"IP_Роутера"}
+  local port=$(sed -n 's/.*-p \([0-9]*\).*/\1/p' /opt/etc/init.d/S99xkeen-ui 2>/dev/null); port=${port:-1000}
 
   echo -e "${GREEN}\n ✅${GREEN_BOLD} XKeen UI успешно обновлен!\n${NC}"
   echo -e " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port${NC}"
@@ -248,13 +215,10 @@ uninstall_xkeenui() {
   echo -e "\n Данное действие ${RED_BOLD}удалит${NC} XKeen UI, его файлы и зависимости.\n"
   read -p " Продолжить? [y/N]: " response < /dev/tty
   case "$response" in
-    [Yy])
-        echo -e "${CYAN}\n ℹ️  Начинаем удаление...${NC}"
-        ;;
-    *)
-        echo -e "${RED}\n ❌${RED_BOLD} Отмена операции.\n${NC}"
-        exit 1
-        ;;
+    [Yy]) echo -e "${CYAN}\n ℹ️  Начинаем удаление...${NC}" ;;
+    *) echo -e "${RED}\n ❌${RED_BOLD} Отмена операции.\n${NC}"
+       exit 1
+       ;;
   esac
 
   echo
@@ -292,13 +256,10 @@ legacy_installation_check() {
     read -p " Удалить его? [Y/n]: " response < /dev/tty
 
     case "$response" in
-      [Nn])
-        return
-        ;;
-      *)
-        opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
-        rm -rf $lighttpd_dir
-        ;;
+      [Nn]) return ;;
+      *) opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
+         rm -rf $lighttpd_dir
+         ;;
     esac
   fi
 }
@@ -374,24 +335,14 @@ echo -e " 5. Выйти\n"
 read -p "${CYAN}>: ${NC}" response < /dev/tty
 
 case $response in
-  1)
-    install_xkeenui
-    ;;
-  2)
-    update_xkeenui
-    ;;
-  3)
-    uninstall_xkeenui
-    ;;
-  4)
-    toggle_editor_mode
-    ;;
-  5)
-    echo
-    exit
-    ;;
-  *)
-    echo -e "${RED}\n ❌${RED_BOLD} Неверный выбор.\n${NC}"
-    exit 1
-    ;;
+  1) install_xkeenui ;;
+  2) update_xkeenui ;;
+  3) uninstall_xkeenui ;;
+  4) toggle_editor_mode ;;
+  5) echo
+     exit
+     ;;
+  *) echo -e "${RED}\n ❌${RED_BOLD} Неверный выбор.\n${NC}"
+     exit 1
+     ;;
 esac
