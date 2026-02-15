@@ -145,11 +145,7 @@ install_xkeenui() {
     exit 1
   fi
 
-  local ip=$(ip -4 a s br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p'); ip=${ip:-"IP_Роутера"}
-  local port=$(sed -n 's/.*-p \([0-9]*\).*/\1/p' /opt/etc/init.d/S99xkeen-ui 2>/dev/null); port=${port:-1000}
-
-  printf "${GREEN}\n ✅${GREEN_BOLD} XKeen UI успешно установлен!\n\n${NC}"
-  printf " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port\n\n${NC}"
+  finish_setup "установлен"
 }
 
 update_xkeenui() {
@@ -189,12 +185,7 @@ update_xkeenui() {
     exit 1
   fi
 
-  local ip=$(ip -4 a s br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p'); ip=${ip:-"IP_Роутера"}
-  local port=$(sed -n 's/.*-p \([0-9]*\).*/\1/p' /opt/etc/init.d/S99xkeen-ui 2>/dev/null); port=${port:-1000}
-
-  printf "${GREEN}\n ✅${GREEN_BOLD} XKeen UI успешно обновлен!\n\n${NC}"
-  printf " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port\n${NC}"
-  printf " После перехода нажмите Ctrl+Shift+R для обновления кэша\n\n"
+  finish_setup "обновлен"
 }
 
 uninstall_xkeenui() {
@@ -226,6 +217,15 @@ uninstall_xkeenui() {
   (rm -rf $STATIC_DIR; rm -f $XKEENUI_BIN $XKEENUI_INIT) &
   spinner $! "Удаление файлов XKeen UI..."
   printf "${GREEN}\n ✅${GREEN_BOLD} Удаление XKeen-UI завершено\n\n${NC}"
+}
+
+finish_setup() {
+  local ip=$(ip -4 a s br0 2>/dev/null | sed -n 's/.*inet \([0-9.]*\).*/\1/p'); ip=${ip:-"IP_Роутера"}
+  local port=$(sed -n 's/.*-p \([0-9]*\).*/\1/p' $XKEENUI_INIT 2>/dev/null); port=${port:-1000}
+
+  printf "${GREEN}\n ✅${GREEN_BOLD} XKeen UI успешно $1!\n\n${NC}"
+  printf " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port\n\n${NC}"
+  [ "$1" = "обновлен" ] && printf " После перехода нажмите Ctrl+Shift+R для обновления кэша\n\n"
 }
 
 legacy_installation_check() {
