@@ -1,8 +1,9 @@
 #!/bin/sh
 
-GREEN=$'\033[1;32m'
-GREEN_NO_BOLD=$'\033[32m'
-RED=$'\033[1;31m'
+GREEN=$'\033[32m'
+GREEN_BOLD=$'\033[1;32m'
+RED=$'\033[31m'
+RED_BOLD=$'\033[1;31m'
 NC=$'\033[0m'
 BLUE=$'\033[1;34m'
 YELLOW=$'\033[1;33m'
@@ -37,7 +38,7 @@ spinner() {
       8) c=' ⠇ ' ;;
       9) c=' ⠏ ' ;;
     esac
-    printf "\r${GREEN_NO_BOLD}%s${NC} %s" "$c" "$msg"
+    printf "\r${GREEN}%s${NC} %s" "$c" "$msg"
     i=$(( (i + 1) % 10 ))
     usleep 100000
   done
@@ -72,7 +73,7 @@ detect_arch() {
       elif echo "${cpuinfo}" | grep -q 'mips'; then
           arch='mips32'
       else
-          echo -e "${RED}\n Не удалось определить архитектуру.\n${NC}" >&2
+          echo -e "${RED_BOLD}\n Не удалось определить архитектуру.\n${NC}" >&2
           exit 1
       fi
       ;;
@@ -107,7 +108,7 @@ download_files() {
   curl -sLfo $static_tmp_path $download_url/xkeen-ui-static.tar.gz &
   spinner $! "Загрузка статики..."
   if [ $? -ne 0 ]; then
-    echo -e "${RED}\n Не удалось скачать архив статики.\n${NC}"
+    echo -e "${RED_BOLD}\n Не удалось скачать архив статики.\n${NC}"
     exit 1
   fi
 
@@ -115,7 +116,7 @@ download_files() {
   tar -xzf $static_tmp_path -C $static_dir 2>/dev/null &
   spinner $! "Распаковка архива..."
   if [ $? -ne 0 ]; then
-    echo -e "${RED}\n Не удалось распаковать архив статики.\n${NC}"
+    echo -e "${RED_BOLD}\n Не удалось распаковать архив статики.\n${NC}"
     rm -f $static_tmp_path
     exit 1
   fi
@@ -124,7 +125,7 @@ download_files() {
   (curl -sLfo $xkeenui_bin $download_url/$bin_name && chmod +x $xkeenui_bin) &
   spinner $! "Загрузка бинарного файла xkeen-ui..."
   if [ $? -ne 0 ]; then
-    echo -e "${RED}\n Не удалось скачать бинарный файл.\n${NC}"
+    echo -e "${RED_BOLD}\n Не удалось скачать бинарный файл.\n${NC}"
     exit 1
   fi
 }
@@ -143,7 +144,7 @@ setup_local_editor() {
   ) &
   spinner $! "Загрузка Monaco Editor..."
   if [ $? -ne 0 ]; then
-    echo -e "${RED}\n Не удалось загрузить файлы редактора.\n${NC}"
+    echo -e "${RED_BOLD}\n Не удалось загрузить файлы редактора.\n${NC}"
     exit 1
   fi
 
@@ -153,7 +154,7 @@ setup_local_editor() {
   ) &
   spinner $! "Распаковка редактора..."
   if [ $? -ne 0 ]; then
-    echo -e "${RED}\n Не удалось распаковать архив редактора.\n${NC}"
+    echo -e "${RED_BOLD}\n Не удалось распаковать архив редактора.\n${NC}"
     rm -f $monaco_tmp_path
     exit 1
   fi
@@ -162,14 +163,14 @@ setup_local_editor() {
 
 install_xkeenui() {
   if [ -d $static_dir ] || [ -f $xkeenui_bin ] || [ -f $xkeenui_init ] || [ -f $lighttpd_conf ]; then
-    echo -e "${YELLOW}\n  ⚠️ Обнаружены файлы XKeen UI, запуск переустановки...${NC}"
+    echo -e "${YELLOW}\n Обнаружены файлы XKeen UI, запуск переустановки...${NC}"
     uninstall_xkeenui
   fi
 
   echo -e "${YELLOW}\n Вариант установки редактора:\n${NC}"
   echo -e " 1. CDN"
   echo -e " 2. Local\n"
-  read -p "${GREEN}>: ${NC}" editor_choice < /dev/tty
+  read -p "${GREEN_BOLD}>: ${NC}" editor_choice < /dev/tty
 
   mkdir -p $static_dir
 
@@ -194,7 +195,7 @@ install_xkeenui() {
   ($xkeenui_init start >/dev/null 2>&1) &
   spinner $! "Запуск XKeen UI..."
   if [ $? -ne 0 ]; then
-    echo -e "${RED}\n Не удалось запустить XKeen UI.\n${NC}"
+    echo -e "${RED_BOLD}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
 
@@ -203,13 +204,13 @@ install_xkeenui() {
   local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
   local port=${port:-1000}
 
-  echo -e "${GREEN_NO_BOLD}\n ✅ XKeen UI успешно установлен!\n${NC}"
-  echo -e " Панель доступна по адресу: ${GREEN}http://$ip:$port\n${NC}"
+  echo -e "${GREEN}\n ✅ XKeen UI успешно установлен!\n${NC}"
+  echo -e " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port\n${NC}"
 }
 
 update_xkeenui() {
   if [ ! -f $xkeenui_bin ]; then
-    echo -e "${RED}❌ Ошибка: XKeen UI не установлен!\n${NC}"
+    echo -e "${RED}❌${RED_BOLD} Ошибка: XKeen UI не установлен!\n${NC}"
     exit 1
   fi
 
@@ -252,7 +253,7 @@ update_xkeenui() {
   $xkeenui_init start >/dev/null 2>&1 &
   spinner $! "Запуск XKeen UI..."
   if [ $? -ne 0 ]; then
-    echo -e "${RED}\n Не удалось запустить XKeen UI.\n${NC}"
+    echo -e "${RED_BOLD}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
 
@@ -261,20 +262,20 @@ update_xkeenui() {
   local port=$(grep -oP 'ARGS=.*-p\s+\K\d+' /opt/etc/init.d/S99xkeen-ui 2>/dev/null || :)
   local port=${port:-1000}
 
-  echo -e "${GREEN_NO_BOLD}\n ✅ XKeen UI успешно обновлен!\n${NC}"
-  echo -e " Панель доступна по адресу: ${GREEN}http://$ip:$port${NC}"
+  echo -e "${GREEN}\n ✅ XKeen UI успешно обновлен!\n${NC}"
+  echo -e " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port${NC}"
   echo -e " После перехода нажмите Ctrl+Shift+R для обновления кэша\n"
 }
 
 uninstall_xkeenui() {
-  echo -e "\n ⚠ Данное действие ${RED}удалит${NC} XKeen UI, его файлы и зависимости.\n"
+  echo -e "\n Данное действие ${RED_BOLD}удалит${NC} XKeen UI, его файлы и зависимости.\n"
   read -p " Продолжить? [y/N]: " response < /dev/tty
   case "$response" in
     [Yy])
         echo -e "${CYAN}\n ℹ️  Начинаем удаление...${NC}"
         ;;
     *)
-        echo -e "${RED}\n ❌ Отмена операции.\n${NC}"
+        echo -e "${RED}\n ❌${RED_BOLD} Отмена операции.\n${NC}"
         exit 1
         ;;
   esac
@@ -303,14 +304,14 @@ uninstall_xkeenui() {
   rm -f $xkeenui_bin $xkeenui_init
   ) &
   spinner $! "Удаление файлов XKeen UI..."
-  echo -e "${GREEN_NO_BOLD}\n ✅ Удаление XKeen-UI завершено\n${NC}"
+  echo -e "${GREEN}\n ✅ Удаление XKeen-UI завершено\n${NC}"
 }
 
 legacy_installation_check() {
   if [ -f "$lighttpd_conf" ]; then
     $lighttpd_init status >/dev/null 2>&1 && $lighttpd_init stop
     rm -f "$lighttpd_conf"
-    echo -e "${YELLOW}\n ⚠️ Веб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
+    echo -e "${YELLOW}\n Веб-сервер lighttpd для работы XKeen UI более не используется.${NC}"
     read -p " Удалить его? [Y/n]: " response < /dev/tty
 
     case "$response" in
@@ -343,23 +344,23 @@ EOF
 
 get_editor_mode() {
   if grep -q "const LOCAL = true" "$local_mode_path" 2>/dev/null; then
-    echo -e "${GREEN}🏠 Local${NC}"
+    echo -e "${GREEN_BOLD}🏠 Local${NC}"
   elif grep -q "const LOCAL = false" "$local_mode_path" 2>/dev/null; then
     echo -e "${CYAN}🌐 CDN${NC}"
   else
-    echo -e "${RED}N/A${NC}"
+    echo -e "${RED_BOLD}N/A${NC}"
   fi
 }
 
 toggle_editor_mode() {
   if [ ! -f "$local_mode_path" ]; then
-    echo -e "${RED}\n ❌ Ошибка: XKeen UI не установлен\n${NC}"
+    echo -e "${RED}\n ❌${RED_BOLD} Ошибка: XKeen UI не установлен\n${NC}"
     exit 1
   fi
 
   if grep -q "const LOCAL = true" "$local_mode_path"; then
     echo "const LOCAL = false" > "$local_mode_path"
-    echo -e "${GREEN_NO_BOLD}\n ✅ Режим редактора переключен на CDN\n${NC}"
+    echo -e "${GREEN}\n ✅ Режим редактора переключен на CDN\n${NC}"
   else
     if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
       echo -e "${CYAN}\n ℹ️  Будет выполнена загрузка файлов редактора.\n"
@@ -368,7 +369,7 @@ toggle_editor_mode() {
       setup_local_editor
     fi
     echo "const LOCAL = true" > "$local_mode_path"
-    echo -e "${GREEN_NO_BOLD}\n ✅ Режим редактора переключен на Local\n${NC}"
+    echo -e "${GREEN}\n ✅ Режим редактора переключен на Local\n${NC}"
   fi
 }
 
@@ -411,7 +412,7 @@ case $response in
     exit
     ;;
   *)
-    echo -e "${RED}\n ❌ Неверный выбор.\n${NC}"
+    echo -e "${RED}\n ❌${RED_BOLD} Неверный выбор.\n${NC}"
     exit 1
     ;;
 esac
