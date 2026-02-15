@@ -269,13 +269,13 @@ get_editor_mode() {
 }
 
 get_status() {
-  if ! command -v xkeen-ui >/dev/null; then
+  if [ ! -f "$xkeenui_bin" ] >/dev/null 2>&1; then
     printf "Статус панели: ${RED_BOLD}не установлена${NC}"
     return
   fi
   local version=$(xkeen-ui -v | awk '{print $3}')
   local status="${RED_BOLD}не запущена"
-  pidof xkeen-ui >/dev/null && status="${GREEN_BOLD}запущена"
+  pidof xkeen-ui >/dev/null 2>&1 && status="${GREEN_BOLD}запущена"
   printf "Статус панели: $status ${NC}[$version]"
 }
 
