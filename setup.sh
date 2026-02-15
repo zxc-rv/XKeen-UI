@@ -33,13 +33,13 @@ spinner() {
   wait "$pid" && printf "\r ✔  %s\n" "$msg" || { printf "\r ❌ %s\n" "$msg"; return 1; }
 }
 
-detect_arch() {
+get_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
 
   case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
-    *'armv8'* | *'aarch64'* | *'cortex-a'* ) arch='arm64-v8a' ;;
-    *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* ) arch='mips32le' ;;
-    *'mips'* ) arch='mips32' ;;
+    *'armv8'* | *'aarch64'* | *'cortex-a'* ) arch='arm64-v8a';;
+    *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* ) arch='mips32le';;
+    *'mips'* ) arch='mips32';;
     *)  if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
           arch='arm64-v8a'
         elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
@@ -54,14 +54,9 @@ detect_arch() {
   esac
 
   if [ "${arch}" = 'mips64' ] || [ "${arch}" = 'mips32' ]; then
-    if [ ! -f /opt/bin/lscpu ]; then
-        opkg install lscpu &>/dev/null
-    fi
-
+    [ -f /opt/bin/lscpu ] || opkg install lscpu &>/dev/null
     lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
-    if echo "${lscpu_output}" | grep -q "little endian"; then
-        arch="${arch}le"
-    fi
+    echo "$lscpu_output" | grep -q "little endian" && arch="${arch}le"
   fi
 }
 
@@ -132,20 +127,18 @@ install_xkeenui() {
   mkdir -p $static_dir
 
   echo -e "${CYAN}\n ℹ️  Начинаем установку...${NC}\n"
-  detect_arch
-  download_files
-  create_xkeenui_init
 
-  if [ "$editor_choice" = "2" ]; then
-    echo "const LOCAL = true" > $local_mode_path
-    setup_local_editor
-  else
-    echo "const LOCAL = false" > $local_mode_path
-  fi
+  get_arch; download_files; create_xkeenui_init
+
+  case "$editor_choice" in
+    2) echo "const LOCAL = true" > "$local_mode_path"; setup_local_editor;;
+    *) echo "const LOCAL = false" > "$local_mode_path";;
+  esac
 
   sync & spinner $! "Запись данных..."
 
-  $xkeenui_init start >/dev/null 2>&1 & if ! spinner $! "Запуск XKeen UI..."; then
+  $xkeenui_init start >/dev/null 2>&1 &
+  if ! spinner $! "Запуск XKeen UI..."; then
     echo -e "${RED_BOLD}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
@@ -158,10 +151,7 @@ install_xkeenui() {
 }
 
 update_xkeenui() {
-  if [ ! -f $xkeenui_bin ]; then
-    echo -e "${RED}❌${RED_BOLD} Ошибка: XKeen UI не установлен!\n${NC}"
-    exit 1
-  fi
+  [ -f "$xkeenui_bin" ] || { echo -e "${RED}❌${RED_BOLD} Ошибка: XKeen UI не установлен!\n${NC}"; exit 1; }
 
   echo -e "${CYAN}\n ℹ️  Начинаем обновление...${NC}\n"
 
@@ -183,12 +173,10 @@ update_xkeenui() {
   fi
 
   legacy_installation_check
-  detect_arch
+  get_arch
   download_files
 
-  if ! [ -f $local_mode_path ]; then
-    echo "const LOCAL = false" > $local_mode_path
-  fi
+  [ -f $local_mode_path ] || echo "const LOCAL = false" > $local_mode_path
 
   if grep -q "LOCAL = true" "$local_mode_path"; then
     if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
@@ -198,7 +186,8 @@ update_xkeenui() {
 
   sync & spinner $! "Запись данных..."
 
-  $xkeenui_init start >/dev/null 2>&1 & if ! spinner $! "Запуск XKeen UI..."; then
+  $xkeenui_init start >/dev/null 2>&1 &
+  if ! spinner $! "Запуск XKeen UI..."; then
     echo -e "${RED_BOLD}\n Не удалось запустить XKeen UI.\n${NC}"
     exit 1
   fi
@@ -215,13 +204,9 @@ uninstall_xkeenui() {
   echo -e "\n Данное действие ${RED_BOLD}удалит${NC} XKeen UI, его файлы и зависимости.\n"
   read -p " Продолжить? [y/N]: " response < /dev/tty
   case "$response" in
-    [Yy]) echo -e "${CYAN}\n ℹ️  Начинаем удаление...${NC}" ;;
-    *) echo -e "${RED}\n ❌${RED_BOLD} Отмена операции.\n${NC}"
-       exit 1
-       ;;
+    [Yy]) echo -e "${CYAN}\n ℹ️  Начинаем удаление...${NC}\n";;
+    *) echo -e "${RED}\n ❌${RED_BOLD} Отмена операции.\n${NC}"; exit 1;;
   esac
-
-  echo
 
   (
   if [ -f $lighttpd_init ] && [ -f $lighttpd_conf ]; then
@@ -240,12 +225,9 @@ uninstall_xkeenui() {
   ) &
   spinner $! "Остановка XKeen UI..."
 
-  (
-  rm -rf $static_dir
-  rm -f $xkeenui_bin $xkeenui_init
-  ) &
+  (rm -rf $static_dir; rm -f $xkeenui_bin $xkeenui_init) &
   spinner $! "Удаление файлов XKeen UI..."
-  echo -e "${GREEN}\n ✅ Удаление XKeen-UI завершено\n${NC}"
+  echo -e "${GREEN}\n ✅${GREEN_BOLD} Удаление XKeen-UI завершено\n${NC}"
 }
 
 legacy_installation_check() {
@@ -256,10 +238,8 @@ legacy_installation_check() {
     read -p " Удалить его? [Y/n]: " response < /dev/tty
 
     case "$response" in
-      [Nn]) return ;;
-      *) opkg remove --autoremove --force-removal-of-dependent-packages lighttpd
-         rm -rf $lighttpd_dir
-         ;;
+      [Nn]) return;;
+      *) opkg remove --autoremove --force-removal-of-dependent-packages lighttpd; rm -rf $lighttpd_dir;;
     esac
   fi
 }
@@ -282,32 +262,29 @@ EOF
 
 get_editor_mode() {
   case "$(sed -n 's/.*LOCAL = \(true\|false\).*/\1/p' "$local_mode_path" 2>/dev/null)" in
-    true)  printf "${GREEN_BOLD}🏠 Local${NC}\n" ;;
-    false) printf "${CYAN}🌐 CDN${NC}\n" ;;
-    *)     printf "${RED_BOLD}N/A${NC}\n" ;;
+    true)  printf "${GREEN_BOLD}🏠 Local${NC}\n";;
+    false) printf "${CYAN}🌐 CDN${NC}\n";;
+    *)     printf "${RED_BOLD}N/A${NC}\n";;
   esac
 }
 
 toggle_editor_mode() {
-  if [ ! -f "$local_mode_path" ]; then
-    echo -e "${RED}\n ❌${RED_BOLD} Ошибка: XKeen UI не установлен\n${NC}"
-    exit 1
-  fi
+  [ -f "$xkeenui_bin" ] || { echo -e "${RED}❌${RED_BOLD} Ошибка: XKeen UI не установлен!\n${NC}"; exit 1; }
 
   if grep -q "const LOCAL = true" "$local_mode_path"; then
     echo "const LOCAL = false" > "$local_mode_path"
-    echo -e "${GREEN}\n ✅ Режим редактора переключен на CDN\n${NC}"
+    echo -e "${GREEN}\n ✅${GREEN_BOLD} Режим редактора переключен на CDN\n${NC}"
   else
     if [ ! -f "$monaco_dir/loader.min.js" ] || [ ! -f "$monaco_dir/js-yaml.min.js" ] || [ ! -f "$monaco_dir/standalone.min.js" ] || [ ! -f "$monaco_dir/babel.min.js" ] || [ ! -f "$monaco_dir/yaml.min.js" ]; then
       echo -e "${CYAN}\n ℹ️  Будет выполнена загрузка файлов редактора.\n"
       read -p " Продолжить? [Y/n]: " response < /dev/tty
-      [[ ! $response =~ ^[Yy]?$ ]] && echo && return
+      [[ $response =~ ^[Yy]?$ ]] || { echo; return; }
       echo
       setup_local_editor
       sync & spinner $! "Запись данных..."
     fi
     echo "const LOCAL = true" > "$local_mode_path"
-    echo -e "${GREEN}\n ✅ Режим редактора переключен на Local\n${NC}"
+    echo -e "${GREEN}\n ✅${GREEN_BOLD} Режим редактора переключен на Local\n${NC}"
   fi
 }
 
@@ -333,14 +310,10 @@ echo -e " 5. Выйти\n"
 read -p "${CYAN}>: ${NC}" response < /dev/tty
 
 case $response in
-  1) install_xkeenui ;;
-  2) update_xkeenui ;;
-  3) uninstall_xkeenui ;;
-  4) toggle_editor_mode ;;
-  5) echo
-     exit
-     ;;
-  *) echo -e "${RED}\n ❌${RED_BOLD} Неверный выбор.\n${NC}"
-     exit 1
-     ;;
+  1) install_xkeenui;;
+  2) update_xkeenui;;
+  3) uninstall_xkeenui;;
+  4) toggle_editor_mode;;
+  5) echo; exit;;
+  *) echo -e "${RED}\n ❌${RED_BOLD} Неверный выбор.\n${NC}"; exit 1;;
 esac
