@@ -23,6 +23,7 @@ beta=false
 
 spinner() {
   local pid=$1 msg=$2
+  trap 'printf "\r ❌ %s\n" "$msg"; return 130' INT
   set -- ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏
   while kill -0 "$pid" 2>/dev/null; do
     printf "\r$GREEN %s $NC %s" "$1" "$msg"
@@ -32,7 +33,6 @@ spinner() {
   done
   wait "$pid" && printf "\r ✔  %s\n" "$msg" || { printf "\r ❌ %s\n" "$msg"; return 1; }
 }
-
 
 get_arch() {
   cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
