@@ -6,7 +6,7 @@ use ipnet::IpNet;
 use regex::Regex;
 use crate::types::*;
 use prost::bytes::Buf;
-use memmap2::MmapOptions;
+use memmap2::{MmapOptions, Advice};
 
 #[derive(Message)]
 struct GeoIP {
@@ -54,7 +54,7 @@ fn match_domain(query: &str, rule: &str, rule_type: i32) -> bool {
     match rule_type {
         0 => query.contains(rule),
         1 => Regex::new(rule).map(|r| r.is_match(query)).unwrap_or(false),
-        2 => query == rule || query.ends_with(&format!(".{}", rule)),
+        2 => query == rule || query.strip_suffix(rule).map_or(false, |prefix| prefix.ends_with('.')),
         3 => query == rule,
         _ => false
     }
@@ -65,10 +65,13 @@ where
     F: FnMut(&mut &[u8]) -> Option<String>,
 {
     let file = File::open(path)?;
-    let mmap = unsafe { MmapOptions::new().map(&file)? };
+    let mmap = unsafe {
+        let map = MmapOptions::new().map(&file)?;
+        map.advise(Advice::Sequential)?;
+        map
+    };
     let mut buf = &mmap[..];
-
-    let mut found = Vec::with_capacity(2);
+    let mut found = Vec::new();
 
     while buf.has_remaining() {
         let (tag, wire_type) = match prost::encoding::decode_key(&mut buf) {
@@ -94,12 +97,9 @@ where
     Ok(found)
 }
 
-// Теперь функции поиска стали крошечными и переиспользуют scan_geo_file
 async fn find_ip_categories(geoip_path: &str, ip_str: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let target_ip: IpAddr = ip_str.parse()?;
 
-    // scan_geo_file работает синхронно из-за mmap, для axum это ок,
-    // т.к. это операция в памяти, блокировок I/O не будет.
     scan_geo_file(geoip_path, |entry_buf| {
         if let Ok(entry) = GeoIP::decode(entry_buf) {
             for cidr in &entry.cidr {
