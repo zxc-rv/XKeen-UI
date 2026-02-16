@@ -2984,12 +2984,12 @@ async function performGeoScan() {
   const scanBtn = document.getElementById("geoScanBtn")
 
   if (!input) {
-    showToast(geoScanType === "ip" ? "Введи IP-адрес" : "Введи домен", "error")
+    showToast(geoScanType === "ip" ? "Введите IP-адрес" : "Введите доменное имя", "error")
     return
   }
 
   if (selectedGeoFiles.length === 0) {
-    showToast("Выбери хотя бы один геофайл", "error")
+    showToast("Выберите хотя бы один геофайл", "error")
     return
   }
 
@@ -3012,7 +3012,7 @@ async function performGeoScan() {
     }
 
     if (results.length === 0) {
-      resultContent.innerHTML = `<div class="geo-scan-not-found">${geoScanType === "ip" ? "IP" : "Домен"} не найден ни в одном из выбранных файлов</div>`
+      resultContent.innerHTML = `<div class="geo-scan-not-found">Запись не найдена</div>`
     } else {
       resultContent.innerHTML = results
         .map(
