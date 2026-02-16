@@ -44,7 +44,7 @@ where F: FnMut(&mut &[u8]) -> Option<String> {
 }
 
 fn find_ip_categories(data: &[u8], ip_str: &str) -> Result<Vec<String>, String> {
-    let target: IpAddr = ip_str.parse().map_err(|_| format!("Кривой IP: {}", ip_str))?;
+    let target: IpAddr = ip_str.parse().map_err(|_| format!("Некорректный IP: {}", ip_str))?;
     let (target_v4, target_v6) = match target {
         IpAddr::V4(v4) => (Some(u32::from(v4)), None),
         IpAddr::V6(v6) => (None, Some(u128::from(v6))),
@@ -131,18 +131,18 @@ pub async fn get_geo(State(_state): State<AppState>) -> impl IntoResponse {
 async fn handle_geo_request(params: HashMap<String, String>, is_ip: bool) -> impl IntoResponse {
     let filename = match params.get("file") {
         Some(f) => f,
-        None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("Дай file".into()), data: None }),
+        None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("Отсутствует файл в запросе".into()), data: None }),
     };
 
     let target = match params.get(if is_ip { "ip" } else { "domain" }) {
         Some(t) => t.clone(),
-        None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("Дай таргет (ip/domain)".into()), data: None }),
+        None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("Отсутствует домен/IP в запросе".into()), data: None }),
     };
 
     let path = format!("{}/{}", XRAY_ASSET, filename);
     let result = task::spawn_blocking(move || -> Result<Vec<String>, String> {
-        let file = File::open(&path).map_err(|e| format!("Не могу открыть: {}", e))?;
-        let mmap = unsafe { MmapOptions::new().map(&file).map_err(|e| format!("Mmap откис: {}", e))? };
+        let file = File::open(&path).map_err(|e| format!("Ошибка открытия: {}", e))?;
+        let mmap = unsafe { MmapOptions::new().map(&file).map_err(|e| format!("Ошибка mmap: {}", e))? };
         mmap.advise(Advice::Sequential).ok();
 
         if is_ip { find_ip_categories(&mmap, &target) } else { find_domain_categories(&mmap, &target) }
@@ -151,7 +151,7 @@ async fn handle_geo_request(params: HashMap<String, String>, is_ip: bool) -> imp
     match result {
         Ok(Ok(categories)) => Json(ApiResponse { success: true, error: None, data: Some(GeoResponse { categories }) }),
         Ok(Err(e)) => Json(ApiResponse::<GeoResponse> { success: false, error: Some(e), data: None }),
-        Err(e) => Json(ApiResponse::<GeoResponse> { success: false, error: Some(format!("Task упал: {}", e)), data: None }),
+        Err(e) => Json(ApiResponse::<GeoResponse> { success: false, error: Some(format!("Ошибка: {}", e)), data: None }),
     }
 }
 

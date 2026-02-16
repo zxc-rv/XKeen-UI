@@ -991,9 +991,9 @@ textarea {
 }
 
 #settingsModal .modal-content {
+  width: 550px;
   min-width: 550px;
   max-width: 550px;
-  min-height: 500px;
 }
 
 .settings-tabs {
@@ -2913,7 +2913,7 @@ textarea {
 .settings-modal-body {
   padding: 0;
   margin-bottom: 0;
-  min-height: 280px;
+  min-height: 300px;
 }
 
 .settings-section {
@@ -3889,7 +3889,7 @@ span#coreSelectLabel {
   font-size: 13px;
   font-weight: 500;
   color: #e2e8f0;
-  margin-left: 3px;
+  margin-bottom: 8px;
 }
 
 .geo-files-header {
@@ -4079,6 +4079,14 @@ span#coreSelectLabel {
 
 .geo-file-status.found {
   color: #10b981;
+}
+
+.geo-file-status.not-found {
+  color: #ef4444;
+}
+
+.geo-file-status.error {
+  color: #f59e0b;
 }
 
 .geo-file-categories {

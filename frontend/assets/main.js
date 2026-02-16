@@ -2923,7 +2923,10 @@ function switchGeoType(type) {
   input.value = ""
 
   document.querySelectorAll(".geo-file-categories").forEach((el) => el.remove())
-  document.querySelectorAll(".geo-file-status").forEach((el) => (el.textContent = ""))
+  document.querySelectorAll(".geo-file-status").forEach((el) => {
+    el.textContent = ""
+    el.classList.remove("scanning", "found", "not-found", "error")
+  })
   document.querySelectorAll(".geo-file-item").forEach((el) => el.classList.remove("has-results"))
 }
 
@@ -3010,7 +3013,10 @@ async function performGeoScan() {
   scanBtn.textContent = "Сканирование..."
 
   document.querySelectorAll(".geo-file-categories").forEach((el) => el.remove())
-  document.querySelectorAll(".geo-file-status").forEach((el) => (el.textContent = ""))
+  document.querySelectorAll(".geo-file-status").forEach((el) => {
+    el.textContent = ""
+    el.classList.remove("scanning", "found", "not-found", "error")
+  })
   document.querySelectorAll(".geo-file-item").forEach((el) => el.classList.remove("has-results"))
 
   const endpoint = geoScanType === "ip" ? "/api/geo/ip" : "/api/geo/site"
@@ -3024,6 +3030,7 @@ async function performGeoScan() {
       const statusEl = fileItem.querySelector(".geo-file-status")
       statusEl.textContent = "сканируется..."
       statusEl.classList.add("scanning")
+      statusEl.classList.remove("found", "not-found", "error")
 
       try {
         const response = await fetch(`${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input)}`)
@@ -3069,12 +3076,14 @@ async function performGeoScan() {
             })
           })
         } else {
-          statusEl.textContent = ""
+          statusEl.textContent = "не найдено"
           statusEl.classList.remove("scanning")
+          statusEl.classList.add("not-found")
         }
       } catch (err) {
         statusEl.textContent = "ошибка"
         statusEl.classList.remove("scanning")
+        statusEl.classList.add("error")
         console.error(`Ошибка сканирования ${file}:`, err)
       }
     }
