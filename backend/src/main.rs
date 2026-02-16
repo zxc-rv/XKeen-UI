@@ -1,4 +1,4 @@
-mod types; mod settings; mod logs; mod controller; mod configs; mod version; mod websocket; mod updater;
+mod types; mod settings; mod logs; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo;
 use std::{env, path::Path, sync::{Arc, RwLock}, net::SocketAddr, process::exit};
 use axum::{Router, routing::{get, get_service}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
@@ -39,6 +39,9 @@ async fn main() {
         .route("/api/settings", get(settings::get_settings).patch(settings::patch_settings))
         .route("/api/version", get(version::version_handler))
         .route("/api/update", get(updater::get_releases).post(updater::post_update))
+        .route("/api/geo", get(geo::get_geo))
+        .route("/api/geo/site", get(geo::get_geosite))
+        .route("/api/geo/ip", get(geo::get_geoip))
         .route("/ws", get(websocket::ws_handler))
         .route("/", get_service(ServeFile::new(format!("{}/index.html", STATIC_DIR))).layer(no_cache.clone()))
         .route("/local_mode.js", get_service(ServeFile::new(format!("{}/local_mode.js", STATIC_DIR))).layer(no_cache))

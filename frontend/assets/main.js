@@ -2463,6 +2463,7 @@ document.addEventListener("click", (e) => {
     else if (id === "commentsWarningModal") closeCommentsWarning()
     else if (id === "coreManageModal") closeCoreManageModal()
     else if (id === "updateModal") closeUpdateModal()
+    else if (id === "geoScanModal") closeGeoScanModal()
   }
 })
 
@@ -2476,6 +2477,7 @@ document.addEventListener("keydown", (e) => {
     const commentsModal = document.getElementById("commentsWarningModal")
     const coreManageModal = document.getElementById("coreManageModal")
     const updateModal = document.getElementById("updateModal")
+    const geoScanModal = document.getElementById("geoScanModal")
 
     if (logsPanel && logsPanel.classList.contains("expanded-vertical")) {
       toggleLogFullscreen()
@@ -2505,6 +2507,9 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault()
     } else if (updateModal && updateModal.classList.contains("show")) {
       closeUpdateModal()
+      e.preventDefault()
+    } else if (geoScanModal && geoScanModal.classList.contains("show")) {
+      closeGeoScanModal()
       e.preventDefault()
     }
   }
@@ -2861,6 +2866,190 @@ function showCommentsWarning(action) {
   setTimeout(() => document.getElementById("confirmCommentsBtn").focus(), 50)
 }
 
+let geoFiles = []
+let selectedGeoFiles = []
+let geoScanType = "ip"
+
+function switchGeoType(type) {
+  geoScanType = type
+  const buttons = document.querySelectorAll(".geo-type-btn")
+  buttons.forEach((btn) => {
+    if (btn.dataset.type === type) {
+      btn.classList.add("active")
+    } else {
+      btn.classList.remove("active")
+    }
+  })
+
+  const label = document.getElementById("geoInputLabel")
+  const input = document.getElementById("geoIpInput")
+  const resultDiv = document.getElementById("geoScanResult")
+
+  if (type === "ip") {
+    label.textContent = "IP-адрес"
+    input.placeholder = "1.1.1.1"
+  } else {
+    label.textContent = "Домен"
+    input.placeholder = "example.com"
+  }
+
+  input.value = ""
+  resultDiv.style.display = "none"
+}
+
+async function openGeoScanModal() {
+  const modal = document.getElementById("geoScanModal")
+  const filesList = document.getElementById("geoFilesList")
+  const resultDiv = document.getElementById("geoScanResult")
+  const ipInput = document.getElementById("geoIpInput")
+  const clearBtn = document.getElementById("geoInputClear")
+
+  modal.classList.add("show")
+  resultDiv.style.display = "none"
+  ipInput.value = ""
+  selectedGeoFiles = []
+  if (clearBtn) clearBtn.classList.remove("show")
+
+  switchGeoType("ip")
+
+  filesList.innerHTML = '<div class="geo-files-loading">Загрузка списка файлов...</div>'
+
+  try {
+    const response = await fetch("/api/geo")
+    const data = await response.json()
+
+    if (data.success && data.files) {
+      geoFiles = data.files
+      document.getElementById("geoFilesCount").textContent = `(${geoFiles.length})`
+
+      if (geoFiles.length === 0) {
+        filesList.innerHTML = '<div class="geo-files-empty">Геофайлы не найдены</div>'
+        return
+      }
+
+      filesList.innerHTML = geoFiles
+        .map(
+          (file, index) => `
+        <label class="geo-file-item">
+          <input type="checkbox" value="${file}" onchange="toggleGeoFile('${file}')" checked>
+          <span>${file}</span>
+        </label>
+      `,
+        )
+        .join("")
+
+      selectedGeoFiles = [...geoFiles]
+    } else {
+      filesList.innerHTML = '<div class="geo-files-error">Ошибка загрузки файлов</div>'
+    }
+  } catch (error) {
+    console.error("Ошибка загрузки геофайлов:", error)
+    filesList.innerHTML = '<div class="geo-files-error">Ошибка загрузки файлов</div>'
+  }
+
+  setTimeout(() => ipInput.focus(), 100)
+}
+
+function closeGeoScanModal() {
+  document.getElementById("geoScanModal").classList.remove("show")
+}
+
+function toggleGeoFile(filename) {
+  const index = selectedGeoFiles.indexOf(filename)
+  if (index > -1) {
+    selectedGeoFiles.splice(index, 1)
+  } else {
+    selectedGeoFiles.push(filename)
+  }
+}
+
+async function performGeoScan() {
+  const input = document.getElementById("geoIpInput").value.trim()
+  const resultDiv = document.getElementById("geoScanResult")
+  const resultContent = document.getElementById("geoScanResultContent")
+  const scanBtn = document.getElementById("geoScanBtn")
+
+  if (!input) {
+    showToast(geoScanType === "ip" ? "Введи IP-адрес" : "Введи домен", "error")
+    return
+  }
+
+  if (selectedGeoFiles.length === 0) {
+    showToast("Выбери хотя бы один геофайл", "error")
+    return
+  }
+
+  scanBtn.disabled = true
+  scanBtn.textContent = "Сканирование..."
+  resultDiv.style.display = "none"
+
+  const results = []
+  const endpoint = geoScanType === "ip" ? "/api/geo/ip" : "/api/geo/site"
+  const paramName = geoScanType === "ip" ? "ip" : "domain"
+
+  try {
+    for (const file of selectedGeoFiles) {
+      const response = await fetch(`${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input)}`)
+      const data = await response.json()
+
+      if (data.success && data.categories && data.categories.length > 0) {
+        results.push({ file, categories: data.categories })
+      }
+    }
+
+    if (results.length === 0) {
+      resultContent.innerHTML = `<div class="geo-scan-not-found">${geoScanType === "ip" ? "IP" : "Домен"} не найден ни в одном из выбранных файлов</div>`
+    } else {
+      resultContent.innerHTML = results
+        .map(
+          (r) => `
+        <div class="geo-scan-match">
+          <div class="geo-scan-match-file">${r.file}</div>
+          <div class="geo-scan-match-categories">
+            ${r.categories.map((cat) => `<span class="geo-category-badge" data-file="${r.file}" data-category="${cat}">${cat}</span>`).join("")}
+          </div>
+        </div>
+      `,
+        )
+        .join("")
+
+      resultContent.querySelectorAll(".geo-category-badge").forEach((badge) => {
+        badge.addEventListener("click", () => {
+          const file = badge.dataset.file
+          const category = badge.dataset.category
+          const text = `"ext:${file}:${category}"`.toLowerCase()
+
+          const ta = document.createElement("textarea")
+          ta.value = text
+          ta.style.position = "fixed"
+          ta.style.left = "-9999px"
+          document.body.appendChild(ta)
+          ta.focus()
+          ta.select()
+
+          try {
+            document.execCommand("copy")
+            badge.classList.add("copied")
+            setTimeout(() => badge.classList.remove("copied"), 1000)
+          } catch (err) {
+            console.error("Ошибка копирования:", err)
+          }
+
+          document.body.removeChild(ta)
+        })
+      })
+    }
+
+    resultDiv.style.display = "block"
+  } catch (error) {
+    console.error("Ошибка сканирования:", error)
+    showToast("Ошибка при сканировании", "error")
+  } finally {
+    scanBtn.disabled = false
+    scanBtn.textContent = "Сканировать"
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const newProxyInput = document.getElementById("newProxyInput")
   if (newProxyInput) {
@@ -2869,5 +3058,27 @@ document.addEventListener("DOMContentLoaded", () => {
         addGithubProxy()
       }
     })
+  }
+
+  const geoIpInput = document.getElementById("geoIpInput")
+  if (geoIpInput) {
+    geoIpInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        performGeoScan()
+      }
+    })
+
+    const geoInputClear = document.getElementById("geoInputClear")
+    if (geoInputClear) {
+      geoIpInput.addEventListener("input", () => {
+        geoInputClear.classList.toggle("show", geoIpInput.value.length > 0)
+      })
+
+      geoInputClear.addEventListener("click", () => {
+        geoIpInput.value = ""
+        geoInputClear.classList.remove("show")
+        geoIpInput.focus()
+      })
+    }
   }
 })
