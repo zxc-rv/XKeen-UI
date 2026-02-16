@@ -27,6 +27,7 @@ jobs:
         run: |
           sed -i 's/^version = .*/version = "${{ inputs.version }}"/' backend/Cargo.toml
           sed -i 's/version = "v/version = "/' backend/Cargo.toml
+          cat backend/Cargo.toml
       - name: Install Rust
         run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
       - uses: swatinem/rust-cache@v2
@@ -46,6 +47,9 @@ jobs:
           image = "rustembedded/cross:mipsel-unknown-linux-musl"
           build-std = ["core", "alloc", "std", "panic_abort"]
           EOF
+      - name: Check metadata
+        working-directory: backend
+        run: cargo metadata --format-version 1
       - name: Build binary
         working-directory: backend
         run: |
