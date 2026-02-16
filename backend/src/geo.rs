@@ -131,7 +131,7 @@ pub async fn get_geo(State(_state): State<AppState>) -> impl IntoResponse {
 async fn handle_geo_request(params: HashMap<String, String>, is_ip: bool) -> impl IntoResponse {
     let filename = match params.get("file") {
         Some(f) => f,
-        None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("Отсутствует файл в запросе".into()), data: None }),
+        None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("Отсутствует название файла в запросе".into()), data: None }),
     };
 
     let target = match params.get(if is_ip { "ip" } else { "domain" }) {
