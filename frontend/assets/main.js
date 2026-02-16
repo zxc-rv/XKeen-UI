@@ -2452,8 +2452,20 @@ document.addEventListener("click", (e) => {
   if (tzSelect && !tzSelect.contains(e.target)) {
     tzSelect.classList.remove("open")
   }
+})
 
+let modalMousedownTarget = null
+
+document.addEventListener("mousedown", (e) => {
   if (e.target.classList.contains("modal-overlay")) {
+    modalMousedownTarget = e.target
+  } else {
+    modalMousedownTarget = null
+  }
+})
+
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("modal-overlay") && modalMousedownTarget === e.target) {
     const id = e.target.id
     if (id === "settingsModal") closeSettingsModal()
     else if (id === "dirtyModal") closeDirtyModal()
@@ -2464,6 +2476,8 @@ document.addEventListener("click", (e) => {
     else if (id === "coreManageModal") closeCoreManageModal()
     else if (id === "updateModal") closeUpdateModal()
     else if (id === "geoScanModal") closeGeoScanModal()
+
+    modalMousedownTarget = null
   }
 })
 
@@ -2868,7 +2882,7 @@ function showCommentsWarning(action) {
 
 let geoFiles = []
 let selectedGeoFiles = []
-let geoScanType = "ip"
+let geoScanType = "domain"
 
 function switchGeoType(type) {
   geoScanType = type
@@ -2910,7 +2924,7 @@ async function openGeoScanModal() {
   selectedGeoFiles = []
   if (clearBtn) clearBtn.classList.remove("show")
 
-  switchGeoType("ip")
+  switchGeoType("domain")
 
   filesList.innerHTML = '<div class="geo-files-loading">Загрузка списка файлов...</div>'
 

@@ -61,62 +61,61 @@ struct GeoFilesResponse {
 }
 
 fn match_domain(query: &str, rule: &str, rule_type: i32) -> bool {
-    let query_lower = query.to_lowercase();
-    let rule_lower = rule.to_lowercase();
-
     match rule_type {
-        0 => query_lower.contains(&rule_lower),
-        1 => Regex::new(&rule_lower).map(|r| r.is_match(&query_lower)).unwrap_or(false),
-        2 => query_lower == rule_lower || query_lower.ends_with(&format!(".{}", rule_lower)),
-        3 => query_lower == rule_lower,
+        0 => query.contains(rule),
+        1 => Regex::new(rule).map(|r| r.is_match(query)).unwrap_or(false),
+        2 => query == rule || query.ends_with(&format!(".{}", rule)),
+        3 => query == rule,
         _ => false
     }
 }
 
-fn find_ip_categories(geoip_path: &str, ip_str: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let data = std::fs::read(geoip_path)?;
-    let geolist = GeoIPList::decode(&*data)?;
+async fn find_ip_categories(geoip_path: &str, ip_str: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let data = tokio::fs::read(geoip_path).await?;
+    let geolist = GeoIPList::decode(&data[..])?;
     let ip: IpAddr = ip_str.parse()?;
-    let mut found = Vec::new();
-
+    let mut found = Vec::with_capacity(2);
     for entry in geolist.entry {
         for cidr in &entry.cidr {
             let network = if cidr.ip.len() == 4 {
-                IpNet::new(IpAddr::from(<[u8; 4]>::try_from(&cidr.ip[..])?), cidr.prefix as u8)?
+                match <[u8; 4]>::try_from(&cidr.ip[..]) {
+                    Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
+                    Err(_) => continue,
+                }
             } else {
-                IpNet::new(IpAddr::from(<[u8; 16]>::try_from(&cidr.ip[..])?), cidr.prefix as u8)?
+                match <[u8; 16]>::try_from(&cidr.ip[..]) {
+                    Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
+                    Err(_) => continue,
+                }
             };
-
             if network.contains(&ip) {
-                found.push(entry.country_code.clone());
+                found.push(entry.country_code);
                 break;
             }
         }
     }
-
     Ok(found)
 }
 
-fn find_domain_categories(geosite_path: &str, domain: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let data = std::fs::read(geosite_path)?;
-    let geolist = GeoSiteList::decode(&*data)?;
-    let mut found = Vec::new();
-
+async fn find_domain_categories(geosite_path: &str, domain: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let data = tokio::fs::read(geosite_path).await?;
+    let geolist = GeoSiteList::decode(&data[..])?;
+    let domain_lower = domain.to_lowercase();
+    let mut found = Vec::with_capacity(2);
     for entry in geolist.entry {
         for rule in &entry.domain {
-            if match_domain(domain, &rule.value, rule.domain_type) {
-                found.push(entry.country_code.clone());
+            let rule_lower = rule.value.to_lowercase();
+            if match_domain(&domain_lower, &rule_lower, rule.domain_type) {
+                found.push(entry.country_code);
                 break;
             }
         }
     }
-
     Ok(found)
 }
 
 pub async fn get_geo(State(_state): State<AppState>) -> impl IntoResponse {
     let mut files = Vec::new();
-
     if let Ok(mut entries) = tokio::fs::read_dir(XRAY_ASSET).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
@@ -127,7 +126,6 @@ pub async fn get_geo(State(_state): State<AppState>) -> impl IntoResponse {
             }
         }
     }
-
     files.sort();
     Json(ApiResponse { success: true, error: None, data: Some(GeoFilesResponse { files }) })
 }
@@ -137,15 +135,12 @@ pub async fn get_geoip(State(_state): State<AppState>, Query(params): Query<Hash
         Some(f) => f,
         None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("missing file parameter".into()), data: None })
     };
-
     let ip = match params.get("ip") {
         Some(i) => i,
         None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("missing ip parameter".into()), data: None })
     };
-
     let path = format!("{}/{}", XRAY_ASSET, filename);
-
-    match find_ip_categories(&path, ip) {
+    match find_ip_categories(&path, ip).await {
         Ok(categories) => Json(ApiResponse { success: true, error: None, data: Some(GeoResponse { categories }) }),
         Err(e) => Json(ApiResponse::<GeoResponse> { success: false, error: Some(e.to_string()), data: None })
     }
@@ -156,15 +151,12 @@ pub async fn get_geosite(State(_state): State<AppState>, Query(params): Query<Ha
         Some(f) => f,
         None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("missing file parameter".into()), data: None })
     };
-
     let domain = match params.get("domain") {
         Some(d) => d,
         None => return Json(ApiResponse::<GeoResponse> { success: false, error: Some("missing domain parameter".into()), data: None })
     };
-
     let path = format!("{}/{}", XRAY_ASSET, filename);
-
-    match find_domain_categories(&path, domain) {
+    match find_domain_categories(&path, domain).await {
         Ok(categories) => Json(ApiResponse { success: true, error: None, data: Some(GeoResponse { categories }) }),
         Err(e) => Json(ApiResponse::<GeoResponse> { success: false, error: Some(e.to_string()), data: None })
     }

@@ -888,10 +888,28 @@
           </svg>
           Скан геофайлов
         </h3>
-        <p class="modal-description">Проверка IP-адреса или домена в геобазах</p>
+        <p class="modal-description">Проверка домена или IP-адреса в базах геолокации</p>
         <div class="modal-body">
           <div class="geo-scan-type-switch">
-            <button class="geo-type-btn active" data-type="ip" onclick="switchGeoType('ip')">
+            <button class="geo-type-btn active" data-type="domain" onclick="switchGeoType('domain')">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+              Домен
+            </button>
+            <button class="geo-type-btn" data-type="ip" onclick="switchGeoType('ip')">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="16"
@@ -910,29 +928,11 @@
               </svg>
               IP-адрес
             </button>
-            <button class="geo-type-btn" data-type="domain" onclick="switchGeoType('domain')">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
-              Домен
-            </button>
           </div>
           <div class="geo-scan-input-group">
-            <label class="geo-scan-label" id="geoInputLabel">IP-адрес</label>
+            <label class="geo-scan-label" id="geoInputLabel">Домен</label>
             <div class="geo-input-wrapper">
-              <input type="text" id="geoIpInput" placeholder="1.1.1.1" />
+              <input type="text" id="geoIpInput" placeholder="example.com" />
               <button class="geo-input-clear" id="geoInputClear" aria-label="Очистить"></button>
             </div>
           </div>
