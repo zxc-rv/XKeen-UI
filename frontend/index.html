@@ -690,9 +690,13 @@
           </svg>
           Настройки
         </h3>
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="gui" onclick="switchSettingsTab('gui')">Режим GUI</button>
+          <button class="settings-tab" data-tab="updates" onclick="switchSettingsTab('updates')">Обновления</button>
+          <button class="settings-tab" data-tab="logs" onclick="switchSettingsTab('logs')">Журнал</button>
+        </div>
         <div class="modal-body settings-modal-body">
-          <div class="settings-section">
-            <h4 class="settings-section-title">Режим GUI</h4>
+          <div class="settings-tab-content active" data-content="gui">
             <div class="settings-warning">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -736,8 +740,7 @@
             </div>
           </div>
 
-          <div class="settings-section">
-            <h4 class="settings-section-title">Обновления</h4>
+          <div class="settings-tab-content" data-content="updates">
             <div class="settings-item">
               <span class="settings-item-label">Автопроверка (панель)</span>
               <div class="routing-gui-toggle">
@@ -779,8 +782,7 @@
             </div>
           </div>
 
-          <div class="settings-section">
-            <h4 class="settings-section-title">Журнал</h4>
+          <div class="settings-tab-content" data-content="logs">
             <div class="settings-item">
               <span class="settings-item-label">Часовой пояс</span>
               <div class="timezone-select-wrapper">
@@ -796,9 +798,6 @@
               </div>
             </div>
           </div>
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" onclick="closeSettingsModal()">Закрыть</button>
         </div>
       </div>
     </div>
@@ -890,76 +889,57 @@
         </h3>
         <p class="modal-description">Проверка наличия домена или IP-адреса в геофайлах</p>
         <div class="modal-body">
-          <div class="geo-scan-type-switch">
-            <button class="geo-type-btn active" data-type="domain" onclick="switchGeoType('domain')">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
-              Домен
-            </button>
-            <button class="geo-type-btn" data-type="ip" onclick="switchGeoType('ip')">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
-                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
-                <line x1="6" y1="6" x2="6.01" y2="6"></line>
-                <line x1="6" y1="18" x2="6.01" y2="18"></line>
-              </svg>
-              IP-адрес
-            </button>
-          </div>
-          <div class="geo-scan-input-group">
-            <label class="geo-scan-label" id="geoInputLabel">Домен</label>
+          <div class="geo-scan-controls">
+            <div class="geo-scan-type-switch">
+              <button class="geo-type-btn active" data-type="domain" onclick="switchGeoType('domain')">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                Домен
+              </button>
+              <button class="geo-type-btn" data-type="ip" onclick="switchGeoType('ip')">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                  <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                  <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                  <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                </svg>
+                IP-адрес
+              </button>
+            </div>
             <div class="geo-input-wrapper">
               <input type="text" id="geoIpInput" placeholder="example.com" />
               <button class="geo-input-clear" id="geoInputClear" aria-label="Очистить"></button>
             </div>
           </div>
-          <div class="geo-scan-input-group">
-            <label class="geo-scan-label">Геофайлы <span id="geoFilesCount" class="geo-files-count"></span></label>
-            <div id="geoFilesList" class="geo-files-list">
-              <div class="geo-files-loading">Загрузка списка файлов...</div>
-            </div>
+          <div class="geo-files-header">
+            <label class="geo-scan-label">Геофайлы</label>
+            <span id="geoFilesCount" class="template-count-badge"></span>
           </div>
-          <div id="geoScanResult" class="geo-scan-result" style="display: none">
-            <div class="geo-scan-result-header">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-              <span>Результаты сканирования</span>
-            </div>
-            <div id="geoScanResultContent" class="geo-scan-result-content"></div>
+          <div id="geoFilesList" class="geo-files-list">
+            <div class="geo-files-loading">Загрузка списка файлов...</div>
           </div>
         </div>
         <div class="modal-actions">

@@ -2589,6 +2589,24 @@ function closeSettingsModal() {
   document.getElementById("settingsModal").classList.remove("show")
 }
 
+function switchSettingsTab(tab) {
+  document.querySelectorAll(".settings-tab").forEach((btn) => {
+    if (btn.dataset.tab === tab) {
+      btn.classList.add("active")
+    } else {
+      btn.classList.remove("active")
+    }
+  })
+
+  document.querySelectorAll(".settings-tab-content").forEach((content) => {
+    if (content.dataset.content === tab) {
+      content.classList.add("active")
+    } else {
+      content.classList.remove("active")
+    }
+  })
+}
+
 function renderGithubProxies() {
   const proxyList = document.getElementById("githubProxyList")
   if (!proxyList) return
@@ -2895,31 +2913,27 @@ function switchGeoType(type) {
     }
   })
 
-  const label = document.getElementById("geoInputLabel")
   const input = document.getElementById("geoIpInput")
-  const resultDiv = document.getElementById("geoScanResult")
-
   if (type === "ip") {
-    label.textContent = "IP-адрес"
     input.placeholder = "1.1.1.1"
   } else {
-    label.textContent = "Домен"
     input.placeholder = "example.com"
   }
 
   input.value = ""
-  resultDiv.style.display = "none"
+
+  document.querySelectorAll(".geo-file-categories").forEach((el) => el.remove())
+  document.querySelectorAll(".geo-file-status").forEach((el) => (el.textContent = ""))
+  document.querySelectorAll(".geo-file-item").forEach((el) => el.classList.remove("has-results"))
 }
 
 async function openGeoScanModal() {
   const modal = document.getElementById("geoScanModal")
   const filesList = document.getElementById("geoFilesList")
-  const resultDiv = document.getElementById("geoScanResult")
   const ipInput = document.getElementById("geoIpInput")
   const clearBtn = document.getElementById("geoInputClear")
 
   modal.classList.add("show")
-  resultDiv.style.display = "none"
   ipInput.value = ""
   selectedGeoFiles = []
   if (clearBtn) clearBtn.classList.remove("show")
@@ -2934,7 +2948,7 @@ async function openGeoScanModal() {
 
     if (data.success && data.files) {
       geoFiles = data.files
-      document.getElementById("geoFilesCount").textContent = `(${geoFiles.length})`
+      document.getElementById("geoFilesCount").textContent = geoFiles.length
 
       if (geoFiles.length === 0) {
         filesList.innerHTML = '<div class="geo-files-empty">Геофайлы не найдены</div>'
@@ -2943,11 +2957,14 @@ async function openGeoScanModal() {
 
       filesList.innerHTML = geoFiles
         .map(
-          (file, index) => `
-        <label class="geo-file-item">
-          <input type="checkbox" value="${file}" onchange="toggleGeoFile('${file}')" checked>
-          <span>${file}</span>
-        </label>
+          (file) => `
+        <div class="geo-file-item" data-file="${file}">
+          <div class="geo-file-item-header">
+            <input type="checkbox" value="${file}" onchange="toggleGeoFile('${file}')" checked>
+            <span class="geo-file-name">${file}</span>
+            <span class="geo-file-status"></span>
+          </div>
+        </div>
       `,
         )
         .join("")
@@ -2979,85 +2996,90 @@ function toggleGeoFile(filename) {
 
 async function performGeoScan() {
   const input = document.getElementById("geoIpInput").value.trim()
-  const resultDiv = document.getElementById("geoScanResult")
-  const resultContent = document.getElementById("geoScanResultContent")
   const scanBtn = document.getElementById("geoScanBtn")
 
   if (!input) {
-    showToast(geoScanType === "ip" ? "Введите IP-адрес" : "Введите доменное имя", "error")
     return
   }
 
   if (selectedGeoFiles.length === 0) {
-    showToast("Выберите хотя бы один геофайл", "error")
     return
   }
 
   scanBtn.disabled = true
   scanBtn.textContent = "Сканирование..."
-  resultDiv.style.display = "none"
 
-  const results = []
+  document.querySelectorAll(".geo-file-categories").forEach((el) => el.remove())
+  document.querySelectorAll(".geo-file-status").forEach((el) => (el.textContent = ""))
+  document.querySelectorAll(".geo-file-item").forEach((el) => el.classList.remove("has-results"))
+
   const endpoint = geoScanType === "ip" ? "/api/geo/ip" : "/api/geo/site"
   const paramName = geoScanType === "ip" ? "ip" : "domain"
 
   try {
     for (const file of selectedGeoFiles) {
-      const response = await fetch(`${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input)}`)
-      const data = await response.json()
+      const fileItem = document.querySelector(`.geo-file-item[data-file="${file}"]`)
+      if (!fileItem) continue
 
-      if (data.success && data.categories && data.categories.length > 0) {
-        results.push({ file, categories: data.categories })
+      const statusEl = fileItem.querySelector(".geo-file-status")
+      statusEl.textContent = "сканируется..."
+      statusEl.classList.add("scanning")
+
+      try {
+        const response = await fetch(`${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input)}`)
+        const data = await response.json()
+
+        if (data.success && data.categories && data.categories.length > 0) {
+          statusEl.textContent = `${data.categories.length} найдено`
+          statusEl.classList.remove("scanning")
+          statusEl.classList.add("found")
+
+          const categoriesDiv = document.createElement("div")
+          categoriesDiv.className = "geo-file-categories"
+          categoriesDiv.innerHTML = data.categories
+            .map((cat) => `<span class="geo-category-badge" data-file="${file}" data-category="${cat}">${cat}</span>`)
+            .join("")
+
+          fileItem.appendChild(categoriesDiv)
+          fileItem.classList.add("has-results")
+
+          categoriesDiv.querySelectorAll(".geo-category-badge").forEach((badge) => {
+            badge.addEventListener("click", () => {
+              const badgeFile = badge.dataset.file
+              const category = badge.dataset.category
+              const text = `"ext:${badgeFile}:${category}"`.toLowerCase()
+
+              const ta = document.createElement("textarea")
+              ta.value = text
+              ta.style.position = "fixed"
+              ta.style.left = "-9999px"
+              document.body.appendChild(ta)
+              ta.focus()
+              ta.select()
+
+              try {
+                document.execCommand("copy")
+                badge.classList.add("copied")
+                setTimeout(() => badge.classList.remove("copied"), 1000)
+              } catch (err) {
+                console.error("Ошибка копирования:", err)
+              }
+
+              document.body.removeChild(ta)
+            })
+          })
+        } else {
+          statusEl.textContent = ""
+          statusEl.classList.remove("scanning")
+        }
+      } catch (err) {
+        statusEl.textContent = "ошибка"
+        statusEl.classList.remove("scanning")
+        console.error(`Ошибка сканирования ${file}:`, err)
       }
     }
-
-    if (results.length === 0) {
-      resultContent.innerHTML = `<div class="geo-scan-not-found">Запись не найдена</div>`
-    } else {
-      resultContent.innerHTML = results
-        .map(
-          (r) => `
-        <div class="geo-scan-match">
-          <div class="geo-scan-match-file">${r.file}</div>
-          <div class="geo-scan-match-categories">
-            ${r.categories.map((cat) => `<span class="geo-category-badge" data-file="${r.file}" data-category="${cat}">${cat}</span>`).join("")}
-          </div>
-        </div>
-      `,
-        )
-        .join("")
-
-      resultContent.querySelectorAll(".geo-category-badge").forEach((badge) => {
-        badge.addEventListener("click", () => {
-          const file = badge.dataset.file
-          const category = badge.dataset.category
-          const text = `"ext:${file}:${category}"`.toLowerCase()
-
-          const ta = document.createElement("textarea")
-          ta.value = text
-          ta.style.position = "fixed"
-          ta.style.left = "-9999px"
-          document.body.appendChild(ta)
-          ta.focus()
-          ta.select()
-
-          try {
-            document.execCommand("copy")
-            badge.classList.add("copied")
-            setTimeout(() => badge.classList.remove("copied"), 1000)
-          } catch (err) {
-            console.error("Ошибка копирования:", err)
-          }
-
-          document.body.removeChild(ta)
-        })
-      })
-    }
-
-    resultDiv.style.display = "block"
   } catch (error) {
     console.error("Ошибка сканирования:", error)
-    showToast("Ошибка при сканировании", "error")
   } finally {
     scanBtn.disabled = false
     scanBtn.textContent = "Сканировать"
