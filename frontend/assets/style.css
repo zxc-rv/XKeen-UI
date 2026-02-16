@@ -991,9 +991,9 @@ textarea {
 }
 
 #settingsModal .modal-content {
-  width: 550px;
   min-width: 550px;
   max-width: 550px;
+  min-height: 500px;
 }
 
 .settings-tabs {
@@ -3889,7 +3889,7 @@ span#coreSelectLabel {
   font-size: 13px;
   font-weight: 500;
   color: #e2e8f0;
-  margin-bottom: 8px;
+  margin-left: 3px;
 }
 
 .geo-files-header {
@@ -4060,7 +4060,7 @@ span#coreSelectLabel {
 .geo-file-name {
   font-size: 13px;
   color: #e2e8f0;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.3px;
   flex: 1;
 }
 
