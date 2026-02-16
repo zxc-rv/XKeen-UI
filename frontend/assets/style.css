@@ -4359,9 +4359,34 @@ span#coreSelectLabel {
     top: 125px;
   }
 
+  .modal-overlay {
+    align-items: center;
+    padding-top: 20px;
+  }
+
   .modal-content {
     min-width: 300px;
     padding: 20px;
+    max-height: 90vh;
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+
+  .modal-content::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .modal-content::-webkit-scrollbar-track {
+    background: #0f172a;
+  }
+
+  .modal-content::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+  }
+
+  .modal-content::-webkit-scrollbar-thumb:hover {
+    background: #475569;
   }
 
   .modal-content.expanded {
@@ -4395,6 +4420,65 @@ span#coreSelectLabel {
   .modal-description {
     font-size: 13px;
     margin: -8px 0 20px 0;
+  }
+
+  .geo-scan-type-switch {
+    gap: 6px;
+    padding: 3px;
+  }
+
+  .geo-type-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .geo-type-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .geo-scan-input-group {
+    margin-bottom: 16px;
+  }
+
+  .geo-scan-label {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  #geoIpInput {
+    height: 38px !important;
+    font-size: 16px !important;
+  }
+
+  .geo-files-list {
+    max-height: 180px;
+  }
+
+  .geo-file-item {
+    padding: 8px 10px;
+  }
+
+  .geo-file-item span {
+    font-size: 12px;
+  }
+
+  .geo-scan-result-content {
+    max-height: 200px;
+  }
+
+  .geo-scan-match {
+    padding: 10px;
+  }
+
+  .geo-scan-match-file {
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .geo-category-badge {
+    padding: 3px 8px;
+    font-size: 11px;
   }
 
   .template-list {
