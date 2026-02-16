@@ -24,6 +24,7 @@ tar = "0.4.44"
 http = "1.4.0"
 prost = "0.12"
 ipnet = "2.11"
+memmap2 = "0.9"
 
 [profile.release]
 opt-level = "z"

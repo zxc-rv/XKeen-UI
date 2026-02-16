@@ -1,11 +1,12 @@
 use axum::{extract::{Query, State}, response::{IntoResponse, Json}};
 use prost::Message;
 use serde::Serialize;
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, fs::File};
 use ipnet::IpNet;
 use regex::Regex;
 use crate::types::*;
 use prost::bytes::Buf;
+use memmap2::MmapOptions;
 
 #[derive(Message)]
 struct GeoIP {
@@ -59,12 +60,15 @@ fn match_domain(query: &str, rule: &str, rule_type: i32) -> bool {
     }
 }
 
-async fn find_ip_categories(geoip_path: &str, ip_str: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let data = tokio::fs::read(geoip_path).await?;
-    let ip: IpAddr = ip_str.parse()?;
-    let mut found = Vec::with_capacity(2);
+fn scan_geo_file<F>(path: &str, mut check_entry: F) -> Result<Vec<String>, Box<dyn std::error::Error>>
+where
+    F: FnMut(&mut &[u8]) -> Option<String>,
+{
+    let file = File::open(path)?;
+    let mmap = unsafe { MmapOptions::new().map(&file)? };
+    let mut buf = &mmap[..];
 
-    let mut buf = &data[..];
+    let mut found = Vec::with_capacity(2);
 
     while buf.has_remaining() {
         let (tag, wire_type) = match prost::encoding::decode_key(&mut buf) {
@@ -79,79 +83,59 @@ async fn find_ip_categories(geoip_path: &str, ip_str: &str) -> Result<Vec<String
             let mut entry_buf = &buf[..len];
             buf.advance(len);
 
-            if let Ok(entry) = GeoIP::decode(&mut entry_buf) {
-                for cidr in &entry.cidr {
-                    let network = if cidr.ip.len() == 4 {
-                        match <[u8; 4]>::try_from(&cidr.ip[..]) {
-                            Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
-                            Err(_) => continue,
-                        }
-                    } else {
-                        match <[u8; 16]>::try_from(&cidr.ip[..]) {
-                            Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
-                            Err(_) => continue,
-                        }
-                    };
-
-                    if network.contains(&ip) {
-                        found.push(entry.country_code);
-                        break;
-                    }
-                }
+            if let Some(country_code) = check_entry(&mut entry_buf) {
+                found.push(country_code);
             }
         } else {
-            let _ = prost::encoding::skip_field(
-                wire_type,
-                tag,
-                &mut buf,
-                prost::encoding::DecodeContext::default()
-            );
+            let _ = prost::encoding::skip_field(wire_type, tag, &mut buf, prost::encoding::DecodeContext::default());
         }
     }
 
     Ok(found)
 }
 
-async fn find_domain_categories(geosite_path: &str, domain: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let data = tokio::fs::read(geosite_path).await?;
-    let domain_lower = domain.to_lowercase();
-    let mut found = Vec::with_capacity(2);
+// Теперь функции поиска стали крошечными и переиспользуют scan_geo_file
+async fn find_ip_categories(geoip_path: &str, ip_str: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let target_ip: IpAddr = ip_str.parse()?;
 
-    let mut buf = &data[..];
+    // scan_geo_file работает синхронно из-за mmap, для axum это ок,
+    // т.к. это операция в памяти, блокировок I/O не будет.
+    scan_geo_file(geoip_path, |entry_buf| {
+        if let Ok(entry) = GeoIP::decode(entry_buf) {
+            for cidr in &entry.cidr {
+                let network = if cidr.ip.len() == 4 {
+                    <[u8; 4]>::try_from(&cidr.ip[..]).ok()
+                        .and_then(|bytes| IpNet::new(IpAddr::from(bytes), cidr.prefix as u8).ok())
+                } else {
+                    <[u8; 16]>::try_from(&cidr.ip[..]).ok()
+                        .and_then(|bytes| IpNet::new(IpAddr::from(bytes), cidr.prefix as u8).ok())
+                };
 
-    while buf.has_remaining() {
-        let (tag, wire_type) = match prost::encoding::decode_key(&mut buf) {
-            Ok(k) => k,
-            Err(_) => break,
-        };
-
-        if tag == 1 && wire_type == prost::encoding::WireType::LengthDelimited {
-            let len = prost::encoding::decode_varint(&mut buf).unwrap_or(0) as usize;
-            if buf.remaining() < len { break; }
-
-            let mut entry_buf = &buf[..len];
-            buf.advance(len);
-
-            if let Ok(entry) = GeoSite::decode(&mut entry_buf) {
-                for rule in &entry.domain {
-                    let rule_lower = rule.value.to_lowercase();
-                    if match_domain(&domain_lower, &rule_lower, rule.domain_type) {
-                        found.push(entry.country_code);
-                        break;
+                if let Some(net) = network {
+                    if net.contains(&target_ip) {
+                        return Some(entry.country_code);
                     }
                 }
             }
-        } else {
-            let _ = prost::encoding::skip_field(
-                wire_type,
-                tag,
-                &mut buf,
-                prost::encoding::DecodeContext::default()
-            );
         }
-    }
+        None
+    })
+}
 
-    Ok(found)
+async fn find_domain_categories(geosite_path: &str, domain: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let domain_lower = domain.to_lowercase();
+
+    scan_geo_file(geosite_path, |entry_buf| {
+        if let Ok(entry) = GeoSite::decode(entry_buf) {
+            for rule in &entry.domain {
+                let rule_lower = rule.value.to_lowercase();
+                if match_domain(&domain_lower, &rule_lower, rule.domain_type) {
+                    return Some(entry.country_code);
+                }
+            }
+        }
+        None
+    })
 }
 
 pub async fn get_geo(State(_state): State<AppState>) -> impl IntoResponse {
