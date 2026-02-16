@@ -5,12 +5,7 @@ use std::{collections::HashMap, net::IpAddr};
 use ipnet::IpNet;
 use regex::Regex;
 use crate::types::*;
-
-#[derive(Message)]
-struct GeoIPList {
-    #[prost(message, repeated, tag = "1")]
-    entry: Vec<GeoIP>,
-}
+use prost::bytes::Buf;
 
 #[derive(Message)]
 struct GeoIP {
@@ -26,12 +21,6 @@ struct CIDR {
     ip: Vec<u8>,
     #[prost(uint32, tag = "2")]
     prefix: u32,
-}
-
-#[derive(Message)]
-struct GeoSiteList {
-    #[prost(message, repeated, tag = "1")]
-    entry: Vec<GeoSite>,
 }
 
 #[derive(Message)]
@@ -72,45 +61,96 @@ fn match_domain(query: &str, rule: &str, rule_type: i32) -> bool {
 
 async fn find_ip_categories(geoip_path: &str, ip_str: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let data = tokio::fs::read(geoip_path).await?;
-    let geolist = GeoIPList::decode(&data[..])?;
     let ip: IpAddr = ip_str.parse()?;
     let mut found = Vec::with_capacity(2);
-    for entry in geolist.entry {
-        for cidr in &entry.cidr {
-            let network = if cidr.ip.len() == 4 {
-                match <[u8; 4]>::try_from(&cidr.ip[..]) {
-                    Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
-                    Err(_) => continue,
+
+    let mut buf = &data[..];
+
+    while buf.has_remaining() {
+        let (tag, wire_type) = match prost::encoding::decode_key(&mut buf) {
+            Ok(k) => k,
+            Err(_) => break,
+        };
+
+        if tag == 1 && wire_type == prost::encoding::WireType::LengthDelimited {
+            let len = prost::encoding::decode_varint(&mut buf).unwrap_or(0) as usize;
+            if buf.remaining() < len { break; }
+
+            let mut entry_buf = &buf[..len];
+            buf.advance(len);
+
+            if let Ok(entry) = GeoIP::decode(&mut entry_buf) {
+                for cidr in &entry.cidr {
+                    let network = if cidr.ip.len() == 4 {
+                        match <[u8; 4]>::try_from(&cidr.ip[..]) {
+                            Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
+                            Err(_) => continue,
+                        }
+                    } else {
+                        match <[u8; 16]>::try_from(&cidr.ip[..]) {
+                            Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
+                            Err(_) => continue,
+                        }
+                    };
+
+                    if network.contains(&ip) {
+                        found.push(entry.country_code);
+                        break;
+                    }
                 }
-            } else {
-                match <[u8; 16]>::try_from(&cidr.ip[..]) {
-                    Ok(bytes) => IpNet::new(IpAddr::from(bytes), cidr.prefix as u8)?,
-                    Err(_) => continue,
-                }
-            };
-            if network.contains(&ip) {
-                found.push(entry.country_code);
-                break;
             }
+        } else {
+            let _ = prost::encoding::skip_field(
+                wire_type,
+                tag,
+                &mut buf,
+                prost::encoding::DecodeContext::default()
+            );
         }
     }
+
     Ok(found)
 }
 
 async fn find_domain_categories(geosite_path: &str, domain: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let data = tokio::fs::read(geosite_path).await?;
-    let geolist = GeoSiteList::decode(&data[..])?;
     let domain_lower = domain.to_lowercase();
     let mut found = Vec::with_capacity(2);
-    for entry in geolist.entry {
-        for rule in &entry.domain {
-            let rule_lower = rule.value.to_lowercase();
-            if match_domain(&domain_lower, &rule_lower, rule.domain_type) {
-                found.push(entry.country_code);
-                break;
+
+    let mut buf = &data[..];
+
+    while buf.has_remaining() {
+        let (tag, wire_type) = match prost::encoding::decode_key(&mut buf) {
+            Ok(k) => k,
+            Err(_) => break,
+        };
+
+        if tag == 1 && wire_type == prost::encoding::WireType::LengthDelimited {
+            let len = prost::encoding::decode_varint(&mut buf).unwrap_or(0) as usize;
+            if buf.remaining() < len { break; }
+
+            let mut entry_buf = &buf[..len];
+            buf.advance(len);
+
+            if let Ok(entry) = GeoSite::decode(&mut entry_buf) {
+                for rule in &entry.domain {
+                    let rule_lower = rule.value.to_lowercase();
+                    if match_domain(&domain_lower, &rule_lower, rule.domain_type) {
+                        found.push(entry.country_code);
+                        break;
+                    }
+                }
             }
+        } else {
+            let _ = prost::encoding::skip_field(
+                wire_type,
+                tag,
+                &mut buf,
+                prost::encoding::DecodeContext::default()
+            );
         }
     }
+
     Ok(found)
 }
 
