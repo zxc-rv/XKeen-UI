@@ -10,7 +10,6 @@ use tokio::task;
 use crate::types::*;
 use std::sync::{Arc, RwLock};
 use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::time::SystemTime;
 
 #[derive(Serialize)]

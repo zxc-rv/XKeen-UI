@@ -1949,46 +1949,10 @@ function toggleFormatMenu(e) {
   document.getElementById("formatMenu").classList.toggle("show")
 }
 
-const configTemplates = {
-  xray: [
-    {
-      name: "Log",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/01_log.json",
-    },
-    {
-      name: "Inbounds (Режим Mixed)",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/03_inbounds_mixed.json",
-    },
-    {
-      name: "Inbounds (Режим TProxy)",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/03_inbounds_tproxy.json",
-    },
-    {
-      name: "Outbounds",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/04_outbounds.json",
-    },
-    {
-      name: "Routing (только заблокированное, zkeen)",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/05_routing_1.json",
-    },
-    {
-      name: "Routing (все в прокси, кроме RU)",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/05_routing_2.json",
-    },
-    {
-      name: "Policy",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/xray/06_policy.json",
-    },
-  ],
-  mihomo: [
-    {
-      name: "Сonfig (только заблокированное, refilter)",
-      url: "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/mihomo/config.yaml",
-    },
-  ],
-}
+const TEMPLATES_URL = "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/templates.json"
+let configTemplatesCache = null
 
-function openTemplateImportModal() {
+async function openTemplateImportModal() {
   const modal = document.getElementById("templateImportModal")
   const templateList = document.getElementById("templateList")
   const importBtn = document.getElementById("importTemplateBtn")
@@ -1997,15 +1961,28 @@ function openTemplateImportModal() {
 
   selectedTemplateUrl = null
   importBtn.disabled = true
-
-  const templates = configTemplates[currentCore] || []
-
-  if (countBadge) {
-    countBadge.textContent = templates.length
-  }
+  modal.classList.add("show")
 
   const coreLabel = currentCore === "xray" ? "Xray" : "Mihomo"
   description.innerHTML = `Выберите готовый шаблон конфигурации для <span style="color: #3b82f6; font-weight: 600;">${coreLabel}</span>`
+
+  if (!configTemplatesCache) {
+    templateList.innerHTML = '<div class="template-loading">Загрузка шаблонов...</div>'
+    try {
+      const response = await fetch(TEMPLATES_URL)
+      if (!response.ok) throw new Error(response.statusText)
+      configTemplatesCache = await response.json()
+    } catch (error) {
+      console.error("Ошибка загрузки шаблонов:", error)
+      templateList.innerHTML = '<div class="template-list-empty"><p>Не удалось загрузить шаблоны</p></div>'
+      if (countBadge) countBadge.textContent = 0
+      return
+    }
+  }
+
+  const templates = configTemplatesCache[currentCore] || []
+
+  if (countBadge) countBadge.textContent = templates.length
 
   if (templates.length === 0) {
     templateList.innerHTML = `
@@ -2017,7 +1994,6 @@ function openTemplateImportModal() {
         <p>Нет доступных шаблонов для текущего ядра</p>
       </div>
     `
-    modal.classList.add("show")
     return
   }
 
@@ -2031,11 +2007,7 @@ function openTemplateImportModal() {
     )
     .join("")
 
-  modal.classList.add("show")
-
-  if (templates.length > 0) {
-    setTimeout(() => selectTemplate(templates[0].url, 0), 0)
-  }
+  setTimeout(() => selectTemplate(templates[0].url, 0), 0)
 }
 
 function closeTemplateImportModal() {
@@ -2948,8 +2920,8 @@ async function openGeoScanModal() {
   ipInput.value = ""
   selectedGeoFiles = []
   if (clearBtn) clearBtn.classList.remove("show")
-
-  // filesList.innerHTML = '<div class="geo-files-loading">Загрузка файлов...</div>'
+  const scanBtn = document.getElementById("geoScanBtn")
+  if (scanBtn) scanBtn.disabled = true
 
   try {
     const response = await fetch("/api/geo")
@@ -3100,14 +3072,17 @@ document.addEventListener("DOMContentLoaded", () => {
     })
 
     const geoInputClear = document.getElementById("geoInputClear")
+    const geoScanBtn = document.getElementById("geoScanBtn")
     if (geoInputClear) {
       geoIpInput.addEventListener("input", () => {
         geoInputClear.classList.toggle("show", geoIpInput.value.length > 0)
+        if (geoScanBtn) geoScanBtn.disabled = geoIpInput.value.trim().length === 0
       })
 
       geoInputClear.addEventListener("click", () => {
         geoIpInput.value = ""
         geoInputClear.classList.remove("show")
+        if (geoScanBtn) geoScanBtn.disabled = true
         geoIpInput.focus()
       })
     }
