@@ -117,7 +117,7 @@
           </div>
         </div>
 
-        <div class="validation-info" id="validationInfo" style="display: none">
+        <div class="validation-info" id="validationInfo" style="visibility: hidden">
           <div id="validationMessageContainer"></div>
           <div id="validationSkeleton" class="skeleton skeleton-line"></div>
           <div class="editor-controls" id="editorControlsContainer">
@@ -126,10 +126,10 @@
               <div id="saveBtn-skeleton" class="skeleton skeleton-btn" style="width: 125px"></div>
               <div id="formatBtn-skeleton" class="skeleton skeleton-btn" style="width: 106px"></div>
             </div>
-            <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled>Применить</button>
-            <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()" disabled>Сохранить</button>
+            <button class="btn btn-success" id="saveRestartBtn" onclick="saveAndRestart()" disabled style="display: none">Применить</button>
+            <button class="btn btn-primary" id="saveBtn" onclick="saveCurrentConfig()" disabled style="display: none">Сохранить</button>
             <div class="btn-group">
-              <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()">Формат</button>
+              <button id="formatBtn" class="btn btn-secondary" onclick="formatCurrentConfig()" style="display: none">Формат</button>
               <button
                 id="formatDropdownBtn"
                 class="btn btn-secondary btn-dropdown"

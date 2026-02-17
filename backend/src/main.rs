@@ -20,12 +20,18 @@ async fn main() {
     println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, get_arch());
 
     let init_file = if Path::new(S99XKEEN).exists() { S99XKEEN } else { S24XRAY }.to_string();
+    let geo_cache = Arc::new(RwLock::new(std::collections::HashMap::new()));
+    let gc_clone = geo_cache.clone();
+    tokio::task::spawn_blocking(move || {
+        let _ = crate::geo::list_geo_files(gc_clone);
+    });
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(&init_file))),
         settings: Arc::new(RwLock::new(load_settings())),
         init_file: Arc::new(RwLock::new(init_file)),
         http_client: reqwest::Client::builder().user_agent("XKeen-UI").timeout(std::time::Duration::from_secs(120)).build().unwrap(),
         update_checker: UpdateChecker::default(),
+        geo_cache,
         _debug,
     };
     version::start_update_checker(state.clone());

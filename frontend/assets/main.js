@@ -819,7 +819,7 @@ function renderTabs() {
   const validationInfo = document.getElementById("validationInfo")
 
   if (isConfigsLoading) {
-    if (validationInfo) validationInfo.style.display = "flex"
+    if (validationInfo) validationInfo.style.visibility = "visible"
     if (editorControlsSkeletons) editorControlsSkeletons.style.display = "inline-flex"
     if (saveBtn) saveBtn.style.display = "none"
     if (saveRestartBtn) saveRestartBtn.style.display = "none"
@@ -1008,7 +1008,7 @@ function switchTab(index) {
   updateUIDirtyState()
 
   const validationInfo = document.getElementById("validationInfo")
-  if (validationInfo) validationInfo.style.display = "flex"
+  if (validationInfo) validationInfo.style.visibility = "visible"
 
   if (config && getFileLanguage(config.filename) === "json") {
     const model = monacoEditor.getModel()
@@ -2949,7 +2949,7 @@ async function openGeoScanModal() {
   selectedGeoFiles = []
   if (clearBtn) clearBtn.classList.remove("show")
 
-  filesList.innerHTML = '<div class="geo-files-loading">Загрузка файлов...</div>'
+  // filesList.innerHTML = '<div class="geo-files-loading">Загрузка файлов...</div>'
 
   try {
     const response = await fetch("/api/geo")

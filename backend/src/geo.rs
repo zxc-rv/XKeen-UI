@@ -8,12 +8,16 @@ use serde::Serialize;
 use std::{collections::HashMap, net::IpAddr, fs::File};
 use tokio::task;
 use crate::types::*;
+use std::sync::{Arc, RwLock};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::time::SystemTime;
 
 #[derive(Serialize)]
 struct GeoResponse { categories: Vec<String> }
 
-#[derive(Serialize)]
-struct GeoFilesResponse {
+#[derive(Serialize, Clone)]
+pub struct GeoFilesResponse {
     site_files: Vec<String>,
     ip_files: Vec<String>,
 }
@@ -96,39 +100,53 @@ fn find_domain_categories(data: &[u8], domain: &str) -> Result<Vec<String>, Stri
     }))
 }
 
-fn list_geo_files() -> Result<GeoFilesResponse, String> {
+pub fn list_geo_files(cache_arc: Arc<RwLock<crate::types::GeoCache>>) -> Result<GeoFilesResponse, String> {
     let mut site_files = Vec::new();
     let mut ip_files = Vec::new();
-    for entry in std::fs::read_dir(XRAY_ASSET).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
-        if entry.file_type().map_err(|e| e.to_string())?.is_symlink() { continue; }
+    let mut new_cache_entries = Vec::new();
 
+    let entries = std::fs::read_dir(XRAY_ASSET).map_err(|e| e.to_string())?;
+
+    for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().map_or(false, |ext| ext == "dat") {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                let n = name.to_string();
-                let (mut is_site, mut is_ip) = (false, false);
-                if let Ok(file) = File::open(&path) {
-                    if let Ok(mmap) = unsafe { MmapOptions::new().map(&file) } {
-                        let mut data = mmap.as_ref();
-                        if let Ok((1, WireType::LengthDelimited)) = decode_key(&mut data) {
-                            let len = decode_varint(&mut data).unwrap_or(0) as usize;
-                            if data.remaining() >= len {
-                                let entry_buf = &data[..len];
-                                is_site = GeoSite::decode(entry_buf).map_or(false, |s| s.domain.iter().any(|d| !d.value.is_empty()));
-                                is_ip = GeoIP::decode(entry_buf).map_or(false, |i| i.cidr.iter().any(|c| c.ip.len() == 4 || c.ip.len() == 16));
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let mtime = entry.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+            let cached = {
+                let cache = cache_arc.read().unwrap();
+                cache.get(&name).cloned()
+            };
+
+            let (is_site, is_ip) = match cached {
+                Some((cached_time, s, i)) if cached_time == mtime => (s, i),
+                _ => {
+                    let (mut s, mut i) = (false, false);
+                    if let Ok(file) = File::open(&path) {
+                        if let Ok(mmap) = unsafe { MmapOptions::new().map(&file) } {
+                            let mut data = mmap.as_ref();
+                            if let Ok((1, WireType::LengthDelimited)) = decode_key(&mut data) {
+                                let len = decode_varint(&mut data).unwrap_or(0) as usize;
+                                if data.remaining() >= len {
+                                    let buf = &data[..len];
+                                    s = GeoSite::decode(buf).map_or(false, |gs| !gs.domain.is_empty());
+                                    i = GeoIP::decode(buf).map_or(false, |gi| !gi.cidr.is_empty());
+                                }
                             }
                         }
                     }
+                    new_cache_entries.push((name.clone(), mtime, s, i));
+                    (s, i)
                 }
-                if !is_site && !is_ip {
-                    site_files.push(n.clone());
-                    ip_files.push(n);
-                } else {
-                    if is_site { site_files.push(n.clone()); }
-                    if is_ip { ip_files.push(n); }
-                }
-            }
+            };
+
+            if is_site { site_files.push(name.clone()); }
+            if is_ip { ip_files.push(name); }
+        }
+    }
+    if !new_cache_entries.is_empty() {
+        let mut cache = cache_arc.write().unwrap();
+        for (name, mtime, s, i) in new_cache_entries {
+            cache.insert(name, (mtime, s, i));
         }
     }
 
@@ -137,23 +155,12 @@ fn list_geo_files() -> Result<GeoFilesResponse, String> {
     Ok(GeoFilesResponse { site_files, ip_files })
 }
 
-pub async fn get_geo(State(_state): State<AppState>) -> impl IntoResponse {
-    match task::spawn_blocking(|| list_geo_files()).await {
-        Ok(Ok(data)) => Json(ApiResponse {
-            success: true,
-            error: None,
-            data: Some(data),
-        }),
-        Ok(Err(e)) => Json(ApiResponse::<GeoFilesResponse> {
-            success: false,
-            error: Some(e),
-            data: None,
-        }),
-        Err(e) => Json(ApiResponse::<GeoFilesResponse> {
-            success: false,
-            error: Some(format!("Task failed: {}", e)),
-            data: None,
-        }),
+pub async fn get_geo(State(state): State<AppState>) -> impl IntoResponse {
+    let cache = state.geo_cache.clone();
+    match task::spawn_blocking(move || list_geo_files(cache)).await {
+        Ok(Ok(data)) => Json(ApiResponse { success: true, error: None, data: Some(data) }),
+        Ok(Err(e)) => Json(ApiResponse::<GeoFilesResponse> { success: false, error: Some(e), data: None }),
+        Err(e) => Json(ApiResponse::<GeoFilesResponse> { success: false, error: Some(format!("Task panic: {}", e)), data: None }),
     }
 }
 

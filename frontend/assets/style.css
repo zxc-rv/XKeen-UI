@@ -171,6 +171,7 @@ textarea {
 .panel-title {
   font-size: 20px;
   font-weight: 600;
+  line-height: 1.2;
   margin-bottom: 16px;
   color: #e4e4e7;
 }
@@ -417,16 +418,17 @@ textarea {
   border: 1px solid #1e293b;
   border-radius: 8px;
   background: var(--field-background);
-  /*overflow: hidden;*/
 }
 
 .tabs-content.no-border {
-  border: none;
+  border-color: var(--panel-background);
 }
 
 .editor-container {
   position: relative;
   height: 750px;
+  overflow: hidden;
+  border-radius: 8px;
 }
 
 .logs-container {
@@ -1505,6 +1507,7 @@ textarea {
 
 #editorControlsSkeletons {
   gap: 8px;
+  display: inline-flex;
 }
 
 #dashboardLink {
