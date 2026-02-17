@@ -1,5 +1,6 @@
 Thumbs.db
 Makefile
+Justfile
 monaco-editor
 prettier
 local_mode.js
