@@ -986,8 +986,8 @@ textarea {
 }
 
 #geoScanModal .modal-content {
-  min-width: 650px;
-  max-width: 750px;
+  min-width: 600px;
+  max-width: 650px;
 }
 
 #settingsModal .modal-content {
@@ -3840,8 +3840,6 @@ span#coreSelectLabel {
   flex-direction: column;
   gap: 12px;
   margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #1e293b;
 }
 
 .geo-scan-type-switch {
@@ -3911,6 +3909,7 @@ span#coreSelectLabel {
   position: relative;
   display: flex;
   align-items: center;
+  margin-top: 12px;
 }
 
 #geoIpInput {
@@ -3972,6 +3971,7 @@ span#coreSelectLabel {
 }
 
 .geo-files-list {
+  min-height: 219px;
   max-height: 440px;
   overflow-y: auto;
   border: 1px solid #1e293b;
@@ -4002,7 +4002,7 @@ span#coreSelectLabel {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 6px;
   transition: background 0.15s;
   user-select: none;
