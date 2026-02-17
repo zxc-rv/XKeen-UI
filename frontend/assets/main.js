@@ -2898,7 +2898,7 @@ function showCommentsWarning(action) {
   setTimeout(() => document.getElementById("confirmCommentsBtn").focus(), 50)
 }
 
-let geoFiles = []
+let geoData = { domain: [], ip: [] }
 let selectedGeoFiles = []
 let geoScanType = "domain"
 
@@ -2906,28 +2906,36 @@ function switchGeoType(type) {
   geoScanType = type
   const buttons = document.querySelectorAll(".geo-type-btn")
   buttons.forEach((btn) => {
-    if (btn.dataset.type === type) {
-      btn.classList.add("active")
-    } else {
-      btn.classList.remove("active")
-    }
+    btn.classList.toggle("active", btn.dataset.type === type)
   })
 
   const input = document.getElementById("geoIpInput")
-  if (type === "ip") {
-    input.placeholder = "1.1.1.1"
-  } else {
-    input.placeholder = "example.com"
-  }
-
+  input.placeholder = type === "ip" ? "1.1.1.1" : "example.com"
   input.value = ""
 
-  document.querySelectorAll(".geo-file-categories").forEach((el) => el.remove())
-  document.querySelectorAll(".geo-file-status").forEach((el) => {
-    el.textContent = ""
-    el.classList.remove("scanning", "found", "not-found", "error")
-  })
-  document.querySelectorAll(".geo-file-item").forEach((el) => el.classList.remove("has-results"))
+  const currentFiles = geoData[type] || []
+  const countEl = document.getElementById("geoFilesCount")
+  if (countEl) countEl.textContent = currentFiles.length
+
+  const filesList = document.getElementById("geoFilesList")
+  if (currentFiles.length === 0) {
+    filesList.innerHTML = '<div class="geo-files-empty">Геофайлы не найдены</div>'
+  } else {
+    filesList.innerHTML = currentFiles
+      .map(
+        (file) => `
+      <div class="geo-file-item" data-file="${file}">
+        <div class="geo-file-item-header">
+          <input type="checkbox" value="${file}" onchange="toggleGeoFile('${file}')" checked>
+          <span class="geo-file-name">${file}</span>
+          <span class="geo-file-status"></span>
+        </div>
+      </div>
+    `,
+      )
+      .join("")
+  }
+  selectedGeoFiles = [...currentFiles]
 }
 
 async function openGeoScanModal() {
@@ -2941,38 +2949,16 @@ async function openGeoScanModal() {
   selectedGeoFiles = []
   if (clearBtn) clearBtn.classList.remove("show")
 
-  switchGeoType("domain")
-
-  filesList.innerHTML = '<div class="geo-files-loading">Загрузка списка файлов...</div>'
+  filesList.innerHTML = '<div class="geo-files-loading">Загрузка файлов...</div>'
 
   try {
     const response = await fetch("/api/geo")
     const data = await response.json()
 
-    if (data.success && data.files) {
-      geoFiles = data.files
-      document.getElementById("geoFilesCount").textContent = geoFiles.length
-
-      if (geoFiles.length === 0) {
-        filesList.innerHTML = '<div class="geo-files-empty">Геофайлы не найдены</div>'
-        return
-      }
-
-      filesList.innerHTML = geoFiles
-        .map(
-          (file) => `
-        <div class="geo-file-item" data-file="${file}">
-          <div class="geo-file-item-header">
-            <input type="checkbox" value="${file}" onchange="toggleGeoFile('${file}')" checked>
-            <span class="geo-file-name">${file}</span>
-            <span class="geo-file-status"></span>
-          </div>
-        </div>
-      `,
-        )
-        .join("")
-
-      selectedGeoFiles = [...geoFiles]
+    if (data.success) {
+      geoData.domain = data.site_files || []
+      geoData.ip = data.ip_files || []
+      switchGeoType("domain")
     } else {
       filesList.innerHTML = '<div class="geo-files-error">Ошибка загрузки файлов</div>'
     }

@@ -13,7 +13,10 @@ use crate::types::*;
 struct GeoResponse { categories: Vec<String> }
 
 #[derive(Serialize)]
-struct GeoFilesResponse { files: Vec<String> }
+struct GeoFilesResponse {
+    site_files: Vec<String>,
+    ip_files: Vec<String>,
+}
 
 fn to_v4(ip: &[u8]) -> Option<u32> { ip.try_into().ok().map(u32::from_be_bytes) }
 fn to_v6(ip: &[u8]) -> Option<u128> { ip.try_into().ok().map(u128::from_be_bytes) }
@@ -93,27 +96,53 @@ fn find_domain_categories(data: &[u8], domain: &str) -> Result<Vec<String>, Stri
     }))
 }
 
-fn list_geo_files() -> Result<Vec<String>, String> {
-    let mut names = Vec::new();
+fn list_geo_files() -> Result<GeoFilesResponse, String> {
+    let mut site_files = Vec::new();
+    let mut ip_files = Vec::new();
     for entry in std::fs::read_dir(XRAY_ASSET).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
+        if entry.file_type().map_err(|e| e.to_string())?.is_symlink() { continue; }
+
         let path = entry.path();
         if path.extension().map_or(false, |ext| ext == "dat") {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                names.push(name.to_string());
+                let n = name.to_string();
+                let (mut is_site, mut is_ip) = (false, false);
+                if let Ok(file) = File::open(&path) {
+                    if let Ok(mmap) = unsafe { MmapOptions::new().map(&file) } {
+                        let mut data = mmap.as_ref();
+                        if let Ok((1, WireType::LengthDelimited)) = decode_key(&mut data) {
+                            let len = decode_varint(&mut data).unwrap_or(0) as usize;
+                            if data.remaining() >= len {
+                                let entry_buf = &data[..len];
+                                is_site = GeoSite::decode(entry_buf).map_or(false, |s| s.domain.iter().any(|d| !d.value.is_empty()));
+                                is_ip = GeoIP::decode(entry_buf).map_or(false, |i| i.cidr.iter().any(|c| c.ip.len() == 4 || c.ip.len() == 16));
+                            }
+                        }
+                    }
+                }
+                if !is_site && !is_ip {
+                    site_files.push(n.clone());
+                    ip_files.push(n);
+                } else {
+                    if is_site { site_files.push(n.clone()); }
+                    if is_ip { ip_files.push(n); }
+                }
             }
         }
     }
-    names.sort();
-    Ok(names)
+
+    site_files.sort();
+    ip_files.sort();
+    Ok(GeoFilesResponse { site_files, ip_files })
 }
 
 pub async fn get_geo(State(_state): State<AppState>) -> impl IntoResponse {
     match task::spawn_blocking(|| list_geo_files()).await {
-        Ok(Ok(files)) => Json(ApiResponse {
+        Ok(Ok(data)) => Json(ApiResponse {
             success: true,
             error: None,
-            data: Some(GeoFilesResponse { files }),
+            data: Some(data),
         }),
         Ok(Err(e)) => Json(ApiResponse::<GeoFilesResponse> {
             success: false,
