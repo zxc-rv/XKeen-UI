@@ -64,17 +64,38 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
-    let id = WS_COUNTER.fetch_add(1, Ordering::Relaxed);
-    println!("[WS-{}] Connected (Total: {})", id, WS_COUNTER.load(Ordering::Relaxed));
+    let count = WS_COUNTER.fetch_add(1, Ordering::SeqCst);
+    println!("[WS-{}] Connected (Total: {})", count, count + 1);
+
+    if count == 0 {
+        println!("🚀 Starting log watcher...");
+        let tx = state.log_tx.clone();
+        let handle = tokio::spawn(async move {
+            let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
+            let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
+                if let Ok(e) = res {
+                    if e.kind.is_modify() {
+                        for path in e.paths {
+                            let _ = mpsc_tx.send(path.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }).unwrap();
+
+            let _ = watcher.watch(Path::new(ERROR_LOG), RecursiveMode::NonRecursive);
+            let _ = watcher.watch(Path::new(ACCESS_LOG), RecursiveMode::NonRecursive);
+
+            while let Some(path) = mpsc_rx.recv().await {
+                let _ = tx.send(path);
+            }
+        });
+
+        *state.log_watcher.lock().await = Some(handle.abort_handle());
+    }
 
     let (mut tx, mut rx) = socket.split();
-    let (msg_tx, mut msg_rx) = tokio::sync::mpsc::unbounded_channel();
-    let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
-        if let Ok(e) = res { if e.kind.is_modify() { _ = msg_tx.send(()); } }
-    }).unwrap();
-
+    let mut log_rx = state.log_tx.subscribe();
     let mut path = ERROR_LOG.to_string();
-    _ = watcher.watch(Path::new(&path), RecursiveMode::NonRecursive);
     let tz = state.settings.read().unwrap().log.timezone;
     let p_clone = path.clone();
     let (t, l, mut offset) = tokio::task::spawn_blocking(move ||
@@ -93,9 +114,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         let tz = state.settings.read().unwrap().log.timezone;
                         match v["type"].as_str() {
                             Some("switchFile") => {
-                                _ = watcher.unwatch(Path::new(&path));
                                 path = if v["file"] == "access.log" { ACCESS_LOG.into() } else { ERROR_LOG.into() };
-                                _ = watcher.watch(Path::new(&path), RecursiveMode::NonRecursive);
 
                                 let p = path.clone();
                                 let (t, l, off) = tokio::task::spawn_blocking(move || read_log_file(p, 0, "".into(), true, tz)).await.unwrap();
@@ -126,22 +145,32 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     _ => {}
                 }
             }
-            Some(_) = msg_rx.recv() => {
-                let tz = state.settings.read().unwrap().log.timezone;
-                let p = path.clone();
-                let off_curr = offset;
-                let (t, l, new_off) = tokio::task::spawn_blocking(move || read_log_file(p, off_curr, "".into(), false, tz)).await.unwrap();
-                offset = new_off;
+            Ok(changed_path) = log_rx.recv() => {
+                if changed_path == path {
+                    let tz = state.settings.read().unwrap().log.timezone;
+                    let p = path.clone();
+                    let off_curr = offset;
+                    let (t, l, new_off) = tokio::task::spawn_blocking(move || read_log_file(p, off_curr, "".into(), false, tz)).await.unwrap();
+                    offset = new_off;
 
-                if !l.is_empty() {
-                    let content = l.join("\n");
-                    if tx.send(Message::Text(serde_json::json!({"type": t, "content": content}).to_string().into())).await.is_err() { break; }
-                } else if t == "clear" {
-                     if tx.send(Message::Text(serde_json::json!({"type": "clear"}).to_string().into())).await.is_err() { break; }
+                    if !l.is_empty() {
+                        let content = l.join("\n");
+                        if tx.send(Message::Text(serde_json::json!({"type": t, "content": content}).to_string().into())).await.is_err() { break; }
+                    } else if t == "clear" {
+                         if tx.send(Message::Text(serde_json::json!({"type": "clear"}).to_string().into())).await.is_err() { break; }
+                    }
                 }
             }
         }
     }
-    println!("[WS-{}] Disconnected", id);
-    WS_COUNTER.fetch_sub(1, Ordering::Relaxed);
+
+    let count_after = WS_COUNTER.fetch_sub(1, Ordering::SeqCst);
+    println!("[WS] Disconnected. Remaining: {}", count_after - 1);
+
+    if count_after == 1 {
+        println!("💤 Stopping log watcher...");
+        if let Some(abort_handle) = state.log_watcher.lock().await.take() {
+            abort_handle.abort();
+        }
+    }
 }

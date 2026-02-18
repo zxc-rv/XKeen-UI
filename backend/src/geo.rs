@@ -9,7 +9,6 @@ use std::{collections::HashMap, net::IpAddr, fs::File};
 use tokio::task;
 use crate::types::*;
 use std::sync::{Arc, RwLock};
-use std::collections::hash_map::DefaultHasher;
 use std::time::SystemTime;
 
 #[derive(Serialize)]

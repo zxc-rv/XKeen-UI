@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{sync::{Arc, RwLock}, time::Instant};
+use tokio::{sync::{broadcast, Mutex}, task::AbortHandle};
 
 pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 pub const APP_CONFIG: &str = "/opt/share/www/XKeen-UI/config.json";
@@ -24,6 +25,8 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub update_checker: UpdateChecker,
     pub geo_cache: Arc<RwLock<GeoCache>>,
+    pub log_tx: Arc<broadcast::Sender<String>>,
+    pub log_watcher: Arc<Mutex<Option<AbortHandle>>>,
     pub _debug: bool,
 }
 
