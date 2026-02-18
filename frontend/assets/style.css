@@ -992,6 +992,10 @@ textarea {
   max-width: 650px;
 }
 
+#geoScanModal .modal-actions {
+  padding-top: 0;
+}
+
 #settingsModal .modal-content {
   min-width: 550px;
   max-width: 550px;
@@ -1122,7 +1126,6 @@ textarea {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding-top: 16px;
 }
 
 #importModal .modal-actions {
@@ -3974,13 +3977,13 @@ span#coreSelectLabel {
 }
 
 .geo-files-list {
-  min-height: 219px;
-  max-height: 440px;
+  min-height: 233px;
+  max-height: 287px;
   overflow-y: auto;
   border: 1px solid #1e293b;
   border-radius: 8px;
   background: #080e1d;
-  padding: 8px;
+  padding: 6px;
 }
 
 .geo-files-list::-webkit-scrollbar {
@@ -4005,7 +4008,7 @@ span#coreSelectLabel {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-radius: 6px;
   transition: background 0.15s;
   user-select: none;

@@ -2504,6 +2504,8 @@ document.addEventListener("keydown", (e) => {
     const coreModal = document.getElementById("coreModal")
     const importModal = document.getElementById("importModal")
     const templateImportModal = document.getElementById("templateImportModal")
+    const commentsModal = document.getElementById("commentsWarningModal")
+    const generateBtn = document.getElementById("generateBtn")
 
     if (dirtyModal && dirtyModal.classList.contains("show")) {
       saveAndSwitch()
@@ -2884,6 +2886,11 @@ function switchGeoType(type) {
   const input = document.getElementById("geoIpInput")
   input.placeholder = type === "ip" ? "1.1.1.1" : "example.com"
   input.value = ""
+
+  const clearBtn = document.getElementById("geoInputClear")
+  if (clearBtn) clearBtn.classList.remove("show")
+  const scanBtn = document.getElementById("geoScanBtn")
+  if (scanBtn) scanBtn.disabled = true
 
   const currentFiles = geoData[type] || []
   const countEl = document.getElementById("geoFilesCount")
