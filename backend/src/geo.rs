@@ -48,6 +48,15 @@ where F: FnMut(&mut &[u8]) -> Option<String> {
     found
 }
 
+fn match_cidr(cidr: &CIDR, target_v4: Option<u32>, target_v6: Option<u128>) -> bool {
+    let pfx = cidr.prefix as u32;
+    match (cidr.ip.len(), target_v4, target_v6) {
+        (4, Some(t), _) => to_v4(&cidr.ip).map_or(false, |n| pfx <= 32 && (t >> (32 - pfx)) == (n >> (32 - pfx))),
+        (16, _, Some(t)) => to_v6(&cidr.ip).map_or(false, |n| pfx <= 128 && (t >> (128 - pfx)) == (n >> (128 - pfx))),
+        _ => false,
+    }
+}
+
 fn find_ip_categories(data: &[u8], ip_str: &str) -> Result<Vec<String>, String> {
     let target: IpAddr = ip_str.parse().map_err(|_| format!("Некорректный IP: {}", ip_str))?;
     let (target_v4, target_v6) = match target {
@@ -56,17 +65,52 @@ fn find_ip_categories(data: &[u8], ip_str: &str) -> Result<Vec<String>, String> 
     };
 
     Ok(scan_geo_file(data, |entry_buf| {
-        GeoIP::decode(*entry_buf).ok().and_then(|entry| {
-            entry.cidr.into_iter().find(|cidr| {
-                let pfx = cidr.prefix as u32;
-                match (cidr.ip.len(), target_v4, target_v6) {
-                    (4, Some(t), _) => to_v4(&cidr.ip).map_or(false, |n| pfx <= 32 && (t >> (32 - pfx)) == (n >> (32 - pfx))),
-                    (16, _, Some(t)) => to_v6(&cidr.ip).map_or(false, |n| pfx <= 128 && (t >> (128 - pfx)) == (n >> (128 - pfx))),
-                    _ => false,
+        let mut country_code = String::new();
+        let mut buf = *entry_buf;
+        while buf.has_remaining() {
+            let (tag, wire_type) = decode_key(&mut buf).ok()?;
+            match (tag, wire_type) {
+                (1, WireType::LengthDelimited) => {
+                    let len = decode_varint(&mut buf).ok()? as usize;
+                    country_code = std::str::from_utf8(&buf[..len]).unwrap_or("").to_string();
+                    buf.advance(len);
                 }
-            }).map(|_| entry.country_code)
-        })
+                (2, WireType::LengthDelimited) => {
+                    let len = decode_varint(&mut buf).ok()? as usize;
+                    let cidr_buf = &buf[..len];
+                    buf.advance(len);
+                    if let Ok(cidr) = CIDR::decode(cidr_buf) {
+                        if match_cidr(&cidr, target_v4, target_v6) {
+                            return Some(country_code);
+                        }
+                    }
+                }
+                _ => { let _ = skip_field(wire_type, tag, &mut buf, DecodeContext::default()); }
+            }
+        }
+        None
     }))
+}
+
+fn match_domain(rule: &Domain, dom_low: &str, dom_bytes: &[u8]) -> bool {
+    let value = rule.value.as_str();
+    let value_bytes = value.as_bytes();
+    match rule.domain_type {
+        0 => dom_low.contains(value),
+        1 => Regex::new(value).map_or(false, |re| re.is_match(dom_low)),
+        2 => {
+            if dom_bytes.len() == value_bytes.len() {
+                dom_low == value
+            } else if dom_bytes.len() > value_bytes.len() {
+                dom_bytes[dom_bytes.len() - value_bytes.len() - 1] == b'.'
+                && dom_low.ends_with(value)
+            } else {
+                false
+            }
+        }
+        3 => dom_low == value,
+        _ => false,
+    }
 }
 
 fn find_domain_categories(data: &[u8], domain: &str) -> Result<Vec<String>, String> {
@@ -74,27 +118,30 @@ fn find_domain_categories(data: &[u8], domain: &str) -> Result<Vec<String>, Stri
     let dom_bytes = dom_low.as_bytes();
 
     Ok(scan_geo_file(data, |entry_buf| {
-        GeoSite::decode(*entry_buf).ok().and_then(|entry| {
-            entry.domain.into_iter().find(|rule| {
-                let r_bytes = rule.value.as_bytes();
-                match rule.domain_type {
-                    0 => dom_low.contains(&rule.value),
-                    1 => Regex::new(&rule.value).map_or(false, |re| re.is_match(&dom_low)),
-                    2 => {
-                        if dom_bytes.len() == r_bytes.len() {
-                            dom_low == rule.value
-                        } else if dom_bytes.len() > r_bytes.len() {
-                            dom_bytes[dom_bytes.len() - r_bytes.len() - 1] == b'.'
-                            && dom_low.ends_with(&rule.value)
-                        } else {
-                            false
-                        }
-                    },
-                    3 => dom_low == rule.value,
-                    _ => false,
+        let mut country_code = String::new();
+        let mut buf = *entry_buf;
+        while buf.has_remaining() {
+            let (tag, wire_type) = decode_key(&mut buf).ok()?;
+            match (tag, wire_type) {
+                (1, WireType::LengthDelimited) => {
+                    let len = decode_varint(&mut buf).ok()? as usize;
+                    country_code = std::str::from_utf8(&buf[..len]).unwrap_or("").to_string();
+                    buf.advance(len);
                 }
-            }).map(|_| entry.country_code)
-        })
+                (2, WireType::LengthDelimited) => {
+                    let len = decode_varint(&mut buf).ok()? as usize;
+                    let domain_buf = &buf[..len];
+                    buf.advance(len);
+                    if let Ok(rule) = Domain::decode(domain_buf) {
+                        if match_domain(&rule, &dom_low, dom_bytes) {
+                            return Some(country_code);
+                        }
+                    }
+                }
+                _ => { let _ = skip_field(wire_type, tag, &mut buf, DecodeContext::default()); }
+            }
+        }
+        None
     }))
 }
 
