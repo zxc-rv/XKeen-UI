@@ -1,10 +1,10 @@
 use chrono::{DateTime, Duration, NaiveDateTime};
-use regex::Regex;
-use once_cell::sync::Lazy;
+use regex_lite::Regex;
+use std::sync::LazyLock;
 
-static ANSI_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\x1b\[\d+m").unwrap());
-static LVL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\[(debug|info|warn|warning|error|fatal)\]").unwrap());
-static XRAY_TIME_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"time="([^"]+)" level=(\w+) msg="?(.*?)""#).unwrap());
+static ANSI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[\d+m").unwrap());
+static LVL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\[(debug|info|warn|warning|error|fatal)\]").unwrap());
+static XRAY_TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"time="([^"]+)" level=(\w+) msg="?(.*?)""#).unwrap());
 
 pub fn format_plain_log(level: &str, msg: &str) -> String {
     let timestamp = chrono::Local::now().format("%Y/%m/%d %H:%M:%S.%6f").to_string();
@@ -42,7 +42,7 @@ pub fn process_log_line(line: String, tz: i32) -> String {
         }
     }
 
-    out = ANSI_RE.replace_all(&out, |caps: &regex::Captures| {
+    out = ANSI_RE.replace_all(&out, |caps: &regex_lite::Captures<'_>| {
         match &caps[0] {
             "\x1b[32m" | "\x1b[92m" => r#"<span style="color: #00cc00;">"#,
             "\x1b[31m" | "\x1b[91m" => r#"<span style="color: #ef4444;">"#,
@@ -53,7 +53,7 @@ pub fn process_log_line(line: String, tz: i32) -> String {
         }
     }).to_string();
 
-    out = LVL_RE.replace_all(&out, |caps: &regex::Captures| {
+    out = LVL_RE.replace_all(&out, |caps: &regex_lite::Captures<'_>| {
         let l = caps[1].to_lowercase();
         let cls = if l == "warning" { "warn" } else { &l };
         format!(r#"<span class="log-badge log-badge-{}" data-filter="{}">{}</span>"#, cls, cls.to_uppercase(), cls.to_uppercase())

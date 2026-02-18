@@ -2,7 +2,7 @@ use axum::{extract::{Query, State}, response::{IntoResponse, Json}};
 use memmap2::{MmapOptions, Advice};
 use prost::bytes::Buf;
 use prost::encoding::{decode_key, decode_varint, skip_field, WireType, DecodeContext};
-use regex::Regex;
+use regex_lite::Regex;
 use serde::Serialize;
 use std::{collections::HashMap, net::IpAddr, fs::File, path::Path};
 use std::sync::{Arc, RwLock};
@@ -85,7 +85,7 @@ fn parse_domain_and_match(mut buf: &[u8], dom_low: &str) -> bool {
     }
     match domain_type {
         0 => dom_low.contains(value),
-        1 => Regex::new(value).map_or(false, |re| re.is_match(dom_low)),
+        1 => Regex::new(value).map_or(false, |re: regex_lite::Regex| re.is_match(dom_low)),
         2 => dom_low == value || (dom_low.len() > value.len() && dom_low.ends_with(value) && dom_low.as_bytes()[dom_low.len() - value.len() - 1] == b'.'),
         3 => dom_low == value,
         _ => false,
