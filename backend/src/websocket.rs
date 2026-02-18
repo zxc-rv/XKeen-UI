@@ -1,5 +1,5 @@
 use axum::{extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State}, response::IntoResponse};
-use futures::{sink::SinkExt, stream::StreamExt};
+use futures_util::{sink::SinkExt, stream::StreamExt};
 use notify::{RecursiveMode, Watcher};
 use std::{fs::File, io::{BufRead, BufReader, Seek, SeekFrom}, path::Path, sync::atomic::{AtomicU32, Ordering}};
 use crate::{types::*, logs::process_log_line};
