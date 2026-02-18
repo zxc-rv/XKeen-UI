@@ -4,7 +4,6 @@ use axum::{Router, routing::{get, get_service}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
-use notify::{Watcher, RecursiveMode};
 use tokio::sync::broadcast;
 
 #[tokio::main]
@@ -29,26 +28,6 @@ async fn main() {
     });
     let (log_tx, _) = broadcast::channel::<String>(16);
     let log_tx_arc = Arc::new(log_tx);
-    let log_tx_clone = log_tx_arc.clone();
-    tokio::spawn(async move {
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
-            if let Ok(e) = res {
-                if e.kind.is_modify() {
-                    for path in e.paths {
-                        let _ = tx.send(path.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }).unwrap();
-
-        let _ = watcher.watch(Path::new(ERROR_LOG), RecursiveMode::NonRecursive);
-        let _ = watcher.watch(Path::new(ACCESS_LOG), RecursiveMode::NonRecursive);
-
-        while let Some(path) = rx.recv().await {
-            let _ = log_tx_clone.send(path);
-        }
-    });
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(&init_file))),
         settings: Arc::new(RwLock::new(load_settings())),

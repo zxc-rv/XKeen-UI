@@ -445,6 +445,15 @@ function connectWebSocket() {
         }
       }
 
+      if (displayLines.length > 5000) {
+        const excess = displayLines.length - 5000
+        displayLines.splice(0, excess)
+        const container = document.getElementById("logsContainer")
+        for (let i = 0; i < excess; i++) {
+          if (container.firstChild) container.removeChild(container.firstChild)
+        }
+      }
+
       if (linesToRender.length > 0) {
         const container = document.getElementById("logsContainer")
         appendLogLines(container, linesToRender)

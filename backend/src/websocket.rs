@@ -145,7 +145,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     _ => {}
                 }
             }
-            Ok(changed_path) = log_rx.recv() => {
+            result = log_rx.recv() => {
+                let changed_path = match result {
+                    Ok(p) => p,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => path.clone(),
+                    Err(_) => break,
+                };
                 if changed_path == path {
                     let tz = state.settings.read().unwrap().log.timezone;
                     let p = path.clone();
