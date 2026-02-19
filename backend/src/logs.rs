@@ -47,9 +47,9 @@ pub fn process_log_line(line: String, tz: i32) -> String {
             "\x1b[32m" | "\x1b[92m" => r#"<span style="color: #00cc00;">"#,
             "\x1b[31m" | "\x1b[91m" => r#"<span style="color: #ef4444;">"#,
             "\x1b[33m" | "\x1b[93m" => r#"<span style="color: #f59e0b;">"#,
-            "\x1b[96m"             => r#"<span style="color: #8BCEF7;">"#,
-            "\x1b[0m"              => "</span>",
-            _                      => "",
+            "\x1b[96m"              => r#"<span style="color: #8BCEF7;">"#,
+            "\x1b[0m"               => "</span>",
+            _                       => "",
         }
     }).to_string();
 

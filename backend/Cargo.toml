@@ -5,24 +5,24 @@ edition = "2024"
 
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
-tokio = { version = "1",  features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "net"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
-nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource"] }
-rustix = { version = "1.1", features = ["fs"] }
-notify = "8"
 chrono = "0.4"
-regex-lite = "0.1.9"
-futures-util = "0.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-zip = { version = "8", default-features = false, features = ["deflate"] }
 flate2 = "1.1"
-tar = "0.4.44"
+futures-util = "0.3"
 http = "1.4.0"
-prost = "0.14"
 ipnet = "2.11"
 memmap2 = "0.9"
+nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource"] }
+notify = "8"
+prost = "0.14"
+regex-lite = "0.1.9"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+rustix = { version = "1.1", features = ["fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tar = "0.4.44"
+tokio = { version = "1",  features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "net"] }
+tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [profile.release]
 opt-level = 3
