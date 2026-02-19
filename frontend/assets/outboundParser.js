@@ -30,7 +30,7 @@ const getStreamSettings = (type, params) => {
             fingerprint: string(params.fp) || "chrome",
             serverName: string(params.sni),
             alpn: params.alpn?.split(","),
-            allowInsecure: bool(params.allowInsecure || params.insecure),
+            allowInsecure: bool(params.allowinsecure || params.insecure),
           }
         : undefined,
     realitySettings:
