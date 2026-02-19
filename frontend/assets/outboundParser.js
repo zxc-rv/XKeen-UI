@@ -89,7 +89,7 @@ const getStreamSettings = (type, params) => {
 
 const parseUrl = (uri, protocol, settingsMapper) => {
   const url = new URL(uri)
-  const params = Object.fromEntries(url.searchParams)
+  const params = Object.fromEntries([...url.searchParams].map(([k, v]) => [k.toLowerCase(), v]))
   const baseConfig = {
     tag: decodeURIComponent(url.hash.slice(1)) || "PROXY",
     protocol: protocol,
