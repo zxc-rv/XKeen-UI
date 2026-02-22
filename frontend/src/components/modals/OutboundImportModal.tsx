@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { IconLink, IconCopy, IconCheck, IconArrowUp, IconArrowDown } from "@tabler/icons-react"
+import { IconLink, IconCopy, IconCheck, IconArrowUp, IconArrowDown, IconX } from "@tabler/icons-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -53,8 +53,10 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
 
   function close() {
     dispatch({ type: "SHOW_MODAL", modal: "showImportModal", show: false })
-    setUri("")
-    setResult(null)
+    setTimeout(() => {
+      setUri("")
+      setResult(null)
+    }, 300)
   }
 
   function generate() {
@@ -104,7 +106,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
   return (
     <TooltipProvider delayDuration={300}>
       <Dialog open={state.showImportModal} onOpenChange={(open) => !open && close()}>
-        <DialogContent>
+        <DialogContent className="flex flex-col max-h-[90dvh] !w-auto !min-w-[min(90vw,480px)] !max-w-[min(90vw,900px)] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 pb-3">
               <IconLink size={24} className="text-chart-2" /> Импорт подключения
@@ -112,11 +114,11 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
             <DialogDescription>Вставьте ссылку в формате protocol://</DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 tracking-wide">
+          <div className="space-y-3 tracking-wide flex flex-col min-h-0 overflow-y-auto">
             {result && (
               <div className="relative group">
                 <pre
-                  className="p-3 pr-12 text-md overflow-auto max-h-60 font-mono rounded-lg border border-border"
+                  className="p-3 pr-12 text-[13px] overflow-auto font-[JetBrains_Mono] tracking-tight rounded-lg border border-border"
                   style={{ background: "var(--color-input-background)" }}
                   dangerouslySetInnerHTML={{ __html: highlightCode(result.content, result.type) }}
                 />
@@ -125,10 +127,10 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={copy}>
-                        {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                        {copied ? <IconCheck size={14} className="text-green-500" /> : <IconCopy size={14} />}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="left">Копировать</TooltipContent>
+                    <TooltipContent side="left">Скопировать</TooltipContent>
                   </Tooltip>
 
                   <Tooltip>
@@ -137,7 +139,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                         <IconArrowUp size={14} />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="left">В начало</TooltipContent>
+                    <TooltipContent side="left">Добавить в начало конфига</TooltipContent>
                   </Tooltip>
 
                   <Tooltip>
@@ -146,18 +148,29 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                         <IconArrowDown size={14} />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="left">В конец</TooltipContent>
+                    <TooltipContent side="left">Добавить в конец конфига</TooltipContent>
                   </Tooltip>
                 </div>
               </div>
             )}
 
-            <Input
-              value={uri}
-              onChange={(e) => setUri(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && isValidUri && generate()}
-              placeholder="vless://..."
-            />
+            <div className="relative">
+              <Input
+                value={uri}
+                onChange={(e) => setUri(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && isValidUri && generate()}
+                placeholder="vless://..."
+                className={uri ? "pr-7" : ""}
+              />
+              {uri && (
+                <button
+                  onClick={() => setUri("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <IconX size={14} />
+                </button>
+              )}
+            </div>
 
             <Button onClick={generate} disabled={!isValidUri} className="w-full">
               Сгенерировать

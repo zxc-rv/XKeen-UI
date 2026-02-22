@@ -257,7 +257,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:ml-auto">
             {isConfigsLoading ? (
               <div className="flex gap-2">
-                {[280, 160].map((w) => (
+                {[524, 311].map((w) => (
                   <Skeleton key={w} className="h-9 rounded-lg p-0.75 gap-0.5" style={{ width: w }} />
                 ))}
               </div>
@@ -375,22 +375,33 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                   <IconDeviceFloppy size={14} /> Сохранить
                 </Button>
                 <div className="flex h-9 rounded-md overflow-hidden border border-border">
-                  <Button
-                    variant="outline"
-                    size="default"
-                    disabled={!canFormat}
-                    className="h-full rounded-none border-0 gap-1.5 px-3"
-                    onClick={() => editorRef.current?.format()}
-                  >
-                    <IconCode size={14} /> Формат
-                  </Button>
-                  <div className="w-px bg-border" />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-full w-8 rounded-none border-0">
-                        <IconChevronDown />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="default"
+                        disabled={!canFormat}
+                        className="h-full rounded-none border-0 gap-1.5 px-3"
+                        onClick={() => editorRef.current?.format()}
+                      >
+                        <IconCode size={14} /> Формат
                       </Button>
-                    </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>Форматировать файл</TooltipContent>
+                  </Tooltip>
+                  <div className="w-px bg-border" />
+
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-full w-8 rounded-none border-0">
+                            <IconChevronDown />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>Утилиты</TooltipContent>
+                    </Tooltip>
                     <DropdownMenuContent align="end" className="w-max">
                       <DropdownMenuItem onClick={onOpenImport} className="gap-2 cursor-pointer px-3 py-2">
                         <IconLink /> Импорт подключения

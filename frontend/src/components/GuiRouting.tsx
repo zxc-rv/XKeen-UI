@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, forwardRef } from "react"
+import { useState, useRef, useEffect, useCallback, forwardRef, startTransition } from "react"
 import { IconPlus, IconX, IconGripVertical, IconPencil, IconCheck } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -76,6 +76,8 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
   const [available, setAvailable] = useState<AvailableTags>({ outbounds: [], inbounds: [], balancers: [] })
   const rulesRef = useRef<Rule[]>([])
   const cardRefs = useRef<(HTMLDivElement | null)[]>([])
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
 
   useEffect(() => {
@@ -123,23 +125,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
       try {
         const json = JSON.parse(stripComments(wrapper.getValue()))
         json.routing.rules = newRules
-        let text = JSON.stringify(json, null, 2)
-        if (window.prettier && window.prettierPlugins?.babel) {
-          try {
-            const formatted = await window.prettier.format(text, {
-              parser: "json",
-              plugins: [window.prettierPlugins.babel],
-              semi: false,
-              trailingComma: "none",
-              printWidth: 120,
-              endOfLine: "lf",
-            })
-            text = formatted
-              .replace(/\n{3,}/g, "\n\n")
-              .replace(/\s+$/gm, "")
-              .replace(/\n$/, "")
-          } catch {}
-        }
+        const text = JSON.stringify(json, null, 2)
         monacoEditor.executeEdits("gui-routing", [{ range: model.getFullModelRange(), text }])
 
         if (triggerSoftRestart && state.settings.autoApply && state.serviceStatus === "running") {
@@ -163,8 +149,9 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
 
   function applyRules(newRules: Rule[], triggerSoftRestart = false) {
     rulesRef.current = newRules
-    setRules([...newRules])
-    syncToEditor(newRules, triggerSoftRestart)
+    startTransition(() => setRules([...newRules]))
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    syncTimerRef.current = setTimeout(() => syncToEditor(newRules, triggerSoftRestart), 100)
   }
 
   function startDrag(e: React.MouseEvent | React.TouchEvent, fromIndex: number) {
@@ -203,7 +190,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
   }
 
   return (
-    <div className="absolute inset-4 overflow-y-auto flex flex-col gap-2">
+    <div ref={scrollRef} className="absolute inset-4 overflow-y-auto flex flex-col gap-2">
       <div className="flex flex-col gap-2">
         {rules.map((rule, index) => (
           <RuleCard
@@ -227,7 +214,10 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         ))}
       </div>
       <button
-        onClick={() => applyRules([...rulesRef.current, { domain: [], outboundTag: available.outbounds[0] ?? "direct" }])}
+        onClick={() => {
+          applyRules([...rulesRef.current, { domain: [], outboundTag: available.outbounds[0] ?? "direct" }])
+          setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }), 50)
+        }}
         className="flex items-center cursor-pointer justify-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#60a5fa] transition-colors border-2 border-dashed border-ring/60 hover:border-chart-2 hover:border-solid rounded-xl px-3 py-2.5 w-full mt-1"
       >
         <IconPlus size={17} /> Добавить правило
@@ -510,6 +500,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
       {/* Add condition */}
       {availableToAdd.length > 0 && (
         <Select
+          key={availableToAdd.join(",")}
           onValueChange={(v) => {
             if (v) addField(v as FieldName)
           }}

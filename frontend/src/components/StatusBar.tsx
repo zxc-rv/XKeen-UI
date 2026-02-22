@@ -175,13 +175,20 @@ export function StatusBar({
           {isConfigsLoading ? (
             <Skeleton className="h-9 w-32 rounded-md" />
           ) : (
-            <Button variant="outline" className="h-9 gap-2" onClick={onOpenCoreManage}>
-              <IconCpu className="text-muted-foreground size-5" />
-              <span className="text-[13px]">{capitalize(currentCore)}</span>
-              {coreVersions[currentCore as keyof typeof coreVersions] && (
-                <span className="text-xs mt-0.5 text-muted-foreground/60">{coreVersions[currentCore as keyof typeof coreVersions]}</span>
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" className="h-9 gap-2" onClick={onOpenCoreManage}>
+                  <IconCpu className="text-muted-foreground size-5" />
+                  <span className="text-[13px]">{capitalize(currentCore)}</span>
+                  {coreVersions[currentCore as keyof typeof coreVersions] && (
+                    <span className="text-xs mt-0.5 text-muted-foreground/60">
+                      {coreVersions[currentCore as keyof typeof coreVersions]}
+                    </span>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Управление ядром</TooltipContent>
+            </Tooltip>
           )}
           {isConfigsLoading ? (
             <Skeleton className="h-9 w-9 rounded-md" />

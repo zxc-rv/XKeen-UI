@@ -205,7 +205,7 @@ export function LogPanel() {
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
       <h2 className="text-lg font-semibold">Журнал</h2>
       <div className="flex flex-wrap items-center gap-1.5">
-        <div className="relative flex items-center flex-1 sm:flex-none min-w-[120px]">
+        <div className="relative flex items-center flex-1 sm:flex-none min-w-30">
           <IconSearch size={13} className="absolute left-2.5 text-muted-foreground pointer-events-none" />
           <Input
             ref={filterInputRef}
@@ -221,14 +221,14 @@ export function LogPanel() {
                 setFilter("")
                 ws.applyFilter("")
               }}
-              className="absolute right-2 text-muted-foreground hover:text-foreground transition-colors"
+              className="absolute right-3 text-muted-foreground hover:text-foreground transition-colors"
             >
               <IconX size={13} />
             </button>
           )}
         </div>
         <Select value={currentFile} onValueChange={switchFile}>
-          <SelectTrigger className="h-9 w-[120px] sm:w-32 shrink-0 text-sm">
+          <SelectTrigger className="h-9 w-30 sm:w-32 shrink-0 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper">
