@@ -1,9 +1,10 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle } from "react"
+import type * as Monaco from "monaco-editor"
 import { getFileLanguage } from "../lib/api"
 
 declare global {
   interface Window {
-    monaco: any
+    monaco: typeof Monaco
     require: any
     MonacoEnvironment: any
     prettier: any
@@ -22,7 +23,7 @@ export interface MonacoEditorRef {
   format: () => void
   layout: () => void
   isValid: (filename: string) => boolean
-  getEditor: () => any
+  getEditor: () => Monaco.editor.IStandaloneCodeEditor | null
 }
 
 interface Props {
@@ -31,7 +32,7 @@ interface Props {
   onReady?: () => void
 }
 
-const THEME = {
+const THEME: Monaco.editor.IStandaloneThemeData = {
   base: "vs-dark",
   inherit: true,
   rules: [
@@ -63,7 +64,7 @@ const THEME = {
 
 export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChange, onValidationChange, onReady }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null)
-  const editorRef = useRef<any>(null)
+  const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
 
   const onContentChangeRef = useRef(onContentChange)
   const onValidationChangeRef = useRef(onValidationChange)
@@ -89,8 +90,8 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
       savedContentRef.current = content
     },
     setLanguage: (language: string) => {
-      if (editorRef.current) window.monaco?.editor.setModelLanguage(editorRef.current.getModel(), language)
-      filenameRef.current = language // store language hint
+      if (editorRef.current) window.monaco?.editor.setModelLanguage(editorRef.current.getModel()!, language)
+      filenameRef.current = language
     },
     validate: (filename: string) => {
       filenameRef.current = filename
@@ -106,9 +107,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
         const model = editorRef.current.getModel()
         if (!model) return true
         const markers = window.monaco?.editor.getModelMarkers({ owner: "json" }) ?? []
-        return !markers.some(
-          (m: any) => m.resource.toString() === model.uri.toString() && m.severity === window.monaco.MarkerSeverity.Error,
-        )
+        return !markers.some((m) => m.resource.toString() === model.uri.toString() && m.severity === window.monaco.MarkerSeverity.Error)
       }
       if (lang === "yaml") {
         try {
@@ -137,7 +136,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
       minimap: { enabled: !isMobile, showSlider: "always" },
       fontSize: isMobile ? 13 : 14,
       fontFamily: '"JetBrains Mono", monospace, "Noto Color Emoji"',
-      fontWeight: 400,
+      fontWeight: "400",
       smoothScrolling: true,
       lineHeight: 1.5,
       renderLineHighlight: "none",
@@ -159,12 +158,12 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
     editorRef.current = editor
     registerFormatters()
 
-    // JSON validation via marker changes
-    window.monaco?.editor.onDidChangeMarkers((uris: any[]) => {
+    window.monaco?.editor.onDidChangeMarkers((uris) => {
+      if (getFileLanguage(filenameRef.current) !== "json") return
       const model = editor.getModel()
       if (!model || !uris.some((u) => u.toString() === model.uri.toString())) return
       const markers = window.monaco.editor.getModelMarkers({ owner: "json", resource: model.uri })
-      const err = markers.find((m: any) => m.severity === window.monaco.MarkerSeverity.Error)
+      const err = markers.find((m) => m.severity === window.monaco.MarkerSeverity.Error)
       onValidationChangeRef.current(!err, err?.message)
     })
 
@@ -173,7 +172,6 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
       const content = editor.getValue()
       const isDirty = content !== savedContentRef.current
       onContentChangeRef.current(content, isDirty)
-      // YAML needs manual validation on each change
       if (getFileLanguage(filenameRef.current) === "yaml") runValidation(editor, filenameRef.current)
     })
 
@@ -181,18 +179,18 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
     return () => editor.dispose()
   }, [])
 
-  function runValidation(editor: any, filename: string) {
+  function runValidation(editor: Monaco.editor.IStandaloneCodeEditor, filename: string) {
     const lang = getFileLanguage(filename)
     if (lang === "yaml") {
       try {
         window.jsyaml?.load(editor.getValue())
-        window.monaco?.editor.setModelMarkers(editor.getModel(), "yaml", [])
+        window.monaco?.editor.setModelMarkers(editor.getModel()!, "yaml", [])
         onValidationChangeRef.current(true)
       } catch (e: any) {
         const line = e.mark ? e.mark.line + 1 : 1
         const col = e.mark ? e.mark.column + 1 : 1
         const msg = e.mark ? `${e.reason || e.message} [строка ${line}]` : e.message
-        window.monaco?.editor.setModelMarkers(editor.getModel(), "yaml", [
+        window.monaco?.editor.setModelMarkers(editor.getModel()!, "yaml", [
           {
             severity: window.monaco.MarkerSeverity.Error,
             message: msg,
@@ -205,12 +203,11 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
         onValidationChangeRef.current(false, msg)
       }
     } else if (lang === "json") {
-      // For JSON, wait a tick for Monaco's built-in JSON validator to fire
       setTimeout(() => {
         const model = editor.getModel()
         if (!model) return
         const markers = window.monaco?.editor.getModelMarkers({ owner: "json", resource: model.uri }) ?? []
-        const err = markers.find((m: any) => m.severity === window.monaco.MarkerSeverity.Error)
+        const err = markers.find((m) => m.severity === window.monaco.MarkerSeverity.Error)
         onValidationChangeRef.current(!err, err?.message)
       }, 300)
     } else {
@@ -220,11 +217,11 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
 
   function registerFormatters() {
     window.monaco?.languages.registerDocumentFormattingEditProvider("json", {
-      async provideDocumentFormattingEdits(model: any) {
+      async provideDocumentFormattingEdits(model) {
         try {
           const text = await window.prettier.format(model.getValue(), {
             parser: "json",
-            plugins: [window.prettierPlugins.babel],
+            plugins: [window.prettierPlugins.babel, window.prettierPlugins.estree],
             semi: false,
             trailingComma: "none",
             printWidth: 120,
@@ -245,7 +242,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
       },
     })
     window.monaco?.languages.registerDocumentFormattingEditProvider("yaml", {
-      async provideDocumentFormattingEdits(model: any) {
+      async provideDocumentFormattingEdits(model) {
         try {
           const text = await window.prettier.format(model.getValue(), {
             parser: "yaml",

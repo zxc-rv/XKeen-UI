@@ -39,8 +39,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
   const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
-  configsRef.current = configs
-  activeIndexRef.current = activeConfigIndex
+
+  useEffect(() => {
+    configsRef.current = configs
+  }, [configs])
+
+  useEffect(() => {
+    activeIndexRef.current = activeConfigIndex
+  }, [activeConfigIndex])
 
   const activeConfig = configs[activeConfigIndex]
   const isRunning = serviceStatus === "running"
@@ -51,72 +57,78 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const canApply = canSave && isRunning && !isPending
   const canFormat = !!(isJsonOrYaml && validationState?.isValid)
 
-  const ed = () => editorRef.current as (MonacoEditorRef & { setSavedContent: (s: string) => void }) | null
-
   const configFilenamesKey = configs.map((c) => c.filename).join(",")
 
-  useEffect(() => {
-    if (monacoReady && activeConfig && editorRef.current) {
-      loadConfigIntoEditor(activeConfig)
-    }
-  }, [activeConfigIndex, configFilenamesKey, monacoReady])
+  const loadConfigIntoEditor = useCallback(
+    (config: Config) => {
+      if (!editorRef.current) return
+      editorRef.current.setSavedContent(config.savedContent)
+      editorRef.current.setValue(config.content, config.savedContent)
+      editorRef.current.setLanguage(getFileLanguage(config.filename))
+      editorRef.current.validate(config.filename)
+    },
+    [editorRef],
+  )
 
   useEffect(() => {
-    loadMonacoAndInit()
-  }, [])
-
-  async function loadMonacoAndInit() {
     const load = (src: string) =>
       new Promise<void>((res, rej) => {
+        if (document.querySelector(`script[src="${src}"]`)) return res()
         const s = document.createElement("script")
         s.src = src
         s.onload = () => res()
         s.onerror = rej
         document.head.appendChild(s)
       })
-    try {
-      if (window.LOCAL) {
-        window.MonacoEnvironment = { getWorkerUrl: () => "/monaco-editor/vs/base/worker/workerMain.js" }
-        for (const s of [
-          "/monaco-editor/standalone.min.js",
-          "/monaco-editor/babel.min.js",
-          "/monaco-editor/yaml.min.js",
-          "/monaco-editor/js-yaml.min.js",
-          "/monaco-editor/loader.min.js",
-        ])
-          await load(s)
-      } else {
-        for (const s of [
-          "https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js",
-          "https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js",
-          "https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js",
-          "https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js",
-          "https://cdn.jsdelivr.net/npm/monaco-editor@0.55/min/vs/loader.min.js",
-        ])
-          await load(s)
+
+    async function init() {
+      try {
+        const isLoc = window.LOCAL
+        if (isLoc) window.MonacoEnvironment = { getWorkerUrl: () => "/monaco-editor/vs/base/worker/workerMain.js" }
+
+        await Promise.all(
+          [
+            isLoc ? "/monaco-editor/standalone.min.js" : "https://cdn.jsdelivr.net/npm/prettier@3/standalone.min.js",
+            isLoc ? "/monaco-editor/babel.min.js" : "https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js",
+            isLoc ? "/monaco-editor/estree.min.js" : "https://cdn.jsdelivr.net/npm/prettier@3/plugins/estree.min.js",
+            isLoc ? "/monaco-editor/yaml.min.js" : "https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js",
+            isLoc ? "/monaco-editor/js-yaml.min.js" : "https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js",
+          ].map(load),
+        )
+
+        await load(isLoc ? "/monaco-editor/loader.min.js" : "https://cdn.jsdelivr.net/npm/monaco-editor@0.55/min/vs/loader.min.js")
+
+        const vsPath = isLoc ? "/monaco-editor/vs" : "https://cdn.jsdelivr.net/npm/monaco-editor@0.55/min/vs"
+        window.require.config({ paths: { vs: vsPath } })
+        await new Promise<void>((res, rej) => window.require(["vs/editor/editor.main"], res, rej))
+
+        const jsonDefaults = (window.monaco.languages.json as any).jsonDefaults
+        jsonDefaults.setDiagnosticsOptions({ allowComments: true })
+        jsonDefaults.setModeConfiguration({ ...jsonDefaults.modeConfiguration, documentFormattingEdits: false })
+        setMonacoReady(true)
+      } catch {
+        showToast("Ошибка загрузки редактора", "error")
       }
-      const vsPath = window.LOCAL ? "/monaco-editor/vs" : "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs"
-      window.require.config({ paths: { vs: vsPath } })
-      await new Promise<void>((res, rej) => window.require(["vs/editor/editor.main"], res, rej))
-      window.monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ allowComments: true })
-      window.monaco.languages.json.jsonDefaults.setModeConfiguration({
-        ...window.monaco.languages.json.jsonDefaults.modeConfiguration,
-        documentFormattingEdits: false,
-      })
-      setMonacoReady(true)
-    } catch {
-      showToast("Ошибка загрузки редактора", "error")
     }
-  }
+
+    init()
+  }, [showToast])
+
+  useEffect(() => {
+    const config = configsRef.current[activeConfigIndex]
+    if (monacoReady && config && editorRef.current) {
+      loadConfigIntoEditor(config)
+    }
+  }, [activeConfigIndex, configFilenamesKey, monacoReady, loadConfigIntoEditor, editorRef])
 
   const handleMonacoReady = useCallback(() => {
     const config = configsRef.current[activeIndexRef.current]
-    if (!config || !ed()) return
-    ed()!.setSavedContent(config.savedContent)
-    ed()!.setValue(config.content, config.savedContent)
-    ed()!.setLanguage(getFileLanguage(config.filename))
-    ed()!.validate(config.filename)
-  }, [])
+    if (!config || !editorRef.current) return
+    editorRef.current.setSavedContent(config.savedContent)
+    editorRef.current.setValue(config.content, config.savedContent)
+    editorRef.current.setLanguage(getFileLanguage(config.filename))
+    editorRef.current.validate(config.filename)
+  }, [editorRef])
 
   const handleContentChange = useCallback(
     (content: string, isDirty: boolean) => {
@@ -130,15 +142,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const handleValidationChange = useCallback((isValid: boolean, error?: string) => {
     setValidationState({ isValid, error })
   }, [])
-
-  function loadConfigIntoEditor(config: Config) {
-    if (!ed()) return
-    ed()!.setSavedContent(config.savedContent)
-    ed()!.setValue(config.content, config.savedContent)
-    ed()!.setLanguage(getFileLanguage(config.filename))
-    ed()!.validate(config.filename)
-    setValidationState(null)
-  }
 
   function switchTab(index: number) {
     if (index === activeConfigIndex) return
@@ -160,18 +163,22 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
   async function saveCurrentConfig(force = false) {
     const cfg = configsRef.current[activeIndexRef.current]
-    if (!cfg || !ed()) return
-    const content = ed()!.getValue()
+    if (!cfg || !editorRef.current) return
+    const content = editorRef.current.getValue()
     if (!content.trim()) return showToast("Конфигурация пустая", "error")
-    if (!ed()!.isValid(cfg.filename)) return showToast("Файл содержит ошибки", "error")
+    if (!editorRef.current.isValid(cfg.filename)) return showToast("Файл содержит ошибки", "error")
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
       dispatch({ type: "SET_PENDING_SAVE_ACTION", action: () => saveCurrentConfig(true) })
       dispatch({ type: "SHOW_MODAL", modal: "showCommentsWarningModal", show: true })
       return
     }
-    const result = await apiCall<any>("PUT", "configs", { action: "save", filename: cfg.filename, content })
+    const result = await apiCall<{ success: boolean; error?: string }>("PUT", "configs", {
+      action: "save",
+      filename: cfg.filename,
+      content,
+    })
     if (result.success) {
-      ed()!.setSavedContent(content)
+      editorRef.current.setSavedContent(content)
       dispatch({ type: "SAVE_CONFIG", index: activeIndexRef.current, content })
       showToast(`Конфигурация "${cfg.name}" сохранена`)
     } else {
@@ -181,22 +188,26 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
   async function saveAndApply(force = false) {
     const cfg = configsRef.current[activeIndexRef.current]
-    if (!cfg || !ed()) return
-    const content = ed()!.getValue()
+    if (!cfg || !editorRef.current) return
+    const content = editorRef.current.getValue()
     if (!content.trim()) return showToast("Конфиг пустой", "error")
-    if (!ed()!.isValid(cfg.filename)) return showToast("Файл содержит ошибки", "error")
+    if (!editorRef.current.isValid(cfg.filename)) return showToast("Файл содержит ошибки", "error")
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
       dispatch({ type: "SET_PENDING_SAVE_ACTION", action: () => saveAndApply(true) })
       dispatch({ type: "SHOW_MODAL", modal: "showCommentsWarningModal", show: true })
       return
     }
-    const saveResult = await apiCall<any>("PUT", "configs", { action: "save", filename: cfg.filename, content })
+    const saveResult = await apiCall<{ success: boolean; error?: string }>("PUT", "configs", {
+      action: "save",
+      filename: cfg.filename,
+      content,
+    })
     if (!saveResult.success) return showToast(`Ошибка сохранения: ${saveResult.error}`, "error")
-    ed()!.setSavedContent(content)
+    editorRef.current.setSavedContent(content)
     dispatch({ type: "SAVE_CONFIG", index: activeIndexRef.current, content })
     dispatch({ type: "SET_SERVICE_STATUS", status: "pending", pendingText: "Перезапуск..." })
     const lang = getFileLanguage(cfg.filename)
-    const r = await apiCall<any>("POST", "control", {
+    const r = await apiCall<{ success: boolean; error?: string }>("POST", "control", {
       action: (lang === "json" || lang === "yaml") && !hasCriticalChanges(cfg.savedContent, content, lang) ? "softRestart" : "hardRestart",
       core: currentCore,
     })
@@ -439,7 +450,7 @@ function hasCriticalChanges(oldContent: string, newContent: string, language: st
       const strip = (s: string) => s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "")
       const o = JSON.parse(strip(oldContent)),
         n = JSON.parse(strip(newContent))
-      const clean = (arr: any[]) => (arr || []).map(({ sniffing, ...rest }: any) => rest)
+      const clean = (arr: Record<string, unknown>[]) => (arr || []).map(({ sniffing: _, ...rest }) => rest)
       return JSON.stringify(clean(o?.inbounds)) !== JSON.stringify(clean(n?.inbounds))
     }
   } catch {
