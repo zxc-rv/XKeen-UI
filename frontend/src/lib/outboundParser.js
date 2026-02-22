@@ -319,6 +319,4 @@ function generateConfigForCore(uri, core = "xray", existingConfig = "") {
     : { type: "outbound", content: JSON.stringify(config, null, 2) }
 }
 
-if (typeof module !== "undefined" && module.exports) {
-  module.exports = { generateConfigForCore, parseProxyUri, convertToMihomoYaml }
-}
+window.generateConfigForCore = generateConfigForCore
