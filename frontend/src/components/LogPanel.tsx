@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "../lib/utils"
 import { useWebSocket } from "../hooks/useWebSocket"
+import { useAppContext } from "../store"
 import { processLogLine } from "../lib/logBadges"
 import type { WsMessage } from "../hooks/useWebSocket"
 
@@ -64,6 +65,7 @@ function LogContent({
 }
 
 export function LogPanel() {
+  const { state } = useAppContext()
   const [logLines, setLogLines] = useState<string[]>([])
   const [filter, setFilter] = useState("")
   const [currentFile, setCurrentFile] = useState("error.log")
@@ -141,6 +143,10 @@ export function LogPanel() {
   const ws = useWebSocket(handleMessage)
 
   useEffect(() => {
+    ws.reload()
+  }, [state.settings.timezone])
+
+  useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const updateScroll = () => {
@@ -198,7 +204,7 @@ export function LogPanel() {
   const header = (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
       <h2 className="text-lg font-semibold">Журнал</h2>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         <div className="relative flex items-center flex-1 sm:flex-none min-w-[120px]">
           <IconSearch size={13} className="absolute left-2.5 text-muted-foreground pointer-events-none" />
           <Input
@@ -269,9 +275,9 @@ export function LogPanel() {
         {/* Сама панель */}
         <div
           className={cn(
-            "flex flex-col rounded-lg border border-border bg-card overflow-hidden z-50",
+            "flex flex-col rounded-xl border border-border bg-card overflow-hidden z-50",
             isFullscreen || isClosing
-              ? "fixed left-1/2 -translate-x-1/2 bottom-4 shadow-2xl w-[calc(100%-2rem)] max-w-7xl"
+              ? "fixed left-1/2 -translate-x-1/2 bottom-3 shadow-2xl w-[calc(100%-2rem)] max-w-[1248px]"
               : "relative h-70 w-full",
             isFullscreen && !isClosing && "animate-panel-expand",
             isClosing && "animate-panel-collapse",

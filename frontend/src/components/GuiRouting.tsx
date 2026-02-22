@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from "react"
 import { IconPlus, IconX, IconGripVertical, IconPencil, IconCheck } from "@tabler/icons-react"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "../lib/utils"
 import { useAppContext } from "../store"
 import { apiCall } from "../lib/api"
@@ -391,15 +392,22 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
         ) : (
           <div className="flex items-center pl-1 gap-2 flex-1 min-w-0">
             {rule.ruleTag && <span className="text-sm truncate">{rule.ruleTag}</span>}
-            <button
-              onClick={() => {
-                setEditingName(true)
-                setNameValue(rule.ruleTag ?? "")
-              }}
-              className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
-            >
-              <IconPencil size={16} />
-            </button>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      setEditingName(true)
+                      setNameValue(rule.ruleTag ?? "")
+                    }}
+                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
+                  >
+                    <IconPencil size={16} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Редактировать название</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
         <button
@@ -506,7 +514,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
             if (v) addField(v as FieldName)
           }}
         >
-          <SelectTrigger className="flex items-center justify-center gap-1.5 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors border border-dashed border-border rounded-lg px-3 py-2 w-full h-auto min-h-[36px] bg-transparent focus:ring-0 [&>svg]:hidden">
+          <SelectTrigger className="flex items-center justify-center gap-1.5 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors border border-dashed border-border rounded-lg px-3 py-2 w-full h-auto min-h-9 bg-transparent focus:ring-0 [&>svg]:hidden">
             <IconPlus size={13} />
             <span>Добавить условие</span>
             <SelectValue className="hidden" />
@@ -682,7 +690,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
           }}
           onBlur={() => commitNew(input)}
           placeholder={badges.length === 0 ? placeholder : ""}
-          className="flex-1 min-w-20 bg-transparent outline-none text-xs placeholder:text-muted-foreground/50"
+          className="pl-1 flex-1 min-w-20 bg-transparent outline-none text-xs placeholder:text-muted-foreground/50"
         />
       )}
       <button

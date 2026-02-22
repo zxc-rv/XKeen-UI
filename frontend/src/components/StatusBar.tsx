@@ -90,11 +90,11 @@ export function StatusBar({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 sm:p-4 rounded-lg border border-border bg-card shrink-0 z-40 relative">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 sm:p-4 rounded-xl border border-border bg-card shrink-0 z-40 relative">
         {/* Левая часть (на десктопе), вторая строка (на мобиле) */}
-        <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 order-2 md:order-1">
+        <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 order-2 md:order-1">
           <div className={badgeClasses}>{statusLabel}</div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {isConfigsLoading ? (
               <>
                 <Skeleton className="h-8 w-8 rounded-md" />
@@ -171,13 +171,13 @@ export function StatusBar({
         </div>
 
         {/* Правая часть (на десктопе), третья строка (на мобиле) */}
-        <div className="flex items-center justify-center md:justify-end gap-2 order-3 ml-auto w-full md:w-auto">
+        <div className="flex items-center justify-center md:justify-end gap-1.5 order-3 ml-auto w-full md:w-auto">
           {isConfigsLoading ? (
             <Skeleton className="h-9 w-32 rounded-md" />
           ) : (
             <Button variant="outline" className="h-9 gap-2" onClick={onOpenCoreManage}>
-              <IconCpu size={16} className="text-muted-foreground" />
-              <span className="text-xs">{capitalize(currentCore)}</span>
+              <IconCpu className="text-muted-foreground size-5" />
+              <span className="text-[13px]">{capitalize(currentCore)}</span>
               {coreVersions[currentCore as keyof typeof coreVersions] && (
                 <span className="text-xs mt-0.5 text-muted-foreground/60">{coreVersions[currentCore as keyof typeof coreVersions]}</span>
               )}
@@ -189,7 +189,7 @@ export function StatusBar({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="outline" size="icon" className="h-9 w-9" onClick={onOpenSettings}>
-                  <IconSettings size={16} />
+                  <IconSettings className="size-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Настройки</TooltipContent>

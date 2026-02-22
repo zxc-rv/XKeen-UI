@@ -9,6 +9,7 @@ import { cn } from "../../lib/utils"
 import { useAppContext } from "../../store"
 import { capitalize } from "../../lib/api"
 import type { Release } from "../../types"
+import { Spinner } from "../ui/spinner"
 
 const ITEM_HEIGHT = 62
 const VISIBLE_ITEMS = 5
@@ -97,7 +98,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
         <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: ITEM_HEIGHT * VISIBLE_ITEMS + 8 }}>
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
-              <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+              <Spinner className="size-10 text-chart-2" />
               <span className="text-xs">Загрузка релизов...</span>
             </div>
           ) : releases.length === 0 ? (

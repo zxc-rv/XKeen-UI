@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { cn } from "../../lib/utils"
 import { useAppContext } from "../../store"
 import { capitalize } from "../../lib/api"
+import { Spinner } from "../ui/spinner"
 
 const TEMPLATES_URL = "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/templates.json"
 let templatesCache: Record<string, { name: string; url: string }[]> | null = null
@@ -78,7 +79,7 @@ export function TemplateModal({ onImport }: { onImport: (url: string) => Promise
         <ScrollArea className="flex-1">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
-              <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+              <Spinner className="size-10 text-chart-2" />
               <span className="text-xs">Загрузка шаблонов...</span>
             </div>
           ) : templates.length === 0 ? (

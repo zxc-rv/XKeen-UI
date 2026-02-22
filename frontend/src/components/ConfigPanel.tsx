@@ -91,7 +91,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           "https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js",
           "https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js",
           "https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js",
-          "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js",
+          "https://cdn.jsdelivr.net/npm/monaco-editor@0.55/min/vs/loader.min.js",
         ])
           await load(s)
       }
@@ -331,10 +331,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           )}
         </div>
 
-        <div className="px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div className="px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
           <div className="text-xs min-w-0">
             {isConfigsLoading ? (
-              <Skeleton className="h-4 w-26" />
+              <Skeleton className="h-4 w-28" />
             ) : validationState && activeConfig && isJsonOrYaml ? (
               <span
                 className={cn(
@@ -349,10 +349,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
               </span>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {isConfigsLoading ? (
-              <div className="flex gap-2">
-                {[90, 90, 90].map((w) => (
+              <div className="flex gap-1.5">
+                {[126, 121, 136].map((w) => (
                   <Skeleton key={w} className="h-9 rounded-md" style={{ width: w }} />
                 ))}
               </div>
@@ -363,7 +363,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                     <Button
                       size="default"
                       disabled={!canApply}
-                      className="gap-2 h-9 px-3 bg-green-600 hover:bg-green-700 text-white"
+                      className="gap-1.5 h-9 px-3 bg-green-600 hover:bg-green-700 text-white"
                       onClick={() => saveAndApply()}
                     >
                       <IconRefresh size={14} /> Применить
@@ -371,7 +371,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                   </TooltipTrigger>
                   <TooltipContent>Сохранить и перезапустить</TooltipContent>
                 </Tooltip>
-                <Button size="default" className="h-9 gap-2 px-3" disabled={!canSave} onClick={() => saveCurrentConfig()}>
+                <Button size="default" className="h-9 gap-1.5 px-3" disabled={!canSave} onClick={() => saveCurrentConfig()}>
                   <IconDeviceFloppy size={14} /> Сохранить
                 </Button>
                 <div className="flex h-9 rounded-md overflow-hidden border border-border">
@@ -379,7 +379,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                     variant="outline"
                     size="default"
                     disabled={!canFormat}
-                    className="h-full rounded-none border-0 gap-2 px-3"
+                    className="h-full rounded-none border-0 gap-1.5 px-3"
                     onClick={() => editorRef.current?.format()}
                   >
                     <IconCode size={14} /> Формат
@@ -388,18 +388,18 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="icon" className="h-full w-8 rounded-none border-0">
-                        <IconChevronDown size={14} />
+                        <IconChevronDown />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-max p-1">
+                    <DropdownMenuContent align="end" className="w-max">
                       <DropdownMenuItem onClick={onOpenImport} className="gap-2 cursor-pointer px-3 py-2">
-                        <IconLink size={14} /> Импорт подключения
+                        <IconLink /> Импорт подключения
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={onOpenTemplate} className="gap-2 cursor-pointer px-3 py-2">
-                        <IconFileText size={14} /> Импорт шаблона
+                        <IconFileText /> Импорт шаблона
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={onOpenGeoScan} className="gap-2 cursor-pointer px-3 py-2">
-                        <IconSearch size={14} /> Скан геофайлов
+                        <IconSearch /> Скан геофайлов
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

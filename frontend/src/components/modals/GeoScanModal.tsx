@@ -157,7 +157,6 @@ export function GeoScanModal() {
               ))}
             </div>
           ) : currentFiles.length === 0 ? (
-            // Врубаем абсолют для идеальной центровки во враппере
             <div className="absolute inset-0 flex items-center justify-center">
               <p className="text-xs text-muted-foreground">Геофайлы не найдены</p>
             </div>
@@ -171,7 +170,7 @@ export function GeoScanModal() {
                     {/* File row - УБРАЛИ h-9, ДОБАВИЛИ py-1.5 */}
                     <div className="flex items-center gap-3 px-3 h-9 py-1.5">
                       <Checkbox id={`file-${file}`} checked={isChecked} onCheckedChange={() => toggleFile(file)} />
-                      <Label htmlFor={`file-${file}`} className="flex-1 text-xs cursor-pointer truncate">
+                      <Label htmlFor={`file-${file}`} className="flex-1 text-xs font-normal tracking-wide cursor-pointer truncate">
                         {file}
                       </Label>
                       {status && status.status !== "idle" && (
