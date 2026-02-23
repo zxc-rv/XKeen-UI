@@ -82,7 +82,7 @@
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.278 0.033 256.848);
   --muted-foreground: oklch(0.707 0.022 261.325);
-  --accent: oklch(0.278 0.033 256.848);
+  --accent: rgba(59, 130, 246, 0.15);
   --accent-foreground: oklch(0.985 0.002 247.839);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(0.2795 0.0368 260.03);
@@ -151,12 +151,15 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-color: #334155 transparent;
+    scrollbar-width: thin;
   }
   body {
     @apply font-sans bg-background text-foreground;
   }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: none;
   }
 }
 *:focus-visible {

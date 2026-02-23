@@ -468,6 +468,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
   }
 
   function changeOutboundValue(value: string) {
+    if (!value) return;
     onUpdate({ ...rule, [outboundType]: value }, true);
   }
 
@@ -599,21 +600,21 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
                     const active = getBadges(rule[fieldName]).includes(opt);
                     const colors: Record<string, { a: string; i: string }> = {
                       inboundTag: {
-                        a: "bg-green-500/10 text-green-400 border-green-500/40",
-                        i: "bg-green-500/5 text-green-500/40 border-green-500/20 hover:bg-green-500/15",
+                        a: "text-green-400 bg-green-400/15 border-none rounded-sm",
+                        i: "text-green-400/25 bg-green-400/3 border-none rounded-sm hover:bg-green-400/15",
                       },
                       protocol: {
-                        a: "bg-purple-500/10 text-purple-400 border-purple-500/40",
-                        i: "bg-purple-500/5 text-purple-500/40 border-purple-500/20 hover:bg-purple-500/15",
+                        a: "text-purple-400 bg-purple-400/15 border-none rounded-sm",
+                        i: "text-purple-400/25 bg-purple-400/3 border-none rounded-sm hover:bg-purple-400/15",
                       },
                       network: {
-                        a: "bg-blue-500/10 text-blue-400 border-blue-500/40",
-                        i: "bg-blue-500/5 text-blue-500/40 border-blue-500/20 hover:bg-blue-500/15",
+                        a: "text-blue-400 bg-blue-400/15 border-none rounded-sm",
+                        i: "text-blue-400/25 bg-blue-400/3 border-none rounded-sm hover:bg-blue-400/15",
                       },
                     };
                     const c = colors[fieldName] || {
-                      a: "bg-primary/10 text-primary border-primary/40",
-                      i: "bg-primary/5 text-primary/40 border-primary/20 hover:bg-primary/15",
+                      a: "text-primary-400 bg-primary-400/15 border-none rounded-sm",
+                      i: "text-primary-400/25 bg-primary-400/3 border-none rounded-sm hover:bg-primary-400/15",
                     };
 
                     return (
@@ -697,33 +698,34 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
           <SelectTrigger className="w-fit min-w-32.5 shrink-0 h-9 px-2.5 border-blue-500/40 bg-input-background hover:bg-blue-500/10 text-blue-400 text-[13px] font-bold transition-colors [&>svg]:text-blue-400/60">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="outboundTag" className="text-[13px] font-bold">
+          <SelectContent className="border-blue-500/40">
+            <SelectItem value="outboundTag" className="text-[13px] font-medium">
               outboundTag
             </SelectItem>
-            <SelectItem value="balancerTag" className="text-[13px] font-bold">
+            <SelectItem value="balancerTag" className="text-[13px] font-medium">
               balancerTag
             </SelectItem>
           </SelectContent>
         </Select>
 
         <Select value={outboundValue} onValueChange={changeOutboundValue}>
-          <SelectTrigger className="h-9 flex-1 text-[13px] border-blue-500/40 bg-input-background hover:bg-blue-500/10 [&>svg]:text-blue-400/60">
-            <SelectValue placeholder="Выберите..." />
+          <SelectTrigger className="h-9 flex-1 text-[13px] border-blue-500/40 bg-input-background hover:bg-blue-500/10 transition-colors [&>svg]:text-blue-400/60">
+            <SelectValue placeholder="Выберите outbound..." />
           </SelectTrigger>
           <SelectContent>
-            {(isBalancer ? available.balancers : available.outbounds).map(
-              (tag) => (
-                <SelectItem key={tag} value={tag} className="text-[13px]">
-                  {tag}
-                </SelectItem>
-              ),
-            )}
             {(isBalancer ? available.balancers : available.outbounds).length ===
-              0 && (
-              <div className="px-3 py-2 text-xs text-muted-foreground">
+            0 ? (
+              <div className="text-xs text-muted-foreground px-2 py-1.5">
                 {isBalancer ? "Балансиры не найдены" : "Аутбаунды не найдены"}
               </div>
+            ) : (
+              (isBalancer ? available.balancers : available.outbounds).map(
+                (tag) => (
+                  <SelectItem key={tag} value={tag} className="text-[13px]">
+                    {tag}
+                  </SelectItem>
+                ),
+              )
             )}
           </SelectContent>
         </Select>
@@ -784,12 +786,12 @@ function BadgeInput({
 
   const color =
     fieldType === "domain"
-      ? "bg-red-500/10 text-red-400 border-red-500/30"
+      ? "text-red-400 bg-red-400/15 border-none rounded-sm"
       : fieldType === "ip"
-        ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+        ? "text-blue-400 bg-blue-400/15 border-none rounded-sm"
         : fieldType === "sourceIP"
-          ? "bg-purple-500/10 text-purple-400 border-purple-500/30"
-          : "bg-yellow-500/10 text-yellow-400 border-yellow-500/30";
+          ? "text-purple-400 bg-purple-400/15 border-none rounded-sm"
+          : "text-yellow-400 bg-yellow-400/15 border-none rounded-sm";
 
   return (
     <div

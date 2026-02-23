@@ -5,9 +5,9 @@ import {
   IconLink,
   IconFileText,
   IconSearch,
-  IconChevronDown,
   IconRefresh,
   IconCode,
+  IconMenu2,
 } from "@tabler/icons-react";
 import * as jsyaml from "js-yaml";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -489,29 +490,25 @@ export function ConfigPanel({
                   <div className="w-px bg-border" />
 
                   <DropdownMenu>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-full w-8 rounded-none border-0"
-                          >
-                            <IconChevronDown />
-                          </Button>
-                        </DropdownMenuTrigger>
-                      </TooltipTrigger>
-                      <TooltipContent>Утилиты</TooltipContent>
-                    </Tooltip>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-full w-8 rounded-none border-0"
+                      >
+                        <IconMenu2 />
+                      </Button>
+                    </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-max">
+                      <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                       <DropdownMenuItem onClick={onOpenImport}>
-                        <IconLink /> Добавить прокси
+                        <IconLink /> Добавить Прокси
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={onOpenTemplate}>
-                        <IconFileText /> Шаблоны конфигураций
+                        <IconFileText /> Шаблоны Конфигураций
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={onOpenGeoScan}>
-                        <IconSearch /> Скан геофайлов
+                        <IconSearch /> Скан Геофайлов
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

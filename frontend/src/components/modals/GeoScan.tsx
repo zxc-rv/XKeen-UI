@@ -276,10 +276,10 @@ export function GeoScanModal() {
                                 .then(() => showToast("Категория скопирована"))
                             }
                             className={cn(
-                              "cursor-pointer h-6 p-2 pt-2.5 text-[11px] tracking-wide rounded-sm transition-colors",
+                              "cursor-pointer h-6 p-2 pt-2.5 text-[11px] tracking-wide rounded-sm border-none transition-colors",
                               geoType === "domain"
-                                ? "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20"
-                                : "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20",
+                                ? "bg-red-400/15 text-red-400 hover:bg-red-400/25"
+                                : "bg-blue-400/15 text-blue-400 hover:bg-blue-400/25",
                             )}
                           >
                             {cat}
