@@ -1,7 +1,7 @@
-import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react"
-import tailwindcss from "@tailwindcss/vite"
-import path from "path"
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import path from "path";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -14,4 +14,7 @@ export default defineConfig({
       "/ws": { target: "ws://192.168.1.1:1000", ws: true },
     },
   },
-})
+  build: {
+    chunkSizeWarningLimit: 3000,
+  },
+});

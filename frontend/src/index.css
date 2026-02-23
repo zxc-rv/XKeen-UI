@@ -18,8 +18,9 @@
   font-display: block;
   src: url("assets/JetBrainsMono-Regular-Latin.woff2") format("woff2");
   unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191,
-    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
@@ -235,7 +236,15 @@
 .status-badge-running {
   background:
     linear-gradient(#19292c, #19292c) padding-box,
-    linear-gradient(90deg, #195040 0%, #195040 30%, #34d399 50%, #195040 70%, #195040 100%) border-box;
+    linear-gradient(
+        90deg,
+        #195040 0%,
+        #195040 30%,
+        #34d399 50%,
+        #195040 70%,
+        #195040 100%
+      )
+      border-box;
   color: #10b981;
   border: 1px solid transparent;
   background-size: 200% 100%;
@@ -245,7 +254,15 @@
 .status-badge-pending {
   background:
     linear-gradient(#2a1f0d, #2a1f0d) padding-box,
-    linear-gradient(90deg, #4a3615 0%, #4a3615 30%, #fbbf24 50%, #4a3615 70%, #4a3615 100%) border-box;
+    linear-gradient(
+        90deg,
+        #4a3615 0%,
+        #4a3615 30%,
+        #fbbf24 50%,
+        #4a3615 70%,
+        #4a3615 100%
+      )
+      border-box;
   color: #f59e0b;
   border: 1px solid transparent;
   background-size: 200% 100%;
@@ -317,6 +334,7 @@
 }
 
 .monaco-editor .iPadShowKeyboard,
-.monaco-editor .showKeyboard {
+.monaco-editor .showKeyboar,
+.monaco-editor .minimap-shadow-visible {
   display: none !important;
 }
