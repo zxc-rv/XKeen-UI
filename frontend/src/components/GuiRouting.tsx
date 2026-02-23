@@ -625,7 +625,9 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
                           active ? c.a : c.i,
                         )}
                       >
-                        {fieldName === "network" ? opt.toUpperCase() : opt}
+                        {fieldName === "network" || fieldName === "protocol"
+                          ? opt.toUpperCase()
+                          : opt}
                       </button>
                     );
                   })}

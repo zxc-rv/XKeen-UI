@@ -22,51 +22,102 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useAppContext } from "../../store";
 
-function highlightCode(code: string, type: string): string {
-  if (type === "outbound" || type === "proxy") {
-    const isJson = code.trimStart().startsWith("{");
-    if (isJson) {
-      return code
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(
-          /"([^"]+)"(\s*:)/g,
-          '<span style="color:#7aa2f7">"$1"</span>$2',
-        )
-        .replace(/:\s*"([^"]*)"/g, ': <span style="color:#9ece6a">"$1"</span>')
-        .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:#ff9e64">$1</span>')
-        .replace(
-          /:\s*(true|false|null)/g,
-          ': <span style="color:#bb9af7">$1</span>',
-        );
-    }
-    // YAML
-    return code
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(
-        /^(\s*)([a-zA-Z][\w-]*)(\s*:)/gm,
-        '$1<span style="color:#7aa2f7">$2</span>$3',
-      )
-      .replace(/:\s*(.+)$/gm, (m, val) => {
-        const trimmed = val.trim();
-        if (/^-?\d+\.?\d*$/.test(trimmed))
-          return ': <span style="color:#ff9e64">' + val + "</span>";
-        if (/^(true|false|null)$/.test(trimmed))
-          return ': <span style="color:#bb9af7">' + val + "</span>";
-        if (trimmed.startsWith("'") || trimmed.startsWith('"'))
-          return ': <span style="color:#9ece6a">' + val + "</span>";
-        return m;
-      });
-  }
+function highlightYaml(code: string): string {
   return code
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .split("\n")
+    .map((line) => {
+      // Comments
+      if (/^\s*#/.test(line))
+        return `<span style="color:#565f89">${line}</span>`;
+
+      // List item marker
+      const listMatch = line.match(/^(\s*-\s)(.*)$/);
+      if (listMatch) {
+        const [, marker, rest] = listMatch;
+        return `<span style="color:#89ddff">${marker}</span>${highlightYamlValue(rest)}`;
+      }
+
+      // Key: value
+      const kvMatch = line.match(/^(\s*)([a-zA-Z_][\w.-]*)(\s*:)(.*)?$/);
+      if (kvMatch) {
+        const [, indent, key, colon, rest] = kvMatch;
+        const value = rest ?? "";
+        return `${indent}<span style="color:#7aa2f7">${key}</span>${colon}${highlightYamlValue(value)}`;
+      }
+
+      return line;
+    })
+    .join("\n");
+}
+
+function highlightYamlValue(value: string): string {
+  if (!value.trim()) return value;
+  const trimmed = value.trim();
+
+  // Inline comment at end
+  const commentIdx = value.search(/\s+#/);
+  if (commentIdx !== -1) {
+    const main = value.slice(0, commentIdx);
+    const comment = value.slice(commentIdx);
+    return (
+      highlightYamlValue(main) + `<span style="color:#565f89">${comment}</span>`
+    );
+  }
+
+  if (/^-?\d+\.?\d*$/.test(trimmed))
+    return value.replace(
+      trimmed,
+      `<span style="color:#ff9e64">${trimmed}</span>`,
+    );
+  if (/^(true|false|null|~)$/.test(trimmed))
+    return value.replace(
+      trimmed,
+      `<span style="color:#bb9af7">${trimmed}</span>`,
+    );
+  if (/^["']/.test(trimmed))
+    return value.replace(
+      trimmed,
+      `<span style="color:#9ece6a">${trimmed}</span>`,
+    );
+  if (
+    trimmed &&
+    !trimmed.startsWith("{") &&
+    !trimmed.startsWith("[") &&
+    !trimmed.startsWith("*") &&
+    !trimmed.startsWith("&")
+  )
+    return value.replace(
+      trimmed,
+      `<span style="color:#9ece6a">${trimmed}</span>`,
+    );
+
+  return value;
+}
+
+function highlightJson(code: string): string {
+  return code
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"([^"]+)"(\s*:)/g, '<span style="color:#7aa2f7">"$1"</span>$2')
+    .replace(/:\s*"([^"]*)"/g, ': <span style="color:#9ece6a">"$1"</span>')
+    .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:#ff9e64">$1</span>')
+    .replace(
+      /:\s*(true|false|null)/g,
+      ': <span style="color:#bb9af7">$1</span>',
+    );
+}
+
+function highlightCode(code: string): string {
+  return code.trimStart().startsWith("{")
+    ? highlightJson(code)
+    : highlightYaml(code);
 }
 
 const SUPPORTED_PROTOCOLS = [
@@ -94,6 +145,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
   const [result, setResult] = useState<{
     content: string;
     type: string;
+    protocol: string;
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -112,7 +164,14 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
   function generate() {
     if (!uri.trim()) return;
     try {
-      setResult(onGenerate(uri.trim()));
+      const generated = onGenerate(uri.trim());
+      if (generated) {
+        const protocol =
+          uri.match(/^([a-zA-Z0-9+\-.]+):\/\//)?.[1]?.toUpperCase() ?? "";
+        setResult({ ...generated, protocol });
+      } else {
+        setResult(null);
+      }
     } catch (e: any) {
       showToast(e.message, "error");
     }
@@ -120,7 +179,6 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
 
   function copy(e: React.MouseEvent<HTMLButtonElement>) {
     if (!result) return;
-
     try {
       if (navigator?.clipboard?.writeText) {
         navigator.clipboard.writeText(result.content);
@@ -129,21 +187,17 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
         textarea.value = result.content;
         textarea.style.cssText =
           "position:absolute;opacity:0;pointer-events:none;z-index:-1;";
-
         const target = e.currentTarget || document.body;
         target.appendChild(textarea);
-
         textarea.focus();
         textarea.select();
         textarea.setSelectionRange(0, 99999);
-
         document.execCommand("copy");
         target.removeChild(textarea);
       }
-
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } catch {
       showToast("Ошибка копирования", "error");
     }
   }
@@ -170,24 +224,24 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 tracking-wide flex flex-col min-h-0 overflow-y-auto">
+          <div className="space-y-3 flex flex-col min-h-0 overflow-y-auto">
+            {/* Result block */}
             {result && (
-              <div className="relative group">
-                <pre
-                  className="p-3 pr-12 text-[13px] overflow-auto font-[JetBrains_Mono] tracking-tight rounded-lg border border-border"
-                  style={{ background: "var(--color-input-background)" }}
-                  dangerouslySetInnerHTML={{
-                    __html: highlightCode(result.content, result.type),
-                  }}
-                />
-
-                <div className="absolute top-2 right-2 flex flex-col gap-1">
+              <div className="rounded-lg border border-border overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-xs tracking-wide px-2 py-0.5"
+                  >
+                    {result.protocol}
+                  </Badge>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="icon"
-                        className="h-8 w-8 shrink-0"
+                        className="h-7 w-7"
                         onClick={copy}
                       >
                         {copied ? (
@@ -199,42 +253,38 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                     </TooltipTrigger>
                     <TooltipContent side="left">Скопировать</TooltipContent>
                   </Tooltip>
+                </div>
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => addToConfig("start")}
-                      >
-                        <IconArrowUp size={14} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      Добавить в начало конфига
-                    </TooltipContent>
-                  </Tooltip>
+                {/* Snippet */}
+                <pre
+                  className="p-3 text-[13px] overflow-auto font-[JetBrains_Mono] tracking-tight"
+                  style={{ background: "var(--color-input-background)" }}
+                  dangerouslySetInnerHTML={{
+                    __html: highlightCode(result.content),
+                  }}
+                />
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => addToConfig("end")}
-                      >
-                        <IconArrowDown size={14} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">
-                      Добавить в конец конфига
-                    </TooltipContent>
-                  </Tooltip>
+                {/* Footer */}
+                <div className="flex gap-2 p-2 border-t border-border bg-muted/10">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-8 text-xs gap-1.5"
+                    onClick={() => addToConfig("start")}
+                  >
+                    <IconArrowUp size={13} /> Добавить в начало
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-8 text-xs gap-1.5"
+                    onClick={() => addToConfig("end")}
+                  >
+                    <IconArrowDown size={13} /> Добавить в конец
+                  </Button>
                 </div>
               </div>
             )}
 
+            {/* Input */}
             <div className="relative">
               <Input
                 value={uri}

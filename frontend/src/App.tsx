@@ -103,7 +103,6 @@ function AppContent() {
           0,
           configs.findIndex((c) => c.filename === saved),
         );
-        // SET_ACTIVE_CONFIG + dashboard port — editor content is populated via onReady callback
         dispatch({ type: "SET_ACTIVE_CONFIG", index });
         const yamlConfig = configs.find(
           (c: any) => c.filename === "config.yaml",
@@ -257,13 +256,18 @@ function AppContent() {
     const stripComments = (s: string) =>
       s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "");
 
-    const scrollToEdge = (ed: any, m: any) => {
-      setTimeout(() => {
-        ed.revealLine(position === "start" ? 1 : m.getLineCount());
-      }, 100);
+    const lineAtOffset = (text: string, offset: number) =>
+      text.slice(0, Math.min(offset, text.length)).split("\n").length;
+
+    const scrollToLine = (editor: any, line: number) => {
+      setTimeout(() => editor.revealLineInCenter(Math.max(1, line)), 100);
     };
 
-    const insertAtOffset = (offset: number, text: string) => {
+    const insertAtOffset = (
+      offset: number,
+      text: string,
+      scrollLine?: number,
+    ) => {
       const pos = model.getPositionAt(offset);
       monacoEditor.executeEdits("add-to-config", [
         {
@@ -276,24 +280,34 @@ function AppContent() {
           text,
         },
       ]);
-      scrollToEdge(monacoEditor, model);
+      scrollToLine(monacoEditor, scrollLine ?? pos.lineNumber);
     };
 
     if (core === "mihomo") {
       const marker = type === "proxy" ? "proxies:" : "proxy-providers:";
-      const idx = current.indexOf(marker);
-      if (idx === -1) {
-        insertAtOffset(current.length, `\n${marker}\n${generated}`);
+      const markerIdx = current.indexOf(marker);
+
+      if (markerIdx === -1) {
+        insertAtOffset(
+          current.length,
+          `\n${marker}\n${generated}`,
+          lineAtOffset(current, current.length) + 2,
+        );
         return;
       }
+
+      const markerLineEnd = current.indexOf("\n", markerIdx) + 1;
+
       if (position === "start") {
-        insertAtOffset(current.indexOf("\n", idx) + 1, generated);
+        const targetLine = lineAtOffset(current, markerLineEnd);
+        insertAtOffset(markerLineEnd, generated, targetLine);
       } else {
-        const afterMarker = current.indexOf("\n", idx) + 1;
-        const nextKey = current.slice(afterMarker).search(/^[a-zA-Z]/m);
+        const afterMarker = markerLineEnd;
+        const nextKeyMatch = current.slice(afterMarker).search(/^[a-zA-Z]/m);
         const insertOffset =
-          nextKey === -1 ? current.length : afterMarker + nextKey;
-        insertAtOffset(insertOffset, generated + "\n");
+          nextKeyMatch === -1 ? current.length : afterMarker + nextKeyMatch;
+        const targetLine = lineAtOffset(current, insertOffset) - 1;
+        insertAtOffset(insertOffset, generated + "\n", targetLine);
       }
     } else {
       try {
@@ -325,18 +339,17 @@ function AppContent() {
 
         const newContent = JSON.stringify(obj, null, 2);
 
-        if (targetIndex !== state.activeConfigIndex) {
+        if (targetIndex !== state.activeConfigIndex)
           dispatch({ type: "SET_ACTIVE_CONFIG", index: targetIndex });
-        }
 
         setTimeout(() => {
-          const ed = editorRef.current?.getEditor();
-          const m = ed?.getModel();
-          if (!ed || !m) return;
-          ed.executeEdits("add-to-config", [
+          const editor = editorRef.current?.getEditor();
+          const m = editor?.getModel();
+          if (!editor || !m) return;
+          editor.executeEdits("add-to-config", [
             { range: m.getFullModelRange(), text: newContent },
           ]);
-          scrollToEdge(ed, m);
+          scrollToLine(editor, position === "start" ? 1 : m.getLineCount());
         }, 150);
       } catch (e: any) {
         showToast(`Ошибка: ${e.message}`, "error");
