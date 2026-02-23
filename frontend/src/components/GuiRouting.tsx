@@ -575,7 +575,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
                 <span className="truncate">{fieldName}</span>
                 <SelectValue placeholder={fieldName} className="hidden" />
               </SelectTrigger>
-              <SelectContent position="popper" className="p-1.5">
+              <SelectContent position="popper">
                 {otherFields.map((f) => (
                   <SelectItem
                     key={f}
@@ -674,7 +674,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
             <span>Добавить условие</span>
             <SelectValue className="hidden" />
           </SelectTrigger>
-          <SelectContent position="popper" className="p-1.5">
+          <SelectContent position="popper">
             {availableToAdd.map((f) => (
               <SelectItem key={f} value={f} className="text-sm cursor-pointer">
                 {f}
@@ -709,7 +709,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
           <SelectTrigger className="h-9 flex-1 text-[13px] border-blue-500/40 bg-input-background hover:bg-blue-500/10 [&>svg]:text-blue-400/60">
             <SelectValue placeholder="Выберите..." />
           </SelectTrigger>
-          <SelectContent className="p-1.5">
+          <SelectContent>
             {(isBalancer ? available.balancers : available.outbounds).map(
               (tag) => (
                 <SelectItem key={tag} value={tag} className="text-[13px]">

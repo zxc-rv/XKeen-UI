@@ -424,7 +424,7 @@ export function ConfigPanel({
             ) : validationState && activeConfig && isJsonOrYaml ? (
               <span
                 className={cn(
-                  "flex items-center gap-1.5 tracking-wide font-medium text-[13px]",
+                  "flex items-center gap-1.5 tracking-wide text-[13px]",
                   validationState.isValid
                     ? "text-green-400/90"
                     : "text-red-500",
@@ -504,22 +504,13 @@ export function ConfigPanel({
                       <TooltipContent>Утилиты</TooltipContent>
                     </Tooltip>
                     <DropdownMenuContent align="end" className="w-max">
-                      <DropdownMenuItem
-                        onClick={onOpenImport}
-                        className="gap-2 cursor-pointer py-2"
-                      >
+                      <DropdownMenuItem onClick={onOpenImport}>
                         <IconLink /> Добавить прокси
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={onOpenTemplate}
-                        className="gap-2 cursor-pointer py-2"
-                      >
+                      <DropdownMenuItem onClick={onOpenTemplate}>
                         <IconFileText /> Шаблоны конфигураций
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={onOpenGeoScan}
-                        className="gap-2 cursor-pointer py-2"
-                      >
+                      <DropdownMenuItem onClick={onOpenGeoScan}>
                         <IconSearch /> Скан геофайлов
                       </DropdownMenuItem>
                     </DropdownMenuContent>

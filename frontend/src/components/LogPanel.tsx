@@ -1,17 +1,35 @@
-import { useState, useRef, useEffect, useCallback } from "react"
-import { IconTrash, IconMaximize, IconMinimize, IconChevronDown, IconSearch, IconX } from "@tabler/icons-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { cn } from "../lib/utils"
-import { useWebSocket } from "../hooks/useWebSocket"
-import { useAppContext } from "../store"
-import { processLogLine } from "../lib/logBadges"
-import type { WsMessage } from "../hooks/useWebSocket"
+import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  IconTrash,
+  IconMaximize,
+  IconMinimize,
+  IconChevronDown,
+  IconSearch,
+  IconX,
+} from "@tabler/icons-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "../lib/utils";
+import { useWebSocket } from "../hooks/useWebSocket";
+import { useAppContext } from "../store";
+import { processLogLine } from "../lib/logBadges";
+import type { WsMessage } from "../hooks/useWebSocket";
 
-const LOG_FILES = ["error.log", "access.log"]
-const MAX_LINES = 5000
+const LOG_FILES = ["error.log", "access.log"];
+const MAX_LINES = 5000;
 
 function LogContent({
   logLines,
@@ -21,12 +39,12 @@ function LogContent({
   showScrollBtn,
   onScrollToBottom,
 }: {
-  logLines: string[]
-  containerRef: React.RefObject<HTMLDivElement | null>
-  onScroll: () => void
-  onClick: (e: React.MouseEvent<HTMLDivElement>) => void
-  showScrollBtn: boolean
-  onScrollToBottom: () => void
+  logLines: string[];
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  onScroll: () => void;
+  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+  showScrollBtn: boolean;
+  onScrollToBottom: () => void;
 }) {
   return (
     <div className="relative flex-1 min-h-0">
@@ -45,9 +63,13 @@ function LogContent({
         }}
       >
         {logLines.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-[13px] text-ring">Журнал пуст</div>
+          <div className="flex items-center justify-center h-full text-[13px] text-ring">
+            Журнал пуст
+          </div>
         ) : (
-          logLines.map((line, i) => <div key={i} dangerouslySetInnerHTML={{ __html: line }} />)
+          logLines.map((line, i) => (
+            <div key={i} dangerouslySetInnerHTML={{ __html: line }} />
+          ))
         )}
       </div>
       {showScrollBtn && (
@@ -61,144 +83,150 @@ function LogContent({
         </Button>
       )}
     </div>
-  )
+  );
 }
 
 export function LogPanel() {
-  const { state } = useAppContext()
-  const [logLines, setLogLines] = useState<string[]>([])
-  const [filter, setFilter] = useState("")
-  const [currentFile, setCurrentFile] = useState("error.log")
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [isClosing, setIsClosing] = useState(false)
-  const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const [userScrolled, setUserScrolled] = useState(false)
+  const { state } = useAppContext();
+  const [logLines, setLogLines] = useState<string[]>([]);
+  const [filter, setFilter] = useState("");
+  const [currentFile, setCurrentFile] = useState("error.log");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [userScrolled, setUserScrolled] = useState(false);
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const filterInputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null);
+  const filterInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey)) return
+      if (!(e.ctrlKey || e.metaKey)) return;
       if (e.code === "KeyA") {
-        const el = containerRef.current
-        if (el && (el.contains(document.activeElement) || document.activeElement === el)) {
-          e.preventDefault()
-          const range = document.createRange()
-          range.selectNodeContents(el)
-          const sel = window.getSelection()
-          sel?.removeAllRanges()
-          sel?.addRange(range)
+        const el = containerRef.current;
+        if (
+          el &&
+          (el.contains(document.activeElement) || document.activeElement === el)
+        ) {
+          e.preventDefault();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
         }
       }
     }
-    document.addEventListener("keydown", onKeyDown)
-    return () => document.removeEventListener("keydown", onKeyDown)
-  }, [])
-  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function openFullscreen() {
-    setIsFullscreen(true)
-    document.body.style.overflow = "hidden"
+    setIsFullscreen(true);
+    document.body.style.overflow = "hidden";
   }
 
   function closeFullscreen() {
-    setIsClosing(true)
-    document.body.style.overflow = ""
+    setIsClosing(true);
+    document.body.style.overflow = "";
     setTimeout(() => {
-      setIsFullscreen(false)
-      setIsClosing(false)
-    }, 350)
+      setIsFullscreen(false);
+      setIsClosing(false);
+    }, 350);
   }
 
   const handleMessage = useCallback((data: WsMessage) => {
     if (data.error) {
-      setLogLines([processLogLine(`ERROR: ${data.error}`)])
-      return
+      setLogLines([processLogLine(`ERROR: ${data.error}`)]);
+      return;
     }
     if (data.type === "initial") {
-      setLogLines((data.lines || []).map(processLogLine))
-      return
+      setLogLines((data.lines || []).map(processLogLine));
+      return;
     }
     if (data.type === "clear") {
-      setLogLines([])
-      return
+      setLogLines([]);
+      return;
     }
     if (data.type === "filtered") {
-      setLogLines((data.lines || []).map(processLogLine))
-      return
+      setLogLines((data.lines || []).map(processLogLine));
+      return;
     }
     if (data.type === "append" && data.content) {
       const newLines = data.content
         .split("\n")
         .filter((l) => l.trim())
-        .map(processLogLine)
+        .map(processLogLine);
       setLogLines((prev) => {
-        const next = [...prev, ...newLines]
-        return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next
-      })
+        const next = [...prev, ...newLines];
+        return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next;
+      });
     }
-  }, [])
+  }, []);
 
-  const ws = useWebSocket(handleMessage)
-
-  useEffect(() => {
-    ws.reload()
-  }, [state.settings.timezone])
+  const ws = useWebSocket(handleMessage);
 
   useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
+    ws.reload();
+  }, [state.settings.timezone]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
     const updateScroll = () => {
       if (!userScrolled) {
-        el.scrollTop = el.scrollHeight
-        setShowScrollBtn(false)
+        el.scrollTop = el.scrollHeight;
+        setShowScrollBtn(false);
       } else {
-        const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 5
-        setShowScrollBtn(!atBottom)
-        if (atBottom) setUserScrolled(false)
+        const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
+        setShowScrollBtn(!atBottom);
+        if (atBottom) setUserScrolled(false);
       }
-    }
-    updateScroll()
-    const observer = new ResizeObserver(updateScroll)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [logLines, isFullscreen, userScrolled])
+    };
+    updateScroll();
+    const observer = new ResizeObserver(updateScroll);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [logLines, isFullscreen, userScrolled]);
 
   function switchFile(filename: string) {
-    if (filename === currentFile) return
-    setCurrentFile(filename)
-    setLogLines([])
-    ws.switchFile(filename)
+    if (filename === currentFile) return;
+    setCurrentFile(filename);
+    setLogLines([]);
+    ws.switchFile(filename);
   }
 
   function handleFilterChange(value: string) {
-    setFilter(value)
-    if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
-    filterTimerRef.current = setTimeout(() => ws.applyFilter(value), 100)
+    setFilter(value);
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    filterTimerRef.current = setTimeout(() => ws.applyFilter(value), 100);
   }
 
   function handleScroll() {
-    const el = containerRef.current
-    if (!el) return
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 5
-    setUserScrolled(!atBottom)
-    setShowScrollBtn(!atBottom)
+    const el = containerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
+    setUserScrolled(!atBottom);
+    setShowScrollBtn(!atBottom);
   }
 
   function scrollToBottom() {
-    containerRef.current?.scrollTo({ top: containerRef.current.scrollHeight, behavior: "smooth" })
-    setUserScrolled(false)
-    setShowScrollBtn(false)
+    containerRef.current?.scrollTo({
+      top: containerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+    setUserScrolled(false);
+    setShowScrollBtn(false);
   }
 
   function handleLogClick(e: React.MouseEvent<HTMLDivElement>) {
-    const badge = (e.target as HTMLElement).closest("span")
-    if (!badge?.textContent) return
-    const level = badge.textContent
-    if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
-    setFilter(level)
-    ws.applyFilter(level)
+    const badge = (e.target as HTMLElement).closest("span");
+    if (!badge?.textContent) return;
+    const level = badge.textContent;
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    setFilter(level);
+    ws.applyFilter(level);
   }
 
   const header = (
@@ -206,7 +234,10 @@ export function LogPanel() {
       <h2 className="text-lg font-semibold">Журнал</h2>
       <div className="flex flex-wrap items-center gap-1.5">
         <div className="relative flex items-center flex-1 sm:flex-none min-w-30">
-          <IconSearch size={13} className="absolute left-2.5 text-muted-foreground pointer-events-none" />
+          <IconSearch
+            size={13}
+            className="absolute left-2.5 text-muted-foreground pointer-events-none"
+          />
           <Input
             ref={filterInputRef}
             value={filter}
@@ -217,9 +248,10 @@ export function LogPanel() {
           {filter && (
             <button
               onClick={() => {
-                if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
-                setFilter("")
-                ws.applyFilter("")
+                if (filterTimerRef.current)
+                  clearTimeout(filterTimerRef.current);
+                setFilter("");
+                ws.applyFilter("");
               }}
               className="absolute right-3 text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -233,7 +265,7 @@ export function LogPanel() {
           </SelectTrigger>
           <SelectContent position="popper">
             {LOG_FILES.map((f) => (
-              <SelectItem key={f} value={f} className="p-2 text-sm">
+              <SelectItem key={f} value={f} className="text-sm">
                 {f}
               </SelectItem>
             ))}
@@ -242,7 +274,12 @@ export function LogPanel() {
         <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => ws.clearLog()}>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={() => ws.clearLog()}
+              >
                 <IconTrash size={14} />
               </Button>
             </TooltipTrigger>
@@ -250,24 +287,41 @@ export function LogPanel() {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={isFullscreen ? closeFullscreen : openFullscreen}>
-                {isFullscreen ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={isFullscreen ? closeFullscreen : openFullscreen}
+              >
+                {isFullscreen ? (
+                  <IconMinimize size={14} />
+                ) : (
+                  <IconMaximize size={14} />
+                )}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{isFullscreen ? "Свернуть" : "Развернуть"}</TooltipContent>
+            <TooltipContent>
+              {isFullscreen ? "Свернуть" : "Развернуть"}
+            </TooltipContent>
           </Tooltip>
         </div>
       </div>
     </div>
-  )
+  );
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="md:shrink-0" style={{ height: isFullscreen || isClosing ? 280 : undefined }}>
+      <div
+        className="md:shrink-0"
+        style={{ height: isFullscreen || isClosing ? 280 : undefined }}
+      >
         {/* Задник для фулскрина */}
         {(isFullscreen || isClosing) && (
           <div
-            className={cn("fixed inset-0 z-40 bg-black/50 transition-opacity duration-300", isClosing ? "opacity-0" : "opacity-100")}
+            className={cn(
+              "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300",
+              isClosing ? "opacity-0" : "opacity-100",
+            )}
             onClick={closeFullscreen}
           />
         )}
@@ -295,5 +349,5 @@ export function LogPanel() {
         </div>
       </div>
     </TooltipProvider>
-  )
+  );
 }
