@@ -4,7 +4,7 @@ import { apiCall, getFileLanguage, capitalize } from "./lib/api";
 import { StatusBar } from "./components/StatusBar";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { LogPanel } from "./components/LogPanel";
-import { ToastContainer } from "./components/ToastContainer";
+import { Toast } from "./components/Toast";
 import { DirtyModal } from "./components/modals/DirtyModal";
 import { CommentsWarningModal } from "./components/modals/CommentsWarningModal";
 import { CoreManageModal } from "./components/modals/CoreManageModal";
@@ -369,7 +369,7 @@ function AppContent() {
         </div>
       </main>
 
-      <ToastContainer />
+      <Toast />
       <DirtyModal
         onSaveAndSwitch={handleSaveAndSwitch}
         onDiscardAndSwitch={handleDiscardAndSwitch}
