@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { IconX, IconAlertCircle, IconCircleCheck } from "@tabler/icons-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useAppContext } from "../store";
 import type { ToastMessage } from "../types";
+import { motion, AnimatePresence } from "framer-motion";
 
 function AlertItem({ alert }: { alert: ToastMessage }) {
   const { dispatch } = useAppContext();
@@ -17,27 +18,29 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
   }, [alert.id, dispatch]);
 
   return (
-    <Alert
-      variant={isError ? "destructive" : "default"}
-      className="relative animate-in slide-in-from-bottom-4 fade-in"
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+      className="w-full max-w-100px"
     >
-      {isError ? (
-        <IconAlertCircle className="size-4.5" />
-      ) : (
-        <IconCircleCheck className="size-4.5" />
-      )}
-
-      <AlertTitle className="pb-1">{alert.title}</AlertTitle>
-
-      {alert.body && <AlertDescription>{alert.body}</AlertDescription>}
-
-      <button
-        onClick={() => dispatch({ type: "REMOVE_TOAST", id: alert.id })}
-        className="absolute right-2 top-2 rounded-md p-1 opacity-70 hover:opacity-100"
-      >
-        <IconX size={18} />
-      </button>
-    </Alert>
+      <Alert variant={isError ? "destructive" : "default"} className="relative">
+        {isError ? (
+          <IconAlertCircle className="size-4.5" />
+        ) : (
+          <IconCircleCheck className="size-4.5" />
+        )}
+        <AlertTitle className="pb-1">{alert.title}</AlertTitle>
+        {alert.body && <AlertDescription>{alert.body}</AlertDescription>}
+        <button
+          onClick={() => dispatch({ type: "REMOVE_TOAST", id: alert.id })}
+          className="absolute right-2 top-2 rounded-md p-1 opacity-70 hover:opacity-100"
+        >
+          <IconX size={18} />
+        </button>
+      </Alert>
+    </motion.div>
   );
 }
 
@@ -45,10 +48,12 @@ export function Toast() {
   const { state } = useAppContext();
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex w-90 flex-col gap-2">
-      {state.toasts.map((alert) => (
-        <AlertItem key={alert.id} alert={alert} />
-      ))}
+    <div className="fixed bottom-6 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 md:left-auto md:right-6 md:items-end md:px-0 md:w-90">
+      <AnimatePresence>
+        {state.toasts.map((alert) => (
+          <AlertItem key={alert.id} alert={alert} />
+        ))}
+      </AnimatePresence>
     </div>
   );
 }
