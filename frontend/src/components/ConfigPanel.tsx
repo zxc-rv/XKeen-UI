@@ -66,6 +66,7 @@ export function ConfigPanel({
 
   const configsRef = useRef(configs);
   const activeIndexRef = useRef(activeConfigIndex);
+  const viewStatesRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
     configsRef.current = configs;
@@ -95,6 +96,9 @@ export function ConfigPanel({
       editorRef.current.setValue(config.content, config.savedContent);
       editorRef.current.setLanguage(getFileLanguage(config.filename));
       editorRef.current.validate(config.filename);
+
+      const savedState = viewStatesRef.current[config.filename];
+      if (savedState) editorRef.current.restoreViewState(savedState);
     },
     [editorRef],
   );
@@ -140,17 +144,19 @@ export function ConfigPanel({
 
   function switchTab(index: number) {
     if (index === activeConfigIndex) return;
-    if (configs[activeConfigIndex]?.isDirty) {
-      dispatch({ type: "SET_PENDING_SWITCH", index });
-      dispatch({ type: "SHOW_MODAL", modal: "showDirtyModal", show: true });
-      return;
-    }
     applyTabSwitch(index);
   }
 
   function applyTabSwitch(index: number) {
     const config = configs[index];
     if (!config) return;
+
+    const currentCfg = configsRef.current[activeIndexRef.current];
+    if (currentCfg && editorRef.current) {
+      viewStatesRef.current[currentCfg.filename] =
+        editorRef.current.saveViewState();
+    }
+
     activeIndexRef.current = index;
     dispatch({ type: "SET_ACTIVE_CONFIG", index });
     setTimeout(
@@ -190,7 +196,7 @@ export function ConfigPanel({
     if (result.success) {
       editorRef.current.setSavedContent(content);
       dispatch({ type: "SAVE_CONFIG", index: activeIndexRef.current, content });
-      showToast(`Конфигурация "${cfg.name}" сохранена`);
+      showToast(`Файл "${cfg.name}" сохранен`);
     } else {
       showToast(`Ошибка сохранения: ${result.error}`, "error");
     }
@@ -401,7 +407,6 @@ export function ConfigPanel({
               onReady={handleMonacoReady}
             />
 
-            {/* Оверлей загрузки поверх самого редактора, пока он не ready */}
             {(!monacoReady || isConfigsLoading) && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-card text-muted-foreground text-sm">
                 {isConfigsLoading
@@ -419,10 +424,10 @@ export function ConfigPanel({
             ) : validationState && activeConfig && isJsonOrYaml ? (
               <span
                 className={cn(
-                  "flex items-center gap-1.5 tracking-wide text-[13px]",
+                  "flex items-center gap-1.5 tracking-wide font-medium text-[13px]",
                   validationState.isValid
-                    ? "text-green-500"
-                    : "text-destructive",
+                    ? "text-green-400/90"
+                    : "text-red-500",
                 )}
               >
                 {validationState.isValid ? "✓ " : "✗ "}
@@ -501,19 +506,19 @@ export function ConfigPanel({
                     <DropdownMenuContent align="end" className="w-max">
                       <DropdownMenuItem
                         onClick={onOpenImport}
-                        className="gap-2 cursor-pointer px-3 py-2"
+                        className="gap-2 cursor-pointer py-2"
                       >
-                        <IconLink /> Импорт подключения
+                        <IconLink /> Добавить прокси
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={onOpenTemplate}
-                        className="gap-2 cursor-pointer px-3 py-2"
+                        className="gap-2 cursor-pointer py-2"
                       >
-                        <IconFileText /> Импорт шаблона
+                        <IconFileText /> Шаблоны конфигураций
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={onOpenGeoScan}
-                        className="gap-2 cursor-pointer px-3 py-2"
+                        className="gap-2 cursor-pointer py-2"
                       >
                         <IconSearch /> Скан геофайлов
                       </DropdownMenuItem>

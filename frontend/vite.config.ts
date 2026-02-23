@@ -16,5 +16,13 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 3000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "monaco-editor": ["monaco-editor/esm/vs/editor/editor.api"],
+          prettier: ["prettier"],
+        },
+      },
+    },
   },
 });

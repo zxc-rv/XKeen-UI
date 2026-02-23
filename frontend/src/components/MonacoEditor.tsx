@@ -29,6 +29,8 @@ export interface MonacoEditorRef {
   layout: () => void;
   isValid: (filename: string) => boolean;
   getEditor: () => monaco.editor.IStandaloneCodeEditor | null;
+  saveViewState: () => any;
+  restoreViewState: (state: any) => void;
 }
 
 interface Props {
@@ -135,6 +137,11 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(
         }
         return true;
       },
+      saveViewState: () => editorRef.current?.saveViewState() ?? null,
+      restoreViewState: (state: any) => {
+        if (state && editorRef.current)
+          editorRef.current.restoreViewState(state);
+      },
       getEditor: () => editorRef.current,
     }));
 
@@ -142,7 +149,9 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(
       if (!containerRef.current) return;
 
       monaco.editor.defineTheme("tokyo-night", THEME);
-      jsonDefaults.setDiagnosticsOptions({ allowComments: true });
+      jsonDefaults.setDiagnosticsOptions({
+        allowComments: true,
+      });
       jsonDefaults.setModeConfiguration({
         ...jsonDefaults.modeConfiguration,
         documentFormattingEdits: false,
@@ -154,6 +163,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(
         language: "json",
         theme: "tokyo-night",
         automaticLayout: true,
+        colorDecorators: false,
         scrollBeyondLastLine: false,
         minimap: { enabled: !isMobile, showSlider: "always" },
         fontSize: isMobile ? 13 : 14,
