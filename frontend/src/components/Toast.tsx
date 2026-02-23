@@ -3,7 +3,7 @@ import { IconX, IconAlertCircle, IconCircleCheck } from "@tabler/icons-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useAppContext } from "../store";
 import type { ToastMessage } from "../types";
-import { motion, AnimatePresence } from "framer-motion";
+import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 
 function AlertItem({ alert }: { alert: ToastMessage }) {
   const { dispatch } = useAppContext();
@@ -18,7 +18,7 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
   }, [alert.id, dispatch]);
 
   return (
-    <motion.div
+    <m.div
       layout
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
@@ -40,7 +40,7 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
           <IconX size={18} />
         </button>
       </Alert>
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -48,12 +48,14 @@ export function Toast() {
   const { state } = useAppContext();
 
   return (
-    <div className="fixed bottom-6 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 md:left-auto md:right-6 md:items-end md:px-0 md:w-90">
-      <AnimatePresence>
-        {state.toasts.map((alert) => (
-          <AlertItem key={alert.id} alert={alert} />
-        ))}
-      </AnimatePresence>
-    </div>
+    <LazyMotion features={domAnimation}>
+      <div className="fixed bottom-6 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 md:left-auto md:right-6 md:items-end md:px-0 md:w-90">
+        <AnimatePresence>
+          {state.toasts.map((alert) => (
+            <AlertItem key={alert.id} alert={alert} />
+          ))}
+        </AnimatePresence>
+      </div>
+    </LazyMotion>
   );
 }
