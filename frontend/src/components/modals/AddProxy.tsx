@@ -32,18 +32,15 @@ function highlightYaml(code: string): string {
     .replace(/>/g, "&gt;")
     .split("\n")
     .map((line) => {
-      // Comments
       if (/^\s*#/.test(line))
         return `<span style="color:#565f89">${line}</span>`;
 
-      // List item marker
       const listMatch = line.match(/^(\s*-\s)(.*)$/);
       if (listMatch) {
         const [, marker, rest] = listMatch;
         return `<span style="color:#89ddff">${marker}</span>${highlightYamlValue(rest)}`;
       }
 
-      // Key: value
       const kvMatch = line.match(/^(\s*)([a-zA-Z_][\w.-]*)(\s*:)(.*)?$/);
       if (kvMatch) {
         const [, indent, key, colon, rest] = kvMatch;
@@ -59,8 +56,6 @@ function highlightYaml(code: string): string {
 function highlightYamlValue(value: string): string {
   if (!value.trim()) return value;
   const trimmed = value.trim();
-
-  // Inline comment at end
   const commentIdx = value.search(/\s+#/);
   if (commentIdx !== -1) {
     const main = value.slice(0, commentIdx);
@@ -125,6 +120,7 @@ const SUPPORTED_PROTOCOLS = [
   "vless://",
   "vmess://",
   "hysteria2://",
+  "hy2://",
   "http://",
   "https://",
   "trojan://",
