@@ -6,6 +6,7 @@ use tokio::{process::Command, io::AsyncWriteExt, fs};
 use futures_util::StreamExt;
 use std::process::Stdio;
 use crate::types::*;
+use crate::logger::log;
 
 const GITHUB_API: &str = "https://api.github.com/repos";
 const GITHUB_RELEASE: &str = "https://github.com";
@@ -31,13 +32,6 @@ pub async fn fetch_latest_version(client: &reqwest::Client, core: &str) -> Optio
     let res = client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await.ok()?;
     let rels = res.json::<Vec<GhRelease>>().await.ok()?;
     rels.into_iter().find(|r| !r.prerelease).map(|r| r.tag_name.trim_start_matches('v').to_string())
-}
-
-async fn log(lvl: &str, msg: String) {
-    if lvl == "ERROR" { eprintln!("{}", msg); } else { println!("{}", msg); }
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG).await {
-        _ = f.write_all(crate::logs::format_plain_log(lvl, &msg).as_bytes()).await;
-    }
 }
 
 fn response(success: bool, error: Option<String>) -> (HeaderMap, Json<Value>) {
@@ -109,6 +103,53 @@ pub async fn get_releases(State(state): State<AppState>, Query(q): Query<Release
         }
     }
     response(false, Some("Не удалось получить релизы".into()))
+}
+
+async fn install_jq() -> Result<(), String> {
+    log("INFO", "Установка jq через opkg...".into()).await;
+    let update = Command::new("opkg").arg("update").status().await.map_err(|e| format!("opkg update: {}", e))?;
+    if !update.success() { return Err("Ошибка обновления opkg кеша".into()); }
+    let install = Command::new("opkg").args(["install", "jq"]).status().await.map_err(|e| format!("opkg install jq: {}", e))?;
+    if !install.success() { return Err("Ошибка установки jq".into()); }
+    log("INFO", "Пакет jq установлен".into()).await;
+    Ok(())
+}
+
+async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path) -> Result<(), String> {
+    let arch = std::env::consts::ARCH;
+    let url = match arch {
+        "aarch64" => format!("{}/mikefarah/yq/releases/latest/download/yq_linux_arm64", GITHUB_RELEASE),
+        "mips" if cfg!(target_endian = "little") => format!("{}/mikefarah/yq/releases/download/v4.52.2/yq_linux_mipsle", GITHUB_RELEASE),
+        "mips" => format!("{}/mikefarah/yq/releases/download/v4.52.2/yq_linux_mips", GITHUB_RELEASE),
+        _ => return Err("Архитектура не поддерживается для yq".into()),
+    };
+
+    log("INFO", format!("Загрузка yq: {}", url)).await;
+    let dl_res = download(client, &url, proxies, &tmp_dir.join("yq.tmp")).await?;
+
+    let target = "/opt/sbin/yq";
+    let tmp_bin = tmp_dir.join("yq.bin");
+    let written = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+        let mut out = File::create(&tmp_bin)?;
+        match dl_res {
+            DownloadResult::RAM(d) => out.write_all(&d)?,
+            DownloadResult::Disk(p) => { std::io::copy(&mut File::open(&p)?, &mut out)?; _ = std::fs::remove_file(p); }
+        }
+        out.sync_data()
+    }).await;
+
+    if let Ok(Err(e)) | Err(e) = written.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) {
+        return Err(format!("Ошибка записи yq: {}", e));
+    }
+
+    let src = tmp_dir.join("yq.bin");
+    if fs::rename(&src, target).await.is_err() {
+        fs::copy(&src, target).await.map_err(|e| format!("Ошибка установки yq: {}", e))?;
+        _ = fs::remove_file(&src).await;
+    }
+    _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
+    log("INFO", "Пакет yq установлен".into()).await;
+    Ok(())
 }
 
 pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
@@ -222,6 +263,18 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         },
         _ => return response(false, Some("Неизвестное ядро".into()))
     };
+
+    match req.core.as_str() {
+        "xray" if !Path::new("/opt/bin/jq").exists() => {
+            log("WARN", "Пакет jq не найден".into()).await;
+            if let Err(e) = install_jq().await { return response(false, Some(e)); }
+        }
+        "mihomo" if !Path::new("/opt/sbin/yq").exists() => {
+            log("WARN", "Пакет yq не найден".into()).await;
+            if let Err(e) = install_yq(&state.http_client, &proxies, tmp_dir).await { return response(false, Some(e)); }
+        }
+        _ => {}
+    }
 
     log("INFO", format!("Загрузка: {}", url)).await;
     let dl_res = match download(&state.http_client, &url, &proxies, &tmp_dir.join("download.tmp")).await { Ok(r) => r, Err(e) => return response(false, Some(e)) };

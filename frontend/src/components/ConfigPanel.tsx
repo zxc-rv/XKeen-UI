@@ -344,20 +344,22 @@ export function ConfigPanel({
                 }}
                 className="flex flex-row! items-center gap-2 w-full"
               >
-                <TabsList className="shrink-0">
-                  {coreConfigs.map((config) => (
-                    <TabsTrigger
-                      key={config.filename}
-                      value={config.filename}
-                      className="relative data-[state=active]:bg-input-background!"
-                    >
-                      {config.name}
-                      {config.isDirty && (
-                        <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                      )}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+                {coreConfigs.length > 0 && (
+                  <TabsList className="shrink-0">
+                    {coreConfigs.map((config) => (
+                      <TabsTrigger
+                        key={config.filename}
+                        value={config.filename}
+                        className="relative data-[state=active]:bg-input-background!"
+                      >
+                        {config.name}
+                        {config.isDirty && (
+                          <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        )}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                )}
                 {xkeenConfigs.length > 0 && (
                   <TabsList className="shrink-0">
                     {xkeenConfigs.map((config) => (

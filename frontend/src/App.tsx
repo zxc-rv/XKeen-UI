@@ -22,7 +22,7 @@ function AppContent() {
 
   useEffect(() => {
     init();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
     try {
@@ -77,16 +77,23 @@ function AppContent() {
           version: data.version.replace(/^v/i, ""),
           isOutdatedUI: !!data.outdated?.ui,
         });
-        if (data.show_toast?.ui) showToast("Доступна новая версия XKeen UI");
+        if (data.show_toast?.ui)
+          showToast({
+            title: "Доступно обновление",
+            body: "Доступна новая версия XKeen UI",
+          });
         if (data.show_toast?.core)
-          showToast(`Доступна новая версия ${capitalize(state.currentCore)}`);
+          showToast({
+            title: "Доступно обновление",
+            body: `Доступна новая версия ${capitalize(state.currentCore)}`,
+          });
       }
     } catch {
       /* ignore */
     }
   }
 
-  async function loadConfigs(core?: string) {
+  async function loadConfigs(core?: string): Promise<Config[]> {
     dispatch({ type: "SET_CONFIGS_LOADING", loading: true });
     try {
       const url = core ? `/api/configs?core=${core}` : "/api/configs";
@@ -112,6 +119,7 @@ function AppContent() {
             /^external-controller:\s*[\w.-]+:(\d+)/m,
           )?.[1] ?? null;
         dispatch({ type: "SET_DASHBOARD_PORT", port });
+        return configs;
       } else {
         dispatch({ type: "SET_CONFIGS_LOADING", loading: false });
         showToast("Ошибка загрузки конфигураций", "error");
@@ -120,6 +128,7 @@ function AppContent() {
       dispatch({ type: "SET_CONFIGS_LOADING", loading: false });
       showToast(`Ошибка загрузки: ${e.message}`, "error");
     }
+    return [];
   }
 
   async function switchCore(core: string) {
@@ -134,7 +143,10 @@ function AppContent() {
       coreVersions: state.coreVersions,
       availableCores: state.availableCores,
     });
-    await loadConfigs(core);
+    const configs = await loadConfigs(core);
+    const mihomoYamlEmpty =
+      core === "mihomo" &&
+      !configs.find((c) => c.filename === "config.yaml")?.content.trim();
     dispatch({
       type: "SET_SERVICE_STATUS",
       status: "pending",
@@ -162,6 +174,7 @@ function AppContent() {
         type: "SET_SERVICE_STATUS",
         status: data.running ? "running" : "stopped",
       });
+      if (result.success && mihomoYamlEmpty) await loadConfigs(core);
     }
   }
 

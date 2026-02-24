@@ -59,28 +59,31 @@ jobs:
         with:
           name: xkeen-ui-${{ matrix.name }}
           path: xkeen-ui-${{ matrix.name }}
+
   static:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Generate Hash
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build frontend
         working-directory: frontend
         run: |
-          cd assets
-          for f in main.js outboundParser.js guiRouting.js guiLog.js style.css; do
-            h=$(sha1sum "$f" | cut -c1-8)
-            ext="${f##*.}"
-            base="${f%.*}"
-            nf="$base.$h.$ext"
-            mv "$f" "$nf"
-            sed -i "s|assets/$f|assets/$nf|g" ../index.html
-          done
+          bun install
+          bun run build
+
       - name: Pack static files
-        run: tar --exclude='outboundGenerator.html' --exclude='generator-favicon.png' -czf xkeen-ui-static.tar.gz -C frontend .
+        run: tar -czf xkeen-ui-static.tar.gz -C frontend/dist .
+
       - uses: actions/upload-artifact@v4
         with:
           name: xkeen-ui-static
           path: xkeen-ui-static.tar.gz
+
   release:
     runs-on: ubuntu-latest
     needs: [build, static]

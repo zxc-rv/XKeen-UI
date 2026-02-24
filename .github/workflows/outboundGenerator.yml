@@ -3,7 +3,7 @@ on:
   push:
     branches: ["main"]
     paths:
-      - frontend/outboundGenerator.html
+      - outboundGenerator.html
       - frontend/src/lib/outboundParser.js
   workflow_dispatch:
 permissions:
@@ -26,9 +26,9 @@ jobs:
         run: |
           rm -rf _site
           mkdir -p _site/Outbound_Generator
-          cp frontend/outboundGenerator.html _site/Outbound_Generator/index.html
+          cp outboundGenerator.html _site/Outbound_Generator/index.html
           cp frontend/src/lib/outboundParser.js _site/Outbound_Generator/outboundParser.js
-          cp frontend/generator-favicon.png _site/Outbound_Generator/favicon.png
+          cp generator-favicon.png _site/Outbound_Generator/favicon.png
           echo '<meta http-equiv="refresh" content="0;url=./Outbound_Generator/">' > _site/index.html
       - name: Setup Pages
         uses: actions/configure-pages@v5

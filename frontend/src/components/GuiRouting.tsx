@@ -712,7 +712,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
           <SelectTrigger className="h-9 flex-1 text-[13px] border-blue-500/40 bg-input-background hover:bg-blue-500/10 transition-colors [&>svg]:text-blue-400/60">
             <SelectValue placeholder="Выберите outbound..." />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="border-blue-500/40">
             {(isBalancer ? available.balancers : available.outbounds).length ===
             0 ? (
               <div className="text-xs text-muted-foreground px-2 py-1.5">

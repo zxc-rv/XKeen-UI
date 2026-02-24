@@ -1,6 +1,7 @@
 use chrono::{DateTime, Duration, NaiveDateTime};
 use regex_lite::Regex;
 use std::sync::LazyLock;
+use tokio::io::AsyncWriteExt;
 
 static ANSI_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\x1b\[\d+m").unwrap());
 static LVL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\[(debug|info|warn|warning|error|fatal)\]").unwrap());
@@ -9,6 +10,13 @@ static XRAY_TIME_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"time="([^"
 pub fn format_plain_log(level: &str, msg: &str) -> String {
     let timestamp = chrono::Local::now().format("%Y/%m/%d %H:%M:%S.%6f").to_string();
     format!("{} [{}] {}\n", timestamp, level.to_uppercase(), msg)
+}
+
+pub async fn log(lvl: &str, msg: String) {
+    if lvl == "ERROR" { eprintln!("{}", msg); } else { println!("{}", msg); }
+    if let Ok(mut f) = tokio::fs::OpenOptions::new().create(true).append(true).open(crate::types::ERROR_LOG).await {
+        _ = f.write_all(format_plain_log(lvl, &msg).as_bytes()).await;
+    }
 }
 
 pub fn process_log_line(line: String, tz: i32) -> String {

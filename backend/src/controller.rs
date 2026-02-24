@@ -4,6 +4,7 @@ use std::{collections::HashMap, path::Path, os::unix::fs::PermissionsExt, fs::Pe
 use nix::{sys::{signal::{kill, Signal}, resource::{setrlimit, Resource}}, unistd::{Gid, Pid, setgid, setsid}};
 use tokio::{fs::{self, set_permissions}, process::Command};
 use crate::types::*;
+use crate::logger::log;
 
 #[derive(Deserialize)] pub struct ControlReq { action: String, #[serde(default)] core: String }
 
@@ -92,6 +93,19 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     Json(serde_json::json!({ "success": true, "cores": available_cores, "currentCore": current_core.name, "running": running_status, "versions": core_versions }))
 }
 
+async fn check_core_config(core: &str) -> Result<(), String> {
+    if core == "xray" {
+        fs::create_dir_all(XRAY_CONF).await.ok();
+        let has_json = std::fs::read_dir(XRAY_CONF)
+            .map(|dir| dir.flatten().any(|e| e.path().extension().map_or(false, |x| x == "json")))
+            .unwrap_or(false);
+        if !has_json {
+            return Err("Не найдены конфигурационные файлы. Настройте их в /opt/etc/xray/configs перед запуском".into());
+        }
+    }
+    Ok(())
+}
+
 pub async fn post_control(State(state): State<AppState>, Json(req): Json<ControlReq>) -> impl IntoResponse {
     match req.action.as_str() {
         "switchCore" => {
@@ -113,6 +127,11 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
 
             *state.core.write().unwrap() = get_core_info(&req.core);
 
+            if let Err(e) = check_core_config(&req.core).await {
+                log("ERROR", e).await;
+                return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}", req.core)), data: None });
+            }
+
             if req.core != "xray" { _ = fs::write(ERROR_LOG, b"").await; }
 
             if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
@@ -130,6 +149,12 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             };
 
             let cur_name = state.core.read().unwrap().name.clone();
+            if a == "start" || a == "hardRestart" {
+                if let Err(e) = check_core_config(&cur_name).await {
+                    log("ERROR", e).await;
+                    return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}", cur_name)), data: None });
+                }
+            }
             if cur_name == "mihomo" && (a == "start" || a == "hardRestart") {
                 _ = fs::write(ERROR_LOG, b"").await;
             }

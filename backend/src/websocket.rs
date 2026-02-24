@@ -2,7 +2,7 @@ use axum::{extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State}, respons
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use notify::{RecursiveMode, Watcher};
 use std::{fs::File, io::{BufRead, BufReader, Seek, SeekFrom}, path::Path, sync::atomic::{AtomicU32, Ordering}};
-use crate::{types::*, logs::process_log_line};
+use crate::{types::*, logger::process_log_line};
 
 static WS_COUNTER: AtomicU32 = AtomicU32::new(0);
 
