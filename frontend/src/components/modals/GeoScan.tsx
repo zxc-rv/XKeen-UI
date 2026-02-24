@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "../../lib/utils";
 import { useAppContext } from "../../store";
 import { Spinner } from "../ui/spinner";
@@ -72,7 +73,10 @@ export function GeoScanModal() {
   }
 
   useEffect(() => {
-    if (state.showGeoScanModal) loadGeoFiles();
+    if (state.showGeoScanModal) {
+      setGeoType("domain");
+      loadGeoFiles();
+    }
   }, [state.showGeoScanModal]);
 
   function switchType(type: GeoType) {
@@ -151,28 +155,31 @@ export function GeoScanModal() {
           </DialogDescription>
         </DialogHeader>
 
-        {/* Type switcher */}
-        <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
-          {(
-            [
-              ["domain", "GeoSite", IconWorld],
-              ["ip", "GeoIP", IconServer],
-            ] as const
-          ).map(([id, label, Icon]) => (
-            <button
-              key={id}
-              onClick={() => switchType(id as GeoType)}
-              className={cn(
-                "cursor-pointer flex-1 flex items-center justify-center gap-1.5 py-2 text-sm transition-colors",
-                geoType === id
-                  ? "bg-primary text-foreground"
-                  : "bg-input-background text-muted-foreground hover:bg-muted",
-              )}
+        <Tabs
+          value={geoType}
+          onValueChange={(value) => switchType(value as GeoType)}
+          className="shrink-0"
+        >
+          <TabsList
+            className="w-full! bg-transparent border border-border overflow-hidden rounded-lg h-full!"
+            style={{ padding: 0 }}
+          >
+            <TabsTrigger
+              value="domain"
+              style={{ height: "100%" }}
+              className="flex-1 gap-1.5 rounded-none py-2 border-none! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
             >
-              <Icon size={18} /> {label}
-            </button>
-          ))}
-        </div>
+              <IconWorld size={16} /> GeoSite
+            </TabsTrigger>
+            <TabsTrigger
+              value="ip"
+              style={{ height: "100%" }}
+              className="flex-1 gap-1.5 rounded-none py-2 border-none! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
+            >
+              <IconServer size={16} /> GeoIP
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Files header */}
         <div className="flex items-center justify-between shrink-0 -my-2">

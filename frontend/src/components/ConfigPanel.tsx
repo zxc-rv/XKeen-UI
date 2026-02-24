@@ -346,7 +346,7 @@ export function ConfigPanel({
                   const index = configs.findIndex((c) => c.filename === value);
                   if (index >= 0) switchTab(index);
                 }}
-                className="flex flex-row! items-center gap-2 w-full"
+                className="flex-row!"
               >
                 {coreConfigs.length > 0 && (
                   <TabsList className="shrink-0">
@@ -354,7 +354,7 @@ export function ConfigPanel({
                       <TabsTrigger
                         key={config.filename}
                         value={config.filename}
-                        className="relative data-[state=active]:bg-input-background!"
+                        className="data-[state=active]:bg-input-background!"
                       >
                         {config.name}
                         {config.isDirty && (
@@ -370,7 +370,7 @@ export function ConfigPanel({
                       <TabsTrigger
                         key={config.filename}
                         value={config.filename}
-                        className="relative data-[state=active]:bg-input-background!"
+                        className="data-[state=active]:bg-input-background!"
                       >
                         {config.name}
                         {config.isDirty && (
