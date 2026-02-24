@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   IconTrash,
   IconMaximize,
@@ -28,7 +28,7 @@ import { useAppContext } from "../store";
 import type { WsMessage } from "../hooks/useWebSocket";
 
 const LOG_FILES = ["error.log", "access.log"];
-const MAX_LINES = 5000;
+const MAX_LINES = 2000;
 
 export function LogPanel() {
   const { state } = useAppContext();
@@ -76,7 +76,6 @@ export function LogPanel() {
     const el = containerRef.current;
     if (!el) return;
 
-    // если контейнер показывает "пусто" — сбрасываем
     if (!linesRef.current.length) {
       linesRef.current = newLines;
       el.innerHTML = newLines.join("");
@@ -84,17 +83,13 @@ export function LogPanel() {
     }
 
     linesRef.current.push(...newLines);
-    el.insertAdjacentHTML("beforeend", newLines.join(""));
 
     if (linesRef.current.length > MAX_LINES) {
       const excess = linesRef.current.length - MAX_LINES;
       linesRef.current.splice(0, excess);
-      // удаляем первые excess текстовых/span нод
-      let removed = 0;
-      while (removed < excess && el.firstChild) {
-        el.removeChild(el.firstChild);
-        removed++;
-      }
+      el.innerHTML = linesRef.current.join("");
+    } else {
+      el.insertAdjacentHTML("beforeend", newLines.join(""));
     }
   }
 
@@ -165,7 +160,6 @@ export function LogPanel() {
     autoScrollRef.current = true;
     containerRef.current?.scrollTo({
       top: containerRef.current.scrollHeight,
-      behavior: "smooth",
     });
     setShowScrollBtn(false);
   }
@@ -193,142 +187,148 @@ export function LogPanel() {
     }, 350);
   }
 
-  const header = (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
-      <h2 className="text-lg font-semibold select-none">Журнал</h2>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <div className="relative flex items-center flex-1 sm:flex-none min-w-30">
-          <IconSearch
-            size={13}
-            className="absolute left-2.5 text-muted-foreground pointer-events-none"
-          />
-          <Input
-            ref={filterInputRef}
-            value={filter}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            placeholder="Фильтр"
-            className="h-9 text-base md:text-sm w-full md:w-40 px-7"
-          />
-          {filter && (
-            <button
-              onClick={() => {
-                if (filterTimerRef.current)
-                  clearTimeout(filterTimerRef.current);
-                setFilter("");
-                ws.applyFilter("");
-              }}
-              className="absolute right-3 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <IconX size={13} />
-            </button>
-          )}
-        </div>
-        <Select value={currentFile} onValueChange={switchFile}>
-          <SelectTrigger className="h-9 w-30 sm:w-32 shrink-0 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent position="popper">
-            {LOG_FILES.map((f) => (
-              <SelectItem key={f} value={f} className="text-sm">
-                {f}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                onClick={() => ws.clearLog()}
-              >
-                <IconTrash size={14} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Очистить лог</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-9 w-9 shrink-0"
-                onClick={isFullscreen ? closeFullscreen : openFullscreen}
-              >
-                {isFullscreen ? (
-                  <IconMinimize size={14} />
-                ) : (
-                  <IconMaximize size={14} />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isFullscreen ? "Свернуть" : "Развернуть"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-    </div>
-  );
+  const timezone = state.settings.timezone;
 
-  return (
-    <TooltipProvider delayDuration={300}>
-      <div
-        className="md:shrink-0"
-        style={{ height: isFullscreen || isClosing ? 280 : undefined }}
-      >
-        {(isFullscreen || isClosing) && (
-          <div
-            className={cn(
-              "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300",
-              isClosing ? "opacity-0" : "opacity-100",
-            )}
-            onClick={closeFullscreen}
-          />
-        )}
-        <div
-          className={cn(
-            "flex flex-col rounded-xl border border-border bg-card overflow-hidden z-50",
-            isFullscreen || isClosing
-              ? "fixed left-1/2 -translate-x-1/2 bottom-3 shadow-2xl w-[calc(100%-2rem)] max-w-[1248px]"
-              : "relative h-70 w-full",
-            isFullscreen && !isClosing && "animate-panel-expand",
-            isClosing && "animate-panel-collapse",
-          )}
-        >
-          {header}
-          <div className="relative flex-1 min-h-0">
-            <div
-              ref={containerRef}
-              onScroll={handleScroll}
-              onClick={handleLogClick}
-              className="absolute border inset-4 overflow-y-auto overflow-x-hidden rounded-md bg-input-background"
-              tabIndex={0}
-              style={{
-                color: "#dbdbdb",
-                fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
-                fontSize: 13,
-                lineHeight: "1.6",
-                padding: "10px 12px",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
-              }}
+  return useMemo(() => {
+    const header = (
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
+        <h2 className="text-lg font-semibold select-none">Журнал</h2>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="relative flex items-center flex-1 sm:flex-none min-w-30">
+            <IconSearch
+              size={13}
+              className="absolute left-2.5 text-muted-foreground pointer-events-none"
             />
-            {showScrollBtn && (
-              <Button
-                variant="outline"
-                size="icon"
-                className="absolute bottom-8 right-8 z-10 h-8 w-8 rounded-md shadow-lg bg-background/80 backdrop-blur"
-                onClick={handleScrollToBottom}
+            <Input
+              ref={filterInputRef}
+              value={filter}
+              onChange={(e) => handleFilterChange(e.target.value)}
+              placeholder="Фильтр"
+              className="h-9 text-base md:text-sm w-full md:w-40 px-7"
+            />
+            {filter && (
+              <button
+                onClick={() => {
+                  if (filterTimerRef.current)
+                    clearTimeout(filterTimerRef.current);
+                  setFilter("");
+                  ws.applyFilter("");
+                }}
+                className="absolute right-3 text-muted-foreground hover:text-foreground transition-colors"
               >
-                <IconChevronDown size={14} />
-              </Button>
+                <IconX size={13} />
+              </button>
             )}
+          </div>
+          <Select value={currentFile} onValueChange={switchFile}>
+            <SelectTrigger className="h-9 w-30 sm:w-32 shrink-0 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {LOG_FILES.map((f) => (
+                <SelectItem key={f} value={f} className="text-sm">
+                  {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() => ws.clearLog()}
+                >
+                  <IconTrash size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Очистить лог</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={isFullscreen ? closeFullscreen : openFullscreen}
+                >
+                  {isFullscreen ? (
+                    <IconMinimize size={14} />
+                  ) : (
+                    <IconMaximize size={14} />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isFullscreen ? "Свернуть" : "Развернуть"}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
-    </TooltipProvider>
-  );
+    );
+
+    return (
+      <TooltipProvider delayDuration={300}>
+        <div
+          className="md:shrink-0"
+          style={{ height: isFullscreen || isClosing ? 280 : undefined }}
+        >
+          {(isFullscreen || isClosing) && (
+            <div
+              className={cn(
+                "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300",
+                isClosing ? "opacity-0" : "opacity-100",
+              )}
+              onClick={closeFullscreen}
+            />
+          )}
+          <div
+            className={cn(
+              "flex flex-col rounded-xl border border-border bg-card overflow-hidden z-50",
+              isFullscreen || isClosing
+                ? "fixed left-1/2 -translate-x-1/2 bottom-3 shadow-2xl w-[calc(100%-2rem)] max-w-[1248px]"
+                : "relative h-70 w-full",
+              isFullscreen && !isClosing && "animate-panel-expand",
+              isClosing && "animate-panel-collapse",
+            )}
+          >
+            {header}
+            <div className="relative flex-1 min-h-0">
+              <div
+                ref={containerRef}
+                onScroll={handleScroll}
+                onClick={handleLogClick}
+                className="absolute border inset-4 overflow-y-auto overflow-x-hidden rounded-md bg-input-background"
+                tabIndex={0}
+                style={{
+                  color: "#dbdbdb",
+                  fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
+                  fontSize: 13,
+                  lineHeight: "1.6",
+                  padding: "10px 12px",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  contain: "content",
+                }}
+              />
+              {showScrollBtn && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute bottom-8 right-8 z-10 h-8 w-8 rounded-md shadow-lg bg-background/80 backdrop-blur"
+                  onClick={handleScrollToBottom}
+                >
+                  <IconChevronDown size={14} />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullscreen, isClosing, filter, currentFile, showScrollBtn, timezone]);
 }
