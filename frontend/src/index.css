@@ -150,21 +150,16 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-    scrollbar-color: #334155 transparent;
-    scrollbar-width: thin;
+    @apply border-border;
   }
   body {
     @apply font-sans bg-background text-foreground;
   }
   html {
     @apply font-sans;
-    -webkit-text-size-adjust: none;
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
   }
-}
-*:focus-visible {
-  outline: none;
-  box-shadow: none;
 }
 
 /* ─── Log badges (shadcn Badge style) ─── */

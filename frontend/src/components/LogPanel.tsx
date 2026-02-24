@@ -25,102 +25,159 @@ import {
 import { cn } from "../lib/utils";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useAppContext } from "../store";
-import { processLogLine } from "../lib/logBadges";
 import type { WsMessage } from "../hooks/useWebSocket";
 
 const LOG_FILES = ["error.log", "access.log"];
 const MAX_LINES = 5000;
 
-function LogContent({
-  logLines,
-  containerRef,
-  onScroll,
-  onClick,
-  showScrollBtn,
-  onScrollToBottom,
-}: {
-  logLines: string[];
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  onScroll: () => void;
-  onClick: (e: React.MouseEvent<HTMLDivElement>) => void;
-  showScrollBtn: boolean;
-  onScrollToBottom: () => void;
-}) {
-  return (
-    <div className="relative flex-1 min-h-0">
-      <div
-        ref={containerRef}
-        onScroll={onScroll}
-        onClick={onClick}
-        className="absolute border p-3 inset-4 overflow-y-auto overflow-x-hidden leading-relaxed rounded-md bg-input-background"
-        tabIndex={0}
-        style={{
-          color: "#dbdbdb",
-          fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
-          fontSize: 13,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-all",
-        }}
-      >
-        {logLines.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-[13px] text-ring">
-            Журнал пуст
-          </div>
-        ) : (
-          logLines.map((line, i) => (
-            <div key={i} dangerouslySetInnerHTML={{ __html: line }} />
-          ))
-        )}
-      </div>
-      {showScrollBtn && (
-        <Button
-          variant="outline"
-          size="icon"
-          className="absolute bottom-8 right-8 z-10 h-8 w-8 rounded-md shadow-lg bg-background/80 backdrop-blur"
-          onClick={onScrollToBottom}
-        >
-          <IconChevronDown size={14} />
-        </Button>
-      )}
-    </div>
-  );
-}
-
 export function LogPanel() {
   const { state } = useAppContext();
-  const [logLines, setLogLines] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   const [currentFile, setCurrentFile] = useState("error.log");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [userScrolled, setUserScrolled] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const linesRef = useRef<string[]>([]);
   const filterInputRef = useRef<HTMLInputElement>(null);
+  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoScrollRef = useRef(true);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.code === "KeyA") {
-        const el = containerRef.current;
-        if (
-          el &&
-          (el.contains(document.activeElement) || document.activeElement === el)
-        ) {
-          e.preventDefault();
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          const sel = window.getSelection();
-          sel?.removeAllRanges();
-          sel?.addRange(range);
-        }
+      if (!(e.ctrlKey || e.metaKey) || e.code !== "KeyA") return;
+      const el = containerRef.current;
+      if (
+        el &&
+        (el.contains(document.activeElement) || document.activeElement === el)
+      ) {
+        e.preventDefault();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        window.getSelection()?.selectAllChildren(el);
       }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
-  const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function renderAll(lines: string[]) {
+    const el = containerRef.current;
+    if (!el) return;
+    linesRef.current = lines;
+    el.innerHTML = lines.length
+      ? lines.join("")
+      : '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:13px;color:#6b7280;">Журнал пуст</div>';
+  }
+
+  function appendLines(newLines: string[]) {
+    if (!newLines.length) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    // если контейнер показывает "пусто" — сбрасываем
+    if (!linesRef.current.length) {
+      linesRef.current = newLines;
+      el.innerHTML = newLines.join("");
+      return;
+    }
+
+    linesRef.current.push(...newLines);
+    el.insertAdjacentHTML("beforeend", newLines.join(""));
+
+    if (linesRef.current.length > MAX_LINES) {
+      const excess = linesRef.current.length - MAX_LINES;
+      linesRef.current.splice(0, excess);
+      // удаляем первые excess текстовых/span нод
+      let removed = 0;
+      while (removed < excess && el.firstChild) {
+        el.removeChild(el.firstChild);
+        removed++;
+      }
+    }
+  }
+
+  function scrollToBottom() {
+    const el = containerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  const handleMessage = useCallback((data: WsMessage) => {
+    if (data.error) {
+      renderAll([`ERROR: ${data.error}`]);
+      if (autoScrollRef.current) requestAnimationFrame(scrollToBottom);
+      return;
+    }
+    if (data.type === "initial") {
+      renderAll(data.lines || []);
+      if (autoScrollRef.current) requestAnimationFrame(scrollToBottom);
+      return;
+    }
+    if (data.type === "clear") {
+      linesRef.current = [];
+      if (containerRef.current)
+        containerRef.current.innerHTML =
+          '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:13px;color:#6b7280;">Логи очищены</div>';
+      return;
+    }
+    if (data.type === "filtered") {
+      renderAll(data.lines || []);
+      if (autoScrollRef.current) requestAnimationFrame(scrollToBottom);
+      return;
+    }
+    if (data.type === "append" && data.content) {
+      const newLines = data.content.split("\n").filter((l) => l.trim());
+      appendLines(newLines);
+      if (autoScrollRef.current) requestAnimationFrame(scrollToBottom);
+    }
+  }, []);
+
+  const ws = useWebSocket(handleMessage);
+
+  useEffect(() => {
+    ws.reload();
+  }, [state.settings.timezone]);
+
+  function switchFile(filename: string) {
+    if (filename === currentFile) return;
+    setCurrentFile(filename);
+    linesRef.current = [];
+    if (containerRef.current) containerRef.current.innerHTML = "";
+    ws.switchFile(filename);
+  }
+
+  function handleFilterChange(value: string) {
+    setFilter(value);
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    filterTimerRef.current = setTimeout(() => ws.applyFilter(value), 100);
+  }
+
+  function handleScroll() {
+    const el = containerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 10;
+    autoScrollRef.current = atBottom;
+    setShowScrollBtn(!atBottom);
+  }
+
+  function handleScrollToBottom() {
+    autoScrollRef.current = true;
+    containerRef.current?.scrollTo({
+      top: containerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+    setShowScrollBtn(false);
+  }
+
+  function handleLogClick(e: React.MouseEvent<HTMLDivElement>) {
+    const badge = (e.target as HTMLElement).closest("span");
+    if (!badge?.textContent) return;
+    const level = badge.textContent;
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    setFilter(level);
+    ws.applyFilter(level);
+  }
 
   function openFullscreen() {
     setIsFullscreen(true);
@@ -134,99 +191,6 @@ export function LogPanel() {
       setIsFullscreen(false);
       setIsClosing(false);
     }, 350);
-  }
-
-  const handleMessage = useCallback((data: WsMessage) => {
-    if (data.error) {
-      setLogLines([processLogLine(`ERROR: ${data.error}`)]);
-      return;
-    }
-    if (data.type === "initial") {
-      setLogLines((data.lines || []).map(processLogLine));
-      return;
-    }
-    if (data.type === "clear") {
-      setLogLines([]);
-      return;
-    }
-    if (data.type === "filtered") {
-      setLogLines((data.lines || []).map(processLogLine));
-      return;
-    }
-    if (data.type === "append" && data.content) {
-      const newLines = data.content
-        .split("\n")
-        .filter((l) => l.trim())
-        .map(processLogLine);
-      setLogLines((prev) => {
-        const next = [...prev, ...newLines];
-        return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next;
-      });
-    }
-  }, []);
-
-  const ws = useWebSocket(handleMessage);
-
-  useEffect(() => {
-    ws.reload();
-  }, [state.settings.timezone]);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const updateScroll = () => {
-      if (!userScrolled) {
-        el.scrollTop = el.scrollHeight;
-        setShowScrollBtn(false);
-      } else {
-        const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
-        setShowScrollBtn(!atBottom);
-        if (atBottom) setUserScrolled(false);
-      }
-    };
-    updateScroll();
-    const observer = new ResizeObserver(updateScroll);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [logLines, isFullscreen, userScrolled]);
-
-  function switchFile(filename: string) {
-    if (filename === currentFile) return;
-    setCurrentFile(filename);
-    setLogLines([]);
-    ws.switchFile(filename);
-  }
-
-  function handleFilterChange(value: string) {
-    setFilter(value);
-    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
-    filterTimerRef.current = setTimeout(() => ws.applyFilter(value), 100);
-  }
-
-  function handleScroll() {
-    const el = containerRef.current;
-    if (!el) return;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
-    setUserScrolled(!atBottom);
-    setShowScrollBtn(!atBottom);
-  }
-
-  function scrollToBottom() {
-    containerRef.current?.scrollTo({
-      top: containerRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-    setUserScrolled(false);
-    setShowScrollBtn(false);
-  }
-
-  function handleLogClick(e: React.MouseEvent<HTMLDivElement>) {
-    const badge = (e.target as HTMLElement).closest("span");
-    if (!badge?.textContent) return;
-    const level = badge.textContent;
-    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
-    setFilter(level);
-    ws.applyFilter(level);
   }
 
   const header = (
@@ -315,7 +279,6 @@ export function LogPanel() {
         className="md:shrink-0"
         style={{ height: isFullscreen || isClosing ? 280 : undefined }}
       >
-        {/* Задник для фулскрина */}
         {(isFullscreen || isClosing) && (
           <div
             className={cn(
@@ -325,8 +288,6 @@ export function LogPanel() {
             onClick={closeFullscreen}
           />
         )}
-
-        {/* Сама панель */}
         <div
           className={cn(
             "flex flex-col rounded-xl border border-border bg-card overflow-hidden z-50",
@@ -338,14 +299,34 @@ export function LogPanel() {
           )}
         >
           {header}
-          <LogContent
-            logLines={logLines}
-            containerRef={containerRef}
-            onScroll={handleScroll}
-            onClick={handleLogClick}
-            showScrollBtn={showScrollBtn}
-            onScrollToBottom={scrollToBottom}
-          />
+          <div className="relative flex-1 min-h-0">
+            <div
+              ref={containerRef}
+              onScroll={handleScroll}
+              onClick={handleLogClick}
+              className="absolute border inset-4 overflow-y-auto overflow-x-hidden rounded-md bg-input-background"
+              tabIndex={0}
+              style={{
+                color: "#dbdbdb",
+                fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
+                fontSize: 13,
+                lineHeight: "1.6",
+                padding: "10px 12px",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+              }}
+            />
+            {showScrollBtn && (
+              <Button
+                variant="outline"
+                size="icon"
+                className="absolute bottom-8 right-8 z-10 h-8 w-8 rounded-md shadow-lg bg-background/80 backdrop-blur"
+                onClick={handleScrollToBottom}
+              >
+                <IconChevronDown size={14} />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </TooltipProvider>
