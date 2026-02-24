@@ -385,7 +385,7 @@ export function ConfigPanel({
           </div>
         </div>
 
-        <div className="relative min-h-[70dvh] md:flex-1 md:min-h-0">
+        <div className="relative min-h-175! md:flex-1 md:min-h-0">
           {monacoReady && activeConfig && isRoutingGui && (
             <RoutingPanel
               editorRef={editorRef}
@@ -554,7 +554,11 @@ function hasCriticalChanges(
       const o = JSON.parse(strip(oldContent));
       const n = JSON.parse(strip(newContent));
       const clean = (arr: Record<string, unknown>[]) =>
-        (arr || []).map(({ sniffing: _, ...rest }) => rest);
+        (arr || []).map((item) =>
+          Object.fromEntries(
+            Object.entries(item).filter(([k]) => k !== "sniffing"),
+          ),
+        );
       return (
         JSON.stringify(clean(o?.inbounds)) !==
         JSON.stringify(clean(n?.inbounds))

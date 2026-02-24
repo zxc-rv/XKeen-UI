@@ -393,7 +393,7 @@ function AppContent() {
   return (
     <div className="min-h-dvh flex flex-col bg-background">
       <main className="flex-1 flex flex-col">
-        <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-3 py-3 px-3 sm:px-4">
+        <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-3 py-3 px-3 sm:px-4 md:w-[60%]">
           <StatusBar
             onOpenCoreManage={() => openModal("showCoreManageModal")}
             onOpenSettings={() => openModal("showSettingsModal")}

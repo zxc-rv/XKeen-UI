@@ -42,13 +42,6 @@ export function StatusBar({
   const isRunning = serviceStatus === "running";
   const isPending = serviceStatus === "pending" || serviceStatus === "loading";
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (state.serviceStatus !== "pending") checkStatus();
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [state.serviceStatus]);
-
   async function checkStatus() {
     try {
       const data = await apiCall<any>("GET", "control");
@@ -67,6 +60,13 @@ export function StatusBar({
       /* ok */
     }
   }
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (state.serviceStatus !== "pending") checkStatus();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [state.serviceStatus]);
 
   function setPending(text: string) {
     dispatch({

@@ -119,17 +119,6 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    const content =
-      configs[activeConfigIndex]?.content ??
-      editorRef.current?.getValue() ??
-      "";
-    const parsed = parseRules(content);
-    rulesRef.current = parsed;
-    setRules(parsed);
-    loadAvailable();
-  }, [activeConfigIndex]);
-
   function loadAvailable() {
     let outbounds: string[] = [],
       inbounds: string[] = [],
@@ -171,6 +160,17 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
       balancers: [...new Set(balancers)],
     });
   }
+
+  useEffect(() => {
+    const content =
+      configs[activeConfigIndex]?.content ??
+      editorRef.current?.getValue() ??
+      "";
+    const parsed = parseRules(content);
+    rulesRef.current = parsed;
+    setRules(parsed);
+    loadAvailable();
+  }, [activeConfigIndex]);
 
   const syncToEditor = useCallback(
     async (newRules: Rule[], triggerSoftRestart = false) => {

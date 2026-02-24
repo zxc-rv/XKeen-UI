@@ -43,9 +43,13 @@ export function GeoScanModal() {
   const close = () =>
     dispatch({ type: "SHOW_MODAL", modal: "showGeoScanModal", show: false });
 
-  useEffect(() => {
-    if (state.showGeoScanModal) loadGeoFiles();
-  }, [state.showGeoScanModal]);
+  function initStatuses(files: string[]) {
+    setFileStatuses(
+      Object.fromEntries(
+        files.map((f) => [f, { categories: [], status: "idle" as const }]),
+      ),
+    );
+  }
 
   async function loadGeoFiles() {
     setLoading(true);
@@ -67,13 +71,9 @@ export function GeoScanModal() {
     setLoading(false);
   }
 
-  function initStatuses(files: string[]) {
-    setFileStatuses(
-      Object.fromEntries(
-        files.map((f) => [f, { categories: [], status: "idle" as const }]),
-      ),
-    );
-  }
+  useEffect(() => {
+    if (state.showGeoScanModal) loadGeoFiles();
+  }, [state.showGeoScanModal]);
 
   function switchType(type: GeoType) {
     setGeoType(type);

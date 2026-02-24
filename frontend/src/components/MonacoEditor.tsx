@@ -1,4 +1,10 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useRef,
+  useLayoutEffect,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api";
 import { jsonDefaults } from "monaco-editor/esm/vs/language/json/monaco.contribution";
 import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution";
@@ -81,9 +87,102 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(
     const filenameRef = useRef("");
     const suppressRef = useRef(false);
 
-    onContentChangeRef.current = onContentChange;
-    onValidationChangeRef.current = onValidationChange;
-    onReadyRef.current = onReady;
+    useLayoutEffect(() => {
+      onContentChangeRef.current = onContentChange;
+      onValidationChangeRef.current = onValidationChange;
+      onReadyRef.current = onReady;
+    });
+
+    function runValidation(
+      editor: monaco.editor.IStandaloneCodeEditor,
+      filename: string,
+    ) {
+      const lang = getFileLanguage(filename);
+      if (lang === "yaml") {
+        try {
+          jsyaml.load(editor.getValue());
+          monaco.editor.setModelMarkers(editor.getModel()!, "yaml", []);
+          onValidationChangeRef.current(true);
+        } catch (e: any) {
+          const line = e.mark ? e.mark.line + 1 : 1;
+          const col = e.mark ? e.mark.column + 1 : 1;
+          const msg = e.mark
+            ? `${e.reason || e.message} [строка ${line}]`
+            : e.message;
+          monaco.editor.setModelMarkers(editor.getModel()!, "yaml", [
+            {
+              severity: monaco.MarkerSeverity.Error,
+              message: msg,
+              startLineNumber: line,
+              startColumn: col,
+              endLineNumber: line,
+              endColumn: 999,
+            },
+          ]);
+          onValidationChangeRef.current(false, msg);
+        }
+      } else if (lang === "json") {
+        setTimeout(() => {
+          const model = editor.getModel();
+          if (!model) return;
+          const markers = monaco.editor.getModelMarkers({
+            owner: "json",
+            resource: model.uri,
+          });
+          const err = markers.find(
+            (m) => m.severity === monaco.MarkerSeverity.Error,
+          );
+          onValidationChangeRef.current(!err, err?.message);
+        }, 300);
+      } else {
+        onValidationChangeRef.current(true);
+      }
+    }
+
+    function registerFormatters() {
+      monaco.languages.registerDocumentFormattingEditProvider("json", {
+        async provideDocumentFormattingEdits(model) {
+          try {
+            const text = await prettier.format(model.getValue(), {
+              parser: "json",
+              plugins: [prettierBabel, prettierEstree],
+              semi: false,
+              trailingComma: "none",
+              printWidth: 120,
+              endOfLine: "lf",
+            });
+            return [
+              {
+                range: model.getFullModelRange(),
+                text: text
+                  .replace(/\n{3,}/g, "\n\n")
+                  .replace(/\s+$/gm, "")
+                  .replace(/\n$/, ""),
+              },
+            ];
+          } catch {
+            return [];
+          }
+        },
+      });
+      monaco.languages.registerDocumentFormattingEditProvider("yaml", {
+        async provideDocumentFormattingEdits(model) {
+          try {
+            const text = await prettier.format(model.getValue(), {
+              parser: "yaml",
+              plugins: [prettierYaml],
+              printWidth: 200,
+              tabWidth: 2,
+              singleQuote: true,
+              endOfLine: "lf",
+            });
+            return [{ range: model.getFullModelRange(), text }];
+          } catch {
+            return [];
+          }
+        },
+      });
+    }
 
     useImperativeHandle(ref, () => ({
       getValue: () => editorRef.current?.getValue() ?? "",
@@ -226,97 +325,6 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(
         editor.dispose();
       };
     }, []);
-
-    function runValidation(
-      editor: monaco.editor.IStandaloneCodeEditor,
-      filename: string,
-    ) {
-      const lang = getFileLanguage(filename);
-      if (lang === "yaml") {
-        try {
-          jsyaml.load(editor.getValue());
-          monaco.editor.setModelMarkers(editor.getModel()!, "yaml", []);
-          onValidationChangeRef.current(true);
-        } catch (e: any) {
-          const line = e.mark ? e.mark.line + 1 : 1;
-          const col = e.mark ? e.mark.column + 1 : 1;
-          const msg = e.mark
-            ? `${e.reason || e.message} [строка ${line}]`
-            : e.message;
-          monaco.editor.setModelMarkers(editor.getModel()!, "yaml", [
-            {
-              severity: monaco.MarkerSeverity.Error,
-              message: msg,
-              startLineNumber: line,
-              startColumn: col,
-              endLineNumber: line,
-              endColumn: 999,
-            },
-          ]);
-          onValidationChangeRef.current(false, msg);
-        }
-      } else if (lang === "json") {
-        setTimeout(() => {
-          const model = editor.getModel();
-          if (!model) return;
-          const markers = monaco.editor.getModelMarkers({
-            owner: "json",
-            resource: model.uri,
-          });
-          const err = markers.find(
-            (m) => m.severity === monaco.MarkerSeverity.Error,
-          );
-          onValidationChangeRef.current(!err, err?.message);
-        }, 300);
-      } else {
-        onValidationChangeRef.current(true);
-      }
-    }
-
-    function registerFormatters() {
-      monaco.languages.registerDocumentFormattingEditProvider("json", {
-        async provideDocumentFormattingEdits(model) {
-          try {
-            const text = await prettier.format(model.getValue(), {
-              parser: "json",
-              plugins: [prettierBabel, prettierEstree],
-              semi: false,
-              trailingComma: "none",
-              printWidth: 120,
-              endOfLine: "lf",
-            });
-            return [
-              {
-                range: model.getFullModelRange(),
-                text: text
-                  .replace(/\n{3,}/g, "\n\n")
-                  .replace(/\s+$/gm, "")
-                  .replace(/\n$/, ""),
-              },
-            ];
-          } catch {
-            return [];
-          }
-        },
-      });
-      monaco.languages.registerDocumentFormattingEditProvider("yaml", {
-        async provideDocumentFormattingEdits(model) {
-          try {
-            const text = await prettier.format(model.getValue(), {
-              parser: "yaml",
-              plugins: [prettierYaml],
-              printWidth: 200,
-              tabWidth: 2,
-              singleQuote: true,
-              endOfLine: "lf",
-            });
-            return [{ range: model.getFullModelRange(), text }];
-          } catch {
-            return [];
-          }
-        },
-      });
-    }
 
     return (
       <div className="absolute inset-4 rounded-md overflow-hidden border border-border bg-input-background">
