@@ -231,7 +231,7 @@ export function LogPanel() {
 
   const header = (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
-      <h2 className="text-lg font-semibold">Журнал</h2>
+      <h2 className="text-lg font-semibold select-none">Журнал</h2>
       <div className="flex flex-wrap items-center gap-1.5">
         <div className="relative flex items-center flex-1 sm:flex-none min-w-30">
           <IconSearch

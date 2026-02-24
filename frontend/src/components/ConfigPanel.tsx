@@ -308,7 +308,9 @@ export function ConfigPanel({
       <div className="flex flex-col rounded-xl border border-border bg-card overflow-hidden md:flex-1 md:min-h-0">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 flex flex-col md:flex-row md:items-center gap-2 shrink-0">
           <div className="flex items-center gap-2 shrink-0">
-            <h2 className="text-lg font-semibold shrink-0">Конфигурация</h2>
+            <h2 className="text-lg font-semibold shrink-0 select-none">
+              Конфигурация
+            </h2>
             {dashboardPort && currentCore === "mihomo" && (
               <a
                 href={`http://${location.hostname}:${dashboardPort}/ui`}
