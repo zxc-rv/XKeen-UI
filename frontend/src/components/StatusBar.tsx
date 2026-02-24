@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import {
-  IconPlayerPlay,
   IconRefresh,
   IconSettings,
   IconCpu,
   IconPlayerStopFilled,
+  IconPlayerPlayFilled,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,9 +80,7 @@ export function StatusBar({
     setPending("Запуск...");
     const result = await apiCall<any>("POST", "control", { action: "start" });
     showToast(
-      result.success
-        ? "XKeen запущен"
-        : `Ошибка запуска: ${result.output || result.error}`,
+      result.success ? "XKeen запущен" : `${result.output || result.error}`,
       result.success ? "success" : "error",
     );
     dispatch({
@@ -179,7 +177,7 @@ export function StatusBar({
                         {isPending ? (
                           <Spinner className="size-4 text-muted-foreground" />
                         ) : (
-                          <IconPlayerPlay size={15} />
+                          <IconPlayerPlayFilled size={15} />
                         )}
                       </Button>
                     </TooltipTrigger>
