@@ -8,6 +8,8 @@ import {
   IconRefresh,
   IconCode,
   IconMenu2,
+  IconCheck,
+  IconX,
 } from "@tabler/icons-react";
 import * as jsyaml from "js-yaml";
 import { Badge } from "@/components/ui/badge";
@@ -435,7 +437,11 @@ export function ConfigPanel({
                     : "text-red-500",
                 )}
               >
-                {validationState.isValid ? "✓ " : "✗ "}
+                {validationState.isValid ? (
+                  <IconCheck size={15} />
+                ) : (
+                  <IconX size={15} />
+                )}
                 {validationState.isValid
                   ? `${fileLanguage?.toUpperCase()} валиден`
                   : `Ошибка: ${validationState.error || "Файл невалиден"}`}
