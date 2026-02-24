@@ -49,7 +49,7 @@ export function Toast() {
 
   return (
     <LazyMotion features={domAnimation}>
-      <div className="fixed bottom-6 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4 md:left-auto md:right-6 md:items-end md:px-0 md:w-90">
+      <div className="fixed bottom-6 left-0 right-0 z-100 flex flex-col items-center gap-2 px-4 md:left-auto md:right-6 md:items-end md:px-0 md:w-90">
         <AnimatePresence>
           {state.toasts.map((alert) => (
             <AlertItem key={alert.id} alert={alert} />

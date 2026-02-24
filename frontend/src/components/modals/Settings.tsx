@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IconSettings, IconX, IconAlertTriangle } from "@tabler/icons-react";
+import { IconSettings, IconX, IconAlertCircle } from "@tabler/icons-react";
 import {
   Dialog,
   DialogContent,
@@ -65,7 +65,9 @@ export function SettingsModal() {
         return false;
       }
       return true;
-    } catch {
+    } catch (e: any) {
+      showToast(e.message, "error");
+      console.error("Save setting failed:", e);
       return false;
     }
   }
@@ -153,11 +155,11 @@ export function SettingsModal() {
           <div className="px-1" style={{ minHeight: 340 }}>
             {activeTab === "gui" && (
               <div>
-                <div className="mb-3 p-3 rounded-lg bg-yellow-700/15 border border-amber-500/40 text-xs tracking-wide text-amber-400 flex items-start gap-2">
-                  <IconAlertTriangle size={16} className="shrink-0 mt-0.5" />
+                <div className="mb-3 p-3 rounded-lg bg-[#2a1f0d] border border-amber-500/20 text-xs tracking-wide text-amber-400 flex items-start gap-2">
+                  <IconAlertCircle size={19} className="shrink-0 mt-0.5" />
                   <span>
-                    Функция экспериментальная. Сделайте бэкап конфигураций перед
-                    включением. Несовместимо с комментариями в конфиге.
+                    Функция экспериментальная. Перед включением сделайте бэкап
+                    конфигураций. Несовместимо с комментариями.
                   </span>
                 </div>
                 <SwitchRow
