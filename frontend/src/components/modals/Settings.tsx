@@ -19,11 +19,9 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "../../lib/utils";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useAppContext } from "../../store";
 import { apiCall } from "../../lib/api";
-
-type Tab = "gui" | "updates" | "logs";
 
 const SwitchRow = ({
   id,
@@ -47,7 +45,6 @@ const SwitchRow = ({
 export function SettingsModal() {
   const { state, dispatch, showToast } = useAppContext();
   const { settings } = state;
-  const [activeTab, setActiveTab] = useState<Tab>("gui");
   const [newProxy, setNewProxy] = useState("");
 
   const close = () =>
@@ -110,12 +107,6 @@ export function SettingsModal() {
     if (ok) dispatch({ type: "SET_SETTINGS", settings: { timezone: offset } });
   }
 
-  const TABS: { id: Tab; label: string }[] = [
-    { id: "gui", label: "GUI" },
-    { id: "updates", label: "Обновления" },
-    { id: "logs", label: "Журнал" },
-  ];
-
   return (
     <Dialog
       open={state.showSettingsModal}
@@ -131,30 +122,25 @@ export function SettingsModal() {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex border-b border-border gap-1 shrink-0">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "px-3 py-2 text-sm border-b-2 -mb-px transition-colors cursor-pointer",
-                activeTab === tab.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <ScrollArea
-          className="flex-1"
-          style={{ maxHeight: "calc(80vh - 140px)" }}
+        <Tabs
+          defaultValue="gui"
+          className="flex flex-col flex-1 overflow-hidden"
         >
-          <div className="px-1" style={{ minHeight: 340 }}>
-            {activeTab === "gui" && (
-              <div>
+          <TabsList
+            variant="line"
+            className="shrink-0 justify-start rounded-none border-b border-border px-0"
+          >
+            <TabsTrigger value="gui">GUI</TabsTrigger>
+            <TabsTrigger value="updates">Обновления</TabsTrigger>
+            <TabsTrigger value="logs">Журнал</TabsTrigger>
+          </TabsList>
+
+          <ScrollArea
+            className="flex-1"
+            style={{ maxHeight: "calc(80vh - 140px)" }}
+          >
+            <div className="px-1" style={{ minHeight: 340 }}>
+              <TabsContent value="gui">
                 <div className="mb-3 p-3 rounded-lg bg-[#2a1f0d] border border-amber-500/20 text-xs tracking-wide text-amber-400 flex items-start gap-2">
                   <IconAlertCircle size={19} className="shrink-0 mt-0.5" />
                   <span>
@@ -182,11 +168,9 @@ export function SettingsModal() {
                   checked={settings.autoApply}
                   onToggle={(v) => toggle("autoApply", "gui.auto_apply", v)}
                 />
-              </div>
-            )}
+              </TabsContent>
 
-            {activeTab === "updates" && (
-              <div>
+              <TabsContent value="updates">
                 <SwitchRow
                   id="auto-ui"
                   label="Автопроверка (панель)"
@@ -249,38 +233,38 @@ export function SettingsModal() {
                     </Button>
                   </div>
                 </div>
-              </div>
-            )}
+              </TabsContent>
 
-            {activeTab === "logs" && (
-              <div className="py-3 flex items-center justify-between">
-                <Label className="text-sm">Часовой пояс</Label>
-                <Select
-                  value={String(settings.timezone)}
-                  onValueChange={setTimezone}
-                >
-                  <SelectTrigger className="w-28 h-9 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 27 }, (_, i) => i - 12).map(
-                      (offset) => (
-                        <SelectItem
-                          key={offset}
-                          value={String(offset)}
-                          className="p-2 text-sm"
-                        >
-                          UTC{offset >= 0 ? "+" : ""}
-                          {offset}
-                        </SelectItem>
-                      ),
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        </ScrollArea>
+              <TabsContent value="logs">
+                <div className="py-3 flex items-center justify-between">
+                  <Label className="text-sm">Часовой пояс</Label>
+                  <Select
+                    value={String(settings.timezone)}
+                    onValueChange={setTimezone}
+                  >
+                    <SelectTrigger className="w-28 h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 27 }, (_, i) => i - 12).map(
+                        (offset) => (
+                          <SelectItem
+                            key={offset}
+                            value={String(offset)}
+                            className="p-2 text-sm"
+                          >
+                            UTC{offset >= 0 ? "+" : ""}
+                            {offset}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </TabsContent>
+            </div>
+          </ScrollArea>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
