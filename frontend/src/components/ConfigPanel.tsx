@@ -209,7 +209,7 @@ export function ConfigPanel({
     const cfg = configsRef.current[activeIndexRef.current];
     if (!cfg || !editorRef.current) return;
     const content = editorRef.current.getValue();
-    if (!content.trim()) return showToast("Конфиг пустой", "error");
+    if (!content.trim()) return showToast("Файл пустой", "error");
     if (!editorRef.current.isValid(cfg.filename))
       return showToast("Файл содержит ошибки", "error");
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
@@ -308,7 +308,7 @@ export function ConfigPanel({
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex flex-col rounded-xl border border-border bg-card overflow-hidden md:flex-1 md:min-h-0">
-        <div className="px-3 sm:px-4 pt-3 sm:pt-4 flex flex-col md:flex-row md:items-center gap-2 shrink-0">
+        <div className="px-3 sm:px-4 pt-3 sm:pt-4 flex flex-col md:flex-row md:items-start gap-2 shrink-0">
           <div className="flex items-center gap-2 shrink-0">
             <h2 className="text-lg font-semibold shrink-0 select-none">
               Конфигурация
@@ -492,7 +492,8 @@ export function ConfigPanel({
                         className="h-full rounded-none border-0 gap-1.5 px-3"
                         onClick={() => editorRef.current?.format()}
                       >
-                        <IconCode size={14} /> Формат
+                        <IconCode size={14} />{" "}
+                        <span className="hidden sm:inline">Формат</span>
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Форматировать файл</TooltipContent>

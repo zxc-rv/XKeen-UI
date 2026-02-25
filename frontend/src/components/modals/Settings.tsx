@@ -112,10 +112,7 @@ export function SettingsModal() {
       open={state.showSettingsModal}
       onOpenChange={(open) => !open && close()}
     >
-      <DialogContent
-        className="max-w-lg! flex flex-col overflow-hidden"
-        style={{ maxHeight: "80vh" }}
-      >
+      <DialogContent className="max-w-lg! flex flex-col overflow-hidden h-[80vh] md:h-120">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <IconSettings size={24} className="text-chart-2" /> Настройки
@@ -135,11 +132,8 @@ export function SettingsModal() {
             <TabsTrigger value="logs">Журнал</TabsTrigger>
           </TabsList>
 
-          <ScrollArea
-            className="flex-1"
-            style={{ maxHeight: "calc(80vh - 140px)" }}
-          >
-            <div className="px-1" style={{ minHeight: 340 }}>
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="px-1">
               <TabsContent value="gui">
                 <div className="mb-3 p-3 rounded-lg bg-[#2a1f0d] border border-amber-500/20 text-xs tracking-wide text-amber-400 flex items-start gap-2">
                   <IconAlertCircle size={19} className="shrink-0 mt-0.5" />

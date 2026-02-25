@@ -171,7 +171,7 @@ export function LogPanel() {
           className={cn(
             "flex flex-col rounded-xl border border-border bg-card overflow-hidden",
             isFullscreen
-              ? "fixed inset-x-4 mx-auto bottom-3 z-50 shadow-2xl max-w-500 w-[calc(100%-2rem)]"
+              ? "fixed inset-x-3 sm:inset-x-4 bottom-3 z-50 shadow-2xl sm:max-w-500 sm:mx-auto"
               : "absolute inset-0 z-10 w-full",
           )}
           style={{ height: isFullscreen ? "calc(100dvh - 1.25rem)" : "100%" }}
@@ -190,7 +190,7 @@ export function LogPanel() {
                   value={filter}
                   onChange={(e) => handleFilterChange(e.target.value)}
                   placeholder="Фильтр"
-                  className="h-9 text-base md:text-sm w-full md:w-40 px-7"
+                  className="h-9 text-base md:text-sm w-40  px-7"
                 />
                 {filter && (
                   <button
