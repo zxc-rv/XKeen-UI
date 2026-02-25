@@ -110,13 +110,21 @@ export function GeoScanModal() {
           `${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input.trim())}`,
         );
         const data = await res.json();
-        setFileStatuses((prev) => ({
-          ...prev,
-          [file]:
-            data.success && data.categories?.length
-              ? { status: "found", categories: data.categories }
-              : { status: "not-found", categories: [] },
-        }));
+        if (!data.success && data.error) {
+          showToast(data.error, "error");
+          setFileStatuses((prev) => ({
+            ...prev,
+            [file]: { status: "error", categories: [] },
+          }));
+        } else {
+          setFileStatuses((prev) => ({
+            ...prev,
+            [file]:
+              data.success && data.categories?.length
+                ? { status: "found", categories: data.categories }
+                : { status: "not-found", categories: [] },
+          }));
+        }
       } catch {
         setFileStatuses((prev) => ({
           ...prev,

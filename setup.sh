@@ -87,6 +87,11 @@ download_files() {
     download_url="$base_url/download/$beta_tag"
   fi
 
+  if ! [ -f /opt/bin/tar ]; then
+    ( opkg update; opkg install tar ) &
+    ! spinner $! "Установка tar..." && printf "${RED_BOLD}\n Не удалось установить tar.${NCN}"
+  fi
+
   mkdir -p $STATIC_DIR
   ( set -e; curl -Ls "$download_url/xkeen-ui-static.tar.gz" | tar -xz -C "$STATIC_DIR" ) &
   if ! spinner $! "Загрузка статики..."; then
@@ -96,7 +101,7 @@ download_files() {
 
   ( set -e; curl -Lsfo $XKEENUI_BIN $download_url/$bin_name && chmod +x $XKEENUI_BIN ) &
   if ! spinner $! "Загрузка бинарника..."; then
-    printf "${RED_BOLD}\n Не удалось скачать бинарник.${NCN}"
+    printf "${RED_BOLD}\n Не удалось загрузить бинарник.${NCN}"
     exit 1
   fi
 }

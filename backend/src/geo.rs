@@ -202,7 +202,7 @@ async fn resolve_domain(client: &reqwest::Client, domain: &str) -> Result<IpAddr
             }
         }
     }
-    Err(format!("Не удалось разрешить: {}", domain))
+    Err(format!("Не удалось разрешить домен: {}", domain))
 }
 
 async fn geo_query_handler(params: HashMap<String, String>, is_ip: bool, client: Option<reqwest::Client>) -> impl IntoResponse {
