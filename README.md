@@ -1,5 +1,5 @@
 # ✨ XKeen UI
-Веб-панель с современным дизайном для управления сервисом **XKeen** 🚀
+Легковесная панель управления сервисом **XKeen** 🚀
   
 ![preview](https://github.com/zxc-rv/XKeen-UI/blob/main/preview.gif)
 
