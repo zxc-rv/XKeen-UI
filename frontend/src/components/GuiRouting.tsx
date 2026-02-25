@@ -622,7 +622,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
                         key={opt}
                         onClick={() => toggleBtn(fieldName, opt)}
                         className={cn(
-                          "cursor-pointer px-3 py-0.75 rounded text-xs border transition-colors",
+                          "cursor-pointer px-3 py-0.75 rounded text-xs font-medium border transition-colors",
                           active ? c.a : c.i,
                         )}
                       >

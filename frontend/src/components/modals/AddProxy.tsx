@@ -3,9 +3,8 @@ import {
   IconLink,
   IconCopy,
   IconCheck,
-  IconArrowUp,
-  IconArrowDown,
   IconX,
+  IconPlus,
 } from "@tabler/icons-react";
 import {
   Tooltip,
@@ -211,8 +210,9 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
         onOpenChange={(open) => !open && close()}
       >
         <DialogContent className="flex flex-col max-h-[90dvh] w-auto! min-w-[min(90vw,480px)]! max-w-[min(90vw,900px)]! overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 pb-3">
+          {/* Шапка модалки (прибита гвоздями) */}
+          <DialogHeader className="shrink-0 pb-1">
+            <DialogTitle className="flex items-center gap-2 pb-2">
               <IconLink size={24} className="text-chart-2" /> Добавить прокси
             </DialogTitle>
             <DialogDescription>
@@ -220,12 +220,13 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 flex flex-col min-h-0 overflow-y-auto">
-            {/* Result block */}
+          {/* Основная контентная часть */}
+          <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
+            {/* Блок с результатом */}
             {result && (
-              <div className="rounded-lg border border-border overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
+              <div className="flex flex-col flex-1 min-h-0 rounded-lg border border-border bg-card overflow-hidden">
+                {/* Хедер результата (бейджик и копипаста) */}
+                <div className="shrink-0 flex items-center justify-between w-full px-3 py-2 border-b border-border bg-muted/30">
                   <Badge
                     variant="outline"
                     className="font-mono text-xs tracking-wide px-2 py-0.5"
@@ -251,61 +252,66 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                   </Tooltip>
                 </div>
 
-                {/* Snippet */}
-                <pre
-                  className="p-3 text-[13px] overflow-auto font-[JetBrains_Mono] tracking-tight"
-                  style={{ background: "var(--color-input-background)" }}
-                  dangerouslySetInnerHTML={{
-                    __html: highlightCode(result.content),
-                  }}
-                />
+                {/* Сам скроллящийся код (тут обернули в div) */}
+                <div className="flex-1 overflow-auto min-h-0 bg-[var(--color-input-background)]">
+                  <pre
+                    className="p-3 text-[13px] font-[JetBrains_Mono] tracking-tight m-0"
+                    dangerouslySetInnerHTML={{
+                      __html: highlightCode(result.content),
+                    }}
+                  />
+                </div>
 
-                {/* Footer */}
-                <div className="flex gap-2 p-2 border-t border-border bg-muted/10">
+                {/* Футер результата с кнопками добавления */}
+                <div className="shrink-0 flex gap-2 w-full p-2 border-t border-border bg-muted/10">
                   <Button
                     variant="outline"
                     className="flex-1 h-8 text-xs gap-1.5"
                     onClick={() => addToConfig("start")}
                   >
-                    <IconArrowUp size={13} /> Добавить в начало
+                    <IconPlus size={13} /> В начало
                   </Button>
                   <Button
                     variant="outline"
                     className="flex-1 h-8 text-xs gap-1.5"
                     onClick={() => addToConfig("end")}
                   >
-                    <IconArrowDown size={13} /> Добавить в конец
+                    <IconPlus size={13} /> В конец
                   </Button>
                 </div>
               </div>
             )}
 
-            {/* Input */}
-            <div className="relative">
-              <Input
-                value={uri}
-                onChange={(e) => setUri(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && isValidUri && generate()}
-                placeholder="vless://..."
-                className={uri ? "pr-7" : ""}
-              />
-              {uri && (
-                <button
-                  onClick={() => setUri("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <IconX size={14} />
-                </button>
-              )}
-            </div>
+            {/* Блок ввода (всегда внизу) */}
+            <div className="shrink-0 flex flex-col gap-3 mt-auto pt-1">
+              <div className="relative">
+                <Input
+                  value={uri}
+                  onChange={(e) => setUri(e.target.value)}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && isValidUri && generate()
+                  }
+                  placeholder="vless://..."
+                  className={uri ? "pr-7" : ""}
+                />
+                {uri && (
+                  <button
+                    onClick={() => setUri("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <IconX size={14} />
+                  </button>
+                )}
+              </div>
 
-            <Button
-              onClick={generate}
-              disabled={!isValidUri}
-              className="w-full"
-            >
-              Сгенерировать
-            </Button>
+              <Button
+                onClick={generate}
+                disabled={!isValidUri}
+                className="w-full"
+              >
+                Сгенерировать
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

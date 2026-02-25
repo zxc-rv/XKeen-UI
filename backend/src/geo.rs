@@ -166,15 +166,46 @@ pub async fn get_geo(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-pub async fn get_geoip(State(_): State<AppState>, Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
-    geo_query_handler(params, true).await
+pub async fn get_geoip(State(state): State<AppState>, Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    geo_query_handler(params, true, Some(state.http_client)).await
 }
 
 pub async fn get_geosite(State(_): State<AppState>, Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
-    geo_query_handler(params, false).await
+    geo_query_handler(params, false, None).await
 }
 
-async fn geo_query_handler(params: HashMap<String, String>, is_ip: bool) -> impl IntoResponse {
+async fn resolve_domain(client: &reqwest::Client, domain: &str) -> Result<IpAddr, String> {
+    #[derive(serde::Deserialize)]
+    struct DohResponse { #[serde(rename = "Answer")] answer: Option<Vec<DohAnswer>> }
+    #[derive(serde::Deserialize)]
+    struct DohAnswer { data: String }
+
+    const PROVIDERS: &[&str] = &[
+        "https://1.1.1.1/dns-query",
+        "https://8.8.8.8/dns-query",
+    ];
+
+    for provider in PROVIDERS {
+        for qtype in ["A", "AAAA"] {
+            let Ok(resp) = client
+                .get(*provider)
+                .header("accept", "application/dns-json")
+                .query(&[("name", domain), ("type", qtype)])
+                .send().await else { continue };
+            let Ok(parsed): Result<DohResponse, _> = resp.json().await else { continue };
+            if let Some(answers) = parsed.answer {
+                for answer in answers {
+                    if let Ok(ip) = answer.data.parse::<IpAddr>() {
+                        return Ok(ip);
+                    }
+                }
+            }
+        }
+    }
+    Err(format!("Не удалось разрешить: {}", domain))
+}
+
+async fn geo_query_handler(params: HashMap<String, String>, is_ip: bool, client: Option<reqwest::Client>) -> impl IntoResponse {
     let key = if is_ip { "ip" } else { "domain" };
     let (Some(filename), Some(target)) = (params.get("file"), params.get(key)) else {
         return Json(ApiResponse::<GeoQueryResponse> { success: false, error: Some(format!("Отсутствует file или {key}")), data: None });
@@ -184,13 +215,28 @@ async fn geo_query_handler(params: HashMap<String, String>, is_ip: bool) -> impl
         return Json(ApiResponse::<GeoQueryResponse> { success: false, error: Some("Некорректное имя файла".into()), data: None });
     };
     let target = target.clone();
+
+    let resolved_ip: Option<IpAddr> = if is_ip {
+        match target.parse::<IpAddr>() {
+            Ok(ip) => Some(ip),
+            Err(_) => match client.as_ref() {
+                Some(c) => match resolve_domain(c, &target).await {
+                    Ok(ip) => Some(ip),
+                    Err(e) => return Json(ApiResponse::<GeoQueryResponse> { success: false, error: Some(e), data: None }),
+                },
+                None => return Json(ApiResponse::<GeoQueryResponse> { success: false, error: Some(format!("Некорректный IP: {}", target)), data: None }),
+            },
+        }
+    } else {
+        None
+    };
+
     let result = task::spawn_blocking(move || -> Result<Vec<String>, String> {
         let file = File::open(&path).map_err(|e| format!("Ошибка открытия: {}", e))?;
         let mmap = unsafe { MmapOptions::new().map(&file).map_err(|e| format!("Ошибка mmap: {}", e))? };
         mmap.advise(Advice::Sequential).ok();
         if is_ip {
-            let target: IpAddr = target.parse().map_err(|_| format!("Некорректный IP: {}", target))?;
-            let (v4, v6) = match target {
+            let (v4, v6) = match resolved_ip.unwrap() {
                 IpAddr::V4(v4) => (Some(u32::from(v4)), None),
                 IpAddr::V6(v6) => (None, Some(u128::from(v6))),
             };

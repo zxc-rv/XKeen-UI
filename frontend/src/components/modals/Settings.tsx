@@ -112,7 +112,7 @@ export function SettingsModal() {
       open={state.showSettingsModal}
       onOpenChange={(open) => !open && close()}
     >
-      <DialogContent className="max-w-lg! flex flex-col overflow-hidden h-[80vh] md:h-120">
+      <DialogContent className="max-w-lg! flex flex-col overflow-hidden h-[70dvh]! md:h-120!">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <IconSettings size={24} className="text-chart-2" /> Настройки
