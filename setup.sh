@@ -17,7 +17,6 @@ INFO="\n${CYAN} ℹ️ "
 XKEENUI_BIN="/opt/sbin/xkeen-ui"
 XKEENUI_INIT="/opt/etc/init.d/S99xkeen-ui"
 STATIC_DIR="/opt/share/www/XKeen-UI"
-MONACO_DIR="$STATIC_DIR/monaco-editor"
 LOCAL_MODE_PATH="$STATIC_DIR/local_mode.js"
 LIGHTTPD_INIT="/opt/etc/init.d/S80lighttpd"
 LIGHTTPD_DIR="/opt/etc/lighttpd"
@@ -106,45 +105,15 @@ download_files() {
   fi
 }
 
-setup_local_editor() {
-  (
-    set -e
-    mkdir -p $MONACO_DIR
-    curl -Lsf "https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.52.2.tgz" | tar -xz -C "$MONACO_DIR" --strip-components=2 package/min/vs
-    curl -Lsf \
-      "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js" -o "$MONACO_DIR/loader.min.js" \
-      "https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js" -o "$MONACO_DIR/js-yaml.min.js" \
-      "https://cdn.jsdelivr.net/npm/prettier@2/standalone.min.js" -o "$MONACO_DIR/standalone.min.js" \
-      "https://cdn.jsdelivr.net/npm/prettier@3/plugins/babel.min.js" -o "$MONACO_DIR/babel.min.js" \
-      "https://cdn.jsdelivr.net/npm/prettier@3/plugins/yaml.min.js" -o "$MONACO_DIR/yaml.min.js"
-  ) &
-  if ! spinner $! "Загрузка файлов редактора..."; then
-    printf "${RED_BOLD}\n Не удалось загрузить файлы редактора.${NCN}"
-    exit 1
-  fi
-}
-
 install_xkeenui() {
   if [[ -d $STATIC_DIR || -f $XKEENUI_BIN || -f $XKEENUI_INIT || -f $LIGHTTPD_CONF ]]; then
     printf "${YELLOW}\n Обнаружены файлы XKeen UI, запуск переустановки...\n${NC}"
     uninstall_xkeenui
   fi
 
-  printf "${YELLOW}\n Вариант установки редактора:${NCN}"
-  printf "  1. CDN\n"
-  printf "  2. Local\n\n"
-  read -p "${GREEN_BOLD}>: ${NC}" editor_choice < /dev/tty
-
-  case "$editor_choice" in
-    1) mkdir -p $STATIC_DIR; echo "const LOCAL = false" > "$LOCAL_MODE_PATH";;
-    2) mkdir -p $STATIC_DIR; echo "const LOCAL = true" > "$LOCAL_MODE_PATH";;
-    *) printf "\n${ERROR} Неверный выбор.${NCN}"; exit 1;;
-  esac
-
   printf "${INFO} Начинаем установку...${NCN}"
 
   download_files; create_xkeenui_init
-  [ $editor_choice = 2 ] && setup_local_editor
 
   sync & spinner $! "Запись данных..."
 
@@ -181,10 +150,6 @@ update_xkeenui() {
   fi
 
   legacy_installation_check; download_files
-
-  [ -f $LOCAL_MODE_PATH ] || echo "const LOCAL = false" > $LOCAL_MODE_PATH
-
-  grep -q "LOCAL = true" "$LOCAL_MODE_PATH" && ! check_monaco_files && setup_local_editor
 
   sync & spinner $! "Запись данных..."
 
@@ -267,14 +232,6 @@ EOF
   chmod +x $XKEENUI_INIT
 }
 
-get_editor_mode() {
-  case "$(sed -n 's/.*LOCAL = \(true\|false\).*/\1/p' "$LOCAL_MODE_PATH" 2>/dev/null)" in
-    true)  printf "${GREEN_BOLD}🏠 Local${NC}\n";;
-    false) printf "${CYAN}🌐 CDN${NC}\n";;
-    *)     printf "${RED_BOLD}N/A${NC}\n";;
-  esac
-}
-
 get_status() {
   [ ! -f "$XKEENUI_BIN" ] && printf "Статус панели: ${RED_BOLD}не установлена${NC}" && return
 
@@ -285,34 +242,6 @@ get_status() {
 
   pidof xkeen-ui >/dev/null 2>&1 && status="${GREEN_BOLD}запущена"
   printf "Статус панели: $status ${NC}[$version]"
-}
-
-check_monaco_files() {
-  for file in loader.min.js js-yaml.min.js standalone.min.js babel.min.js yaml.min.js; do
-    [ -f "$MONACO_DIR/$file" ] || return 1
-  done
-}
-
-toggle_editor_mode() {
-  [ -f "$XKEENUI_BIN" ] || { printf "${ERROR} Ошибка: XKeen UI не установлен!${NCN}"; exit 1; }
-
-  if grep -q "const LOCAL = true" "$LOCAL_MODE_PATH"; then
-    echo "const LOCAL = false" > "$LOCAL_MODE_PATH"
-    printf "${SUCCESS} Режим редактора переключен на CDN${NCN}"
-    return
-  fi
-
-  if ! check_monaco_files; then
-    printf "${INFO} Будет выполнена загрузка файлов редактора.\n\n Продолжить? [Y/n]: ${NC}"
-    read -r response < /dev/tty
-    response=$(printf '%s' "$response" | tr -cd 'YyNn')
-    case "$response" in [Yy]|"") echo;; *) echo; return;; esac
-    setup_local_editor
-    sync & spinner $! "Запись данных..."
-  fi
-
-  echo "const LOCAL = true" > "$LOCAL_MODE_PATH"
-  printf "${SUCCESS} Режим редактора переключен на Local${NCN}"
 }
 
 clear
@@ -332,8 +261,7 @@ printf "\nДобро пожаловать! Выберите действие:${N
 printf "  1. Установить/переустановить\n"
 printf "  2. Обновить\n"
 printf "  3. Удалить\n"
-printf "  4. Сменить режим редактора [Сейчас: $(get_editor_mode)]\n"
-printf "  5. Выйти\n\n"
+printf "  4. Выйти\n\n"
 
 read -p "${GREEN_BOLD}>: ${NC}" response < /dev/tty
 
@@ -341,7 +269,6 @@ case $response in
   1) install_xkeenui;;
   2) update_xkeenui;;
   3) uninstall_xkeenui;;
-  4) toggle_editor_mode;;
-  5) echo; exit;;
+  4) echo; exit;;
   *) printf "${ERROR} Неверный выбор.${NCN}"; exit 1;;
 esac
