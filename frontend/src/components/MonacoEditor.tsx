@@ -318,6 +318,10 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(
           runValidation(editor, filenameRef.current);
       });
 
+      document.fonts.ready.then(() => {
+        monaco.editor.remeasureFonts();
+      });
+
       onReadyRef.current?.();
 
       return () => {
