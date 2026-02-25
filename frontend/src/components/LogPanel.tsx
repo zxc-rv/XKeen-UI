@@ -7,7 +7,8 @@ import {
   IconSearch,
   IconX,
 } from "@tabler/icons-react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { VList, type VListHandle } from "virtua";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,7 +30,12 @@ import { useAppContext } from "../store";
 import type { WsMessage } from "../hooks/useWebSocket";
 
 const LOG_FILES = ["error.log", "access.log"];
-const MAX_LINES = 2000;
+const MAX_LINES = 1000;
+const TRANSITION = {
+  type: "tween",
+  duration: 0.4,
+  ease: [0.16, 1, 0.3, 1],
+} as const;
 
 export function LogPanel() {
   const { state } = useAppContext();
@@ -37,29 +43,14 @@ export function LogPanel() {
   const [filter, setFilter] = useState("");
   const [currentFile, setCurrentFile] = useState("error.log");
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
+  const vlistRef = useRef<VListHandle>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const filterInputRef = useRef<HTMLInputElement>(null);
   const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollRef = useRef(true);
-
-  const virtualizer = useVirtualizer({
-    count: lines.length,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => 21,
-    measureElement: (el) => el.getBoundingClientRect().height,
-    overscan: 15,
-  });
-
-  useEffect(() => {
-    if (autoScrollRef.current && lines.length > 0) {
-      requestAnimationFrame(() =>
-        virtualizer.scrollToIndex(lines.length - 1, { align: "end" }),
-      );
-    }
-  }, [lines]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -70,8 +61,6 @@ export function LogPanel() {
         (el.contains(document.activeElement) || document.activeElement === el)
       ) {
         e.preventDefault();
-        const range = document.createRange();
-        range.selectNodeContents(el);
         window.getSelection()?.selectAllChildren(el);
       }
     }
@@ -80,22 +69,11 @@ export function LogPanel() {
   }, []);
 
   const handleMessage = useCallback((data: WsMessage) => {
-    if (data.error) {
-      setLines([`ERROR: ${data.error}`]);
-      return;
-    }
-    if (data.type === "initial") {
-      setLines(data.lines || []);
-      return;
-    }
-    if (data.type === "clear") {
-      setLines([]);
-      return;
-    }
-    if (data.type === "filtered") {
-      setLines(data.lines || []);
-      return;
-    }
+    if (data.error) return setLines([`ERROR: ${data.error}`]);
+    if (data.type === "initial" || data.type === "filtered")
+      return setLines(data.lines || []);
+    if (data.type === "clear") return setLines([]);
+
     if (data.type === "append" && data.content) {
       const newLines = data.content.split("\n").filter((l) => l.trim());
       setLines((prev) => {
@@ -111,6 +89,12 @@ export function LogPanel() {
     ws.reload();
   }, [state.settings.timezone]);
 
+  useEffect(() => {
+    if (autoScrollRef.current && !isAnimating && lines.length > 0) {
+      vlistRef.current?.scrollToIndex(lines.length - 1, { align: "end" });
+    }
+  }, [lines.length, isAnimating]);
+
   function switchFile(filename: string) {
     if (filename === currentFile) return;
     setCurrentFile(filename);
@@ -125,77 +109,74 @@ export function LogPanel() {
   }
 
   function handleScroll() {
-    const el = containerRef.current;
-    if (!el) return;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+    if (!vlistRef.current || isAnimating) return;
+    const handle = vlistRef.current;
+    const atBottom =
+      handle.scrollOffset + handle.viewportSize >= handle.scrollSize - 40;
     autoScrollRef.current = atBottom;
     setShowScrollBtn(!atBottom);
   }
 
   function handleScrollToBottom() {
     autoScrollRef.current = true;
-    virtualizer.scrollToIndex(lines.length - 1, { align: "end" });
     setShowScrollBtn(false);
+    vlistRef.current?.scrollToIndex(lines.length - 1, { align: "end" });
   }
 
-  function handleLogClick(e: React.MouseEvent<HTMLDivElement>) {
-    const badge = (e.target as HTMLElement).closest("span");
-    if (!badge?.textContent) return;
-    const level = badge.textContent;
-    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
-    setFilter(level);
-    ws.applyFilter(level);
+  const handleLogClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const badge = (e.target as HTMLElement).closest("span");
+      if (!badge?.textContent) return;
+      const level = badge.textContent;
+      if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+      setFilter(level);
+      ws.applyFilter(level);
+    },
+    [ws],
+  );
+
+  function toggleFullscreen() {
+    document.body.style.overflow = isFullscreen ? "" : "hidden";
+    setIsFullscreen((v) => !v);
   }
-
-  function openFullscreen() {
-    setIsFullscreen(true);
-    document.body.style.overflow = "hidden";
-  }
-
-  function closeFullscreen() {
-    setIsClosing(true);
-    document.body.style.overflow = "";
-    setTimeout(() => {
-      setIsFullscreen(false);
-      setIsClosing(false);
-    }, 350);
-  }
-
-  useEffect(() => {
-    if (!isFullscreen && !isClosing && lines.length > 0) {
-      requestAnimationFrame(() =>
-        virtualizer.scrollToIndex(lines.length - 1, { align: "end" }),
-      );
-    }
-  }, [isFullscreen]);
-
-  const virtualItems = virtualizer.getVirtualItems();
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div
-        className="md:shrink-0 pb-3"
-        style={{ height: isFullscreen || isClosing ? 280 : undefined }}
-      >
-        {(isFullscreen || isClosing) && (
-          <div
-            className={cn(
-              "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300",
-              isClosing ? "opacity-0" : "opacity-100",
-            )}
-            onClick={closeFullscreen}
-          />
-        )}
-        <div
-          className={cn(
-            "flex flex-col rounded-xl border border-border bg-card overflow-hidden z-50",
-            isFullscreen || isClosing
-              ? "fixed left-1/2 -translate-x-1/2 bottom-3 shadow-2xl w-[calc(100%-2rem)] max-w-[1248px]"
-              : "relative h-70 w-full",
-            isFullscreen && !isClosing && "animate-panel-expand",
-            isClosing && "animate-panel-collapse",
+      <div className="md:shrink-0 pb-3 relative h-70 w-full">
+        <AnimatePresence>
+          {isFullscreen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/50"
+              onClick={toggleFullscreen}
+            />
           )}
+        </AnimatePresence>
+
+        <motion.div
+          layout
+          transition={TRANSITION}
+          onLayoutAnimationStart={() => setIsAnimating(true)}
+          onLayoutAnimationComplete={() => {
+            setIsAnimating(false);
+            if (autoScrollRef.current) {
+              vlistRef.current?.scrollToIndex(lines.length - 1, {
+                align: "end",
+              });
+            }
+          }}
+          className={cn(
+            "flex flex-col rounded-xl border border-border bg-card overflow-hidden",
+            isFullscreen
+              ? "fixed inset-x-4 mx-auto bottom-3 z-50 shadow-2xl max-w-500 w-[calc(100%-2rem)]"
+              : "absolute inset-0 z-10 w-full",
+          )}
+          style={{ height: isFullscreen ? "calc(100dvh - 1.25rem)" : "100%" }}
         >
+          {/* Хедер панели */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
             <h2 className="text-lg font-semibold select-none">Журнал</h2>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -257,7 +238,7 @@ export function LogPanel() {
                       variant="outline"
                       size="icon"
                       className="h-9 w-9 shrink-0"
-                      onClick={isFullscreen ? closeFullscreen : openFullscreen}
+                      onClick={toggleFullscreen}
                     >
                       {isFullscreen ? (
                         <IconMinimize size={14} />
@@ -274,54 +255,44 @@ export function LogPanel() {
             </div>
           </div>
 
+          {/* Виртуализированный список логов */}
           <div className="relative flex-1 min-h-0">
             <div
               ref={containerRef}
-              onScroll={handleScroll}
-              onClick={handleLogClick}
-              className="absolute border inset-4 overflow-y-auto overflow-x-hidden rounded-md bg-input-background"
-              tabIndex={0}
+              className={cn(
+                "absolute border inset-4 rounded-md bg-input-background overflow-hidden",
+                isAnimating && "pointer-events-none",
+              )}
               style={{
                 color: "#dbdbdb",
                 fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
                 fontSize: 13,
                 lineHeight: "1.6",
               }}
+              onClick={handleLogClick}
             >
               {lines.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-[13px] text-ring">
                   Журнал пуст
                 </div>
               ) : (
-                <div
-                  style={{
-                    height: virtualizer.getTotalSize(),
-                    position: "relative",
-                  }}
+                <VList
+                  ref={vlistRef}
+                  className="h-full pb-1.5"
+                  onScroll={handleScroll}
                 >
-                  <div
-                    className="absolute top-0 left-0 w-full"
-                    style={{
-                      transform: `translateY(${virtualItems[0]?.start ?? 0}px)`,
-                    }}
-                  >
-                    {virtualItems.map((item) => (
-                      <div
-                        key={item.key}
-                        data-index={item.index}
-                        ref={virtualizer.measureElement}
-                        className={cn(
-                          "px-3 whitespace-pre-wrap break-all",
-                          item.index === lines.length - 1 && "pb-1.5",
-                        )}
-                        dangerouslySetInnerHTML={{ __html: lines[item.index] }}
-                      />
-                    ))}
-                  </div>
-                </div>
+                  {lines.map((line, i) => (
+                    <div
+                      key={i}
+                      className="px-3 whitespace-pre-wrap break-all"
+                      dangerouslySetInnerHTML={{ __html: line }}
+                    />
+                  ))}
+                </VList>
               )}
             </div>
-            {showScrollBtn && (
+
+            {showScrollBtn && !isAnimating && (
               <Button
                 variant="outline"
                 size="icon"
@@ -332,7 +303,7 @@ export function LogPanel() {
               </Button>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
     </TooltipProvider>
   );
