@@ -673,8 +673,10 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
           }}
         >
           <SelectTrigger className="flex items-center justify-center gap-1.5 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors border border-dashed border-border rounded-lg px-3 py-2 w-full h-auto min-h-9 bg-transparent focus:ring-0 [&>svg]:hidden">
-            <IconPlus size={13} />
-            <span>Добавить условие</span>
+            <span className="flex gap-1">
+              <IconPlus size={13} />
+              Добавить условие
+            </span>
             <SelectValue className="hidden" />
           </SelectTrigger>
           <SelectContent position="popper">
