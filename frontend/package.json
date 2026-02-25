@@ -14,6 +14,7 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@tabler/icons-react": "^3.37.1",
     "@tailwindcss/vite": "^4.2.1",
+    "@tanstack/react-virtual": "^3.13.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

@@ -166,15 +166,13 @@ export function GeoScanModal() {
           >
             <TabsTrigger
               value="domain"
-              style={{ height: "100%" }}
-              className="flex-1 gap-1.5 rounded-none py-2 border-none! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
+              className="h-full flex-1 gap-1.5 rounded-none py-2 border-none! bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
             >
               <IconWorld size={16} /> GeoSite
             </TabsTrigger>
             <TabsTrigger
               value="ip"
-              style={{ height: "100%" }}
-              className="flex-1 gap-1.5 rounded-none py-2 border-none! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
+              className="h-full flex-1 gap-1.5 rounded-none py-2 border-none! bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
             >
               <IconServer size={16} /> GeoIP
             </TabsTrigger>
