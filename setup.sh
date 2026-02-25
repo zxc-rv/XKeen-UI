@@ -88,7 +88,7 @@ download_files() {
   fi
 
   if ! [ -f /opt/bin/tar ]; then
-    ( opkg update; opkg install tar ) &
+    ( opkg update >/dev/null 2>&1; opkg install tar >/dev/null 2>&1 ) &
     ! spinner $! "Установка tar..." && printf "${RED_BOLD}\n Не удалось установить tar.${NCN}"
   fi
 
