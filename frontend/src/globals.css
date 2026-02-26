@@ -155,7 +155,7 @@
   justify-content: center;
   width: 48px;
   font-size: 11px;
-  padding: 4px 5px 3px 7px;
+  padding: 4px 0 3px 0;
   border-radius: 9999px;
   white-space: nowrap;
   letter-spacing: 0.5px;

@@ -48,7 +48,15 @@ export function LogPanel() {
   const logRef = useRef<HTMLDivElement>(null);
   const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollRef = useRef(true);
-  const lineCountRef = useRef(0);
+
+  const linesRef = useRef<string[]>([]);
+  const scrollTickingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    };
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     const el = logRef.current;
@@ -58,27 +66,33 @@ export function LogPanel() {
   const renderAll = useCallback((lines: string[]) => {
     const el = logRef.current;
     if (!el) return;
-    lineCountRef.current = lines.length;
-    setIsEmpty(lines.length === 0);
-    el.innerHTML = lines.length === 0 ? "" : lines.join("");
-    if (lines.length > 0 && autoScrollRef.current)
+
+    linesRef.current = lines.slice(-MAX_LINES);
+    const hasLines = linesRef.current.length > 0;
+
+    setIsEmpty(!hasLines);
+    el.innerHTML = hasLines ? linesRef.current.join("") : "";
+
+    if (hasLines && autoScrollRef.current) {
       el.scrollTop = el.scrollHeight;
+    }
   }, []);
 
   const appendLines = useCallback((newLines: string[]) => {
     if (newLines.length === 0) return;
     const el = logRef.current;
     if (!el) return;
+
     setIsEmpty(false);
-    el.insertAdjacentHTML("beforeend", newLines.join(""));
-    lineCountRef.current += newLines.length;
-    if (lineCountRef.current > MAX_LINES) {
-      const excess = lineCountRef.current - MAX_LINES;
-      for (let i = 0; i < excess; i++) {
-        if (el.firstChild) el.removeChild(el.firstChild);
-      }
-      lineCountRef.current = MAX_LINES;
+    linesRef.current.push(...newLines);
+
+    if (linesRef.current.length > MAX_LINES) {
+      linesRef.current = linesRef.current.slice(-MAX_LINES);
+      el.innerHTML = linesRef.current.join("");
+    } else {
+      el.insertAdjacentHTML("beforeend", newLines.join(""));
     }
+
     if (autoScrollRef.current) el.scrollTop = el.scrollHeight;
   }, []);
 
@@ -131,8 +145,13 @@ export function LogPanel() {
   }
 
   function handleScroll() {
-    if (isAnimating) return;
-    checkScrollPosition();
+    if (isAnimating || scrollTickingRef.current) return;
+    scrollTickingRef.current = true;
+
+    requestAnimationFrame(() => {
+      checkScrollPosition();
+      scrollTickingRef.current = false;
+    });
   }
 
   function handleScrollToBottom() {
@@ -174,9 +193,18 @@ export function LogPanel() {
   useEffect(() => {
     const el = logRef.current;
     if (!el) return;
+
+    let rTicking = false;
     const ro = new ResizeObserver(() => {
-      if (autoScrollRef.current) scrollToBottom();
+      if (autoScrollRef.current && !rTicking) {
+        rTicking = true;
+        requestAnimationFrame(() => {
+          scrollToBottom();
+          rTicking = false;
+        });
+      }
     });
+
     ro.observe(el);
     return () => ro.disconnect();
   }, [scrollToBottom]);
