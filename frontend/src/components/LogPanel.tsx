@@ -52,6 +52,22 @@ export function LogPanel() {
   const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollRef = useRef(true);
 
+  const scrollToBottom = useCallback(() => {
+    vlistRef.current?.scrollToIndex(Infinity, { align: "end" });
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver(() => {
+      if (autoScrollRef.current) scrollToBottom();
+    });
+
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scrollToBottom]);
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!(e.ctrlKey || e.metaKey) || e.code !== "KeyA") return;
@@ -90,10 +106,10 @@ export function LogPanel() {
   }, [state.settings.timezone]);
 
   useEffect(() => {
-    if (autoScrollRef.current && !isAnimating && lines.length > 0) {
-      vlistRef.current?.scrollToIndex(lines.length - 1, { align: "end" });
+    if (autoScrollRef.current && !isAnimating) {
+      scrollToBottom();
     }
-  }, [lines.length, isAnimating]);
+  }, [lines.length, isAnimating, scrollToBottom]);
 
   function switchFile(filename: string) {
     if (filename === currentFile) return;
@@ -108,8 +124,8 @@ export function LogPanel() {
     filterTimerRef.current = setTimeout(() => ws.applyFilter(value), 100);
   }
 
-  function handleScroll() {
-    if (!vlistRef.current || isAnimating) return;
+  function checkScrollPosition() {
+    if (!vlistRef.current) return;
     const handle = vlistRef.current;
     const atBottom =
       handle.scrollOffset + handle.viewportSize >= handle.scrollSize - 40;
@@ -117,10 +133,15 @@ export function LogPanel() {
     setShowScrollBtn(!atBottom);
   }
 
+  function handleScroll() {
+    if (isAnimating) return;
+    checkScrollPosition();
+  }
+
   function handleScrollToBottom() {
     autoScrollRef.current = true;
     setShowScrollBtn(false);
-    vlistRef.current?.scrollToIndex(lines.length - 1, { align: "end" });
+    scrollToBottom();
   }
 
   const handleLogClick = useCallback(
@@ -162,11 +183,7 @@ export function LogPanel() {
           onLayoutAnimationStart={() => setIsAnimating(true)}
           onLayoutAnimationComplete={() => {
             setIsAnimating(false);
-            if (autoScrollRef.current) {
-              vlistRef.current?.scrollToIndex(lines.length - 1, {
-                align: "end",
-              });
-            }
+            checkScrollPosition();
           }}
           className={cn(
             "flex flex-col rounded-xl border border-border bg-card overflow-hidden",
