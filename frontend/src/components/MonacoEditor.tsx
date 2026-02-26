@@ -266,7 +266,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(
         scrollBeyondLastLine: false,
         minimap: { enabled: !isMobile, showSlider: "always" },
         fontSize: isMobile ? 13 : 14,
-        fontFamily: '"JetBrains Mono", monospace, "Noto Color Emoji"',
+        fontFamily: "var(--font-mono)",
         fontWeight: "400",
         smoothScrolling: true,
         lineHeight: 1.5,

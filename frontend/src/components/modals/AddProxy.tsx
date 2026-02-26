@@ -210,7 +210,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
         onOpenChange={(open) => !open && close()}
       >
         <DialogContent className="flex flex-col max-h-[90dvh] w-auto! min-w-[min(90vw,480px)]! max-w-[min(90vw,900px)]! overflow-hidden">
-          {/* Шапка модалки (прибита гвоздями) */}
+          {/* Шапка модалки*/}
           <DialogHeader className="shrink-0 pb-1">
             <DialogTitle className="flex items-center gap-2 pb-2">
               <IconLink size={24} className="text-chart-2" /> Добавить прокси
@@ -225,7 +225,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
             {/* Блок с результатом */}
             {result && (
               <div className="flex flex-col flex-1 min-h-0 rounded-lg border border-border bg-card overflow-hidden">
-                {/* Хедер результата (бейджик и копипаста) */}
+                {/* Хедер результата */}
                 <div className="shrink-0 flex items-center justify-between w-full px-3 py-2 border-b border-border bg-muted/30">
                   <Badge
                     variant="outline"
@@ -252,10 +252,9 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                   </Tooltip>
                 </div>
 
-                {/* Сам скроллящийся код (тут обернули в div) */}
-                <div className="flex-1 overflow-auto min-h-0 bg-[var(--color-input-background)]">
+                <div className="flex-1 overflow-auto min-h-0 bg-input-background">
                   <pre
-                    className="p-3 text-[13px] font-[JetBrains_Mono] tracking-tight m-0"
+                    className="p-3 text-[13px] font-mono tracking-tight m-0"
                     dangerouslySetInnerHTML={{
                       __html: highlightCode(result.content),
                     }}
@@ -282,7 +281,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
               </div>
             )}
 
-            {/* Блок ввода (всегда внизу) */}
+            {/* Блок ввода*/}
             <div className="shrink-0 flex flex-col gap-3 mt-auto pt-1">
               <div className="relative">
                 <Input

@@ -12,6 +12,7 @@
   "dependencies": {
     "@base-ui/react": "^1.2.0",
     "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@tabler/icons-react": "^3.37.1",
     "@tailwindcss/vite": "^4.2.1",
     "class-variance-authority": "^0.7.1",

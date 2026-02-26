@@ -277,15 +277,9 @@ export function LogPanel() {
             <div
               ref={containerRef}
               className={cn(
-                "absolute border inset-4 rounded-md bg-input-background overflow-hidden",
+                "text-[#dbdbdb] font-mono text-[13px] leading-[1.6] absolute border inset-4 rounded-md bg-input-background overflow-hidden",
                 isAnimating && "pointer-events-none",
               )}
-              style={{
-                color: "#dbdbdb",
-                fontFamily: "JetBrains Mono, monospace, Noto Color Emoji",
-                fontSize: 13,
-                lineHeight: "1.6",
-              }}
               onClick={handleLogClick}
             >
               {lines.length === 0 ? (
