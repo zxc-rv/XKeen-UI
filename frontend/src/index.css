@@ -154,14 +154,17 @@
   align-items: center;
   justify-content: center;
   width: 48px;
-  font-size: 10px;
-  padding: 3px 6px 2px 7px;
+  font-size: 11px;
+  padding: 4px 5px 3px 7px;
   border-radius: 9999px;
   white-space: nowrap;
   letter-spacing: 0.5px;
   line-height: 1;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: opacity 0.15s;
+}
+.log-badge:hover {
+  opacity: 0.8;
 }
 .log-badge-debug {
   color: white;

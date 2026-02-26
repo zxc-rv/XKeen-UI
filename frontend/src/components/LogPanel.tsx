@@ -7,7 +7,6 @@ import {
   IconSearch,
   IconX,
 } from "@tabler/icons-react";
-import { VList, type VListHandle } from "virtua";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,65 +38,70 @@ const TRANSITION = {
 
 export function LogPanel() {
   const { state } = useAppContext();
-  const [lines, setLines] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   const [currentFile, setCurrentFile] = useState("error.log");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(true);
 
-  const vlistRef = useRef<VListHandle>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const filterInputRef = useRef<HTMLInputElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollRef = useRef(true);
+  const lineCountRef = useRef(0);
 
   const scrollToBottom = useCallback(() => {
-    vlistRef.current?.scrollToIndex(Infinity, { align: "end" });
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, []);
 
-  useEffect(() => {
-    const el = containerRef.current;
+  const renderAll = useCallback((lines: string[]) => {
+    const el = logRef.current;
     if (!el) return;
+    lineCountRef.current = lines.length;
+    setIsEmpty(lines.length === 0);
+    el.innerHTML = lines.length === 0 ? "" : lines.join("");
+    if (lines.length > 0 && autoScrollRef.current)
+      el.scrollTop = el.scrollHeight;
+  }, []);
 
-    const ro = new ResizeObserver(() => {
-      if (autoScrollRef.current) scrollToBottom();
-    });
-
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [scrollToBottom]);
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || e.code !== "KeyA") return;
-      const el = containerRef.current;
-      if (
-        el &&
-        (el.contains(document.activeElement) || document.activeElement === el)
-      ) {
-        e.preventDefault();
-        window.getSelection()?.selectAllChildren(el);
+  const appendLines = useCallback((newLines: string[]) => {
+    if (newLines.length === 0) return;
+    const el = logRef.current;
+    if (!el) return;
+    setIsEmpty(false);
+    el.insertAdjacentHTML("beforeend", newLines.join(""));
+    lineCountRef.current += newLines.length;
+    if (lineCountRef.current > MAX_LINES) {
+      const excess = lineCountRef.current - MAX_LINES;
+      for (let i = 0; i < excess; i++) {
+        if (el.firstChild) el.removeChild(el.firstChild);
       }
+      lineCountRef.current = MAX_LINES;
     }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    if (autoScrollRef.current) el.scrollTop = el.scrollHeight;
   }, []);
 
-  const handleMessage = useCallback((data: WsMessage) => {
-    if (data.error) return setLines([`ERROR: ${data.error}`]);
-    if (data.type === "initial" || data.type === "filtered")
-      return setLines(data.lines || []);
-    if (data.type === "clear") return setLines([]);
-
-    if (data.type === "append" && data.content) {
-      const newLines = data.content.split("\n").filter((l) => l.trim());
-      setLines((prev) => {
-        const next = [...prev, ...newLines];
-        return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next;
-      });
-    }
-  }, []);
+  const handleMessage = useCallback(
+    (data: WsMessage) => {
+      if (data.error) {
+        renderAll([`<div style="color:#ef4444">ERROR: ${data.error}</div>`]);
+        return;
+      }
+      if (data.type === "initial" || data.type === "filtered") {
+        renderAll(data.lines || []);
+        return;
+      }
+      if (data.type === "clear") {
+        renderAll([]);
+        return;
+      }
+      if (data.type === "append" && data.content) {
+        appendLines(data.content.split("\n").filter((l) => l.trim()));
+      }
+    },
+    [renderAll, appendLines],
+  );
 
   const ws = useWebSocket(handleMessage);
 
@@ -105,16 +109,10 @@ export function LogPanel() {
     ws.reload();
   }, [state.settings.timezone]);
 
-  useEffect(() => {
-    if (autoScrollRef.current && !isAnimating) {
-      scrollToBottom();
-    }
-  }, [lines.length, isAnimating, scrollToBottom]);
-
   function switchFile(filename: string) {
     if (filename === currentFile) return;
     setCurrentFile(filename);
-    setLines([]);
+    renderAll([]);
     ws.switchFile(filename);
   }
 
@@ -125,10 +123,9 @@ export function LogPanel() {
   }
 
   function checkScrollPosition() {
-    if (!vlistRef.current) return;
-    const handle = vlistRef.current;
-    const atBottom =
-      handle.scrollOffset + handle.viewportSize >= handle.scrollSize - 40;
+    const el = logRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.clientHeight <= el.scrollTop + 40;
     autoScrollRef.current = atBottom;
     setShowScrollBtn(!atBottom);
   }
@@ -144,22 +141,45 @@ export function LogPanel() {
     scrollToBottom();
   }
 
-  const handleLogClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const badge = (e.target as HTMLElement).closest("span");
-      if (!badge?.textContent) return;
-      const level = badge.textContent;
-      if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
-      setFilter(level);
-      ws.applyFilter(level);
-    },
-    [ws],
-  );
+  function handleLogClick(e: React.MouseEvent<HTMLDivElement>) {
+    const badge = (e.target as HTMLElement).closest("span");
+    if (!badge?.textContent) return;
+    const level = badge.textContent;
+    if (filterTimerRef.current) clearTimeout(filterTimerRef.current);
+    setFilter(level);
+    ws.applyFilter(level);
+  }
 
   function toggleFullscreen() {
     document.body.style.overflow = isFullscreen ? "" : "hidden";
     setIsFullscreen((v) => !v);
   }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.code !== "KeyA") return;
+      const el = logRef.current;
+      if (
+        el &&
+        (el.contains(document.activeElement) || document.activeElement === el)
+      ) {
+        e.preventDefault();
+        window.getSelection()?.selectAllChildren(el);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const el = logRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (autoScrollRef.current) scrollToBottom();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scrollToBottom]);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -193,7 +213,6 @@ export function LogPanel() {
           )}
           style={{ height: isFullscreen ? "calc(100dvh - 1.25rem)" : "100%" }}
         >
-          {/* Хедер панели */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
             <h2 className="text-lg font-semibold select-none">Журнал</h2>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -203,11 +222,10 @@ export function LogPanel() {
                   className="absolute left-2.5 text-muted-foreground pointer-events-none"
                 />
                 <Input
-                  ref={filterInputRef}
                   value={filter}
                   onChange={(e) => handleFilterChange(e.target.value)}
                   placeholder="Фильтр"
-                  className="h-9 text-base md:text-sm w-40  px-7"
+                  className="h-9 text-base md:text-sm w-40 px-7"
                 />
                 {filter && (
                   <button
@@ -272,35 +290,23 @@ export function LogPanel() {
             </div>
           </div>
 
-          {/* Виртуализированный список логов */}
           <div className="relative flex-1 min-h-0">
-            <div
-              ref={containerRef}
-              className={cn(
-                "text-[#dbdbdb] font-mono text-[13px] leading-[1.6] absolute border inset-4 rounded-md bg-input-background overflow-hidden",
-                isAnimating && "pointer-events-none",
-              )}
-              onClick={handleLogClick}
-            >
-              {lines.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-[13px] text-ring">
+            <div className="absolute inset-4 rounded-md bg-input-background overflow-hidden border">
+              {isEmpty && (
+                <div className="flex items-center justify-center h-full font-mono text-[13px] text-ring pointer-events-none">
                   Журнал пуст
                 </div>
-              ) : (
-                <VList
-                  ref={vlistRef}
-                  className="h-full pb-1.5"
-                  onScroll={handleScroll}
-                >
-                  {lines.map((line, i) => (
-                    <div
-                      key={i}
-                      className="px-3 whitespace-pre-wrap break-all"
-                      dangerouslySetInnerHTML={{ __html: line }}
-                    />
-                  ))}
-                </VList>
               )}
+              <div
+                ref={logRef}
+                tabIndex={0}
+                className={cn(
+                  "text-[#dbdbdb] font-mono text-[13px] leading-[1.6] h-full overflow-y-auto px-3 py-1.5 whitespace-pre-wrap break-all",
+                  isAnimating && "pointer-events-none",
+                )}
+                onScroll={handleScroll}
+                onClick={handleLogClick}
+              />
             </div>
 
             {showScrollBtn && !isAnimating && (
