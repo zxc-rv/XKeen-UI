@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AppProvider, useAppContext } from "./store";
 import { apiCall, getFileLanguage, capitalize } from "./lib/api";
+import { stripJsonComments } from "./lib/utils";
 import { StatusBar } from "./components/StatusBar";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { LogPanel } from "./components/LogPanel";
@@ -96,8 +97,10 @@ function AppContent() {
   async function loadConfigs(core?: string): Promise<Config[]> {
     dispatch({ type: "SET_CONFIGS_LOADING", loading: true });
     try {
-      const url = core ? `/api/configs?core=${core}` : "/api/configs";
-      const result = await (await fetch(url)).json();
+      const result = await apiCall<any>(
+        "GET",
+        core ? `configs?core=${core}` : "configs",
+      );
       if (result.success && result.configs) {
         const configs: Config[] = result.configs.map((c: any) => ({
           ...c,
@@ -260,9 +263,6 @@ function AppContent() {
     const core = state.currentCore;
     let targetIndex = state.activeConfigIndex;
 
-    const stripComments = (s: string) =>
-      s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "");
-
     if (core === "mihomo") {
       targetIndex = state.configs.findIndex(
         (c) => c.filename === "config.yaml",
@@ -275,13 +275,15 @@ function AppContent() {
       try {
         let obj;
         try {
-          obj = JSON.parse(stripComments(state.configs[targetIndex].content));
+          obj = JSON.parse(
+            stripJsonComments(state.configs[targetIndex].content),
+          );
           if (!Array.isArray(obj.outbounds)) throw new Error();
         } catch {
           targetIndex = state.configs.findIndex((cfg) => {
             try {
               return Array.isArray(
-                JSON.parse(stripComments(cfg.content)).outbounds,
+                JSON.parse(stripJsonComments(cfg.content)).outbounds,
               );
             } catch {
               return false;
@@ -367,7 +369,7 @@ function AppContent() {
         }
       } else {
         try {
-          const obj = JSON.parse(stripComments(current));
+          const obj = JSON.parse(stripJsonComments(current));
           if (position === "start")
             obj.outbounds.unshift(JSON.parse(generated));
           else obj.outbounds.push(JSON.parse(generated));

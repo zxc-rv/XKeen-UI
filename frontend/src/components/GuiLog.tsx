@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import * as prettier from "prettier";
 import prettierBabel from "prettier/plugins/babel";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "../lib/utils";
+import { cn, stripJsonComments } from "../lib/utils";
 import { useAppContext } from "../store";
 import { apiCall } from "../lib/api";
 import type { MonacoEditorRef } from "./MonacoEditor";
@@ -29,13 +29,9 @@ interface LogConfig {
   dnsLog: boolean;
 }
 
-function stripComments(s: string) {
-  return s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "");
-}
-
 function parseLogConfig(content: string): LogConfig | null {
   try {
-    const json = JSON.parse(stripComments(content));
+    const json = JSON.parse(stripJsonComments(content));
     if (!json?.log) return null;
     return {
       access: json.log.access ?? "",
@@ -88,7 +84,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
       const model = monacoEditor.getModel();
       if (!model) return;
       try {
-        const json = JSON.parse(stripComments(wrapper.getValue()));
+        const json = JSON.parse(stripJsonComments(wrapper.getValue()));
         json.log = {
           access: newCfg.access || "none",
           error: newCfg.error || "none",

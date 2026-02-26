@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   IconExternalLink,
   IconDeviceFloppy,
@@ -29,7 +29,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "../lib/utils";
+import { cn, stripJsonComments } from "../lib/utils";
 import { useAppContext } from "../store";
 import { apiCall, getFileLanguage } from "../lib/api";
 import { MonacoEditor, type MonacoEditorRef } from "./MonacoEditor";
@@ -122,12 +122,8 @@ export function ConfigPanel({
   const handleMonacoReady = useCallback(() => {
     setMonacoReady(true);
     const config = configsRef.current[activeIndexRef.current];
-    if (!config || !editorRef.current) return;
-    editorRef.current.setSavedContent(config.savedContent);
-    editorRef.current.setValue(config.content, config.savedContent);
-    editorRef.current.setLanguage(getFileLanguage(config.filename));
-    editorRef.current.validate(config.filename);
-  }, [editorRef]);
+    if (config) loadConfigIntoEditor(config);
+  }, [editorRef, loadConfigIntoEditor]);
 
   const handleContentChange = useCallback(
     (content: string, isDirty: boolean) => {
@@ -162,10 +158,7 @@ export function ConfigPanel({
 
     activeIndexRef.current = index;
     dispatch({ type: "SET_ACTIVE_CONFIG", index });
-    setTimeout(
-      () => localStorage.setItem("lastSelectedTab", config.filename),
-      0,
-    );
+    localStorage.setItem("lastSelectedTab", config.filename);
   }
 
   async function saveCurrentConfig(force = false) {
@@ -270,35 +263,27 @@ export function ConfigPanel({
     );
   }
 
-  const isRoutingGui =
-    settings.guiRouting &&
-    !!activeConfig &&
-    activeConfig.filename.toLowerCase().includes("routing") &&
-    (() => {
-      try {
-        const j = JSON.parse(
-          activeConfig.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""),
-        );
-        return j && typeof j.routing === "object";
-      } catch {
-        return false;
-      }
-    })();
+  const isRoutingGui = useMemo(() => {
+    if (!settings.guiRouting || !activeConfig) return false;
+    if (!activeConfig.filename.toLowerCase().includes("routing")) return false;
+    try {
+      const j = JSON.parse(stripJsonComments(activeConfig.content));
+      return j && typeof j.routing === "object";
+    } catch {
+      return false;
+    }
+  }, [settings.guiRouting, activeConfig]);
 
-  const isLogGui =
-    settings.guiLog &&
-    !!activeConfig &&
-    activeConfig.filename.toLowerCase().includes("log") &&
-    (() => {
-      try {
-        const j = JSON.parse(
-          activeConfig.content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, ""),
-        );
-        return j && typeof j.log === "object";
-      } catch {
-        return false;
-      }
-    })();
+  const isLogGui = useMemo(() => {
+    if (!settings.guiLog || !activeConfig) return false;
+    if (!activeConfig.filename.toLowerCase().includes("log")) return false;
+    try {
+      const j = JSON.parse(stripJsonComments(activeConfig.content));
+      return j && typeof j.log === "object";
+    } catch {
+      return false;
+    }
+  }, [settings.guiLog, activeConfig]);
 
   const isAnyGui = isRoutingGui || isLogGui;
 
@@ -551,9 +536,8 @@ function hasCriticalChanges(
       );
     }
     if (language === "json") {
-      const strip = (s: string) => s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "");
-      const o = JSON.parse(strip(oldContent));
-      const n = JSON.parse(strip(newContent));
+      const o = JSON.parse(stripJsonComments(oldContent));
+      const n = JSON.parse(stripJsonComments(newContent));
       const clean = (arr: Record<string, unknown>[]) =>
         (arr || []).map((item) =>
           Object.fromEntries(

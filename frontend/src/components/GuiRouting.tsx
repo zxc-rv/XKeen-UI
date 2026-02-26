@@ -27,7 +27,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "../lib/utils";
+import { cn, stripJsonComments } from "../lib/utils";
 import { useAppContext } from "../store";
 import { apiCall } from "../lib/api";
 import type { MonacoEditorRef } from "./MonacoEditor";
@@ -57,13 +57,9 @@ const RULE_FIELDS = {
 type FieldName = keyof typeof RULE_FIELDS;
 type Rule = Record<string, any>;
 
-function stripComments(s: string) {
-  return s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, "");
-}
-
 function parseRules(content: string): Rule[] {
   try {
-    const json = JSON.parse(stripComments(content));
+    const json = JSON.parse(stripJsonComments(content));
     if (json?.routing?.rules && Array.isArray(json.routing.rules))
       return JSON.parse(JSON.stringify(json.routing.rules));
   } catch {}
@@ -128,7 +124,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         x.filename.toLowerCase().includes("outbound"),
       );
       if (c) {
-        const j = JSON.parse(stripComments(c.content));
+        const j = JSON.parse(stripJsonComments(c.content));
         outbounds =
           j.outbounds?.filter((o: any) => o.tag).map((o: any) => o.tag) ?? [];
       }
@@ -138,7 +134,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         x.filename.toLowerCase().includes("inbound"),
       );
       if (c) {
-        const j = JSON.parse(stripComments(c.content));
+        const j = JSON.parse(stripJsonComments(c.content));
         inbounds =
           j.inbounds?.filter((i: any) => i.tag).map((i: any) => i.tag) ?? [];
       }
@@ -148,7 +144,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         configs[activeConfigIndex]?.content ??
         editorRef.current?.getValue() ??
         "";
-      const j = JSON.parse(stripComments(content));
+      const j = JSON.parse(stripJsonComments(content));
       balancers =
         j.routing?.balancers
           ?.filter((b: any) => b.tag)
@@ -181,7 +177,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
       const model = monacoEditor.getModel();
       if (!model) return;
       try {
-        const json = JSON.parse(stripComments(wrapper.getValue()));
+        const json = JSON.parse(stripJsonComments(wrapper.getValue()));
         json.routing.rules = newRules;
         const text = JSON.stringify(json, null, 2);
         monacoEditor.executeEdits("gui-routing", [
