@@ -364,9 +364,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
   const isBalancer = "balancerTag" in rule;
   const outboundType = isBalancer ? "balancerTag" : "outboundTag";
   const outboundValue = rule[outboundType] ?? "";
-  const conditionFields = Object.keys(rule).filter(
-    (k) => !["outboundTag", "balancerTag", "ruleTag"].includes(k),
-  );
+  const conditionFields = Object.keys(rule).filter((k) => k in RULE_FIELDS);
   const availableToAdd = (Object.keys(RULE_FIELDS) as FieldName[]).filter(
     (f) => !(f in rule),
   );
@@ -663,7 +661,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
       {/* Add condition */}
       {availableToAdd.length > 0 && (
         <Select
-          key={availableToAdd.join(",")}
+          value=""
           onValueChange={(v) => {
             if (v) addField(v as FieldName);
           }}
@@ -673,7 +671,6 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
               <IconPlus size={13} />
               Добавить условие
             </span>
-            <SelectValue className="hidden" />
           </SelectTrigger>
           <SelectContent position="popper">
             {availableToAdd.map((f) => (
@@ -793,7 +790,7 @@ function BadgeInput({
 
   return (
     <div
-      className="flex flex-wrap gap-1 items-center min-h-9 px-1 py-1 pr-1 rounded-md border border-border bg-input-background cursor-text"
+      className="relative flex flex-wrap gap-1 items-center min-h-9 px-1 py-1 pr-7 rounded-md border border-border bg-input-background cursor-text"
       onClick={() => {
         if (editingIndex === null) inputRef.current?.focus();
       }}
@@ -832,7 +829,7 @@ function BadgeInput({
               startEdit(i);
             }}
             className={cn(
-              "inline-flex items-center gap-0.5 pl-3 pr-2.25 py-0.75 rounded text-xs tracking-wide border cursor-pointer hover:opacity-75 transition-opacity select-none",
+              "inline-flex items-center gap-0.5 pl-3 pr-2.25 py-0.75 rounded text-xs tracking-wide border cursor-pointer hover:opacity-75 transition-opacity select-none max-w-full break-all",
               color,
             )}
           >
@@ -843,6 +840,7 @@ function BadgeInput({
                 e.stopPropagation();
                 onRemove(badge);
               }}
+              onClick={(e) => e.stopPropagation()}
               className="opacity-50 text-sm hover:opacity-100 ml-1 transition-opacity leading-none"
             >
               <IconX size={12} />
@@ -869,7 +867,7 @@ function BadgeInput({
           }}
           onBlur={() => commitNew(input)}
           placeholder={badges.length === 0 ? placeholder : ""}
-          className="pl-1 flex-1 min-w-20 bg-transparent outline-none text-xs placeholder:text-muted-foreground/50"
+          className="pl-1 pr-1 flex-1 min-w-5 bg-transparent outline-none text-base placeholder:text-muted-foreground/50 placeholder:text-[13px]"
         />
       )}
       <button
@@ -878,7 +876,8 @@ function BadgeInput({
           e.stopPropagation();
           onRemoveField();
         }}
-        className="shrink-0 ml-auto text-muted-foreground/40 hover:text-destructive transition-colors p-1"
+        onClick={(e) => e.stopPropagation()}
+        className="absolute top-1.5 right-1 text-muted-foreground/40 hover:text-destructive transition-colors p-1"
       >
         <IconX size={14} />
       </button>
