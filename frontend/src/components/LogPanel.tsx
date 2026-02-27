@@ -227,6 +227,7 @@ export function LogPanel() {
 
         <motion.div
           layout
+          layoutScroll
           transition={TRANSITION}
           onLayoutAnimationStart={() => setIsAnimating(true)}
           onLayoutAnimationComplete={() => {
@@ -239,7 +240,10 @@ export function LogPanel() {
               ? "fixed inset-x-3 sm:inset-x-4 bottom-3 z-50 shadow-2xl sm:max-w-500 sm:mx-auto"
               : "absolute inset-0 z-10 w-full",
           )}
-          style={{ height: isFullscreen ? "calc(100dvh - 1.25rem)" : "100%" }}
+          style={{
+            height: isFullscreen ? "calc(100dvh - 1.25rem)" : "100%",
+            willChange: isAnimating ? "transform, border-radius" : "auto",
+          }}
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
             <h2 className="text-lg font-semibold select-none">Журнал</h2>
@@ -329,7 +333,7 @@ export function LogPanel() {
                 ref={logRef}
                 tabIndex={0}
                 className={cn(
-                  "text-[#dbdbdb] font-mono text-[13px] leading-[1.6] h-full overflow-y-auto px-3 py-1.5 whitespace-pre-wrap break-all",
+                  "text-[#dbdbdb] font-mono text-[13px] leading-[1.6] h-full overflow-y-auto px-3 py-1.5 whitespace-pre-wrap break-all contain-content",
                   isAnimating && "pointer-events-none",
                 )}
                 onScroll={handleScroll}

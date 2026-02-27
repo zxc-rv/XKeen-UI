@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppProvider, useAppContext } from "./store";
 import { apiCall, getFileLanguage, capitalize } from "./lib/api";
 import { stripJsonComments } from "./lib/utils";
@@ -17,9 +17,31 @@ import { GeoScanModal } from "./components/modals/GeoScan";
 import type { MonacoEditorRef } from "./components/MonacoEditor";
 import type { Config } from "./types";
 
+function useLazyMount(open: boolean, delay = 200) {
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+    } else {
+      const timer = setTimeout(() => setMounted(false), delay);
+      return () => clearTimeout(timer);
+    }
+  }, [open, delay]);
+  return mounted;
+}
+
 function AppContent() {
   const { state, dispatch, showToast } = useAppContext();
   const editorRef = useRef<MonacoEditorRef | null>(null);
+
+  const mountDirty = useLazyMount(state.showDirtyModal);
+  const mountCommentsWarning = useLazyMount(state.showCommentsWarningModal);
+  const mountCoreManage = useLazyMount(state.showCoreManageModal);
+  const mountUpdate = useLazyMount(state.showUpdateModal);
+  const mountImport = useLazyMount(state.showImportModal);
+  const mountTemplate = useLazyMount(state.showTemplateModal);
+  const mountSettings = useLazyMount(state.showSettingsModal);
+  const mountGeoScan = useLazyMount(state.showGeoScanModal);
 
   useEffect(() => {
     init();
@@ -415,23 +437,29 @@ function AppContent() {
       </main>
 
       <Toast />
-      <DirtyModal
-        onSaveAndSwitch={handleSaveAndSwitch}
-        onDiscardAndSwitch={handleDiscardAndSwitch}
-      />
-      <CommentsWarningModal />
-      <CoreManageModal
-        onSwitchCore={switchCore}
-        onOpenUpdate={(core) => {
-          dispatch({ type: "SET_UPDATE_MODAL_CORE", core });
-          openModal("showUpdateModal");
-        }}
-      />
-      <UpdateModal onInstalled={checkStatus} />
-      <ImportModal onGenerate={generateConfig} onAddToConfig={addToConfig} />
-      <TemplateModal onImport={importTemplate} />
-      <SettingsModal />
-      <GeoScanModal />
+      {mountDirty && (
+        <DirtyModal
+          onSaveAndSwitch={handleSaveAndSwitch}
+          onDiscardAndSwitch={handleDiscardAndSwitch}
+        />
+      )}
+      {mountCommentsWarning && <CommentsWarningModal />}
+      {mountCoreManage && (
+        <CoreManageModal
+          onSwitchCore={switchCore}
+          onOpenUpdate={(core) => {
+            dispatch({ type: "SET_UPDATE_MODAL_CORE", core });
+            openModal("showUpdateModal");
+          }}
+        />
+      )}
+      {mountUpdate && <UpdateModal onInstalled={checkStatus} />}
+      {mountImport && (
+        <ImportModal onGenerate={generateConfig} onAddToConfig={addToConfig} />
+      )}
+      {mountTemplate && <TemplateModal onImport={importTemplate} />}
+      {mountSettings && <SettingsModal />}
+      {mountGeoScan && <GeoScanModal />}
     </div>
   );
 }
