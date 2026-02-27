@@ -1,9 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  IconDownload,
-  IconMistOff,
-  IconRefreshAlert,
-} from "@tabler/icons-react";
+import { IconDownload, IconPlaylistX } from "@tabler/icons-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -34,10 +30,9 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-  EmptyDescription,
   EmptyContent,
 } from "@/components/ui/empty";
-import { IconPackageOff, IconRefresh } from "@tabler/icons-react";
+import { IconRefresh } from "@tabler/icons-react";
 
 const mdClass = `
   text-xs text-muted-foreground leading-relaxed
@@ -193,7 +188,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
               <Empty className="min-h-88 border-none">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
-                    <IconMistOff />
+                    <IconPlaylistX className="size-8" />
                   </EmptyMedia>
                   <EmptyTitle className="text-[16px] tracking-normal">
                     Нет доступных релизов

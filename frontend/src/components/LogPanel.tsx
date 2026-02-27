@@ -6,19 +6,12 @@ import {
   IconChevronDown,
   IconSearch,
   IconX,
-  IconTerminal,
-  IconMistOff,
-  IconTerminal2,
+  IconFile,
 } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Empty,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyDescription,
-} from "@/components/ui/empty";
+import { Empty, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import {
   Select,
   SelectContent,
@@ -336,9 +329,9 @@ export function LogPanel() {
               {isEmpty && (
                 <Empty className="h-full gap-1">
                   <EmptyMedia variant="icon" className="size-9">
-                    <IconMistOff className="text-muted-foreground size-6" />
+                    <IconFile className="text-muted-foreground size-6" />
                   </EmptyMedia>
-                  <EmptyTitle className="font-mono text-[15px] text-ring">
+                  <EmptyTitle className="font-mono text-sm text-ring">
                     Журнал пуст
                   </EmptyTitle>
                 </Empty>
