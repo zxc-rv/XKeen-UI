@@ -255,34 +255,10 @@
 
 .status-badge-stopped {
   background: #2a1215;
-
   color: #ef4444;
-
   border-color: #4a1f24;
 }
 
-@keyframes panel-expand {
-  from {
-    top: calc(100vh - 280px - 1rem);
-  }
-  to {
-    top: 1rem;
-  }
-}
-@keyframes panel-collapse {
-  from {
-    top: 1rem;
-  }
-  to {
-    top: calc(100vh - 280px - 1rem);
-  }
-}
-.animate-panel-expand {
-  animation: panel-expand 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-.animate-panel-collapse {
-  animation: panel-collapse 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
 @keyframes dark-glow {
   0% {
     text-shadow:

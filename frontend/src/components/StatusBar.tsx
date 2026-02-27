@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "../lib/utils";
 import { useAppContext } from "../store";
 import { apiCall, capitalize } from "../lib/api";
+import { AuroraText } from "@/components/ui/aurora-text";
 
 export function StatusBar({
   onOpenCoreManage,
@@ -210,9 +211,12 @@ export function StatusBar({
         </div>
 
         <div className="flex justify-center items-center order-1 md:order-2 md:absolute md:left-1/2 md:-translate-x-1/2">
-          <h1 className="text-[24px] sm:text-[28px] font-semibold bg-linear-to-r from-cyan-400 via-blue-500 to-blue-600 bg-clip-text text-transparent animate-dark-glow">
+          <AuroraText
+            className="text-[28px] font-semibold animate-dark-glow"
+            colors={["#00D3F2", "#2B7FFF", "#155DFC"]}
+          >
             XKeen UI
-          </h1>
+          </AuroraText>
           {version && (
             <Button
               variant="ghost"
