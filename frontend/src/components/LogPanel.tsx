@@ -6,10 +6,19 @@ import {
   IconChevronDown,
   IconSearch,
   IconX,
+  IconTerminal,
+  IconMistOff,
+  IconTerminal2,
 } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Empty,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
 import {
   Select,
   SelectContent,
@@ -325,9 +334,14 @@ export function LogPanel() {
           <div className="relative flex-1 min-h-0">
             <div className="absolute inset-4 rounded-md bg-input-background overflow-hidden border">
               {isEmpty && (
-                <div className="flex items-center justify-center h-full font-mono text-[13px] text-ring pointer-events-none">
-                  Журнал пуст
-                </div>
+                <Empty className="h-full gap-1">
+                  <EmptyMedia variant="icon" className="size-9">
+                    <IconMistOff className="text-muted-foreground size-6" />
+                  </EmptyMedia>
+                  <EmptyTitle className="font-mono text-[15px] text-ring">
+                    Журнал пуст
+                  </EmptyTitle>
+                </Empty>
               )}
               <div
                 ref={logRef}
