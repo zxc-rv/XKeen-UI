@@ -867,7 +867,7 @@ function BadgeInput({
           }}
           onBlur={() => commitNew(input)}
           placeholder={badges.length === 0 ? placeholder : ""}
-          className="pl-1 pr-1 flex-1 min-w-5 bg-transparent outline-none text-base placeholder:text-muted-foreground/50 placeholder:text-[13px]"
+          className="pl-1 pr-1 flex-1 min-w-5 bg-transparent outline-none md:text-[13px] placeholder:text-muted-foreground/50 placeholder:text-[13px]"
         />
       )}
       <button
