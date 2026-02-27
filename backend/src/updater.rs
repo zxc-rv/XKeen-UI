@@ -13,7 +13,7 @@ const GITHUB_RELEASE: &str = "https://github.com";
 const JSDELIVR_API: &str = "https://data.jsdelivr.com/v1/package/gh";
 
 #[derive(Deserialize)] pub struct ReleaseQuery { core: String }
-#[derive(Deserialize)] struct GhRelease { tag_name: String, #[serde(default)] name: String, #[serde(default)] published_at: String, #[serde(default)] prerelease: bool, #[serde(default)] assets: Vec<GhAsset> }
+#[derive(Deserialize)] struct GhRelease { tag_name: String, #[serde(default)] name: String, #[serde(default)] published_at: String, #[serde(default)] prerelease: bool, #[serde(default)] assets: Vec<GhAsset>, #[serde(default)] body: String }
 #[derive(Deserialize, Default)] struct GhAsset { #[serde(default)] name: String, #[serde(default)] browser_download_url: String }
 #[derive(Deserialize)] struct JsdResponse { versions: Vec<String> }
 
@@ -89,16 +89,16 @@ pub async fn get_releases(State(state): State<AppState>, Query(q): Query<Release
 
     if let Ok(res) = state.http_client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await {
         if let Ok(rels) = res.json::<Vec<GhRelease>>().await {
-            return (HeaderMap::new(), Json(json!({ "success": true, "releases": rels.into_iter().map(|r| ReleaseInfo {
+            return (HeaderMap::new(), Json(json!({ "success": true, "source": "github", "releases": rels.into_iter().map(|r| ReleaseInfo {
                 version: r.tag_name.trim_start_matches('v').into(), name: r.name,
-                published_at: r.published_at.split('T').next().unwrap_or("").into(), is_prerelease: r.prerelease
+                published_at: r.published_at.split('T').next().unwrap_or("").into(), is_prerelease: r.prerelease, body: r.body
             }).collect::<Vec<_>>() })));
         }
     }
     if let Ok(res) = state.http_client.get(format!("{}/{}", JSDELIVR_API, repo)).send().await {
         if let Ok(jsd) = res.json::<JsdResponse>().await {
-            return (HeaderMap::new(), Json(json!({ "success": true, "releases": jsd.versions.into_iter().take(10).map(|v| ReleaseInfo {
-                version: v.clone(), name: format!("Release {}", v), published_at: String::new(), is_prerelease: false
+            return (HeaderMap::new(), Json(json!({ "success": true, "source": "jsdelivr", "releases": jsd.versions.into_iter().take(10).map(|v| ReleaseInfo {
+                version: v.clone(), name: format!("Release {}", v), published_at: String::new(), is_prerelease: false, body: String::new()
             }).collect::<Vec<_>>() })));
         }
     }

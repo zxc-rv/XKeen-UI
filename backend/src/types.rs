@@ -140,4 +140,5 @@ pub struct ReleaseInfo {
     pub name: String,
     pub published_at: String,
     pub is_prerelease: bool,
+    pub body: String,
 }
