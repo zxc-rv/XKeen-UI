@@ -39,9 +39,9 @@ export function StatusBar({
     coreVersions,
     isConfigsLoading,
     version,
-    // isOutdatedUI,
+    isOutdatedUI,
   } = state;
-  const isOutdatedUI = true;
+
   const isRunning = serviceStatus === "running";
   const isPending = serviceStatus === "pending" || serviceStatus === "loading";
 

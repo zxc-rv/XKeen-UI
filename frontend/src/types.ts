@@ -1,6 +1,5 @@
 export interface Config {
-  filename: string;
-  name: string;
+  file: string;
   content: string;
   savedContent: string;
   isDirty: boolean;

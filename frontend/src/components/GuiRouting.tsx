@@ -120,9 +120,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
       inbounds: string[] = [],
       balancers: string[] = [];
     try {
-      const c = configs.find((x) =>
-        x.filename.toLowerCase().includes("outbound"),
-      );
+      const c = configs.find((x) => x.file.toLowerCase().includes("outbound"));
       if (c) {
         const j = JSON.parse(stripJsonComments(c.content));
         outbounds =
@@ -130,9 +128,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
       }
     } catch {}
     try {
-      const c = configs.find((x) =>
-        x.filename.toLowerCase().includes("inbound"),
-      );
+      const c = configs.find((x) => x.file.toLowerCase().includes("inbound"));
       if (c) {
         const j = JSON.parse(stripJsonComments(c.content));
         inbounds =
@@ -194,7 +190,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
             const content = monacoEditor.getValue();
             await apiCall<any>("PUT", "configs", {
               action: "save",
-              filename: activeConfig.filename,
+              file: activeConfig.file,
               content,
             });
             dispatch({

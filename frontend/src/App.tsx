@@ -133,11 +133,12 @@ function AppContent() {
         const saved = localStorage.getItem("lastSelectedTab");
         const index = Math.max(
           0,
-          configs.findIndex((c) => c.filename === saved),
+          configs.findIndex((c) => c.file === saved),
         );
         dispatch({ type: "SET_ACTIVE_CONFIG", index });
         const yamlConfig = configs.find(
-          (c: any) => c.filename === "config.yaml",
+          (c: any) =>
+            c.file.endsWith("/config.yaml") || c.file === "config.yaml",
         );
         const port =
           yamlConfig?.content.match(
@@ -171,7 +172,11 @@ function AppContent() {
     const configs = await loadConfigs(core);
     const mihomoYamlEmpty =
       core === "mihomo" &&
-      !configs.find((c) => c.filename === "config.yaml")?.content.trim();
+      !configs
+        .find(
+          (c) => c.file.endsWith("/config.yaml") || c.file === "config.yaml",
+        )
+        ?.content.trim();
     dispatch({
       type: "SET_SERVICE_STATUS",
       status: "pending",
@@ -211,7 +216,7 @@ function AppContent() {
       const content = editorRef.current.getValue();
       await apiCall<any>("PUT", "configs", {
         action: "save",
-        filename: config.filename,
+        file: config.file,
         content,
       });
       dispatch({ type: "SAVE_CONFIG", index: activeConfigIndex, content });
@@ -241,7 +246,7 @@ function AppContent() {
     const target = configs[index];
     if (target && editorRef.current) {
       editorRef.current.setValue(target.content);
-      editorRef.current.setLanguage(getFileLanguage(target.filename));
+      editorRef.current.setLanguage(getFileLanguage(target.file));
     }
   }
 
@@ -287,7 +292,7 @@ function AppContent() {
 
     if (core === "mihomo") {
       targetIndex = state.configs.findIndex(
-        (c) => c.filename === "config.yaml",
+        (c) => c.file.endsWith("/config.yaml") || c.file === "config.yaml",
       );
       if (targetIndex === -1) {
         showToast("Файл config.yaml не найден", "error");

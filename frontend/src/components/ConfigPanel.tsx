@@ -82,25 +82,23 @@ export function ConfigPanel({
   const activeConfig = configs[activeConfigIndex];
   const isRunning = serviceStatus === "running";
   const isPending = serviceStatus === "pending";
-  const fileLanguage = activeConfig
-    ? getFileLanguage(activeConfig.filename)
-    : null;
+  const fileLanguage = activeConfig ? getFileLanguage(activeConfig.file) : null;
   const isJsonOrYaml = fileLanguage === "json" || fileLanguage === "yaml";
   const canSave = !!(activeConfig?.isDirty && validationState?.isValid);
   const canApply = canSave && isRunning && !isPending;
   const canFormat = !!(isJsonOrYaml && validationState?.isValid);
 
-  const configFilenamesKey = configs.map((c) => c.filename).join(",");
+  const configFilenamesKey = configs.map((c) => c.file).join(",");
 
   const loadConfigIntoEditor = useCallback(
     (config: Config) => {
       if (!editorRef.current) return;
       editorRef.current.setSavedContent(config.savedContent);
       editorRef.current.setValue(config.content, config.savedContent);
-      editorRef.current.setLanguage(getFileLanguage(config.filename));
-      editorRef.current.validate(config.filename);
+      editorRef.current.setLanguage(getFileLanguage(config.file));
+      editorRef.current.validate(config.file);
 
-      const savedState = viewStatesRef.current[config.filename];
+      const savedState = viewStatesRef.current[config.file];
       if (savedState) editorRef.current.restoreViewState(savedState);
     },
     [editorRef],
@@ -152,13 +150,13 @@ export function ConfigPanel({
 
     const currentCfg = configsRef.current[activeIndexRef.current];
     if (currentCfg && editorRef.current) {
-      viewStatesRef.current[currentCfg.filename] =
+      viewStatesRef.current[currentCfg.file] =
         editorRef.current.saveViewState();
     }
 
     activeIndexRef.current = index;
     dispatch({ type: "SET_ACTIVE_CONFIG", index });
-    localStorage.setItem("lastSelectedTab", config.filename);
+    localStorage.setItem("lastSelectedTab", config.file);
   }
 
   async function saveCurrentConfig(force = false) {
@@ -166,7 +164,7 @@ export function ConfigPanel({
     if (!cfg || !editorRef.current) return;
     const content = editorRef.current.getValue();
     if (!content.trim()) return showToast("Конфигурация пустая", "error");
-    if (!editorRef.current.isValid(cfg.filename))
+    if (!editorRef.current.isValid(cfg.file))
       return showToast("Файл содержит ошибки", "error");
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
       dispatch({
@@ -185,14 +183,14 @@ export function ConfigPanel({
       "configs",
       {
         action: "save",
-        filename: cfg.filename,
+        file: cfg.file,
         content,
       },
     );
     if (result.success) {
       editorRef.current.setSavedContent(content);
       dispatch({ type: "SAVE_CONFIG", index: activeIndexRef.current, content });
-      showToast(`Файл "${cfg.name}" сохранен`);
+      showToast(`Файл "${cfg.file.split("/").pop()}" сохранен`);
     } else {
       showToast(`Ошибка сохранения: ${result.error}`, "error");
     }
@@ -203,7 +201,7 @@ export function ConfigPanel({
     if (!cfg || !editorRef.current) return;
     const content = editorRef.current.getValue();
     if (!content.trim()) return showToast("Файл пустой", "error");
-    if (!editorRef.current.isValid(cfg.filename))
+    if (!editorRef.current.isValid(cfg.file))
       return showToast("Файл содержит ошибки", "error");
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
       dispatch({
@@ -222,7 +220,7 @@ export function ConfigPanel({
       "configs",
       {
         action: "save",
-        filename: cfg.filename,
+        file: cfg.file,
         content,
       },
     );
@@ -235,7 +233,7 @@ export function ConfigPanel({
       status: "pending",
       pendingText: "Перезапуск...",
     });
-    const lang = getFileLanguage(cfg.filename);
+    const lang = getFileLanguage(cfg.file);
     const r = await apiCall<{ success: boolean; error?: string }>(
       "POST",
       "control",
@@ -256,7 +254,7 @@ export function ConfigPanel({
   }
 
   function isGuiActive(cfg: Config) {
-    const f = cfg.filename.toLowerCase();
+    const f = cfg.file.toLowerCase();
     return (
       (f.includes("routing") && settings.guiRouting) ||
       (f.includes("log") && settings.guiLog)
@@ -265,7 +263,7 @@ export function ConfigPanel({
 
   const isRoutingGui = useMemo(() => {
     if (!settings.guiRouting || !activeConfig) return false;
-    if (!activeConfig.filename.toLowerCase().includes("routing")) return false;
+    if (!activeConfig.file.toLowerCase().includes("routing")) return false;
     try {
       const j = JSON.parse(stripJsonComments(activeConfig.content));
       return j && typeof j.routing === "object";
@@ -276,7 +274,7 @@ export function ConfigPanel({
 
   const isLogGui = useMemo(() => {
     if (!settings.guiLog || !activeConfig) return false;
-    if (!activeConfig.filename.toLowerCase().includes("log")) return false;
+    if (!activeConfig.file.toLowerCase().includes("log")) return false;
     try {
       const j = JSON.parse(stripJsonComments(activeConfig.content));
       return j && typeof j.log === "object";
@@ -287,8 +285,8 @@ export function ConfigPanel({
 
   const isAnyGui = isRoutingGui || isLogGui;
 
-  const coreConfigs = configs.filter((c) => !c.filename.endsWith(".lst"));
-  const xkeenConfigs = configs.filter((c) => c.filename.endsWith(".lst"));
+  const coreConfigs = configs.filter((c) => !c.file.endsWith(".lst"));
+  const xkeenConfigs = configs.filter((c) => c.file.endsWith(".lst"));
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -326,9 +324,9 @@ export function ConfigPanel({
               </div>
             ) : (
               <Tabs
-                value={activeConfig?.filename || ""}
+                value={activeConfig?.file || ""}
                 onValueChange={(value) => {
-                  const index = configs.findIndex((c) => c.filename === value);
+                  const index = configs.findIndex((c) => c.file === value);
                   if (index >= 0) switchTab(index);
                 }}
                 className="flex-row!"
@@ -337,11 +335,14 @@ export function ConfigPanel({
                   <TabsList className="shrink-0">
                     {coreConfigs.map((config) => (
                       <TabsTrigger
-                        key={config.filename}
-                        value={config.filename}
+                        key={config.file}
+                        value={config.file}
                         className="data-[state=active]:bg-input-background!"
                       >
-                        {config.name}
+                        {config.file
+                          .split("/")
+                          .pop()
+                          ?.replace(/\.[^.]+$/, "")}
                         {config.isDirty && (
                           <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
                         )}
@@ -353,11 +354,14 @@ export function ConfigPanel({
                   <TabsList className="shrink-0">
                     {xkeenConfigs.map((config) => (
                       <TabsTrigger
-                        key={config.filename}
-                        value={config.filename}
+                        key={config.file}
+                        value={config.file}
                         className="data-[state=active]:bg-input-background!"
                       >
-                        {config.name}
+                        {config.file
+                          .split("/")
+                          .pop()
+                          ?.replace(/\.[^.]+$/, "")}
                         {config.isDirty && (
                           <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
                         )}
