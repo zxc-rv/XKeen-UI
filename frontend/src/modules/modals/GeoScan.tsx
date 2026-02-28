@@ -168,10 +168,7 @@ export function GeoScanModal() {
           onValueChange={(value) => switchType(value as GeoType)}
           className="shrink-0"
         >
-          <TabsList
-            className="w-full! bg-transparent border border-border overflow-hidden rounded-lg h-full!"
-            style={{ padding: 0 }}
-          >
+          <TabsList className="w-full! bg-transparent border border-border overflow-hidden rounded-lg p-0 h-full!">
             <TabsTrigger
               value="domain"
               className="h-full flex-1 gap-1.5 rounded-none py-2 border-none! bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"

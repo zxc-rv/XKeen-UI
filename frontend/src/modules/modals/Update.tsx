@@ -43,7 +43,7 @@ const mdClass = `
   [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ul:last-child]:mb-0 [&_li]:mb-0.5 [&_li]:break-words
   [&_ol]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol:last-child]:mb-0
   [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[10px] [&_code]:font-mono [&_code]:break-all
-  [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:rounded [&_pre]:mb-2 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre
+  [&_pre]:bg-muted [&_pre]:p-2 [&_pre]:rounded [&_pre]:mb-2 [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_pre]:max-w-full
   [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:break-normal
   [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-2 [&_a]:break-all
   [&_strong]:text-foreground [&_strong]:font-semibold
@@ -143,30 +143,35 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
               Обновление {coreLabel}
             </DialogTitle>
 
-            <DialogDescription className="flex items-center justify-between w-full">
-              Выберите версию для установки
-              <div className="flex items-center gap-1.5">
-                {!loading && source && (
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "rounded-full px-2 h-5 text-xs font-medium border-none",
-                      source === "github"
-                        ? "bg-green-500/10 text-green-400"
-                        : "bg-orange-500/10 text-orange-400",
-                    )}
-                  >
-                    {source === "github" ? "GitHub" : "jsDelivr"}
-                  </Badge>
-                )}
-                {!loading && releases.length > 0 && (
-                  <Badge
-                    variant="outline"
-                    className="rounded-full w-6 h-6 bg-blue-500/10 text-blue-400 border-blue-500/20"
-                  >
-                    {releases.length}
-                  </Badge>
-                )}
+            <DialogDescription
+              className="flex items-center justify-between w-full"
+              asChild
+            >
+              <div>
+                Выберите версию для установки
+                <span className="flex items-center gap-1.5">
+                  {!loading && source && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "rounded-full px-2 h-5 text-xs font-medium border-none",
+                        source === "github"
+                          ? "bg-green-500/10 text-green-400"
+                          : "bg-orange-500/10 text-orange-400",
+                      )}
+                    >
+                      {source === "github" ? "GitHub" : "jsDelivr"}
+                    </Badge>
+                  )}
+                  {!loading && releases.length > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="rounded-full w-6 h-6 bg-blue-500/10 text-blue-400 border-blue-500/20"
+                    >
+                      {releases.length}
+                    </Badge>
+                  )}
+                </span>
               </div>
             </DialogDescription>
           </DialogHeader>
@@ -229,11 +234,11 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                       )}
                     >
                       <AccordionTrigger
-                        className="px-3 py-0 hover:no-underline [&>[data-slot=accordion-trigger-icon]]:hidden"
+                        className="px-3 py-0 hover:no-underline *:data-[slot=accordion-trigger-icon]:hidden min-w-0 overflow-hidden"
                         onClick={() => setSelectedVersion(release.version)}
                       >
-                        <div className="flex items-center justify-between gap-3 w-full py-2.5">
-                          <div className="flex flex-col gap-2 min-w-0">
+                        <div className="flex items-center justify-between gap-3 w-full py-2.5 min-w-0">
+                          <div className="flex flex-col gap-2 flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium truncate">
                                 {release.name || release.version}
@@ -268,8 +273,8 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                       {release.body && (
                         <AccordionContent className="px-3 pb-3 pt-0">
                           <div className="border-t border-ring/20 pt-2.5">
-                            <div className="max-h-48 overflow-y-auto">
-                              <div className={mdClass}>
+                            <div className="max-h-48 overflow-y-auto overflow-x-hidden w-full">
+                              <div className={cn(mdClass, "min-w-0")}>
                                 <ReactMarkdown
                                   remarkPlugins={[remarkGfm]}
                                   components={{ img: () => null }}

@@ -129,7 +129,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
 
             if let Err(e) = check_core_config(&req.core).await {
                 log("ERROR", e);
-                return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}", req.core)), data: None });
+                return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}{}", &req.core[..1].to_uppercase(), &req.core[1..])), data: None });
             }
 
             if req.core != "xray" { _ = fs::write(ERROR_LOG, b"").await; }
@@ -152,7 +152,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             if a == "start" || a == "hardRestart" {
                 if let Err(e) = check_core_config(&cur_name).await {
                     log("ERROR", e);
-                    return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}", cur_name)), data: None });
+                    return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}{}", &cur_name[..1].to_uppercase(), &cur_name[1..])), data: None });
                 }
             }
             if cur_name == "mihomo" && (a == "start" || a == "hardRestart") {
