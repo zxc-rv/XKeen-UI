@@ -327,11 +327,11 @@ export function LogPanel() {
           <div className="relative flex-1 min-h-0">
             <div className="absolute inset-4 rounded-md bg-input-background overflow-hidden border">
               {isEmpty && (
-                <Empty className="h-full gap-1">
-                  <EmptyMedia variant="icon" className="size-9">
-                    <IconFile className="text-muted-foreground size-6" />
+                <Empty className="h-full gap-0">
+                  <EmptyMedia variant="icon" className="size-8.5">
+                    <IconFile className="text-muted-foreground size-5" />
                   </EmptyMedia>
-                  <EmptyTitle className="font-mono text-sm text-ring">
+                  <EmptyTitle className="font-mono text-[13px] text-ring">
                     Журнал пуст
                   </EmptyTitle>
                 </Empty>
@@ -340,7 +340,7 @@ export function LogPanel() {
                 ref={logRef}
                 tabIndex={0}
                 className={cn(
-                  "text-[#dbdbdb] font-mono text-[13px] leading-[1.6] h-full overflow-y-auto px-3 py-1.5 whitespace-pre-wrap break-all contain-content",
+                  "text-[#dbdbdb] font-mono text-[13px] leading-[1.6] h-full overflow-y-auto px-3 py-1.5 contain-content",
                   isAnimating && "pointer-events-none",
                 )}
                 onScroll={handleScroll}
@@ -352,7 +352,7 @@ export function LogPanel() {
               <Button
                 variant="outline"
                 size="icon"
-                className="absolute bottom-8 right-8 z-10 h-8 w-8 rounded-md shadow-lg bg-background/80 backdrop-blur"
+                className="absolute bottom-8 right-8 z-10 h-8 w-8 rounded-md shadow-lg bg-background/80 backdrop-blur!"
                 onClick={handleScrollToBottom}
               >
                 <IconChevronDown size={14} />
