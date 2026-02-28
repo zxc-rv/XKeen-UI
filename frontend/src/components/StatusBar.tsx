@@ -5,6 +5,7 @@ import {
   IconCpu,
   IconPlayerStopFilled,
   IconPlayerPlayFilled,
+  IconBox,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +20,7 @@ import { cn } from "../lib/utils";
 import { useAppContext } from "../store";
 import { apiCall, capitalize } from "../lib/api";
 import { AuroraText } from "@/components/ui/aurora-text";
+import { ShineBorder } from "@/components/ui/shine-border";
 
 export function StatusBar({
   onOpenCoreManage,
@@ -37,9 +39,9 @@ export function StatusBar({
     coreVersions,
     isConfigsLoading,
     version,
-    isOutdatedUI,
+    // isOutdatedUI,
   } = state;
-
+  const isOutdatedUI = true;
   const isRunning = serviceStatus === "running";
   const isPending = serviceStatus === "pending" || serviceStatus === "loading";
 
@@ -126,17 +128,35 @@ export function StatusBar({
 
   const badgeClasses = cn(
     "status-badge-custom",
-    serviceStatus === "running" && "status-badge-running",
-    (serviceStatus === "pending" || serviceStatus === "loading") &&
-      "status-badge-pending",
     serviceStatus === "stopped" && "status-badge-stopped",
   );
+
+  const shineColors = isRunning
+    ? ["#195040", "#34d399", "#195040"]
+    : isPending
+      ? ["#4a3615", "#fbbf24", "#4a3615"]
+      : null;
+
+  const badgeBg = isRunning
+    ? { background: "#19292c", color: "#10b981", border: "none" }
+    : isPending
+      ? { background: "#2a1f0d", color: "#f59e0b", border: "none" }
+      : {};
 
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 sm:p-4 rounded-xl border border-border bg-card shrink-0 z-40 relative">
         <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 order-2 md:order-1">
-          <div className={badgeClasses}>{statusLabel}</div>
+          <div className={badgeClasses} style={badgeBg}>
+            {shineColors && (
+              <ShineBorder
+                duration={5}
+                borderWidth={2}
+                shineColor={shineColors}
+              />
+            )}
+            {statusLabel}
+          </div>
           <div className="flex items-center gap-1.5">
             {isConfigsLoading ? (
               <>
@@ -217,23 +237,8 @@ export function StatusBar({
           >
             XKeen UI
           </AuroraText>
-          {version && (
-            <Button
-              variant="ghost"
-              onClick={() => onOpenUpdate("self")}
-              className={cn(
-                "cursor-pointer text-xs mt-1 h-3 items-start tracking-wider hover:bg-blue-500/0! hover:drop-shadow-xs!",
-                isOutdatedUI
-                  ? "text-amber-300 hover:text-amber-300 hover:drop-shadow-amber-300!"
-                  : "text-blue-400 hover:text-blue-400 hover:drop-shadow-blue-400!",
-              )}
-            >
-              v{version}
-            </Button>
-          )}
         </div>
 
-        {/* Правая часть (на десктопе), третья строка (на мобиле) */}
         <div className="flex items-center justify-center md:justify-end gap-1.5 order-3 ml-auto w-full md:w-auto">
           {isConfigsLoading ? (
             <Skeleton className="h-9 w-32 rounded-md" />
@@ -257,6 +262,37 @@ export function StatusBar({
               <TooltipContent>Управление ядром</TooltipContent>
             </Tooltip>
           )}
+          {version &&
+            (isConfigsLoading ? (
+              <Skeleton className="h-9 w-14 rounded-md" />
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={() => onOpenUpdate("self")}
+                    className={cn(
+                      "relative h-9 text-xs tracking-wider overflow-hidden",
+                      isOutdatedUI
+                        ? "text-cyan-300 hover:text-cyan-300 border-none!"
+                        : "",
+                    )}
+                  >
+                    {isOutdatedUI && (
+                      <ShineBorder
+                        duration={7}
+                        borderWidth={2}
+                        shineColor={["#00D3F2", "#2B7FFF", "#155DFC"]}
+                      />
+                    )}
+                    <IconBox className="size-5" />v{version}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isOutdatedUI ? "Доступно обновление" : "Версия XKeen UI"}
+                </TooltipContent>
+              </Tooltip>
+            ))}
           {isConfigsLoading ? (
             <Skeleton className="h-9 w-9 rounded-md" />
           ) : (

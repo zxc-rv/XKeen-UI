@@ -130,25 +130,37 @@
   --radius-4xl: calc(var(--radius) + 16px);
   --animate-aurora: aurora 8s ease-in-out infinite alternate;
   @keyframes aurora {
-  0% {
-    background-position: 0% 50%;
-    transform: rotate(-5deg) scale(0.9);
+    0% {
+      background-position: 0% 50%;
+      transform: rotate(-5deg) scale(0.9);
     }
-  25% {
-    background-position: 50% 100%;
-    transform: rotate(5deg) scale(1.1);
+    25% {
+      background-position: 50% 100%;
+      transform: rotate(5deg) scale(1.1);
     }
-  50% {
-    background-position: 100% 50%;
-    transform: rotate(-3deg) scale(0.95);
+    50% {
+      background-position: 100% 50%;
+      transform: rotate(-3deg) scale(0.95);
     }
-  75% {
-    background-position: 50% 0%;
-    transform: rotate(3deg) scale(1.05);
+    75% {
+      background-position: 50% 0%;
+      transform: rotate(3deg) scale(1.05);
     }
-  100% {
-    background-position: 0% 50%;
-    transform: rotate(-5deg) scale(0.9);
+    100% {
+      background-position: 0% 50%;
+      transform: rotate(-5deg) scale(0.9);
+    }
+  }
+  --animate-shine: shine var(--duration) infinite linear;
+  @keyframes shine {
+    0% {
+      background-position: 0% 0%;
+    }
+    50% {
+      background-position: 100% 100%;
+    }
+    to {
+      background-position: 0% 0%;
     }
   }
 }
@@ -211,15 +223,6 @@
   color: white;
 }
 
-@keyframes borderFlow {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
-  }
-}
-
 .status-badge-custom {
   display: inline-flex;
   align-items: center;
@@ -238,42 +241,6 @@
   position: relative;
   overflow: hidden;
   user-select: none;
-}
-
-.status-badge-running {
-  background:
-    linear-gradient(#19292c, #19292c) padding-box,
-    linear-gradient(
-        90deg,
-        #195040 0%,
-        #195040 30%,
-        #34d399 50%,
-        #195040 70%,
-        #195040 100%
-      )
-      border-box;
-  color: #10b981;
-  border: 1px solid transparent;
-  background-size: 200% 100%;
-  animation: borderFlow 2s linear infinite;
-}
-
-.status-badge-pending {
-  background:
-    linear-gradient(#2a1f0d, #2a1f0d) padding-box,
-    linear-gradient(
-        90deg,
-        #4a3615 0%,
-        #4a3615 30%,
-        #fbbf24 50%,
-        #4a3615 70%,
-        #4a3615 100%
-      )
-      border-box;
-  color: #f59e0b;
-  border: 1px solid transparent;
-  background-size: 200% 100%;
-  animation: borderFlow 2s linear infinite;
 }
 
 .status-badge-stopped {
