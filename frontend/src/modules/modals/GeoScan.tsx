@@ -17,8 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "../../lib/utils";
-import { useAppContext } from "../../store";
-import { Spinner } from "../ui/spinner";
+import { useAppContext } from "../../lib/store";
+import { Spinner } from "@/components/ui/spinner";
 
 type GeoType = "domain" | "ip";
 type FileStatus = {

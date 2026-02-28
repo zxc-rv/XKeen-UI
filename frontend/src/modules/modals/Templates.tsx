@@ -13,9 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "../../lib/utils";
-import { useAppContext } from "../../store";
+import { useAppContext } from "../../lib/store";
 import { capitalize } from "../../lib/api";
-import { Spinner } from "../ui/spinner";
+import { Spinner } from "@/components/ui/spinner";
 
 const TEMPLATES_URL =
   "https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/templates.json";

@@ -20,7 +20,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useAppContext } from "../../store";
+import { useAppContext } from "../../lib/store";
 import { apiCall } from "../../lib/api";
 
 const SwitchRow = ({

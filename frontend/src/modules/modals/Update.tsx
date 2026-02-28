@@ -21,10 +21,10 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { cn } from "../../lib/utils";
-import { useAppContext } from "../../store";
+import { useAppContext } from "../../lib/store";
 import { capitalize } from "../../lib/api";
-import type { Release } from "../../types";
-import { Spinner } from "../ui/spinner";
+import type { Release } from "../../lib/types";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Empty,
   EmptyHeader,

@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { IconX, IconAlertCircle, IconCircleCheck } from "@tabler/icons-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { useAppContext } from "../store";
-import type { ToastMessage } from "../types";
+import { useAppContext } from "../lib/store";
+import type { ToastMessage } from "../lib/types";
 import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 
 function AlertItem({ alert }: { alert: ToastMessage }) {

@@ -27,11 +27,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn, stripJsonComments } from "../lib/utils";
-import { useAppContext } from "../store";
-import { apiCall } from "../lib/api";
-import type { MonacoEditorRef } from "./MonacoEditor";
-import type { Config } from "../types";
+import { cn, stripJsonComments } from "../../../lib/utils";
+import { useAppContext } from "../../../lib/store";
+import { apiCall } from "../../../lib/api";
+import type { MonacoEditorRef } from "../MonacoEditor";
+import type { Config } from "../../../lib/types";
 
 const RULE_FIELDS = {
   domain: {

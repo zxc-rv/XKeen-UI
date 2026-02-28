@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "../lib/utils";
-import { useAppContext } from "../store";
-import { apiCall, capitalize } from "../lib/api";
+import { cn } from "../../lib/utils";
+import { useAppContext } from "../../lib/store";
+import { apiCall, capitalize } from "../../lib/api";
 import { AuroraText } from "@/components/ui/aurora-text";
 import { ShineBorder } from "@/components/ui/shine-border";
 
@@ -150,7 +150,7 @@ export function StatusBar({
           <div className={badgeClasses} style={badgeBg}>
             {shineColors && (
               <ShineBorder
-                duration={5}
+                duration={8}
                 borderWidth={2}
                 shineColor={shineColors}
               />

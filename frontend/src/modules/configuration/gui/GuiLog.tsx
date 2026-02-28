@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import * as prettier from "prettier";
 import prettierBabel from "prettier/plugins/babel";
 import { Switch } from "@/components/ui/switch";
-import { cn, stripJsonComments } from "../lib/utils";
-import { useAppContext } from "../store";
-import { apiCall } from "../lib/api";
-import type { MonacoEditorRef } from "./MonacoEditor";
-import type { Config } from "../types";
+import { cn, stripJsonComments } from "../../../lib/utils";
+import { useAppContext } from "../../../lib/store";
+import { apiCall } from "../../../lib/api";
+import type { MonacoEditorRef } from "../MonacoEditor";
+import type { Config } from "../../../lib/types";
 
 const LOG_LEVELS = ["none", "error", "warning", "info", "debug"] as const;
 type LogLevel = (typeof LOG_LEVELS)[number];

@@ -16,7 +16,7 @@ import prettierBabel from "prettier/plugins/babel";
 import prettierEstree from "prettier/plugins/estree";
 import prettierYaml from "prettier/plugins/yaml";
 import * as jsyaml from "js-yaml";
-import { getFileLanguage } from "../lib/api";
+import { getFileLanguage } from "../../lib/api";
 
 window.MonacoEnvironment = {
   getWorker(_, label) {

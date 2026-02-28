@@ -8,7 +8,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useAppContext } from "../../store";
+import { useAppContext } from "../../lib/store";
 
 export function CommentsWarningModal() {
   const { state, dispatch } = useAppContext();

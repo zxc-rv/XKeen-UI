@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { AppProvider, useAppContext } from "./store";
-import { apiCall, getFileLanguage, capitalize } from "./lib/api";
+import { AppProvider, useAppContext } from "./lib/store";
+import { apiCall, capitalize } from "./lib/api";
 import { stripJsonComments } from "./lib/utils";
-import { StatusBar } from "./components/StatusBar";
-import { ConfigPanel } from "./components/ConfigPanel";
-import { LogPanel } from "./components/LogPanel";
+import { StatusBar } from "./modules/status/StatusBar";
+import { ConfigPanel } from "./modules/configuration/ConfigPanel";
+import { LogPanel } from "./modules/log/LogPanel";
 import { Toast } from "./components/Toast";
-import { DirtyModal } from "./components/modals/Dirty";
-import { CommentsWarningModal } from "./components/modals/CommentsWarning";
-import { CoreManageModal } from "./components/modals/CoreManagement";
-import { UpdateModal } from "./components/modals/Update";
-import { ImportModal } from "./components/modals/AddProxy";
-import { TemplateModal } from "./components/modals/Templates";
-import { SettingsModal } from "./components/modals/Settings";
-import { GeoScanModal } from "./components/modals/GeoScan";
-import type { MonacoEditorRef } from "./components/MonacoEditor";
-import type { Config } from "./types";
+import { CommentsWarningModal } from "./modules/modals/CommentsWarning";
+import { CoreManageModal } from "./modules/modals/CoreManagement";
+import { UpdateModal } from "./modules/modals/Update";
+import { ImportModal } from "./modules/modals/AddProxy";
+import { TemplateModal } from "./modules/modals/Templates";
+import { SettingsModal } from "./modules/modals/Settings";
+import { GeoScanModal } from "./modules/modals/GeoScan";
+import type { MonacoEditorRef } from "./modules/configuration/MonacoEditor";
+import type { Config } from "./lib/types";
 
 function useLazyMount(open: boolean, delay = 200) {
   const [mounted, setMounted] = useState(open);
@@ -34,7 +33,6 @@ function AppContent() {
   const { state, dispatch, showToast } = useAppContext();
   const editorRef = useRef<MonacoEditorRef | null>(null);
 
-  const mountDirty = useLazyMount(state.showDirtyModal);
   const mountCommentsWarning = useLazyMount(state.showCommentsWarningModal);
   const mountCoreManage = useLazyMount(state.showCoreManageModal);
   const mountUpdate = useLazyMount(state.showUpdateModal);
@@ -205,48 +203,6 @@ function AppContent() {
         status: data.running ? "running" : "stopped",
       });
       if (result.success && mihomoYamlEmpty) await loadConfigs(core);
-    }
-  }
-
-  async function handleSaveAndSwitch() {
-    const { pendingSwitchIndex, configs, activeConfigIndex } = state;
-    if (pendingSwitchIndex < 0) return;
-    const config = configs[activeConfigIndex];
-    if (config && editorRef.current) {
-      const content = editorRef.current.getValue();
-      await apiCall<any>("PUT", "configs", {
-        action: "save",
-        file: config.file,
-        content,
-      });
-      dispatch({ type: "SAVE_CONFIG", index: activeConfigIndex, content });
-    }
-    dispatch({ type: "SHOW_MODAL", modal: "showDirtyModal", show: false });
-    applySwitch(pendingSwitchIndex, configs);
-  }
-
-  function handleDiscardAndSwitch() {
-    const { pendingSwitchIndex, configs, activeConfigIndex } = state;
-    if (pendingSwitchIndex < 0) return;
-    const config = configs[activeConfigIndex];
-    if (config && editorRef.current)
-      editorRef.current.setValue(config.savedContent);
-    dispatch({
-      type: "SAVE_CONFIG",
-      index: activeConfigIndex,
-      content: config.savedContent,
-    });
-    dispatch({ type: "SHOW_MODAL", modal: "showDirtyModal", show: false });
-    applySwitch(pendingSwitchIndex, configs);
-  }
-
-  function applySwitch(index: number, configs: Config[]) {
-    dispatch({ type: "SET_ACTIVE_CONFIG", index });
-    dispatch({ type: "SET_PENDING_SWITCH", index: -1 });
-    const target = configs[index];
-    if (target && editorRef.current) {
-      editorRef.current.setValue(target.content);
-      editorRef.current.setLanguage(getFileLanguage(target.file));
     }
   }
 
@@ -442,12 +398,6 @@ function AppContent() {
       </main>
 
       <Toast />
-      {mountDirty && (
-        <DirtyModal
-          onSaveAndSwitch={handleSaveAndSwitch}
-          onDiscardAndSwitch={handleDiscardAndSwitch}
-        />
-      )}
       {mountCommentsWarning && <CommentsWarningModal />}
       {mountCoreManage && (
         <CoreManageModal

@@ -25,10 +25,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "../lib/utils";
-import { useWebSocket } from "../hooks/useWebSocket";
-import { useAppContext } from "../store";
-import type { WsMessage } from "../hooks/useWebSocket";
+import { cn } from "../../lib/utils";
+import { useWebSocket } from "./WebSocket";
+import { useAppContext } from "../../lib/store";
+import type { WsMessage } from "./WebSocket";
 
 const LOG_FILES = ["error.log", "access.log"];
 const MAX_LINES = 1000;

@@ -29,13 +29,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn, stripJsonComments } from "../lib/utils";
-import { useAppContext } from "../store";
-import { apiCall, getFileLanguage } from "../lib/api";
+import { cn, stripJsonComments } from "../../lib/utils";
+import { useAppContext } from "../../lib/store";
+import { apiCall, getFileLanguage } from "../../lib/api";
 import { MonacoEditor, type MonacoEditorRef } from "./MonacoEditor";
-import { RoutingPanel } from "./GuiRouting";
-import { GuiLog } from "./GuiLog";
-import type { Config } from "../types";
+import { RoutingPanel } from "./gui/GuiRouting";
+import { GuiLog } from "./gui/GuiLog";
+import type { Config } from "../../lib/types";
 
 interface Props {
   onOpenImport: () => void;
