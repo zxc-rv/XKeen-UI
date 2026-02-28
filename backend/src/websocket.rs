@@ -2,7 +2,7 @@ use axum::{extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State}, respons
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use notify::{RecursiveMode, Watcher};
 use std::{fs::File, io::{BufRead, BufReader, Seek, SeekFrom}, path::Path, sync::atomic::{AtomicU32, Ordering}};
-use crate::{types::*, logger::process_log_line};
+use crate::{types::*, logger::{process_log_line, ts}};
 
 static WS_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -64,11 +64,12 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
+    let debug = state.debug;
     let count = WS_COUNTER.fetch_add(1, Ordering::SeqCst);
-    println!("[WS-{}] Connected (Total: {})", count, count + 1);
+    if debug { println!("{} {}", ts(), format!("[INFO] WS-{} Connected (Total: {})", count, count + 1)); }
 
     if count == 0 {
-        println!("🚀 Starting log watcher...");
+        if debug { println!("{} [INFO] 🚀 Starting log watcher...", ts()); }
         let tx = state.log_tx.clone();
         let handle = tokio::spawn(async move {
             let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -170,10 +171,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
 
     let count_after = WS_COUNTER.fetch_sub(1, Ordering::SeqCst);
-    println!("[WS] Disconnected. Remaining: {}", count_after - 1);
+    if debug { println!("{} {}", ts(), format!("[INFO] WS Disconnected. Remaining: {}", count_after - 1)); }
 
     if count_after == 1 {
-        println!("💤 Stopping log watcher...");
+        if debug { println!("{} [INFO] 💤 Stopping log watcher...", ts()); }
         if let Some(abort_handle) = state.log_watcher.lock().await.take() {
             abort_handle.abort();
         }

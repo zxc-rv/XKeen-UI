@@ -2,6 +2,7 @@ use axum::{extract::{Query, State}, response::{IntoResponse, Json}};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::Path};
 use crate::types::*;
+use crate::logger::log;
 
 #[derive(Serialize)] struct ConfigItem { file: String, content: String }
 #[derive(Deserialize)] pub struct ConfigReq { action: String, file: String, content: String }
@@ -11,28 +12,35 @@ async fn collect_configs(paths: &[String], is_mihomo: bool) -> Vec<ConfigItem> {
     for path_str in paths {
         let path = Path::new(path_str);
         if path.is_dir() {
-            if let Ok(mut entries) = tokio::fs::read_dir(path).await {
-                while let Ok(Some(entry)) = entries.next_entry().await {
-                    let entry_path = entry.path();
-                    let matches = if is_mihomo {
-                        entry_path.extension().map_or(false, |e| e == "yaml" || e == "yml")
-                    } else {
-                        entry_path.extension().map_or(false, |e| e == "json")
-                    };
-                    if matches {
-                        if let Ok(content) = tokio::fs::read_to_string(&entry_path).await {
-                            results.push(ConfigItem {
-                                file: entry_path.to_string_lossy().into(),
-                                content,
-                            });
+            match tokio::fs::read_dir(path).await {
+                Err(e) => { log("ERROR", format!("Не удалось открыть директорию {}: {}", path_str, e)); }
+                Ok(mut entries) => {
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        let entry_path = entry.path();
+                        let matches = if is_mihomo {
+                            entry_path.extension().map_or(false, |e| e == "yaml" || e == "yml")
+                        } else {
+                            entry_path.extension().map_or(false, |e| e == "json")
+                        };
+                        if matches {
+                            match tokio::fs::read_to_string(&entry_path).await {
+                                Ok(content) => results.push(ConfigItem {
+                                    file: entry_path.to_string_lossy().into(),
+                                    content,
+                                }),
+                                Err(e) => { log("ERROR", format!("Не удалось прочитать файл {}: {}", entry_path.display(), e)); }
+                            }
                         }
                     }
                 }
             }
-        } else if path.is_file() {
-            if let Ok(content) = tokio::fs::read_to_string(path).await {
-                results.push(ConfigItem { file: path_str.clone(), content });
+        } else if path.exists() {
+            match tokio::fs::read_to_string(path).await {
+                Ok(content) => results.push(ConfigItem { file: path_str.clone(), content }),
+                Err(e) => { log("ERROR", format!("Не удалось прочитать файл {}: {}", path_str, e)); }
             }
+        } else {
+            log("WARN", format!("Файл не найден: {}", path_str));
         }
     }
     results.sort_by(|a, b| a.file.cmp(&b.file));

@@ -49,15 +49,15 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
         loop {
             match tokio::time::timeout(std::time::Duration::from_secs(5), stream.next()).await {
                 Ok(Some(Ok(chunk))) => if let Some(f) = &mut file {
-                    if f.write_all(&chunk).await.is_err() { log("WARN", format!("Ошибка записи на диск ({})", source)).await; _ = fs::remove_file(path).await; return None; }
+                    if f.write_all(&chunk).await.is_err() { log("WARN", format!("Ошибка записи на диск ({})", source)); _ = fs::remove_file(path); return None; }
                 } else { buf.extend_from_slice(&chunk); },
                 Ok(None) => {
-                    if !is_disk && buf.is_empty() { log("WARN", format!("Загрузка вернула 0 байт ({})", source)).await; return None; }
-                    log("INFO", format!("Файл загружен {} ({:.1} МБ)", if is_disk { "на диск" } else { "в ОЗУ" }, (if is_disk { size } else { buf.len() }) as f64 / 1048576.0)).await;
+                    if !is_disk && buf.is_empty() { log("WARN", format!("Загрузка вернула 0 байт ({})", source)); return None; }
+                    log("INFO", format!("Файл загружен {} ({:.1} МБ)", if is_disk { "на диск" } else { "в ОЗУ" }, (if is_disk { size } else { buf.len() }) as f64 / 1048576.0));
                     return Some(if is_disk { DownloadResult::Disk(path.to_path_buf()) } else { DownloadResult::RAM(buf) });
                 }
-                Ok(Some(Err(e))) => { log("WARN", format!("Соединение оборвалось ({}): {}", source, e)).await; break; }
-                Err(_) => { log("WARN", format!("Таймаут загрузки ({})", source)).await; break; }
+                Ok(Some(Err(e))) => { log("WARN", format!("Соединение оборвалось ({}): {}", source, e)); break; }
+                Err(_) => { log("WARN", format!("Таймаут загрузки ({})", source)); break; }
             }
         }
         if is_disk { _ = fs::remove_file(path).await; }
@@ -67,20 +67,20 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
     let list = std::iter::once(url.to_string()).chain(proxies.iter().map(|p| format!("{}/{}", p, url)));
     for (i, u) in list.enumerate() {
         let (source, is_proxy) = if i == 0 { ("напрямую", false) } else { ("прокси", true) };
-        if is_proxy { log("INFO", format!("Попытка загрузки через прокси #{}: {}", i, proxies[i-1])).await; }
+        if is_proxy { log("INFO", format!("Попытка загрузки через прокси #{}: {}", i, proxies[i-1])); }
 
         match client.get(&u).send().await {
             Ok(r) if r.status().is_success() => {
                 if is_proxy && r.headers().get("content-type").map_or(false, |v| v.to_str().unwrap_or("").contains("text/html")) {
-                    log("WARN", format!("Прокси #{} вернул HTML", i)).await; continue;
+                    log("WARN", format!("Прокси #{} вернул HTML", i)); continue;
                 }
                 if let Some(res) = load(r, tmp_path, &format!("{}{}", source, if is_proxy { format!(" #{}", i) } else { "".into() })).await { return Ok(res); }
             }
-            Ok(r) => log("WARN", format!("Ошибка загрузки: {}", r.status())).await,
-            Err(e) => log("WARN", format!("Ошибка загрузки: {}", e)).await,
+            Ok(r) => log("WARN", format!("Ошибка загрузки: {}", r.status())),
+            Err(e) => log("WARN", format!("Ошибка загрузки: {}", e)),
         }
     }
-    log("ERROR", "Не удалось выполнить обновление".into()).await;
+    log("ERROR", "Не удалось выполнить обновление".into());
     Err("Не удалось выполнить обновление".into())
 }
 
@@ -106,12 +106,12 @@ pub async fn get_releases(State(state): State<AppState>, Query(q): Query<Release
 }
 
 async fn install_jq() -> Result<(), String> {
-    log("INFO", "Установка jq через opkg...".into()).await;
+    log("INFO", "Установка jq через opkg...".into());
     let update = Command::new("opkg").arg("update").status().await.map_err(|e| format!("opkg update: {}", e))?;
     if !update.success() { return Err("Ошибка обновления opkg кеша".into()); }
     let install = Command::new("opkg").args(["install", "jq"]).status().await.map_err(|e| format!("opkg install jq: {}", e))?;
     if !install.success() { return Err("Ошибка установки jq".into()); }
-    log("INFO", "Пакет jq установлен".into()).await;
+    log("INFO", "Пакет jq установлен".into());
     Ok(())
 }
 
@@ -124,7 +124,7 @@ async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path
         _ => return Err("Архитектура не поддерживается для yq".into()),
     };
 
-    log("INFO", format!("Загрузка yq: {}", url)).await;
+    log("INFO", format!("Загрузка yq: {}", url));
     let dl_res = download(client, &url, proxies, &tmp_dir.join("yq.tmp")).await?;
 
     let target = "/opt/sbin/yq";
@@ -148,7 +148,7 @@ async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path
         _ = fs::remove_file(&src).await;
     }
     _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
-    log("INFO", "Пакет yq установлен".into()).await;
+    log("INFO", "Пакет yq установлен".into());
     Ok(())
 }
 
@@ -157,7 +157,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let ver = if req.version.chars().next().map_or(false, |c| c.is_ascii_digit()) { format!("v{}", req.version) } else { req.version.clone() };
     let core_cap = req.core.chars().next().map(|c| c.to_uppercase().to_string() + &req.core[1..]).unwrap_or_default();
 
-    log("INFO", format!("Запущено обновление {} до {}", if req.core == "self" { "XKeen UI" } else { &core_cap }, ver)).await;
+    log("INFO", format!("Запущено обновление {} до {}", if req.core == "self" { "XKeen UI" } else { &core_cap }, ver));
 
     let tmp_dir = Path::new("/opt/tmp"); _ = fs::create_dir_all(tmp_dir).await;
     let proxies = state.settings.read().unwrap().updater.github_proxy.clone();
@@ -171,7 +171,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
           _ => return response(false, Some("Архитектура не поддерживается".into()))
         };
 
-        log("INFO", "Загрузка файлов...".into()).await;
+        log("INFO", "Загрузка файлов...".into());
         let (bin, stat) = (tmp_dir.join("bin.tmp"), tmp_dir.join("static.tmp"));
         let bin_url = format!("{}/{}/releases/download/{}/xkeen-ui-{}", GITHUB_RELEASE, repo, ver, a);
         let stat_url = format!("{}/{}/releases/download/{}/xkeen-ui-static.tar.gz", GITHUB_RELEASE, repo, ver);
@@ -181,7 +181,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         );
         let (bin_d, stat_d) = match (b_res, s_res) { (Ok(b), Ok(s)) => (b, s), (Err(e), _) | (_, Err(e)) => return response(false, Some(e)) };
 
-        log("INFO", "Сохранение и распаковка файлов...".into()).await;
+        log("INFO", "Сохранение и распаковка файлов...".into());
         let unpack = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
             if let Ok(e) = std::fs::read_dir(STATIC_DIR) {
                 for p in e.flatten().map(|x| x.path()) {
@@ -211,19 +211,19 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
         if let Ok(Err(e)) | Err(e) = unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) { return response(false, Some(format!("Ошибка распаковки: {}", e))); }
 
-        log("INFO", "Установка обновления...".into()).await;
+        log("INFO", "Установка обновления...".into());
         let (target, source) = ("/opt/sbin/xkeen-ui", tmp_dir.join("xkeen-ui"));
         if let Err(e) = fs::rename(&source, target).await { return response(false, Some(format!("Ошибка установки: {}", e))); }
 
         _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
         _ = tokio::task::spawn_blocking(rustix::fs::sync).await;
 
-        log("INFO", format!("Обновление XKeen UI до {} завершено", ver)).await;
+        log("INFO", format!("Обновление XKeen UI до {} завершено", ver));
         if Path::new(S99XKEEN_UI).exists() {
-            log("INFO", "Перезапуск...".into()).await;
+            log("INFO", "Перезапуск...".into());
             _ = Command::new(S99XKEEN_UI).arg("restart").stdout(Stdio::null()).stderr(Stdio::null()).spawn();
         } else {
-          log("WARN", "Init скрипт панели не найден, требуется ручной перезапуск".into()).await;
+          log("WARN", "Init скрипт панели не найден, требуется ручной перезапуск".into());
         }
         return response(true, None);
     }
@@ -266,20 +266,20 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     match req.core.as_str() {
         "xray" if !Path::new("/opt/bin/jq").exists() => {
-            log("WARN", "Пакет jq не найден".into()).await;
+            log("WARN", "Пакет jq не найден".into());
             if let Err(e) = install_jq().await { return response(false, Some(e)); }
         }
         "mihomo" if !Path::new("/opt/sbin/yq").exists() => {
-            log("WARN", "Пакет yq не найден".into()).await;
+            log("WARN", "Пакет yq не найден".into());
             if let Err(e) = install_yq(&state.http_client, &proxies, tmp_dir).await { return response(false, Some(e)); }
         }
         _ => {}
     }
 
-    log("INFO", format!("Загрузка: {}", url)).await;
+    log("INFO", format!("Загрузка: {}", url));
     let dl_res = match download(&state.http_client, &url, &proxies, &tmp_dir.join("download.tmp")).await { Ok(r) => r, Err(e) => return response(false, Some(e)) };
 
-    log("INFO", "Распаковка файла...".into()).await;
+    log("INFO", "Распаковка файла...".into());
     let (core_name, is_zip) = (req.core.clone(), asset.ends_with(".zip"));
 
     fn unpack<R: Read + Seek>(rdr: R, out_path: &Path, core: &str, is_zip: bool) -> std::io::Result<()> {
@@ -308,25 +308,25 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     if req.backup_core && Path::new(&target).exists() {
         let bk = format!("/opt/sbin/core-backup/{}-{}", req.core, (chrono::Utc::now() + chrono::Duration::hours(state.settings.read().unwrap().log.timezone as i64)).format("%Y%m%d-%H%M%S"));
         _ = fs::create_dir_all("/opt/sbin/core-backup").await;
-        log("INFO", format!("Создание бэкапа: {}", bk)).await;
+        log("INFO", format!("Создание бэкапа: {}", bk));
         _ = fs::copy(&target, &bk).await;
     }
 
-    log("INFO", "Установка обновления...".into()).await;
+    log("INFO", "Установка обновления...".into());
     let (run, source) = (crate::controller::get_pid(&req.core).is_some(), tmp_dir.join(&req.core));
     if fs::rename(&source, &target).await.is_ok() {
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
-        if run { log("INFO", format!("Перезапуск {}...", core_cap)).await; crate::controller::soft_restart(&req.core).await; }
+        if run { log("INFO", format!("Перезапуск {}...", core_cap)); crate::controller::soft_restart(&req.core).await; }
     } else {
-        log("WARN", "Атомарная замена не удалась, фолбек на копирование...".into()).await;
+        log("WARN", "Атомарная замена не удалась, фолбек на копирование...".into());
         let init = state.init_file.read().unwrap().clone();
         if run { _ = Command::new(&init).arg("stop").status().await; }
         if let Err(e) = fs::copy(&source, &target).await { return response(false, Some(format!("Ошибка установки: {}", e))); }
         _ = fs::remove_file(&source).await; _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
-        if run { log("INFO", "Запуск XKeen...".into()).await; _ = Command::new(&init).arg("start").status().await; }
+        if run { log("INFO", "Запуск XKeen...".into()); _ = Command::new(&init).arg("start").status(); }
     }
 
-    log("INFO", format!("Обновление {} до {} завершено", core_cap, ver)).await;
+    log("INFO", format!("Обновление {} до {} завершено", core_cap, ver));
     { let mut c = state.update_checker.core_outdated.write().unwrap(); *c = false; }
     { let mut c = state.update_checker.last_core_check.write().unwrap(); *c = None; }
     *state.update_checker.last_core_toast.write().unwrap() = None;

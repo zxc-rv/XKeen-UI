@@ -128,7 +128,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             *state.core.write().unwrap() = get_core_info(&req.core);
 
             if let Err(e) = check_core_config(&req.core).await {
-                log("ERROR", e).await;
+                log("ERROR", e);
                 return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}", req.core)), data: None });
             }
 
@@ -151,7 +151,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             let cur_name = state.core.read().unwrap().name.clone();
             if a == "start" || a == "hardRestart" {
                 if let Err(e) = check_core_config(&cur_name).await {
-                    log("ERROR", e).await;
+                    log("ERROR", e);
                     return Json(ApiResponse { success: false, error: Some(format!("Не удалось запустить {}", cur_name)), data: None });
                 }
             }

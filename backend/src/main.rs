@@ -4,16 +4,17 @@ use axum::{Router, routing::{get, get_service}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
+use crate::logger::{log, ts};
 use tokio::sync::broadcast;
 
 #[tokio::main]
 async fn main() {
-    let (mut port, mut _debug) = ("1000".to_string(), false);
+    let (mut port, mut debug) = ("1000".to_string(), false);
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-p" => if let Some(p) = args.next() { port = p },
-            "-d" => _debug = true,
+            "-d" => debug = true,
             "-v" | "-V" => { println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, get_arch()); exit(0); }
             _ => {}
         }
@@ -37,7 +38,7 @@ async fn main() {
         geo_cache,
         log_tx: log_tx_arc,
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),
-        _debug,
+        debug,
     };
     version::start_update_checker(state.clone());
 
@@ -54,13 +55,12 @@ async fn main() {
         .route("/api/geo/site", get(geo::get_geosite))
         .route("/api/geo/ip", get(geo::get_geoip))
         .route("/ws", get(websocket::ws_handler))
-        .route("/", get_service(ServeFile::new(format!("{}/index.html", STATIC_DIR))).layer(no_cache.clone()))
-        .route("/local_mode.js", get_service(ServeFile::new(format!("{}/local_mode.js", STATIC_DIR))).layer(no_cache))
+        .route("/", get_service(ServeFile::new(format!("{}/index.html", STATIC_DIR))).layer(no_cache))
         .fallback_service(get_service(ServeDir::new(STATIC_DIR)).layer(cache))
         .layer(CorsLayer::permissive()).with_state(state);
 
     let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
-    println!("Listening on http://{}", addr);
+    println!("{} [INFO] Listening on http://{}", ts(), addr);
     axum::serve(tokio::net::TcpListener::bind(&addr).await.unwrap(), app).await.unwrap();
 }
 
@@ -77,6 +77,21 @@ fn detect_core(init_file: &str) -> CoreInfo {
 }
 
 fn load_settings() -> AppSettings {
-    let mut s: AppSettings = std::fs::read_to_string(APP_CONFIG).ok().and_then(|c| serde_json::from_str(&c).ok()).unwrap_or_default();
-    s.normalize_proxies(); s
+    match std::fs::read_to_string(APP_CONFIG) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            log("WARN", format!("Файл {} не найден, используются значения по умолчанию", APP_CONFIG));
+            AppSettings::default()
+        }
+        Err(e) => {
+            log("ERROR", format!("Ошибка чтения {}: {}", APP_CONFIG, e));
+            AppSettings::default()
+        }
+        Ok(content) => match serde_json::from_str::<AppSettings>(&content) {
+            Err(e) => {
+                log("ERROR", format!("Ошибка чтения {}: {}", APP_CONFIG, e));
+                AppSettings::default()
+            }
+            Ok(mut s) => { s.normalize_proxies(); s }
+        }
+    }
 }

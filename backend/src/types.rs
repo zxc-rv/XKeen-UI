@@ -27,7 +27,7 @@ pub struct AppState {
     pub geo_cache: Arc<RwLock<GeoCache>>,
     pub log_tx: Arc<broadcast::Sender<String>>,
     pub log_watcher: Arc<Mutex<Option<AbortHandle>>>,
-    pub _debug: bool,
+    pub debug: bool,
 }
 
 #[derive(Clone, Default)]
