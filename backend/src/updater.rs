@@ -185,7 +185,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let unpack = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
             if let Ok(e) = std::fs::read_dir(STATIC_DIR) {
                 for p in e.flatten().map(|x| x.path()) {
-                    if !["monaco-editor", "local_mode.js", "config.json"].contains(&p.file_name().and_then(|n| n.to_str()).unwrap_or("")) {
+                    if p.file_name().and_then(|n| n.to_str()).unwrap_or("") != "config.json" {
                         _ = if p.is_dir() { std::fs::remove_dir_all(p) } else { std::fs::remove_file(p) };
                     }
                 }
