@@ -229,7 +229,7 @@ export function LogPanel() {
 
         <motion.div
           layout
-          layoutScroll
+          // layoutScroll
           transition={TRANSITION}
           onLayoutAnimationStart={() => setIsAnimating(true)}
           onLayoutAnimationComplete={() => {
