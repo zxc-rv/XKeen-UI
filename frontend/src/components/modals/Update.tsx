@@ -173,6 +173,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
 
           <ScrollArea
             className="shrink-0"
+            hideScrollbar
             style={{
               maxHeight: "min(calc(70px * 7 + 8px), calc(90dvh - 160px))",
             }}
