@@ -189,7 +189,6 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
           if (activeConfig) {
             const content = monacoEditor.getValue();
             await apiCall<any>("PUT", "configs", {
-              action: "save",
               file: activeConfig.file,
               content,
             });

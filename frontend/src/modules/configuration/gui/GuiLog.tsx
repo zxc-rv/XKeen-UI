@@ -121,7 +121,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
             await apiCall<{ success: boolean; error?: string }>(
               "PUT",
               "configs",
-              { action: "save", file: activeConfig.file, content },
+              { file: activeConfig.file, content },
             );
             dispatch({
               type: "SAVE_CONFIG",

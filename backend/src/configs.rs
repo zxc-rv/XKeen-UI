@@ -5,7 +5,7 @@ use crate::types::*;
 use crate::logger::log;
 
 #[derive(Serialize)] struct ConfigItem { file: String, content: String }
-#[derive(Deserialize)] pub struct ConfigReq { action: String, file: String, content: String }
+#[derive(Deserialize)] pub struct ConfigReq { file: String, content: String }
 
 async fn collect_configs(paths: &[String], is_mihomo: bool) -> Vec<ConfigItem> {
     let mut results = Vec::new();
@@ -118,10 +118,8 @@ pub async fn put_configs(State(state): State<AppState>, Json(req): Json<ConfigRe
         return Json(ApiResponse::<()> { success: false, error: Some("Path not allowed".into()), data: None });
     }
 
-    if req.action == "save" {
-        if fs::write(&req.file, content).is_err() {
-            return Json(ApiResponse::<()> { success: false, error: Some("Write error".into()), data: None });
-        }
+    if fs::write(&req.file, content).is_err() {
+        return Json(ApiResponse::<()> { success: false, error: Some("Write error".into()), data: None });
     }
 
     Json(ApiResponse::<()> { success: true, error: None, data: None })

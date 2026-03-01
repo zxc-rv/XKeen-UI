@@ -182,7 +182,6 @@ export function ConfigPanel({
       "PUT",
       "configs",
       {
-        action: "save",
         file: cfg.file,
         content,
       },
@@ -219,7 +218,6 @@ export function ConfigPanel({
       "PUT",
       "configs",
       {
-        action: "save",
         file: cfg.file,
         content,
       },
