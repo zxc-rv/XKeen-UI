@@ -285,7 +285,7 @@ export function StatusBar({
                         shineColor={["#00D3F2", "#2B7FFF", "#155DFC"]}
                       />
                     )}
-                    <IconBox className="size-5" />v{version}
+                    <IconBox className="size-5" />{version}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
