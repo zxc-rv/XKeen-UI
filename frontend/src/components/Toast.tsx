@@ -3,7 +3,7 @@ import { IconX, IconAlertCircle, IconCircleCheck } from "@tabler/icons-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useAppContext } from "../lib/store";
 import type { ToastMessage } from "../lib/types";
-import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
+import { LazyMotion, domMax, m, AnimatePresence } from "framer-motion";
 
 function AlertItem({ alert }: { alert: ToastMessage }) {
   const { dispatch } = useAppContext();
@@ -20,8 +20,12 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
   return (
     <m.div
       layout
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 1, y: 16 }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        transition: { duration: 0.35, ease: [0.215, 0.61, 0.355, 1] },
+      }}
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
       className="w-full max-w-100px"
     >
@@ -48,7 +52,7 @@ export function Toast() {
   const { state } = useAppContext();
 
   return (
-    <LazyMotion features={domAnimation}>
+    <LazyMotion features={domMax}>
       <div className="fixed bottom-6 left-0 right-0 z-100 flex flex-col items-center gap-2 px-4 md:left-auto md:right-6 md:items-end md:px-0 md:w-90">
         <AnimatePresence>
           {state.toasts.map((alert) => (

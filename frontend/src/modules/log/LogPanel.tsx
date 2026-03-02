@@ -8,7 +8,6 @@ import {
   IconX,
   IconFile,
 } from "@tabler/icons-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Empty, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -32,11 +31,6 @@ import type { WsMessage } from "./WebSocket";
 
 const LOG_FILES = ["error.log", "access.log"];
 const MAX_LINES = 1000;
-const TRANSITION = {
-  type: "tween",
-  duration: 0.4,
-  ease: [0.16, 1, 0.3, 1],
-} as const;
 
 export function LogPanel() {
   const { state } = useAppContext();
@@ -48,9 +42,11 @@ export function LogPanel() {
   const [isEmpty, setIsEmpty] = useState(true);
 
   const logRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const isFullscreenRef = useRef(false);
   const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollRef = useRef(true);
-
   const linesRef = useRef<string[]>([]);
   const scrollTickingRef = useRef(false);
 
@@ -149,7 +145,6 @@ export function LogPanel() {
   function handleScroll() {
     if (isAnimating || scrollTickingRef.current) return;
     scrollTickingRef.current = true;
-
     requestAnimationFrame(() => {
       checkScrollPosition();
       scrollTickingRef.current = false;
@@ -171,13 +166,68 @@ export function LogPanel() {
     ws.applyFilter(level);
   }
 
-  function toggleFullscreen() {
-    document.body.style.overflow = isFullscreen ? "" : "hidden";
-    setIsFullscreen((v) => !v);
-  }
+  const toggleFullscreen = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) {
+      setIsFullscreen((v) => !v);
+      return;
+    }
+
+    const first = el.getBoundingClientRect();
+    const nextFullscreen = !isFullscreenRef.current;
+
+    document.body.style.overflow = nextFullscreen ? "hidden" : "";
+    isFullscreenRef.current = nextFullscreen;
+    setIsFullscreen(nextFullscreen);
+    setIsAnimating(true);
+
+    const backdrop = backdropRef.current;
+    if (backdrop) {
+      backdrop.style.transition = "none";
+      backdrop.style.opacity = nextFullscreen ? "0" : "1";
+      requestAnimationFrame(() => {
+        backdrop.style.transition = "opacity 0.2s";
+        backdrop.style.opacity = nextFullscreen ? "1" : "0";
+      });
+    }
+
+    requestAnimationFrame(() => {
+      const last = el.getBoundingClientRect();
+
+      const dx = first.left - last.left;
+      const dy = first.top - last.top;
+      const scaleX = first.width / last.width;
+      const scaleY = first.height / last.height;
+
+      el.style.transition = "none";
+      el.style.transform = `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`;
+      el.style.transformOrigin = "top left";
+
+      requestAnimationFrame(() => {
+        el.style.transition = "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)";
+        el.style.transform = "";
+
+        const onTransitionEnd = (e: TransitionEvent) => {
+          if (e.target !== el || e.propertyName !== "transform") return;
+          el.removeEventListener("transitionend", onTransitionEnd);
+          requestAnimationFrame(() => {
+            el.style.transition = "";
+            el.style.transformOrigin = "";
+            setIsAnimating(false);
+            checkScrollPosition();
+          });
+        };
+        el.addEventListener("transitionend", onTransitionEnd);
+      });
+    });
+  }, []);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (e.code === "Escape" && isFullscreenRef.current) {
+        toggleFullscreen();
+        return;
+      }
       if (!(e.ctrlKey || e.metaKey) || e.code !== "KeyA") return;
       const el = logRef.current;
       if (
@@ -190,7 +240,7 @@ export function LogPanel() {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [toggleFullscreen]);
 
   useEffect(() => {
     const el = logRef.current;
@@ -214,28 +264,18 @@ export function LogPanel() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="md:shrink-0 pb-3 relative h-70 w-full">
-        <AnimatePresence>
-          {isFullscreen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 bg-black/50"
-              onClick={toggleFullscreen}
-            />
-          )}
-        </AnimatePresence>
-
-        <motion.div
-          layout
-          // layoutScroll
-          transition={TRANSITION}
-          onLayoutAnimationStart={() => setIsAnimating(true)}
-          onLayoutAnimationComplete={() => {
-            setIsAnimating(false);
-            checkScrollPosition();
+        <div
+          ref={backdropRef}
+          className="fixed inset-0 z-40 bg-black/50 opacity-0"
+          style={{
+            display: isFullscreen || isAnimating ? "block" : "none",
+            pointerEvents: isAnimating ? "none" : "auto",
           }}
+          onClick={toggleFullscreen}
+        />
+
+        <div
+          ref={containerRef}
           className={cn(
             "flex flex-col rounded-xl border border-border bg-card overflow-hidden",
             isFullscreen
@@ -359,7 +399,7 @@ export function LogPanel() {
               </Button>
             )}
           </div>
-        </motion.div>
+        </div>
       </div>
     </TooltipProvider>
   );
