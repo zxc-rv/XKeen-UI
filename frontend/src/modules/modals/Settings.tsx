@@ -125,7 +125,7 @@ export function SettingsModal() {
         >
           <TabsList
             variant="line"
-            className="shrink-0 justify-start rounded-none border-b border-border px-0"
+            className="shrink-0 justify-start rounded-none border-b border-border px-0 gap-3"
           >
             <TabsTrigger value="gui">GUI</TabsTrigger>
             <TabsTrigger value="updates">Обновления</TabsTrigger>

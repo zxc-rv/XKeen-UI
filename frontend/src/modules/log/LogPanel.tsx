@@ -319,7 +319,7 @@ export function LogPanel() {
                 <SelectTrigger className="h-9 w-30 sm:w-32 shrink-0 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent position="popper">
+                <SelectContent>
                   {LOG_FILES.map((f) => (
                     <SelectItem key={f} value={f} className="text-sm">
                       {f}
@@ -371,7 +371,7 @@ export function LogPanel() {
                   <EmptyMedia variant="icon" className="size-8.5">
                     <IconFile className="text-muted-foreground size-5" />
                   </EmptyMedia>
-                  <EmptyTitle className="font-mono text-[13px] text-ring">
+                  <EmptyTitle className="font-mono text-[13px] text-ring tracking-wide">
                     Журнал пуст
                   </EmptyTitle>
                 </Empty>

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
-  IconExternalLink,
   IconDeviceFloppy,
   IconLink,
   IconFileText,
@@ -12,7 +11,6 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import * as jsyaml from "js-yaml";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -29,13 +27,24 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn, stripJsonComments } from "../../lib/utils";
 import { useAppContext } from "../../lib/store";
 import { apiCall, getFileLanguage } from "../../lib/api";
 import { MonacoEditor, type MonacoEditorRef } from "./MonacoEditor";
-import { RoutingPanel } from "./gui/GuiRouting";
-import { GuiLog } from "./gui/GuiLog";
+import { RoutingPanel } from "./xray/GuiRouting";
+import { GuiLog } from "./xray/GuiLog";
+import { ConnectionsPanel } from "./mihomo/Connections";
+import { SelectorsPanel } from "./mihomo/Selectors";
 import type { Config } from "../../lib/types";
+
+type ClashMode = "rule" | "global" | "direct";
 
 interface Props {
   onOpenImport: () => void;
@@ -66,6 +75,18 @@ export function ConfigPanel({
     error?: string;
   } | null>(null);
   const [monacoReady, setMonacoReady] = useState(false);
+  const [activePanel, setActivePanel] = useState<
+    "config" | "selectors" | "connections"
+  >(
+    () =>
+      (localStorage.getItem("lastSelectedPanel") as
+        | "config"
+        | "selectors"
+        | "connections") ?? "config",
+  );
+
+  // Режим Clash (только для вкладки Селекторы)
+  const [mode, setMode] = useState<ClashMode>("rule");
 
   const configsRef = useRef(configs);
   const activeIndexRef = useRef(activeConfigIndex);
@@ -78,6 +99,38 @@ export function ConfigPanel({
   useEffect(() => {
     activeIndexRef.current = activeConfigIndex;
   }, [activeConfigIndex]);
+
+  // Загружаем текущий режим при старте mihomo
+  useEffect(() => {
+    if (currentCore !== "mihomo" || !dashboardPort) return;
+
+    const baseUrl = `http://${location.hostname}:${dashboardPort}`;
+
+    async function fetchInitialMode() {
+      try {
+        const res = await fetch(`${baseUrl}/configs`);
+        const data = await res.json();
+        if (data.mode) setMode(data.mode as ClashMode);
+      } catch {}
+    }
+
+    fetchInitialMode();
+  }, [currentCore, dashboardPort]);
+
+  const changeMode = useCallback(
+    async (newMode: ClashMode) => {
+      setMode(newMode);
+      if (!dashboardPort) return;
+
+      const baseUrl = `http://${location.hostname}:${dashboardPort}`;
+      await fetch(`${baseUrl}/configs`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: newMode }),
+      });
+    },
+    [dashboardPort],
+  );
 
   const activeConfig = configs[activeConfigIndex];
   const isRunning = serviceStatus === "running";
@@ -291,85 +344,128 @@ export function ConfigPanel({
       <div className="flex flex-col rounded-xl border border-border bg-card overflow-hidden md:flex-1 md:min-h-0">
         <div className="px-3 sm:px-4 pt-3 sm:pt-4 flex flex-col md:flex-row md:items-start gap-2 shrink-0">
           <div className="flex items-center gap-2 shrink-0">
-            <h2 className="text-lg font-semibold shrink-0 select-none">
-              Конфигурация
-            </h2>
-            {dashboardPort && currentCore === "mihomo" && (
-              <a
-                href={`http://${location.hostname}:${dashboardPort}/ui`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Badge
-                  variant="default"
-                  className="gap-1 cursor-pointer text-xs hover:bg-primary/80 transition-colors"
-                >
-                  Dashboard <IconExternalLink size={11} />
-                </Badge>
-              </a>
-            )}
-          </div>
-          <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:ml-auto">
-            {isConfigsLoading ? (
-              <div className="flex gap-2">
-                {[524, 311].map((w) => (
-                  <Skeleton
-                    key={w}
-                    className="h-9 rounded-lg p-0.75 gap-0.5"
-                    style={{ width: w }}
-                  />
-                ))}
-              </div>
-            ) : (
+            {currentCore === "mihomo" ? (
               <Tabs
-                value={activeConfig?.file || ""}
+                value={activePanel}
                 onValueChange={(value) => {
-                  const index = configs.findIndex((c) => c.file === value);
-                  if (index >= 0) switchTab(index);
+                  const panel = value as "config" | "selectors" | "connections";
+                  setActivePanel(panel);
+                  localStorage.setItem("lastSelectedPanel", panel);
                 }}
                 className="flex-row!"
               >
-                {coreConfigs.length > 0 && (
-                  <TabsList className="shrink-0">
-                    {coreConfigs.map((config) => (
-                      <TabsTrigger
-                        key={config.file}
-                        value={config.file}
-                        className="data-[state=active]:bg-input-background!"
-                      >
-                        {config.file
-                          .split("/")
-                          .pop()
-                          ?.replace(/\.[^.]+$/, "")}
-                        {config.isDirty && (
-                          <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                        )}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                )}
-                {xkeenConfigs.length > 0 && (
-                  <TabsList className="shrink-0">
-                    {xkeenConfigs.map((config) => (
-                      <TabsTrigger
-                        key={config.file}
-                        value={config.file}
-                        className="data-[state=active]:bg-input-background!"
-                      >
-                        {config.file
-                          .split("/")
-                          .pop()
-                          ?.replace(/\.[^.]+$/, "")}
-                        {config.isDirty && (
-                          <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                        )}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                )}
+                <TabsList variant="line" className="p-0 gap-4">
+                  <TabsTrigger
+                    value="config"
+                    className="text-lg font-semibold p-0"
+                  >
+                    Конфигурация
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="selectors"
+                    className="text-lg font-semibold p-0"
+                  >
+                    Селекторы
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="connections"
+                    className="text-lg font-semibold p-0"
+                  >
+                    Соединения
+                  </TabsTrigger>
+                </TabsList>
               </Tabs>
+            ) : (
+              <h2 className="text-lg font-semibold shrink-0 select-none">
+                Конфигурация
+              </h2>
             )}
           </div>
+
+          {currentCore === "mihomo" && activePanel === "selectors" && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                Режим маршрутизации
+              </span>
+              <Select
+                value={mode}
+                onValueChange={(value) => changeMode(value as ClashMode)}
+              >
+                <SelectTrigger className="h-8 w-35">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="direct">DIRECT</SelectItem>
+                  <SelectItem value="rule">RULE</SelectItem>
+                  <SelectItem value="global">GLOBAL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {activePanel === "config" && (
+            <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:ml-auto">
+              {isConfigsLoading ? (
+                <div className="flex gap-2">
+                  {[524, 311].map((w) => (
+                    <Skeleton
+                      key={w}
+                      className="h-9 rounded-lg p-0.75 gap-0.5"
+                      style={{ width: w }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <Tabs
+                  value={activeConfig?.file || ""}
+                  onValueChange={(value) => {
+                    const index = configs.findIndex((c) => c.file === value);
+                    if (index >= 0) switchTab(index);
+                  }}
+                  className="flex-row!"
+                >
+                  {coreConfigs.length > 0 && (
+                    <TabsList className="shrink-0">
+                      {coreConfigs.map((config) => (
+                        <TabsTrigger
+                          key={config.file}
+                          value={config.file}
+                          className="data-[state=active]:bg-input-background!"
+                        >
+                          {config.file
+                            .split("/")
+                            .pop()
+                            ?.replace(/\.[^.]+$/, "")}
+                          {config.isDirty && (
+                            <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          )}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  )}
+                  {xkeenConfigs.length > 0 && (
+                    <TabsList className="shrink-0">
+                      {xkeenConfigs.map((config) => (
+                        <TabsTrigger
+                          key={config.file}
+                          value={config.file}
+                          className="data-[state=active]:bg-input-background!"
+                        >
+                          {config.file
+                            .split("/")
+                            .pop()
+                            ?.replace(/\.[^.]+$/, "")}
+                          {config.isDirty && (
+                            <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          )}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  )}
+                </Tabs>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="relative min-h-175! md:flex-1 md:min-h-0">
@@ -388,133 +484,143 @@ export function ConfigPanel({
             />
           )}
 
-          <div
-            className={cn(
-              "absolute inset-0",
-              isAnyGui && "invisible opacity-0 pointer-events-none",
-            )}
-          >
-            <MonacoEditor
-              ref={editorRef}
-              onContentChange={handleContentChange}
-              onValidationChange={handleValidationChange}
-              onReady={handleMonacoReady}
-            />
+          {activePanel === "selectors" &&
+          dashboardPort &&
+          currentCore === "mihomo" ? (
+            <SelectorsPanel dashboardPort={dashboardPort} mode={mode} />
+          ) : activePanel === "connections" && dashboardPort ? (
+            <ConnectionsPanel dashboardPort={dashboardPort} />
+          ) : (
+            <div
+              className={cn(
+                "absolute inset-0",
+                isAnyGui && "invisible opacity-0 pointer-events-none",
+              )}
+            >
+              <MonacoEditor
+                ref={editorRef}
+                onContentChange={handleContentChange}
+                onValidationChange={handleValidationChange}
+                onReady={handleMonacoReady}
+              />
 
-            {(!monacoReady || isConfigsLoading) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-card text-muted-foreground text-sm">
-                {isConfigsLoading
-                  ? "Загрузка конфигураций..."
-                  : "Инициализация редактора..."}
-              </div>
-            )}
-          </div>
+              {(!monacoReady || isConfigsLoading) && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-card text-muted-foreground text-sm">
+                  {isConfigsLoading
+                    ? "Загрузка конфигураций..."
+                    : "Инициализация редактора..."}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
-          <div className="text-xs min-w-0">
-            {isConfigsLoading ? (
-              <Skeleton className="h-4 w-28" />
-            ) : validationState && activeConfig && isJsonOrYaml ? (
-              <span
-                className={cn(
-                  "flex items-center gap-1.5 tracking-wide text-[13px]",
-                  validationState.isValid
-                    ? "text-green-400/90"
-                    : "text-red-500",
-                )}
-              >
-                {validationState.isValid ? (
-                  <IconCheck size={15} />
-                ) : (
-                  <IconX size={15} />
-                )}
-                {validationState.isValid
-                  ? `${fileLanguage?.toUpperCase()} валиден`
-                  : `Ошибка: ${validationState.error || "Файл невалиден"}`}
-              </span>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isConfigsLoading ? (
-              <div className="flex gap-1.5">
-                {[126, 121, 136].map((w) => (
-                  <Skeleton
-                    key={w}
-                    className="h-9 rounded-md"
-                    style={{ width: w }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="default"
-                      disabled={!canApply}
-                      className="gap-1.5 h-9 px-3 bg-green-600 hover:bg-green-700 text-white"
-                      onClick={() => saveAndApply()}
-                    >
-                      <IconRefresh size={14} /> Применить
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Сохранить и перезапустить</TooltipContent>
-                </Tooltip>
-                <Button
-                  size="default"
-                  className="h-9 gap-1.5 px-3"
-                  disabled={!canSave}
-                  onClick={() => saveCurrentConfig()}
+        {activePanel === "config" && (
+          <div className="px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
+            <div className="text-xs min-w-0">
+              {isConfigsLoading ? (
+                <Skeleton className="h-4 w-28" />
+              ) : validationState && activeConfig && isJsonOrYaml ? (
+                <span
+                  className={cn(
+                    "flex items-center gap-1.5 tracking-wide text-[13px]",
+                    validationState.isValid
+                      ? "text-green-400/90"
+                      : "text-red-500",
+                  )}
                 >
-                  <IconDeviceFloppy size={14} /> Сохранить
-                </Button>
-                <div className="flex h-9 rounded-md overflow-hidden border border-border">
+                  {validationState.isValid ? (
+                    <IconCheck size={14} />
+                  ) : (
+                    <IconX size={14} />
+                  )}
+                  {validationState.isValid
+                    ? `${fileLanguage?.toUpperCase()} валиден`
+                    : `Ошибка: ${validationState.error || "Файл невалиден"}`}
+                </span>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {isConfigsLoading ? (
+                <div className="flex gap-1.5">
+                  {[126, 121, 136].map((w) => (
+                    <Skeleton
+                      key={w}
+                      className="h-9 rounded-md"
+                      style={{ width: w }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="outline"
                         size="default"
-                        disabled={!canFormat}
-                        className="h-full rounded-none border-0 gap-1.5 px-3"
-                        onClick={() => editorRef.current?.format()}
+                        disabled={!canApply}
+                        className="gap-1.5 h-9 px-3 bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => saveAndApply()}
                       >
-                        <IconCode size={14} />{" "}
-                        <span className="hidden sm:inline">Формат</span>
+                        <IconRefresh size={14} /> Применить
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Форматировать файл</TooltipContent>
+                    <TooltipContent>Сохранить и перезапустить</TooltipContent>
                   </Tooltip>
-                  <div className="w-px bg-border" />
+                  <Button
+                    size="default"
+                    className="h-9 gap-1.5 px-3"
+                    disabled={!canSave}
+                    onClick={() => saveCurrentConfig()}
+                  >
+                    <IconDeviceFloppy size={14} /> Сохранить
+                  </Button>
+                  <div className="flex h-9 rounded-md overflow-hidden border border-border">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="default"
+                          disabled={!canFormat}
+                          className="h-full rounded-none border-0 gap-1.5 px-3"
+                          onClick={() => editorRef.current?.format()}
+                        >
+                          <IconCode size={14} />{" "}
+                          <span className="hidden sm:inline">Формат</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Форматировать файл</TooltipContent>
+                    </Tooltip>
+                    <div className="w-px bg-border" />
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-full w-8 rounded-none border-0"
-                      >
-                        <IconMenu2 />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-max">
-                      <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={onOpenImport}>
-                        <IconLink /> Добавить Прокси
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onOpenTemplate}>
-                        <IconFileText /> Шаблоны Конфигураций
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onOpenGeoScan}>
-                        <IconSearch /> Скан Геофайлов
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </>
-            )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-full w-8 rounded-none border-0"
+                        >
+                          <IconMenu2 />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-max">
+                        <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={onOpenImport}>
+                          <IconLink /> Добавить Прокси
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onOpenTemplate}>
+                          <IconFileText /> Шаблоны Конфигураций
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onOpenGeoScan}>
+                          <IconSearch /> Скан Геофайлов
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </TooltipProvider>
   );
