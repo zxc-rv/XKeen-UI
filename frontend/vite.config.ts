@@ -1,17 +1,24 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
-import path from "path";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import path from 'path'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react({
+      babel: {
+        plugins: [['babel-plugin-react-compiler']],
+      },
+    }),
+    tailwindcss(),
+  ],
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: { '@': path.resolve(__dirname, './src') },
   },
   server: {
     proxy: {
-      "/api": "http://192.168.1.1:1000",
-      "/ws": { target: "ws://192.168.1.1:1000", ws: true },
+      '/api': 'http://192.168.1.1:1000',
+      '/ws': { target: 'ws://192.168.1.1:1000', ws: true },
     },
   },
   build: {
@@ -19,10 +26,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          "monaco-editor": ["monaco-editor/esm/vs/editor/editor.api"],
-          prettier: ["prettier"],
+          'monaco-editor': ['monaco-editor/esm/vs/editor/editor.api'],
+          prettier: ['prettier'],
         },
       },
     },
   },
-});
+})

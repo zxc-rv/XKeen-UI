@@ -1,21 +1,18 @@
-import { useEffect } from "react";
-import { IconX, IconAlertCircle, IconCircleCheck } from "@tabler/icons-react";
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { useAppContext } from "../lib/store";
-import type { ToastMessage } from "../lib/types";
-import { LazyMotion, domMax, m, AnimatePresence } from "framer-motion";
+import { useEffect } from 'react'
+import { IconX, IconAlertCircle, IconCircleCheck } from '@tabler/icons-react'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { useAppContext } from '../../lib/store'
+import type { ToastMessage } from '../../lib/types'
+import { LazyMotion, domMax, m, AnimatePresence } from 'framer-motion'
 
 function AlertItem({ alert }: { alert: ToastMessage }) {
-  const { dispatch } = useAppContext();
-  const isError = alert.type === "error";
+  const { dispatch } = useAppContext()
+  const isError = alert.type === 'error'
 
   useEffect(() => {
-    const timer = setTimeout(
-      () => dispatch({ type: "REMOVE_TOAST", id: alert.id }),
-      5000,
-    );
-    return () => clearTimeout(timer);
-  }, [alert.id, dispatch]);
+    const timer = setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id: alert.id }), 5000)
+    return () => clearTimeout(timer)
+  }, [alert.id, dispatch])
 
   return (
     <m.div
@@ -29,27 +26,23 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
       className="w-full max-w-100px"
     >
-      <Alert variant={isError ? "destructive" : "default"} className="relative">
-        {isError ? (
-          <IconAlertCircle className="size-4.5" />
-        ) : (
-          <IconCircleCheck className="size-4.5" />
-        )}
+      <Alert variant={isError ? 'destructive' : 'default'} className="relative">
+        {isError ? <IconAlertCircle className="size-4.5" /> : <IconCircleCheck className="size-4.5" />}
         <AlertTitle className="pb-1">{alert.title}</AlertTitle>
         {alert.body && <AlertDescription>{alert.body}</AlertDescription>}
         <button
-          onClick={() => dispatch({ type: "REMOVE_TOAST", id: alert.id })}
+          onClick={() => dispatch({ type: 'REMOVE_TOAST', id: alert.id })}
           className="absolute right-2 top-2 rounded-md p-1 opacity-70 hover:opacity-100"
         >
           <IconX size={18} />
         </button>
       </Alert>
     </m.div>
-  );
+  )
 }
 
 export function Toast() {
-  const { state } = useAppContext();
+  const { state } = useAppContext()
 
   return (
     <LazyMotion features={domMax}>
@@ -61,5 +54,5 @@ export function Toast() {
         </AnimatePresence>
       </div>
     </LazyMotion>
-  );
+  )
 }
