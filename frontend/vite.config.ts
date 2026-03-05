@@ -25,9 +25,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 3000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'monaco-editor': ['monaco-editor/esm/vs/editor/editor.api'],
-          prettier: ['prettier'],
+        manualChunks(id) {
+          if (id.includes('monaco-editor')) return 'monaco-editor'
+          if (id.includes('prettier')) return 'prettier'
         },
       },
     },

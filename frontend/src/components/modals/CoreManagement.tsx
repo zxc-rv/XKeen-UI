@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useAppContext } from "../../lib/store";
+import { useAppContext, useModalContext } from "../../lib/store";
 
 interface Props {
   onSwitchCore: (core: string) => void;
@@ -21,7 +21,8 @@ const CORES = [
 ];
 
 export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
-  const { state, dispatch } = useAppContext();
+  const { state } = useAppContext();
+  const { modals, dispatch } = useModalContext();
   const { currentCore, coreVersions, availableCores } = state;
 
   const close = () =>
@@ -29,7 +30,7 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
 
   return (
     <Dialog
-      open={state.showCoreManageModal}
+      open={modals.showCoreManageModal}
       onOpenChange={(open) => !open && close()}
     >
       <DialogContent>

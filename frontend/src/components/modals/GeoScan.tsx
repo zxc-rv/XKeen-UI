@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "../../lib/utils";
-import { useAppContext } from "../../lib/store";
+import { useAppContext, useModalContext } from "../../lib/store";
 import { Spinner } from "@/components/ui/spinner";
 
 type GeoType = "domain" | "ip";
@@ -27,7 +27,8 @@ type FileStatus = {
 };
 
 export function GeoScanModal() {
-  const { state, dispatch, showToast } = useAppContext();
+  const { showToast } = useAppContext();
+  const { modals, dispatch } = useModalContext();
   const [geoType, setGeoType] = useState<GeoType>("domain");
   const [input, setInput] = useState("");
   const [geoFiles, setGeoFiles] = useState<{ domain: string[]; ip: string[] }>({
@@ -73,11 +74,11 @@ export function GeoScanModal() {
   }
 
   useEffect(() => {
-    if (state.showGeoScanModal) {
+    if (modals.showGeoScanModal) {
       setGeoType("domain");
       loadGeoFiles();
     }
-  }, [state.showGeoScanModal]);
+  }, [modals.showGeoScanModal]);
 
   function switchType(type: GeoType) {
     setGeoType(type);
@@ -142,7 +143,7 @@ export function GeoScanModal() {
 
   return (
     <Dialog
-      open={state.showGeoScanModal}
+      open={modals.showGeoScanModal}
       onOpenChange={(open) => !open && close()}
     >
       <DialogContent

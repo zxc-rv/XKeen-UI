@@ -8,10 +8,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useAppContext } from "../../lib/store";
+import { useModalContext } from "../../lib/store";
 
 export function CommentsWarningModal() {
-  const { state, dispatch } = useAppContext();
+  const { modals, dispatch } = useModalContext();
 
   function close() {
     dispatch({
@@ -23,13 +23,13 @@ export function CommentsWarningModal() {
   }
 
   function confirm() {
-    state.pendingSaveAction?.();
+    modals.pendingSaveAction?.();
     close();
   }
 
   return (
     <Dialog
-      open={state.showCommentsWarningModal}
+      open={modals.showCommentsWarningModal}
       onOpenChange={(open) => !open && close()}
     >
       <DialogContent className="bg-[#0F1629] max-w-sm">

@@ -1,223 +1,156 @@
-import { useState } from "react";
-import {
-  IconLink,
-  IconCopy,
-  IconCheck,
-  IconX,
-  IconPlus,
-} from "@tabler/icons-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { useAppContext } from "../../lib/store";
+import { useState } from 'react'
+import { IconLink, IconCopy, IconCheck, IconX, IconPlus } from '@tabler/icons-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { useAppContext, useModalContext } from '../../lib/store'
 
 function highlightYaml(code: string): string {
   return code
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .split("\n")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .split('\n')
     .map((line) => {
-      if (/^\s*#/.test(line))
-        return `<span style="color:#565f89">${line}</span>`;
+      if (/^\s*#/.test(line)) return `<span style="color:#565f89">${line}</span>`
 
-      const listMatch = line.match(/^(\s*-\s)(.*)$/);
+      const listMatch = line.match(/^(\s*-\s)(.*)$/)
       if (listMatch) {
-        const [, marker, rest] = listMatch;
-        return `<span style="color:#89ddff">${marker}</span>${highlightYamlValue(rest)}`;
+        const [, marker, rest] = listMatch
+        return `<span style="color:#89ddff">${marker}</span>${highlightYamlValue(rest)}`
       }
 
-      const kvMatch = line.match(/^(\s*)([a-zA-Z_][\w.-]*)(\s*:)(.*)?$/);
+      const kvMatch = line.match(/^(\s*)([a-zA-Z_][\w.-]*)(\s*:)(.*)?$/)
       if (kvMatch) {
-        const [, indent, key, colon, rest] = kvMatch;
-        const value = rest ?? "";
-        return `${indent}<span style="color:#7aa2f7">${key}</span>${colon}${highlightYamlValue(value)}`;
+        const [, indent, key, colon, rest] = kvMatch
+        const value = rest ?? ''
+        return `${indent}<span style="color:#7aa2f7">${key}</span>${colon}${highlightYamlValue(value)}`
       }
 
-      return line;
+      return line
     })
-    .join("\n");
+    .join('\n')
 }
 
 function highlightYamlValue(value: string): string {
-  if (!value.trim()) return value;
-  const trimmed = value.trim();
-  const commentIdx = value.search(/\s+#/);
+  if (!value.trim()) return value
+  const trimmed = value.trim()
+  const commentIdx = value.search(/\s+#/)
   if (commentIdx !== -1) {
-    const main = value.slice(0, commentIdx);
-    const comment = value.slice(commentIdx);
-    return (
-      highlightYamlValue(main) + `<span style="color:#565f89">${comment}</span>`
-    );
+    const main = value.slice(0, commentIdx)
+    const comment = value.slice(commentIdx)
+    return highlightYamlValue(main) + `<span style="color:#565f89">${comment}</span>`
   }
 
-  if (/^-?\d+\.?\d*$/.test(trimmed))
-    return value.replace(
-      trimmed,
-      `<span style="color:#ff9e64">${trimmed}</span>`,
-    );
-  if (/^(true|false|null|~)$/.test(trimmed))
-    return value.replace(
-      trimmed,
-      `<span style="color:#bb9af7">${trimmed}</span>`,
-    );
-  if (/^["']/.test(trimmed))
-    return value.replace(
-      trimmed,
-      `<span style="color:#9ece6a">${trimmed}</span>`,
-    );
-  if (
-    trimmed &&
-    !trimmed.startsWith("{") &&
-    !trimmed.startsWith("[") &&
-    !trimmed.startsWith("*") &&
-    !trimmed.startsWith("&")
-  )
-    return value.replace(
-      trimmed,
-      `<span style="color:#9ece6a">${trimmed}</span>`,
-    );
+  if (/^-?\d+\.?\d*$/.test(trimmed)) return value.replace(trimmed, `<span style="color:#ff9e64">${trimmed}</span>`)
+  if (/^(true|false|null|~)$/.test(trimmed)) return value.replace(trimmed, `<span style="color:#bb9af7">${trimmed}</span>`)
+  if (/^["']/.test(trimmed)) return value.replace(trimmed, `<span style="color:#9ece6a">${trimmed}</span>`)
+  if (trimmed && !trimmed.startsWith('{') && !trimmed.startsWith('[') && !trimmed.startsWith('*') && !trimmed.startsWith('&'))
+    return value.replace(trimmed, `<span style="color:#9ece6a">${trimmed}</span>`)
 
-  return value;
+  return value
 }
 
 function highlightJson(code: string): string {
   return code
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .replace(/"([^"]+)"(\s*:)/g, '<span style="color:#7aa2f7">"$1"</span>$2')
     .replace(/:\s*"([^"]*)"/g, ': <span style="color:#9ece6a">"$1"</span>')
     .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:#ff9e64">$1</span>')
-    .replace(
-      /:\s*(true|false|null)/g,
-      ': <span style="color:#bb9af7">$1</span>',
-    );
+    .replace(/:\s*(true|false|null)/g, ': <span style="color:#bb9af7">$1</span>')
 }
 
 function highlightCode(code: string): string {
-  return code.trimStart().startsWith("{")
-    ? highlightJson(code)
-    : highlightYaml(code);
+  return code.trimStart().startsWith('{') ? highlightJson(code) : highlightYaml(code)
 }
 
-const SUPPORTED_PROTOCOLS = [
-  "ss://",
-  "vless://",
-  "vmess://",
-  "hysteria2://",
-  "hy2://",
-  "http://",
-  "https://",
-  "trojan://",
-];
+const SUPPORTED_PROTOCOLS = ['ss://', 'vless://', 'vmess://', 'hysteria2://', 'hy2://', 'http://', 'https://', 'trojan://']
 
 interface Props {
-  onGenerate: (uri: string) => { content: string; type: string } | null;
-  onAddToConfig: (
-    content: string,
-    type: string,
-    position: "start" | "end",
-  ) => void;
+  onGenerate: (uri: string) => { content: string; type: string } | null
+  onAddToConfig: (content: string, type: string, position: 'start' | 'end') => void
 }
 
 export function ImportModal({ onGenerate, onAddToConfig }: Props) {
-  const { state, dispatch, showToast } = useAppContext();
-  const [uri, setUri] = useState("");
+  const { showToast } = useAppContext()
+  const { modals, dispatch } = useModalContext()
+  const [uri, setUri] = useState('')
   const [result, setResult] = useState<{
-    content: string;
-    type: string;
-    protocol: string;
-  } | null>(null);
-  const [copied, setCopied] = useState(false);
+    content: string
+    type: string
+    protocol: string
+  } | null>(null)
+  const [copied, setCopied] = useState(false)
 
-  const isValidUri = SUPPORTED_PROTOCOLS.some((p) =>
-    uri.toLowerCase().startsWith(p),
-  );
+  const isValidUri = SUPPORTED_PROTOCOLS.some((p) => uri.toLowerCase().startsWith(p))
 
   function close() {
-    dispatch({ type: "SHOW_MODAL", modal: "showImportModal", show: false });
+    dispatch({ type: 'SHOW_MODAL', modal: 'showImportModal', show: false })
     setTimeout(() => {
-      setUri("");
-      setResult(null);
-    }, 300);
+      setUri('')
+      setResult(null)
+    }, 300)
   }
 
   function generate() {
-    if (!uri.trim()) return;
+    if (!uri.trim()) return
     try {
-      const generated = onGenerate(uri.trim());
+      const generated = onGenerate(uri.trim())
       if (generated) {
-        const protocol =
-          uri.match(/^([a-zA-Z0-9+\-.]+):\/\//)?.[1]?.toUpperCase() ?? "";
-        setResult({ ...generated, protocol });
+        const protocol = uri.match(/^([a-zA-Z0-9+\-.]+):\/\//)?.[1]?.toUpperCase() ?? ''
+        setResult({ ...generated, protocol })
       } else {
-        setResult(null);
+        setResult(null)
       }
     } catch (e: any) {
-      showToast(e.message, "error");
+      showToast(e.message, 'error')
     }
   }
 
   function copy(e: React.MouseEvent<HTMLButtonElement>) {
-    if (!result) return;
+    if (!result) return
     try {
       if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(result.content);
+        navigator.clipboard.writeText(result.content)
       } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = result.content;
-        textarea.style.cssText =
-          "position:absolute;opacity:0;pointer-events:none;z-index:-1;";
-        const target = e.currentTarget || document.body;
-        target.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        textarea.setSelectionRange(0, 99999);
-        document.execCommand("copy");
-        target.removeChild(textarea);
+        const textarea = document.createElement('textarea')
+        textarea.value = result.content
+        textarea.style.cssText = 'position:absolute;opacity:0;pointer-events:none;z-index:-1;'
+        const target = e.currentTarget || document.body
+        target.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        textarea.setSelectionRange(0, 99999)
+        document.execCommand('copy')
+        target.removeChild(textarea)
       }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     } catch {
-      showToast("Ошибка копирования", "error");
+      showToast('Ошибка копирования', 'error')
     }
   }
 
-  function addToConfig(position: "start" | "end") {
-    if (!result) return;
-    onAddToConfig(result.content, result.type, position);
-    close();
+  function addToConfig(position: 'start' | 'end') {
+    if (!result) return
+    onAddToConfig(result.content, result.type, position)
+    close()
   }
 
   return (
     <TooltipProvider delayDuration={300}>
-      <Dialog
-        open={state.showImportModal}
-        onOpenChange={(open) => !open && close()}
-      >
+      <Dialog open={modals.showImportModal} onOpenChange={(open) => !open && close()}>
         <DialogContent className="flex flex-col max-h-[90dvh] w-auto! min-w-[min(90vw,480px)]! max-w-[min(90vw,900px)]! overflow-hidden">
           {/* Шапка модалки*/}
           <DialogHeader className="shrink-0 pb-1">
             <DialogTitle className="flex items-center gap-2 pb-2">
               <IconLink size={24} className="text-chart-2" /> Добавить прокси
             </DialogTitle>
-            <DialogDescription>
-              Вставьте ссылку в формате protocol://
-            </DialogDescription>
+            <DialogDescription>Вставьте ссылку в формате protocol://</DialogDescription>
           </DialogHeader>
 
           {/* Основная контентная часть */}
@@ -227,25 +160,13 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
               <div className="flex flex-col flex-1 min-h-0 rounded-lg border border-border bg-card overflow-hidden">
                 {/* Хедер результата */}
                 <div className="shrink-0 flex items-center justify-between w-full px-3 py-2 border-b border-border bg-muted/30">
-                  <Badge
-                    variant="outline"
-                    className="font-mono text-xs tracking-wide px-2 py-0.5"
-                  >
+                  <Badge variant="outline" className="font-mono text-xs tracking-wide px-2 py-0.5">
                     {result.protocol}
                   </Badge>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={copy}
-                      >
-                        {copied ? (
-                          <IconCheck size={14} className="text-green-500" />
-                        ) : (
-                          <IconCopy size={14} />
-                        )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copy}>
+                        {copied ? <IconCheck size={14} className="text-green-500" /> : <IconCopy size={14} />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="left">Скопировать</TooltipContent>
@@ -263,18 +184,10 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
 
                 {/* Футер результата с кнопками добавления */}
                 <div className="shrink-0 flex gap-2 w-full p-2 border-t border-border bg-muted/10">
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-8 text-xs gap-1.5"
-                    onClick={() => addToConfig("start")}
-                  >
+                  <Button variant="outline" className="flex-1 h-8 text-xs gap-1.5" onClick={() => addToConfig('start')}>
                     <IconPlus size={13} /> В начало
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-8 text-xs gap-1.5"
-                    onClick={() => addToConfig("end")}
-                  >
+                  <Button variant="outline" className="flex-1 h-8 text-xs gap-1.5" onClick={() => addToConfig('end')}>
                     <IconPlus size={13} /> В конец
                   </Button>
                 </div>
@@ -287,15 +200,13 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                 <Input
                   value={uri}
                   onChange={(e) => setUri(e.target.value)}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && isValidUri && generate()
-                  }
+                  onKeyDown={(e) => e.key === 'Enter' && isValidUri && generate()}
                   placeholder="vless://..."
-                  className={uri ? "pr-7" : ""}
+                  className={uri ? 'pr-7' : ''}
                 />
                 {uri && (
                   <button
-                    onClick={() => setUri("")}
+                    onClick={() => setUri('')}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <IconX size={14} />
@@ -303,11 +214,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                 )}
               </div>
 
-              <Button
-                onClick={generate}
-                disabled={!isValidUri}
-                className="w-full"
-              >
+              <Button onClick={generate} disabled={!isValidUri} className="w-full">
                 Сгенерировать
               </Button>
             </div>
@@ -315,5 +222,5 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
         </DialogContent>
       </Dialog>
     </TooltipProvider>
-  );
+  )
 }

@@ -19,7 +19,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn, stripJsonComments } from '../../lib/utils'
-import { useAppContext } from '../../lib/store'
+import { useAppContext, useConnectionsSync } from '../../lib/store'
 import { apiCall, getFileLanguage } from '../../lib/api'
 import { MonacoEditor, type MonacoEditorRef } from './MonacoEditor'
 import { RoutingPanel } from './xray/GuiRouting'
@@ -30,54 +30,25 @@ import type { Config } from '../../lib/types'
 
 type ClashMode = 'rule' | 'global' | 'direct'
 
-interface Connection {
-  id: string
-  metadata: {
-    host: string
-    destinationIP: string
-    sourceIP: string
-    sourcePort: string
-    destinationPort: string
-    network: string
-    type: string
-    inboundIP: string
-    inboundPort: string
-    inboundName: string
-    dnsMode: string
-    uid: number
-    process: string
-    processPath: string
-    remoteDestination: string
-    sniffHost: string
-  }
-  upload: number
-  download: number
-  start: string
-  chains: string[]
-  providerChains: string[]
-  rule: string
-  rulePayload: string
-}
-
 interface Props {
   onOpenImport: () => void
   onOpenTemplate: () => void
   onOpenGeoScan: () => void
   editorRef: React.RefObject<MonacoEditorRef | null>
+  configActionsRef: React.RefObject<{ switchTab: (index: number) => void; getActiveIndex: () => number }>
 }
 
-export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, editorRef }: Props) {
+export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext()
-  const { configs, activeConfigIndex, isConfigsLoading, currentCore, serviceStatus, settings, dashboardPort } = state
+  const { configs, isConfigsLoading, currentCore, serviceStatus, settings, dashboardPort } = state
 
-  const [connections, setConnections] = useState<Connection[]>([])
-  const [wsConnected, setWsConnected] = useState(false)
+  const [wsEnabled, setWsEnabled] = useState(false)
+  useConnectionsSync(wsEnabled ? dashboardPort : null)
 
+  const [activeConfigIndex, setActiveConfigIndex] = useState(0)
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
   const [monacoReady, setMonacoReady] = useState(false)
-  const [activePanel, setActivePanel] = useState<'config' | 'selectors' | 'connections'>(
-    () => (localStorage.getItem('lastSelectedPanel') as 'config' | 'selectors' | 'connections') ?? 'config'
-  )
+  const [activePanel, setActivePanel] = useState<'config' | 'selectors' | 'connections'>('config')
   const [mode, setMode] = useState<ClashMode>('rule')
   const [updatingRuleProviders, setUpdatingRuleProviders] = useState(false)
   const [updatingProxyProviders, setUpdatingProxyProviders] = useState(false)
@@ -85,6 +56,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
   const viewStatesRef = useRef<Record<string, any>>({})
+  const restoredTabRef = useRef(false)
 
   useEffect(() => {
     configsRef.current = configs
@@ -92,6 +64,18 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   useEffect(() => {
     activeIndexRef.current = activeConfigIndex
   }, [activeConfigIndex])
+
+  useEffect(() => {
+    if (configs.length === 0 || restoredTabRef.current) return
+    restoredTabRef.current = true
+    const savedFile = localStorage.getItem('lastSelectedTab')
+    if (!savedFile) return
+    const index = configs.findIndex((c) => c.file === savedFile)
+    if (index > 0) {
+      setActiveConfigIndex(index)
+      activeIndexRef.current = index
+    }
+  }, [configs])
 
   useEffect(() => {
     if (currentCore !== 'mihomo' || !dashboardPort) return
@@ -103,78 +87,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
       })
       .catch(() => {})
   }, [currentCore, dashboardPort])
-
-  useEffect(() => {
-    if (!dashboardPort) return
-
-    const baseWsUrl = `ws://${location.hostname}:${dashboardPort}/connections?interval=1000`
-    const isIOSSafari =
-      /iP(ad|od|hone)/i.test(navigator.userAgent) && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent)
-
-    let ws: WebSocket | null = null
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-    let isActive = true
-    let retryCount = 0
-
-    function getWsUrl() {
-      return baseWsUrl + (baseWsUrl.includes('?') ? '&' : '?') + 't=' + Date.now()
-    }
-
-    function cleanup() {
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      if (ws) {
-        ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close()
-        ws = null
-      }
-    }
-
-    function connect() {
-      if (!isActive || document.visibilityState !== 'visible') return
-      cleanup()
-
-      ws = new WebSocket(getWsUrl())
-
-      ws.onopen = () => {
-        setWsConnected(true)
-        retryCount = 0
-      }
-
-      ws.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          if (Array.isArray(data.connections)) setConnections(data.connections)
-        } catch {}
-      }
-
-      ws.onerror = () => ws?.close()
-
-      ws.onclose = () => {
-        setWsConnected(false)
-        if (isActive && document.visibilityState === 'visible' && retryCount < 12) {
-          retryCount++
-          const delay = Math.min(800 * Math.pow(1.4, retryCount), 12000)
-          reconnectTimer = setTimeout(connect, delay)
-        }
-      }
-    }
-
-    setTimeout(connect, 0)
-
-    let touchHandler: (() => void) | null = null
-    if (isIOSSafari) {
-      touchHandler = () => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) connect()
-      }
-      document.addEventListener('touchstart', touchHandler, { once: true })
-    }
-
-    return () => {
-      isActive = false
-      cleanup()
-      if (touchHandler) document.removeEventListener('touchstart', touchHandler)
-    }
-  }, [dashboardPort])
 
   const changeMode = useCallback(
     async (newMode: ClashMode) => {
@@ -262,9 +174,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
       viewStatesRef.current[currentCfg.file] = editorRef.current.saveViewState()
     }
     activeIndexRef.current = index
-    dispatch({ type: 'SET_ACTIVE_CONFIG', index })
+    setActiveConfigIndex(index)
     localStorage.setItem('lastSelectedTab', configs[index]?.file ?? '')
   }
+
+  configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
 
   async function saveCurrentConfig(force = false) {
     const cfg = configsRef.current[activeIndexRef.current]
@@ -357,7 +271,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 onValueChange={(value) => {
                   const panel = value as 'config' | 'selectors' | 'connections'
                   setActivePanel(panel)
-                  localStorage.setItem('lastSelectedPanel', panel)
+                  if (panel === 'selectors' || panel === 'connections') setWsEnabled(true)
                 }}
                 className="flex-row!"
               >
@@ -477,11 +391,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           {isMihomo && (
             <>
               <div className={cn(activePanel !== 'selectors' && 'hidden')}>
-                <SelectorsPanel dashboardPort={dashboardPort!} mode={mode} connections={connections} />
+                <SelectorsPanel dashboardPort={dashboardPort!} mode={mode} />
               </div>
-              {activePanel === 'connections' && (
-                <ConnectionsPanel dashboardPort={dashboardPort!} connections={connections} connected={wsConnected} />
-              )}
+              {activePanel === 'connections' && <ConnectionsPanel dashboardPort={dashboardPort!} />}
             </>
           )}
 

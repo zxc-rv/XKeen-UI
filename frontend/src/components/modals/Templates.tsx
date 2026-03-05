@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "../../lib/utils";
-import { useAppContext } from "../../lib/store";
+import { useAppContext, useModalContext } from "../../lib/store";
 import { capitalize } from "../../lib/api";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -27,7 +27,8 @@ export function TemplateModal({
 }: {
   onImport: (url: string) => Promise<void>;
 }) {
-  const { state, dispatch, showToast } = useAppContext();
+  const { state, showToast } = useAppContext();
+  const { modals, dispatch } = useModalContext();
   const { currentCore } = state;
   const [templates, setTemplates] = useState<{ name: string; url: string }[]>(
     [],
@@ -40,8 +41,8 @@ export function TemplateModal({
     dispatch({ type: "SHOW_MODAL", modal: "showTemplateModal", show: false });
 
   useEffect(() => {
-    if (state.showTemplateModal) loadTemplates();
-  }, [state.showTemplateModal, currentCore]);
+    if (modals.showTemplateModal) loadTemplates();
+  }, [modals.showTemplateModal, currentCore]);
 
   async function loadTemplates() {
     if (!templatesCache) {
@@ -77,7 +78,7 @@ export function TemplateModal({
 
   return (
     <Dialog
-      open={state.showTemplateModal}
+      open={modals.showTemplateModal}
       onOpenChange={(open) => !open && close()}
     >
       <DialogContent className="max-w-140! max-h-[80vh] flex flex-col overflow-hidden">

@@ -21,7 +21,7 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion";
 import { cn } from "../../lib/utils";
-import { useAppContext } from "../../lib/store";
+import { useAppContext, useModalContext } from "../../lib/store";
 import { capitalize } from "../../lib/api";
 import type { Release } from "../../lib/types";
 import { Spinner } from "@/components/ui/spinner";
@@ -53,7 +53,9 @@ const mdClass = `
 
 export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
   const { state, dispatch, showToast } = useAppContext();
-  const { updateModalCore, settings } = state;
+  const { modals } = useModalContext();
+  const { settings } = state;
+  const { updateModalCore } = modals;
   const [releases, setReleases] = useState<Release[]>([]);
   const [selectedVersion, setSelectedVersion] = useState("");
   const [openVersion, setOpenVersion] = useState("");
@@ -67,8 +69,8 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
     dispatch({ type: "SHOW_MODAL", modal: "showUpdateModal", show: false });
 
   useEffect(() => {
-    if (state.showUpdateModal) fetchReleases();
-  }, [state.showUpdateModal, updateModalCore]);
+    if (modals.showUpdateModal) fetchReleases();
+  }, [modals.showUpdateModal, updateModalCore]);
 
   async function fetchReleases() {
     setLoading(true);
@@ -132,7 +134,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
 
   return (
     <Dialog
-      open={state.showUpdateModal}
+      open={modals.showUpdateModal}
       onOpenChange={(open) => !open && close()}
     >
       <DialogContent className="max-w-[95vw]! md:w-187.5 w-full p-0!">

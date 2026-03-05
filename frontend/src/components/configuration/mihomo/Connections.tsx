@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useConnections } from '../../../lib/store'
 
 interface ProxyInfo {
   name: string
@@ -57,8 +58,6 @@ type SortDirection = 'asc' | 'desc'
 
 interface Props {
   dashboardPort: string
-  connections: Connection[]
-  connected: boolean
 }
 
 function SortIcon({ column, sortColumn, sortDirection }: { column: SortColumn; sortColumn: SortColumn; sortDirection: SortDirection }) {
@@ -218,7 +217,8 @@ const ConnectionRow = memo(
 
 ConnectionRow.displayName = 'ConnectionRow'
 
-export function ConnectionsPanel({ dashboardPort, connections, connected }: Props) {
+export function ConnectionsPanel({ dashboardPort }: Props) {
+  const { connections, connected } = useConnections()
   const [filter, setFilter] = useState('')
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')

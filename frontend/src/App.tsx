@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { AppProvider, useAppContext } from './lib/store'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { AppProvider, useAppContext, useModalContext } from './lib/store'
 import { apiCall, capitalize } from './lib/api'
 import { stripJsonComments } from './lib/utils'
 import { StatusBar } from './components/status/StatusBar'
@@ -29,17 +29,56 @@ function useLazyMount(open: boolean, delay = 200) {
   return mounted
 }
 
+interface ModalManagerProps {
+  onSwitchCore: (core: string) => void
+  onInstalled: () => void
+  onGenerate: (uri: string) => { content: string; type: string } | null
+  onAddToConfig: (content: string, type: string, position: 'start' | 'end') => void
+  onImportTemplate: (url: string) => Promise<void>
+  openModal: (modal: string) => void
+}
+
+const ModalManager = memo(function ModalManager({
+  onSwitchCore, onInstalled, onGenerate, onAddToConfig, onImportTemplate, openModal,
+}: ModalManagerProps) {
+  const { modals, dispatch } = useModalContext()
+
+  const mountCommentsWarning = useLazyMount(modals.showCommentsWarningModal)
+  const mountCoreManage = useLazyMount(modals.showCoreManageModal)
+  const mountUpdate = useLazyMount(modals.showUpdateModal)
+  const mountImport = useLazyMount(modals.showImportModal)
+  const mountTemplate = useLazyMount(modals.showTemplateModal)
+  const mountSettings = useLazyMount(modals.showSettingsModal)
+  const mountGeoScan = useLazyMount(modals.showGeoScanModal)
+
+  return (
+    <>
+      {mountCommentsWarning && <CommentsWarningModal />}
+      {mountCoreManage && (
+        <CoreManageModal
+          onSwitchCore={onSwitchCore}
+          onOpenUpdate={(core) => {
+            dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
+            openModal('showUpdateModal')
+          }}
+        />
+      )}
+      {mountUpdate && <UpdateModal onInstalled={onInstalled} />}
+      {mountImport && <ImportModal onGenerate={onGenerate} onAddToConfig={onAddToConfig} />}
+      {mountTemplate && <TemplateModal onImport={onImportTemplate} />}
+      {mountSettings && <SettingsModal />}
+      {mountGeoScan && <GeoScanModal />}
+    </>
+  )
+})
+
 function AppContent() {
   const { state, dispatch, showToast } = useAppContext()
   const editorRef = useRef<MonacoEditorRef | null>(null)
-
-  const mountCommentsWarning = useLazyMount(state.showCommentsWarningModal)
-  const mountCoreManage = useLazyMount(state.showCoreManageModal)
-  const mountUpdate = useLazyMount(state.showUpdateModal)
-  const mountImport = useLazyMount(state.showImportModal)
-  const mountTemplate = useLazyMount(state.showTemplateModal)
-  const mountSettings = useLazyMount(state.showSettingsModal)
-  const mountGeoScan = useLazyMount(state.showGeoScanModal)
+  const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
+    switchTab: () => {},
+    getActiveIndex: () => 0,
+  })
 
   useEffect(() => {
     init()
@@ -82,10 +121,7 @@ function AppContent() {
       coreVersions: data.versions || {},
       availableCores: data.cores || [],
     })
-    dispatch({
-      type: 'SET_SERVICE_STATUS',
-      status: data.running ? 'running' : 'stopped',
-    })
+    dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
     await loadConfigs(data.currentCore)
   }
 
@@ -98,20 +134,11 @@ function AppContent() {
           version: data.version.replace(/^v/i, ''),
           isOutdatedUI: !!data.outdated?.ui,
         })
-        if (data.show_toast?.ui)
-          showToast({
-            title: 'Доступно обновление',
-            body: 'Доступна новая версия XKeen UI',
-          })
+        if (data.show_toast?.ui) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI' })
         if (data.show_toast?.core)
-          showToast({
-            title: 'Доступно обновление',
-            body: `Доступна новая версия ${capitalize(state.currentCore)}`,
-          })
+          showToast({ title: 'Доступно обновление', body: `Доступна новая версия ${capitalize(state.currentCore)}` })
       }
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }
 
   async function loadConfigs(core?: string): Promise<Config[]> {
@@ -119,18 +146,8 @@ function AppContent() {
     try {
       const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs')
       if (result.success && result.configs) {
-        const configs: Config[] = result.configs.map((c: any) => ({
-          ...c,
-          savedContent: c.content,
-          isDirty: false,
-        }))
+        const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
         dispatch({ type: 'SET_CONFIGS', configs })
-        const saved = localStorage.getItem('lastSelectedTab')
-        const index = Math.max(
-          0,
-          configs.findIndex((c) => c.file === saved)
-        )
-        dispatch({ type: 'SET_ACTIVE_CONFIG', index })
         const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
         const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
         dispatch({ type: 'SET_DASHBOARD_PORT', port })
@@ -147,42 +164,18 @@ function AppContent() {
   }
 
   async function switchCore(core: string) {
-    if (core === state.currentCore) {
-      showToast('Это ядро уже активно', 'error')
-      return
-    }
+    if (core === state.currentCore) { showToast('Это ядро уже активно', 'error'); return }
     dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
-    dispatch({
-      type: 'SET_CORE_INFO',
-      currentCore: core,
-      coreVersions: state.coreVersions,
-      availableCores: state.availableCores,
-    })
+    dispatch({ type: 'SET_CORE_INFO', currentCore: core, coreVersions: state.coreVersions, availableCores: state.availableCores })
     const configs = await loadConfigs(core)
-    const mihomoYamlEmpty =
-      core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
-    dispatch({
-      type: 'SET_SERVICE_STATUS',
-      status: 'pending',
-      pendingText: 'Переключение...',
-    })
-    const result = await apiCall<any>('POST', 'control', {
-      action: 'switchCore',
-      core,
-    })
+    const mihomoYamlEmpty = core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
+    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Переключение...' })
+    const result = await apiCall<any>('POST', 'control', { action: 'switchCore', core })
     showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `Ошибка: ${result.error}`, result.success ? 'success' : 'error')
     const data = await apiCall<any>('GET', 'control')
     if (data.success) {
-      dispatch({
-        type: 'SET_CORE_INFO',
-        currentCore: data.currentCore,
-        coreVersions: data.versions,
-        availableCores: data.cores,
-      })
-      dispatch({
-        type: 'SET_SERVICE_STATUS',
-        status: data.running ? 'running' : 'stopped',
-      })
+      dispatch({ type: 'SET_CORE_INFO', currentCore: data.currentCore, coreVersions: data.versions, availableCores: data.cores })
+      dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
       if (result.success && mihomoYamlEmpty) await loadConfigs(core)
     }
   }
@@ -194,61 +187,41 @@ function AppContent() {
   }
 
   async function importTemplate(url: string) {
-    const active = state.configs[state.activeConfigIndex]
+    const activeIndex = configActionsRef.current.getActiveIndex()
+    const active = state.configs[activeIndex]
     if (active?.isDirty && !confirm('Несохраненные изменения будут потеряны. Продолжить?')) throw new Error('Отменено')
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const content = await res.text()
     if (editorRef.current) {
       editorRef.current.setValue(content)
-      dispatch({
-        type: 'UPDATE_CONFIG_DIRTY',
-        index: state.activeConfigIndex,
-        isDirty: true,
-        content,
-      })
+      dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: activeIndex, isDirty: true, content })
     }
     showToast('Шаблон импортирован')
   }
 
   function addToConfig(generated: string, type: string, position: 'start' | 'end') {
     const core = state.currentCore
-    let targetIndex = state.activeConfigIndex
+    let targetIndex = configActionsRef.current.getActiveIndex()
 
     if (core === 'mihomo') {
       targetIndex = state.configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-      if (targetIndex === -1) {
-        showToast('Файл config.yaml не найден', 'error')
-        return
-      }
+      if (targetIndex === -1) { showToast('Файл config.yaml не найден', 'error'); return }
     } else {
       try {
-        let obj
         try {
-          obj = JSON.parse(stripJsonComments(state.configs[targetIndex].content))
+          const obj = JSON.parse(stripJsonComments(state.configs[targetIndex].content))
           if (!Array.isArray(obj.outbounds)) throw new Error()
         } catch {
           targetIndex = state.configs.findIndex((cfg) => {
-            try {
-              return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds)
-            } catch {
-              return false
-            }
+            try { return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds) } catch { return false }
           })
-          if (targetIndex === -1) {
-            showToast('Массив outbounds не найден', 'error')
-            return
-          }
+          if (targetIndex === -1) { showToast('Массив outbounds не найден', 'error'); return }
         }
-      } catch (e: any) {
-        showToast(`Ошибка: ${e.message}`, 'error')
-        return
-      }
+      } catch (e: any) { showToast(`Ошибка: ${e.message}`, 'error'); return }
     }
 
-    if (targetIndex !== state.activeConfigIndex) {
-      dispatch({ type: 'SET_ACTIVE_CONFIG', index: targetIndex })
-    }
+    if (targetIndex !== configActionsRef.current.getActiveIndex()) configActionsRef.current.switchTab(targetIndex)
 
     setTimeout(() => {
       const editorWrapper = editorRef.current
@@ -257,69 +230,44 @@ function AppContent() {
       if (!monacoEditor) return
       const model = monacoEditor.getModel()
       if (!model) return
-
       const current = editorWrapper.getValue()
-
       const lineAtOffset = (text: string, offset: number) => text.slice(0, Math.min(offset, text.length)).split('\n').length
-
-      const scrollToLine = (editor: any, line: number) => {
-        setTimeout(() => editor.revealLineInCenter(Math.max(1, line)), 100)
-      }
-
+      const scrollToLine = (editor: any, line: number) => setTimeout(() => editor.revealLineInCenter(Math.max(1, line)), 100)
       const insertAtOffset = (offset: number, text: string, scrollLine?: number) => {
         const pos = model.getPositionAt(offset)
-        monacoEditor.executeEdits('add-to-config', [
-          {
-            range: {
-              startLineNumber: pos.lineNumber,
-              startColumn: pos.column,
-              endLineNumber: pos.lineNumber,
-              endColumn: pos.column,
-            },
-            text,
-          },
-        ])
+        monacoEditor.executeEdits('add-to-config', [{ range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column }, text }])
         scrollToLine(monacoEditor, scrollLine ?? pos.lineNumber)
       }
 
       if (core === 'mihomo') {
         const marker = type === 'proxy' ? 'proxies:' : 'proxy-providers:'
         const markerIdx = current.indexOf(marker)
-
-        if (markerIdx === -1) {
-          insertAtOffset(current.length, `\n${marker}\n${generated}`, lineAtOffset(current, current.length) + 2)
-          return
-        }
-
+        if (markerIdx === -1) { insertAtOffset(current.length, `\n${marker}\n${generated}`, lineAtOffset(current, current.length) + 2); return }
         const markerLineEnd = current.indexOf('\n', markerIdx) + 1
-
         if (position === 'start') {
-          const targetLine = lineAtOffset(current, markerLineEnd)
-          insertAtOffset(markerLineEnd, generated, targetLine)
+          insertAtOffset(markerLineEnd, generated, lineAtOffset(current, markerLineEnd))
         } else {
           const afterMarker = markerLineEnd
           const nextKeyMatch = current.slice(afterMarker).search(/^[a-zA-Z]/m)
           const insertOffset = nextKeyMatch === -1 ? current.length : afterMarker + nextKeyMatch
-          const targetLine = lineAtOffset(current, insertOffset) - 1
-          insertAtOffset(insertOffset, generated + '\n', targetLine)
+          insertAtOffset(insertOffset, generated + '\n', lineAtOffset(current, insertOffset) - 1)
         }
       } else {
         try {
           const obj = JSON.parse(stripJsonComments(current))
           if (position === 'start') obj.outbounds.unshift(JSON.parse(generated))
           else obj.outbounds.push(JSON.parse(generated))
-
-          const newContent = JSON.stringify(obj, null, 2)
-          monacoEditor.executeEdits('add-to-config', [{ range: model.getFullModelRange(), text: newContent }])
+          monacoEditor.executeEdits('add-to-config', [{ range: model.getFullModelRange(), text: JSON.stringify(obj, null, 2) }])
           scrollToLine(monacoEditor, position === 'start' ? 1 : model.getLineCount())
-        } catch (e: any) {
-          showToast(`Ошибка парсинга: ${e.message}`, 'error')
-        }
+        } catch (e: any) { showToast(`Ошибка парсинга: ${e.message}`, 'error') }
       }
     }, 150)
   }
 
-  const openModal = (modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true })
+  const openModal = useCallback(
+    (modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }),
+    [dispatch]
+  )
 
   return (
     <div className="min-h-dvh flex flex-col bg-background">
@@ -335,6 +283,7 @@ function AppContent() {
           />
           <ConfigPanel
             editorRef={editorRef}
+            configActionsRef={configActionsRef}
             onOpenImport={() => openModal('showImportModal')}
             onOpenTemplate={() => openModal('showTemplateModal')}
             onOpenGeoScan={() => openModal('showGeoScanModal')}
@@ -342,23 +291,15 @@ function AppContent() {
           <LogPanel />
         </div>
       </main>
-
       <Toast />
-      {mountCommentsWarning && <CommentsWarningModal />}
-      {mountCoreManage && (
-        <CoreManageModal
-          onSwitchCore={switchCore}
-          onOpenUpdate={(core) => {
-            dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
-            openModal('showUpdateModal')
-          }}
-        />
-      )}
-      {mountUpdate && <UpdateModal onInstalled={checkStatus} />}
-      {mountImport && <ImportModal onGenerate={generateConfig} onAddToConfig={addToConfig} />}
-      {mountTemplate && <TemplateModal onImport={importTemplate} />}
-      {mountSettings && <SettingsModal />}
-      {mountGeoScan && <GeoScanModal />}
+      <ModalManager
+        onSwitchCore={switchCore}
+        onInstalled={checkStatus}
+        onGenerate={generateConfig}
+        onAddToConfig={addToConfig}
+        onImportTemplate={importTemplate}
+        openModal={openModal}
+      />
     </div>
   )
 }
