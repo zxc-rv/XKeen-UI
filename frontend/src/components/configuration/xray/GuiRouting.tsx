@@ -466,7 +466,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
               >
                 <SelectValue placeholder={fieldName} />
               </SelectTrigger>
-              <SelectContent position="popper">
+              <SelectContent position="popper" align="start">
                 {otherFields.map((f) => (
                   <SelectItem key={f} value={f} className="text-[13px] cursor-pointer">
                     {f}
