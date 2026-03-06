@@ -22,6 +22,7 @@
   - 🔀 Переключение/установка/обновление ядер Xray и Mihomo
   - 🔗 Генерация аутбаундов из ссылок (также доступно [отдельно по ссылке](https://zxc-rv.github.io/XKeen-UI/Outbound_Generator/))
   - 🩻 Сканирование dat файлов
+  - ⚔️ Clash API реализация для Mihomo
   
     
 &nbsp;
