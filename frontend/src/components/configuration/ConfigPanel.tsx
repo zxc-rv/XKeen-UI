@@ -72,13 +72,13 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     activeIndexRef.current = activeConfigIndex
   }, [activeConfigIndex])
 
+  const configFilenamesKey = configs.map((c) => c.file).join(',')
   const prevConfigFilenamesKeyRef = useRef('')
 
   useEffect(() => {
     if (configs.length === 0) return
-    const key = configs.map((c) => c.file).join(',')
     const isFirstLoad = prevConfigFilenamesKeyRef.current === ''
-    prevConfigFilenamesKeyRef.current = key
+    prevConfigFilenamesKeyRef.current = configFilenamesKey
 
     if (isFirstLoad) {
       const savedFile = localStorage.getItem('lastSelectedTab')
@@ -94,7 +94,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     const next = yamlIndex >= 0 ? yamlIndex : 0
     setActiveConfigIndex(next)
     activeIndexRef.current = next
-  }, [configs])
+  }, [configFilenamesKey])
 
   useEffect(() => {
     if (currentCore !== 'mihomo' || !clashApiPort) return
@@ -149,8 +149,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const canSave = !!(activeConfig?.isDirty && validationState?.isValid)
   const canApply = canSave && isRunning && !isPending
   const canFormat = !!(isJsonOrYaml && validationState?.isValid)
-
-  const configFilenamesKey = configs.map((c) => c.file).join(',')
 
   const loadConfigIntoEditor = useCallback(
     (config: Config) => {
