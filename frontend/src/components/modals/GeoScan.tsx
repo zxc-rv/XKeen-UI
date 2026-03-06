@@ -1,157 +1,132 @@
-import { useState, useEffect } from "react";
-import { IconSearch, IconServer, IconWorld, IconX } from "@tabler/icons-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "../../lib/utils";
-import { useAppContext, useModalContext } from "../../lib/store";
-import { Spinner } from "@/components/ui/spinner";
+import { useState, useEffect } from 'react'
+import { IconSearch, IconServer, IconWorld, IconX } from '@tabler/icons-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '../../lib/utils'
+import { useAppContext, useModalContext } from '../../lib/store'
+import { Spinner } from '@/components/ui/spinner'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
-type GeoType = "domain" | "ip";
+type GeoType = 'domain' | 'ip'
 type FileStatus = {
-  categories: string[];
-  status: "idle" | "scanning" | "found" | "not-found" | "error";
-};
+  categories: string[]
+  status: 'idle' | 'scanning' | 'found' | 'not-found' | 'error'
+}
 
 export function GeoScanModal() {
-  const { showToast } = useAppContext();
-  const { modals, dispatch } = useModalContext();
-  const [geoType, setGeoType] = useState<GeoType>("domain");
-  const [input, setInput] = useState("");
+  const { showToast } = useAppContext()
+  const { modals, dispatch } = useModalContext()
+  const [geoType, setGeoType] = useState<GeoType>('domain')
+  const [input, setInput] = useState('')
   const [geoFiles, setGeoFiles] = useState<{ domain: string[]; ip: string[] }>({
     domain: [],
     ip: [],
-  });
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-  const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus>>(
-    {},
-  );
-  const [scanning, setScanning] = useState(false);
-  const [loading, setLoading] = useState(true);
+  })
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([])
+  const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus>>({})
+  const [scanning, setScanning] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  const close = () =>
-    dispatch({ type: "SHOW_MODAL", modal: "showGeoScanModal", show: false });
+  const close = () => dispatch({ type: 'SHOW_MODAL', modal: 'showGeoScanModal', show: false })
 
   function initStatuses(files: string[]) {
-    setFileStatuses(
-      Object.fromEntries(
-        files.map((f) => [f, { categories: [], status: "idle" as const }]),
-      ),
-    );
+    setFileStatuses(Object.fromEntries(files.map((f) => [f, { categories: [], status: 'idle' as const }])))
   }
 
   async function loadGeoFiles() {
-    setLoading(true);
+    setLoading(true)
     try {
-      const res = await fetch("/api/geo");
-      const data = await res.json();
+      const res = await fetch('/api/geo')
+      const data = await res.json()
       if (data.success) {
         const files = {
           domain: data.site_files || [],
           ip: data.ip_files || [],
-        };
-        setGeoFiles(files);
-        setSelectedFiles(files.domain);
-        initStatuses(files.domain);
+        }
+        setGeoFiles(files)
+        setSelectedFiles(files.domain)
+        initStatuses(files.domain)
       }
     } catch {
       /* ignore */
     }
-    setLoading(false);
+    setLoading(false)
   }
 
   useEffect(() => {
     if (modals.showGeoScanModal) {
-      setGeoType("domain");
-      loadGeoFiles();
+      setGeoType('domain')
+      loadGeoFiles()
     }
-  }, [modals.showGeoScanModal]);
+  }, [modals.showGeoScanModal])
 
   function switchType(type: GeoType) {
-    setGeoType(type);
-    setInput("");
-    setSelectedFiles(geoFiles[type]);
-    initStatuses(geoFiles[type]);
+    setGeoType(type)
+    setInput('')
+    setSelectedFiles(geoFiles[type])
+    initStatuses(geoFiles[type])
   }
 
   function toggleFile(filename: string) {
-    setSelectedFiles((prev) =>
-      prev.includes(filename)
-        ? prev.filter((f) => f !== filename)
-        : [...prev, filename],
-    );
+    setSelectedFiles((prev) => (prev.includes(filename) ? prev.filter((f) => f !== filename) : [...prev, filename]))
   }
 
   async function scan() {
-    if (!input.trim() || selectedFiles.length === 0) return;
-    setScanning(true);
-    const endpoint = geoType === "ip" ? "/api/geo/ip" : "/api/geo/site";
-    const paramName = geoType === "ip" ? "ip" : "domain";
+    if (!input.trim() || selectedFiles.length === 0) return
+    setScanning(true)
+    const endpoint = geoType === 'ip' ? '/api/geo/ip' : '/api/geo/site'
+    const paramName = geoType === 'ip' ? 'ip' : 'domain'
 
     for (const file of selectedFiles) {
       setFileStatuses((prev) => ({
         ...prev,
-        [file]: { status: "scanning", categories: [] },
-      }));
+        [file]: { status: 'scanning', categories: [] },
+      }))
       try {
-        const res = await fetch(
-          `${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input.trim())}`,
-        );
-        const data = await res.json();
+        const res = await fetch(`${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input.trim())}`)
+        const data = await res.json()
         if (!data.success && data.error) {
-          showToast(data.error, "error");
+          showToast(data.error, 'error')
           setFileStatuses((prev) => ({
             ...prev,
-            [file]: { status: "error", categories: [] },
-          }));
+            [file]: { status: 'error', categories: [] },
+          }))
         } else {
           setFileStatuses((prev) => ({
             ...prev,
             [file]:
               data.success && data.categories?.length
-                ? { status: "found", categories: data.categories }
-                : { status: "not-found", categories: [] },
-          }));
+                ? { status: 'found', categories: data.categories }
+                : { status: 'not-found', categories: [] },
+          }))
         }
       } catch {
         setFileStatuses((prev) => ({
           ...prev,
-          [file]: { status: "error", categories: [] },
-        }));
+          [file]: { status: 'error', categories: [] },
+        }))
       }
     }
-    setScanning(false);
+    setScanning(false)
   }
 
-  const currentFiles = geoFiles[geoType];
-  const allSelected =
-    currentFiles.length > 0 &&
-    currentFiles.every((f) => selectedFiles.includes(f));
+  const currentFiles = geoFiles[geoType]
+  const allSelected = currentFiles.length > 0 && currentFiles.every((f) => selectedFiles.includes(f))
 
   return (
-    <Dialog
-      open={modals.showGeoScanModal}
-      onOpenChange={(open) => !open && close()}
-    >
+    <Dialog open={modals.showGeoScanModal} onOpenChange={(open) => !open && close()}>
       <DialogContent
         className="flex flex-col overflow-hidden"
         style={{
-          maxHeight: "95vh",
-          maxWidth: "36rem",
-          width: "calc(100vw - 2rem)",
+          maxHeight: '95vh',
+          maxWidth: '36rem',
+          width: 'calc(100vw - 2rem)',
         }}
       >
         <DialogHeader className="shrink-0">
@@ -159,16 +134,10 @@ export function GeoScanModal() {
             <IconSearch size={24} className="text-chart-2" />
             Скан геофайлов
           </DialogTitle>
-          <DialogDescription>
-            Проверка наличия домена или IP-адреса в геофайлах
-          </DialogDescription>
+          <DialogDescription>Проверка наличия домена или IP-адреса в геофайлах</DialogDescription>
         </DialogHeader>
 
-        <Tabs
-          value={geoType}
-          onValueChange={(value) => switchType(value as GeoType)}
-          className="shrink-0"
-        >
+        <Tabs value={geoType} onValueChange={(value) => switchType(value as GeoType)} className="shrink-0">
           <TabsList className="w-full! bg-transparent border border-border overflow-hidden rounded-lg p-0 h-full!">
             <TabsTrigger
               value="domain"
@@ -191,24 +160,17 @@ export function GeoScanModal() {
             <Checkbox
               id="select-all"
               checked={allSelected}
-              onCheckedChange={() =>
-                setSelectedFiles(allSelected ? [] : [...currentFiles])
-              }
+              onCheckedChange={() => setSelectedFiles(allSelected ? [] : [...currentFiles])}
             />
-            <Label
-              htmlFor="select-all"
-              className="text-xs text-muted-foreground cursor-pointer tracking-wide"
-            >
+            <Label htmlFor="select-all" className="text-xs text-muted-foreground cursor-pointer tracking-wide">
               Все файлы
             </Label>
           </div>
           <Badge
             variant="outline"
             className={cn(
-              "rounded-full w-6 h-6 p-0 text-xs",
-              geoType === "domain"
-                ? "bg-red-500/10 text-red-400 border-red-500/20"
-                : "bg-blue-500/10 text-blue-400 border-blue-500/20",
+              'rounded-full w-6 h-6 p-0 text-xs',
+              geoType === 'domain' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
             )}
           >
             {currentFiles.length}
@@ -225,53 +187,33 @@ export function GeoScanModal() {
             </div>
           ) : currentFiles.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-xs text-muted-foreground tracking-wide">
-                Геофайлы не найдены
-              </p>
+              <p className="text-xs text-muted-foreground tracking-wide">Геофайлы не найдены</p>
             </div>
           ) : (
             <div className="rounded-lg p-1.5 space-y-1">
               {currentFiles.map((file) => {
-                const status = fileStatuses[file];
-                const isChecked = selectedFiles.includes(file);
+                const status = fileStatuses[file]
+                const isChecked = selectedFiles.includes(file)
                 return (
-                  <div
-                    key={file}
-                    className={cn(
-                      "rounded-md transition-colors",
-                      status?.status === "found" && "bg-card",
-                    )}
-                  >
+                  <div key={file} className={cn('rounded-md transition-colors', status?.status === 'found' && 'bg-card')}>
                     <div className="flex items-center gap-3 px-3 h-9 py-1.5">
-                      <Checkbox
-                        id={`file-${file}`}
-                        checked={isChecked}
-                        onCheckedChange={() => toggleFile(file)}
-                      />
-                      <Label
-                        htmlFor={`file-${file}`}
-                        className="flex-1 text-xs font-normal tracking-wide cursor-pointer truncate"
-                      >
+                      <Checkbox id={`file-${file}`} checked={isChecked} onCheckedChange={() => toggleFile(file)} />
+                      <Label htmlFor={`file-${file}`} className="flex-1 text-xs font-normal tracking-wide cursor-pointer truncate">
                         {file}
                       </Label>
-                      {status && status.status !== "idle" && (
+                      {status && status.status !== 'idle' && (
                         <span
-                          className={cn("text-xs shrink-0 font-mono", {
-                            "text-muted-foreground animate-pulse":
-                              status.status === "scanning",
-                            "text-green-500": status.status === "found",
-                            "text-destructive/60":
-                              status.status === "not-found",
-                            "text-destructive": status.status === "error",
+                          className={cn('text-xs shrink-0 font-mono', {
+                            'text-muted-foreground animate-pulse': status.status === 'scanning',
+                            'text-green-500': status.status === 'found',
+                            'text-destructive/60': status.status === 'not-found',
+                            'text-destructive': status.status === 'error',
                           })}
                         >
-                          {status.status === "scanning" && (
-                            <Spinner className="size-3" />
-                          )}
-                          {status.status === "found" &&
-                            `${status.categories.length}`}
-                          {status.status === "not-found" && "—"}
-                          {status.status === "error" && "✗"}
+                          {status.status === 'scanning' && <Spinner className="size-3" />}
+                          {status.status === 'found' && `${status.categories.length}`}
+                          {status.status === 'not-found' && '—'}
+                          {status.status === 'error' && '✗'}
                         </span>
                       )}
                     </div>
@@ -282,15 +224,13 @@ export function GeoScanModal() {
                             key={cat}
                             variant="outline"
                             onClick={() =>
-                              navigator.clipboard
-                                .writeText(`"ext:${file}:${cat}"`)
-                                .then(() => showToast("Категория скопирована"))
+                              navigator.clipboard.writeText(`"ext:${file}:${cat}"`).then(() => showToast('Категория скопирована'))
                             }
                             className={cn(
-                              "cursor-pointer h-6 p-2 pt-2.5 text-[11px] tracking-wide rounded-sm border-none transition-colors",
-                              geoType === "domain"
-                                ? "bg-red-400/15 text-red-400 hover:bg-red-400/25"
-                                : "bg-blue-400/15 text-blue-400 hover:bg-blue-400/25",
+                              'cursor-pointer h-6 p-2 pt-2.5 text-[11px] tracking-wide rounded-sm border-none transition-colors',
+                              geoType === 'domain'
+                                ? 'bg-red-400/15 text-red-400 hover:bg-red-400/25'
+                                : 'bg-blue-400/15 text-blue-400 hover:bg-blue-400/25'
                             )}
                           >
                             {cat}
@@ -299,40 +239,39 @@ export function GeoScanModal() {
                       </div>
                     )}
                   </div>
-                );
+                )
               })}
             </div>
           )}
         </ScrollArea>
 
-        <div className="relative shrink-0 -mt-3">
-          <Input
+        <InputGroup>
+          <InputGroupInput
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !scanning && scan()}
-            placeholder={geoType === "ip" ? "1.1.1.1" : "example.com"}
-            className="h-9 pr-8"
+            onKeyDown={(e) => e.key === 'Enter' && !scanning && scan()}
+            placeholder={geoType === 'ip' ? '1.1.1.1' : 'example.com'}
           />
-          {input && (
-            <button
-              onClick={() => setInput("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <IconX size={13} />
-            </button>
-          )}
-        </div>
+          <InputGroupAddon align="inline-end">
+            {input && (
+              <InputGroupButton
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setInput('')}
+                className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+              >
+                <IconX className="size-3.5" />
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
 
         <DialogFooter className="shrink-0">
-          <Button
-            onClick={scan}
-            disabled={scanning || !input.trim() || selectedFiles.length === 0}
-            className="h-9 w-full"
-          >
-            {scanning ? "Сканирование..." : "Сканировать"}
+          <Button onClick={scan} disabled={scanning || !input.trim() || selectedFiles.length === 0} className="h-9 w-full">
+            {scanning ? 'Сканирование...' : 'Сканировать'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

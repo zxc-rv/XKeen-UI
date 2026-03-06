@@ -6,10 +6,9 @@ import {
   IconSearch,
   IconRefresh,
   IconCode,
-  IconMenu2,
   IconCheck,
   IconX,
-  IconLoader2,
+  IconDotsFilled,
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { Button } from '@/components/ui/button'
@@ -19,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn, stripJsonComments } from '../../lib/utils'
-import { useAppContext, useConnectionsSync } from '../../lib/store'
+import { useAppContext, useConnectionsSync, fetchClashProxies } from '../../lib/store'
 import { apiCall, getFileLanguage } from '../../lib/api'
 import { MonacoEditor, type MonacoEditorRef } from './MonacoEditor'
 import { RoutingPanel } from './xray/GuiRouting'
@@ -27,6 +26,8 @@ import { GuiLog } from './xray/GuiLog'
 import { ConnectionsPanel } from './mihomo/Connections'
 import { SelectorsPanel } from './mihomo/Selectors'
 import type { Config } from '../../lib/types'
+import { ButtonGroup } from '../ui/button-group'
+import { Spinner } from '../ui/spinner'
 
 type ClashMode = 'rule' | 'global' | 'direct'
 
@@ -40,10 +41,29 @@ interface Props {
 
 export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext()
-  const { configs, isConfigsLoading, currentCore, serviceStatus, settings, dashboardPort } = state
+  const { configs, isConfigsLoading, currentCore, serviceStatus, settings, dashboardPort, clashApiSecret } = state
 
   const [wsEnabled, setWsEnabled] = useState(false)
-  useConnectionsSync(wsEnabled ? dashboardPort : null)
+  useConnectionsSync(wsEnabled ? dashboardPort : null, clashApiSecret)
+
+  const isRunning = serviceStatus === 'running'
+  const isPending = serviceStatus === 'pending'
+
+  // Redirect to config tab when service is not running
+  useEffect(() => {
+    if (!isRunning) setActivePanel('config')
+  }, [isRunning])
+
+  // Refetch proxies after restart (pending → running)
+  const prevStatusRef = useRef(serviceStatus)
+  useEffect(() => {
+    const prev = prevStatusRef.current
+    prevStatusRef.current = serviceStatus
+    if (serviceStatus === 'running' && prev === 'pending' && dashboardPort && currentCore === 'mihomo') {
+      const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
+      fetchClashProxies(`http://${location.hostname}:${dashboardPort}`, authHeaders)
+    }
+  }, [serviceStatus])
 
   const [activeConfigIndex, setActiveConfigIndex] = useState(0)
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
@@ -80,37 +100,42 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   useEffect(() => {
     if (currentCore !== 'mihomo' || !dashboardPort) return
     const baseUrl = `http://${location.hostname}:${dashboardPort}`
-    fetch(`${baseUrl}/configs`)
+    const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
+    fetch(`${baseUrl}/configs`, { headers: authHeaders })
       .then((r) => r.json())
       .then((data) => {
         if (data.mode) setMode(data.mode as ClashMode)
       })
       .catch(() => {})
-  }, [currentCore, dashboardPort])
+  }, [currentCore, dashboardPort, clashApiSecret])
 
   const changeMode = useCallback(
     async (newMode: ClashMode) => {
       if (newMode === mode) return
       setMode(newMode)
       if (!dashboardPort) return
+      const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
       await fetch(`http://${location.hostname}:${dashboardPort}/configs`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ mode: newMode }),
       })
     },
-    [dashboardPort, mode]
+    [dashboardPort, mode, clashApiSecret]
   )
 
   async function updateAllProviders(type: 'rules' | 'proxies', setLoading: (v: boolean) => void) {
     if (!dashboardPort) return
     const baseUrl = `http://${location.hostname}:${dashboardPort}`
+    const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
     setLoading(true)
     try {
-      const res = await fetch(`${baseUrl}/providers/${type}`)
+      const res = await fetch(`${baseUrl}/providers/${type}`, { headers: authHeaders })
       const data = await res.json()
       const names = Object.keys(data.providers ?? {})
-      await Promise.all(names.map((name) => fetch(`${baseUrl}/providers/${type}/${encodeURIComponent(name)}`, { method: 'PUT' })))
+      await Promise.all(
+        names.map((name) => fetch(`${baseUrl}/providers/${type}/${encodeURIComponent(name)}`, { method: 'PUT', headers: authHeaders }))
+      )
       showToast(`Наборы ${type === 'rules' ? 'правил' : 'прокси'} обновлены`)
     } catch {
       showToast('Ошибка обновления', 'error')
@@ -120,8 +145,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   }
 
   const activeConfig = configs[activeConfigIndex]
-  const isRunning = serviceStatus === 'running'
-  const isPending = serviceStatus === 'pending'
   const fileLanguage = activeConfig ? getFileLanguage(activeConfig.file) : null
   const isJsonOrYaml = fileLanguage === 'json' || fileLanguage === 'yaml'
   const canSave = !!(activeConfig?.isDirty && validationState?.isValid)
@@ -279,10 +302,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                   <TabsTrigger value="config" className="text-lg font-semibold p-0">
                     Конфигурация
                   </TabsTrigger>
-                  <TabsTrigger value="selectors" className="text-lg font-semibold p-0">
+                  <TabsTrigger value="selectors" className="text-lg font-semibold p-0" disabled={!isRunning}>
                     Селекторы
                   </TabsTrigger>
-                  <TabsTrigger value="connections" className="text-lg font-semibold p-0">
+                  <TabsTrigger value="connections" className="text-lg font-semibold p-0" disabled={!isRunning}>
                     Соединения
                   </TabsTrigger>
                 </TabsList>
@@ -296,20 +319,28 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
             <div className="ml-auto flex items-center gap-2">
               <Button
                 variant="outline"
-                className="gap-1.5 text-xs"
+                className="text-[13px]"
                 disabled={updatingRuleProviders}
                 onClick={() => updateAllProviders('rules', setUpdatingRuleProviders)}
               >
-                {updatingRuleProviders ? <IconLoader2 size={13} className="animate-spin" /> : <IconRefresh size={13} />}
+                {updatingRuleProviders ? (
+                  <IconRefresh data-icon="inline-start" className="animate-spin direction-[reverse]" />
+                ) : (
+                  <IconRefresh data-icon="inline-start" />
+                )}
                 Наборы правил
               </Button>
               <Button
                 variant="outline"
-                className="gap-1.5 text-xs"
+                className="text-[13px]"
                 disabled={updatingProxyProviders}
                 onClick={() => updateAllProviders('proxies', setUpdatingProxyProviders)}
               >
-                {updatingProxyProviders ? <IconLoader2 size={13} className="animate-spin" /> : <IconRefresh size={13} />}
+                {updatingProxyProviders ? (
+                  <IconRefresh data-icon="inline-start" className="animate-spin direction-[reverse]" />
+                ) : (
+                  <IconRefresh data-icon="inline-start" />
+                )}
                 Наборы прокси
               </Button>
             </div>
@@ -319,7 +350,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
             <div className="ml-auto flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Режим маршрутизации</span>
               <Select value={mode} onValueChange={(value) => changeMode(value as ClashMode)}>
-                <SelectTrigger className="h-8 w-35">
+                <SelectTrigger className="w-30">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -391,9 +422,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           {isMihomo && (
             <>
               <div className={cn(activePanel !== 'selectors' && 'hidden')}>
-                <SelectorsPanel dashboardPort={dashboardPort!} mode={mode} />
+                <SelectorsPanel dashboardPort={dashboardPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
               </div>
-              {activePanel === 'connections' && <ConnectionsPanel dashboardPort={dashboardPort!} />}
+              <div className={cn(activePanel !== 'connections' && 'hidden')}>
+                <ConnectionsPanel dashboardPort={dashboardPort!} />
+              </div>
             </>
           )}
 
@@ -411,7 +444,8 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
               onReady={handleMonacoReady}
             />
             {(!monacoReady || isConfigsLoading) && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-card text-muted-foreground text-sm">
+              <div className="absolute inset-4 flex items-center justify-center text-muted-foreground text-sm">
+                <Spinner className="size-5 mr-2" />
                 {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}
               </div>
             )}
@@ -451,37 +485,30 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                       <Button
                         size="default"
                         disabled={!canApply}
-                        className="gap-1.5 h-9 px-3 bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-green-600 hover:bg-green-700 text-white"
                         onClick={() => saveAndApply()}
                       >
-                        <IconRefresh size={14} /> Применить
+                        <IconRefresh data-icon="inline-start" /> Применить
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Сохранить и перезапустить</TooltipContent>
                   </Tooltip>
-                  <Button size="default" className="h-9 gap-1.5 px-3" disabled={!canSave} onClick={() => saveCurrentConfig()}>
-                    <IconDeviceFloppy size={14} /> Сохранить
+                  <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
+                    <IconDeviceFloppy data-icon="inline-start" /> Сохранить
                   </Button>
-                  <div className="flex h-9 rounded-md overflow-hidden border border-border">
+                  <ButtonGroup>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="default"
-                          disabled={!canFormat}
-                          className="h-full rounded-none border-0 gap-1.5 px-3"
-                          onClick={() => editorRef.current?.format()}
-                        >
-                          <IconCode size={14} /> <span className="hidden sm:inline">Формат</span>
+                        <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
+                          <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Форматировать файл</TooltipContent>
                     </Tooltip>
-                    <div className="w-px bg-border" />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-full w-8 rounded-none border-0">
-                          <IconMenu2 />
+                        <Button variant="outline" size="icon">
+                          <IconDotsFilled />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-max">
@@ -497,7 +524,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </div>
+                  </ButtonGroup>
                 </>
               )}
             </div>

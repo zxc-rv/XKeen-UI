@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { IconTrash, IconMaximize, IconMinimize, IconChevronDown, IconSearch, IconX, IconFile } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -9,6 +8,7 @@ import { cn } from '../../lib/utils'
 import { useWebSocket } from './WebSocket'
 import { useAppContext } from '../../lib/store'
 import type { WsMessage } from './WebSocket'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']
 const MAX_LINES = 1000
@@ -26,6 +26,7 @@ export function LogPanel() {
   const containerRef = useRef<HTMLDivElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
   const isFullscreenRef = useRef(false)
+  const isAnimatingRef = useRef(false)
   const filterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoScrollRef = useRef(true)
   const linesRef = useRef<string[]>([])
@@ -148,6 +149,7 @@ export function LogPanel() {
   }
 
   const toggleFullscreen = useCallback(() => {
+    if (isAnimatingRef.current) return
     const el = containerRef.current
     if (!el) {
       setIsFullscreen((v) => !v)
@@ -159,6 +161,7 @@ export function LogPanel() {
 
     document.body.style.overflow = nextFullscreen ? 'hidden' : ''
     isFullscreenRef.current = nextFullscreen
+    isAnimatingRef.current = true
     setIsFullscreen(nextFullscreen)
     setIsAnimating(true)
 
@@ -194,6 +197,7 @@ export function LogPanel() {
           requestAnimationFrame(() => {
             el.style.transition = ''
             el.style.transformOrigin = ''
+            isAnimatingRef.current = false
             setIsAnimating(false)
             checkScrollPosition()
           })
@@ -247,7 +251,6 @@ export function LogPanel() {
           className="fixed inset-0 z-40 bg-black/50 opacity-0"
           style={{
             display: isFullscreen || isAnimating ? 'block' : 'none',
-            pointerEvents: isAnimating ? 'none' : 'auto',
           }}
           onClick={toggleFullscreen}
         />
@@ -267,25 +270,33 @@ export function LogPanel() {
             <h2 className="text-lg font-semibold select-none">Журнал</h2>
             <div className="flex flex-wrap items-center gap-1.5">
               <div className="relative flex items-center flex-1 sm:flex-none min-w-30">
-                <IconSearch size={13} className="absolute left-2.5 text-muted-foreground pointer-events-none" />
-                <Input
-                  value={filter}
-                  onChange={(e) => handleFilterChange(e.target.value)}
-                  placeholder="Фильтр"
-                  className="text-base md:text-sm w-40 px-7"
-                />
-                {filter && (
-                  <button
-                    onClick={() => {
-                      if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
-                      setFilter('')
-                      ws.applyFilter('')
-                    }}
-                    className="absolute right-3 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <IconX size={13} />
-                  </button>
-                )}
+                <InputGroup className="w-40">
+                  <InputGroupInput
+                    placeholder="Фильтр"
+                    className="right-2"
+                    value={filter}
+                    onChange={(e) => handleFilterChange(e.target.value)}
+                  />
+                  <InputGroupAddon>
+                    <IconSearch />
+                  </InputGroupAddon>
+                  <InputGroupAddon align="inline-end">
+                    {filter && (
+                      <InputGroupButton
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => {
+                          if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
+                          setFilter('')
+                          ws.applyFilter('')
+                        }}
+                        className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                      >
+                        <IconX className="size-3.25" />
+                      </InputGroupButton>
+                    )}
+                  </InputGroupAddon>
+                </InputGroup>
               </div>
               <Select value={currentFile} onValueChange={switchFile}>
                 <SelectTrigger popper className="md:w-33">
@@ -302,16 +313,16 @@ export function LogPanel() {
               <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => ws.clearLog()}>
-                      <IconTrash size={14} />
+                    <Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}>
+                      <IconTrash />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Очистить лог</TooltipContent>
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={toggleFullscreen}>
-                      {isFullscreen ? <IconMinimize size={14} /> : <IconMaximize size={14} />}
+                    <Button variant="outline" size="icon" onClick={toggleFullscreen}>
+                      {isFullscreen ? <IconMinimize /> : <IconMaximize />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{isFullscreen ? 'Свернуть' : 'Развернуть'}</TooltipContent>
@@ -327,7 +338,7 @@ export function LogPanel() {
                   <EmptyMedia variant="icon" className="size-8.5">
                     <IconFile className="text-muted-foreground size-5" />
                   </EmptyMedia>
-                  <EmptyTitle className="font-mono text-[13px] text-ring tracking-wide">Журнал пуст</EmptyTitle>
+                  <EmptyTitle className="font-mono text-[13px] text-ring tracking-normal">Журнал пуст</EmptyTitle>
                 </Empty>
               )}
               <div
@@ -345,8 +356,8 @@ export function LogPanel() {
             {showScrollBtn && !isAnimating && (
               <Button
                 variant="outline"
-                size="icon"
-                className="absolute bottom-8 right-8 z-10 h-8 w-8 rounded-md shadow-lg bg-background/80 backdrop-blur!"
+                size="icon-sm"
+                className="absolute bottom-8 right-8 z-10 shadow-lg bg-background/80 backdrop-blur!"
                 onClick={handleScrollToBottom}
               >
                 <IconChevronDown size={14} />

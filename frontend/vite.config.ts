@@ -4,14 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [
-    react({
-      babel: {
-        plugins: [['babel-plugin-react-compiler']],
-      },
-    }),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
@@ -22,7 +15,7 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 3000,
+    chunkSizeWarningLimit: 4000,
     rollupOptions: {
       output: {
         manualChunks(id) {

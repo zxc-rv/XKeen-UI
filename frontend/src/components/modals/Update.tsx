@@ -1,38 +1,20 @@
-import { useState, useEffect } from "react";
-import { IconDownload, IconPlaylistX } from "@tabler/icons-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Accordion,
-  AccordionItem,
-  AccordionTrigger,
-  AccordionContent,
-} from "@/components/ui/accordion";
-import { cn } from "../../lib/utils";
-import { useAppContext, useModalContext } from "../../lib/store";
-import { capitalize } from "../../lib/api";
-import type { Release } from "../../lib/types";
-import { Spinner } from "@/components/ui/spinner";
-import {
-  Empty,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-  EmptyContent,
-} from "@/components/ui/empty";
-import { IconRefresh } from "@tabler/icons-react";
+import { useState, useEffect } from 'react'
+import { IconDownload, IconPlaylistX } from '@tabler/icons-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
+import { cn } from '../../lib/utils'
+import { useAppContext, useModalContext } from '../../lib/store'
+import { capitalize } from '../../lib/api'
+import type { Release } from '../../lib/types'
+import { Spinner } from '@/components/ui/spinner'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyContent } from '@/components/ui/empty'
+import { IconRefresh } from '@tabler/icons-react'
 
 const mdClass = `
   text-xs text-muted-foreground leading-relaxed
@@ -49,94 +31,89 @@ const mdClass = `
   [&_strong]:text-foreground [&_strong]:font-semibold
   [&_hr]:border-ring/20 [&_hr]:my-2
   [&_blockquote]:border-l-2 [&_blockquote]:border-ring/40 [&_blockquote]:pl-3 [&_blockquote]:italic
-`.trim();
+`.trim()
 
 export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
-  const { state, dispatch, showToast } = useAppContext();
-  const { modals } = useModalContext();
-  const { settings } = state;
-  const { updateModalCore } = modals;
-  const [releases, setReleases] = useState<Release[]>([]);
-  const [selectedVersion, setSelectedVersion] = useState("");
-  const [openVersion, setOpenVersion] = useState("");
-  const [source, setSource] = useState<"github" | "jsdelivr" | "">("");
-  const [loading, setLoading] = useState(true);
-  const [installing, setInstalling] = useState(false);
+  const { state, dispatch, showToast } = useAppContext()
+  const { modals } = useModalContext()
+  const { settings } = state
+  const { updateModalCore } = modals
+  const [releases, setReleases] = useState<Release[]>([])
+  const [selectedVersion, setSelectedVersion] = useState('')
+  const [openVersion, setOpenVersion] = useState('')
+  const [source, setSource] = useState<'github' | 'jsdelivr' | ''>('')
+  const [loading, setLoading] = useState(true)
+  const [installing, setInstalling] = useState(false)
 
-  const coreLabel =
-    updateModalCore === "self" ? "XKeen UI" : capitalize(updateModalCore);
-  const close = () =>
-    dispatch({ type: "SHOW_MODAL", modal: "showUpdateModal", show: false });
+  const coreLabel = updateModalCore === 'self' ? 'XKeen UI' : capitalize(updateModalCore)
+  const close = () => dispatch({ type: 'SHOW_MODAL', modal: 'showUpdateModal', show: false })
 
   useEffect(() => {
-    if (modals.showUpdateModal) fetchReleases();
-  }, [modals.showUpdateModal, updateModalCore]);
+    if (modals.showUpdateModal) fetchReleases()
+  }, [modals.showUpdateModal, updateModalCore])
 
   async function fetchReleases() {
-    setLoading(true);
-    setSelectedVersion("");
-    setOpenVersion("");
-    setReleases([]);
-    setSource("");
+    setLoading(true)
+    setSelectedVersion('')
+    setOpenVersion('')
+    setReleases([])
+    setSource('')
     try {
-      const res = await fetch(`/api/update?core=${updateModalCore}`);
-      const data = await res.json();
+      const res = await fetch(`/api/update?core=${updateModalCore}`)
+      const data = await res.json()
       if (data.success && data.releases?.length) {
-        setReleases(data.releases);
-        setSelectedVersion(data.releases[0].version);
-        setOpenVersion(data.releases[0].version);
-        setSource(data.source ?? "");
+        setReleases(data.releases)
+        setSelectedVersion(data.releases[0].version)
+        setOpenVersion(data.releases[0].version)
+        setSource(data.source ?? '')
       }
-      if (!data.success || !data.releases?.length) throw new Error();
+      if (!data.success || !data.releases?.length) throw new Error()
     } catch {
-      showToast("Не удалось получить список релизов", "error");
+      showToast('Не удалось получить список релизов', 'error')
     }
-    setLoading(false);
+    setLoading(false)
   }
 
   async function install() {
-    if (!selectedVersion) return;
-    setInstalling(true);
-    close();
+    if (!selectedVersion) return
+    setInstalling(true)
+    close()
     dispatch({
-      type: "SET_SERVICE_STATUS",
-      status: "pending",
-      pendingText: "Обновление...",
-    });
+      type: 'SET_SERVICE_STATUS',
+      status: 'pending',
+      pendingText: 'Обновление...',
+    })
     try {
-      const res = await fetch("/api/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           core: updateModalCore,
           version: selectedVersion,
           backup_core: settings.backupCore,
         }),
-      });
-      const data = await res.json();
+      })
+      const data = await res.json()
       if (data.success) {
-        showToast(`Установлен ${coreLabel} ${selectedVersion}`);
-        if (updateModalCore === "self") {
-          setTimeout(() => location.reload(), 100);
-          return;
+        showToast(`Установлен ${coreLabel} ${selectedVersion}`)
+        if (updateModalCore === 'self') {
+          setTimeout(() => location.reload(), 100)
+          return
         }
-        onInstalled();
+        onInstalled()
       } else {
-        showToast(data.error || "Ошибка установки", "error");
+        showToast(data.error || 'Ошибка установки', 'error')
       }
     } catch {
-      showToast("Ошибка установки", "error");
+      showToast('Ошибка установки', 'error')
     } finally {
-      setInstalling(false);
-      dispatch({ type: "SET_SERVICE_STATUS", status: "stopped" });
+      setInstalling(false)
+      dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
     }
   }
 
   return (
-    <Dialog
-      open={modals.showUpdateModal}
-      onOpenChange={(open) => !open && close()}
-    >
+    <Dialog open={modals.showUpdateModal} onOpenChange={(open) => !open && close()}>
       <DialogContent className="max-w-[95vw]! md:w-187.5 w-full p-0!">
         <div className="flex flex-col max-h-[90dvh] overflow-hidden p-6 gap-4">
           <DialogHeader className="shrink-0">
@@ -145,10 +122,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
               Обновление {coreLabel}
             </DialogTitle>
 
-            <DialogDescription
-              className="flex items-center justify-between w-full"
-              asChild
-            >
+            <DialogDescription className="flex items-center justify-between w-full" asChild>
               <div>
                 Выберите версию для установки
                 <span className="flex items-center gap-1.5">
@@ -156,20 +130,15 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                     <Badge
                       variant="outline"
                       className={cn(
-                        "rounded-full px-2 h-5 text-xs font-medium border-none",
-                        source === "github"
-                          ? "bg-green-500/10 text-green-400"
-                          : "bg-orange-500/10 text-orange-400",
+                        'rounded-full px-2 h-5 text-xs font-medium border-none',
+                        source === 'github' ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'
                       )}
                     >
-                      {source === "github" ? "GitHub" : "jsDelivr"}
+                      {source === 'github' ? 'GitHub' : 'jsDelivr'}
                     </Badge>
                   )}
                   {!loading && releases.length > 0 && (
-                    <Badge
-                      variant="outline"
-                      className="rounded-full w-6 h-6 bg-blue-500/10 text-blue-400 border-blue-500/20"
-                    >
+                    <Badge variant="outline" className="rounded-full w-6 h-6 bg-blue-500/10 text-blue-400 border-blue-500/20">
                       {releases.length}
                     </Badge>
                   )}
@@ -182,15 +151,13 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
             className="shrink-0"
             hideScrollbar
             style={{
-              maxHeight: "min(calc(70px * 7 + 8px), calc(90dvh - 160px))",
+              maxHeight: 'min(calc(70px * 7 + 8px), calc(90dvh - 160px))',
             }}
           >
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground min-h-88">
                 <Spinner className="size-10 text-chart-2" />
-                <span className="text-sm tracking-normal">
-                  Загрузка релизов...
-                </span>
+                <span className="text-sm tracking-normal">Загрузка релизов...</span>
               </div>
             ) : releases.length === 0 ? (
               <Empty className="min-h-88 border-none">
@@ -198,23 +165,16 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                   <EmptyMedia variant="icon">
                     <IconPlaylistX className="size-8" />
                   </EmptyMedia>
-                  <EmptyTitle className="text-[16px] tracking-normal">
-                    Нет доступных релизов
-                  </EmptyTitle>
+                  <EmptyTitle className="text-[16px] tracking-normal">Нет доступных релизов</EmptyTitle>
                 </EmptyHeader>
                 <EmptyContent>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={fetchReleases}
-                    className="gap-1.5 bg-card! hover:bg-input!"
-                  >
+                  <Button variant="outline" size="sm" onClick={fetchReleases} className="gap-1.5 bg-card! hover:bg-input!">
                     <IconRefresh size={14} />
                     Повторить
                   </Button>
                 </EmptyContent>
               </Empty>
-            ) : source === "github" ? (
+            ) : source === 'github' ? (
               <Accordion
                 type="single"
                 collapsible
@@ -223,16 +183,16 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                 className="py-1 px-0.5 flex flex-col gap-1.5"
               >
                 {releases.map((release) => {
-                  const checked = selectedVersion === release.version;
+                  const checked = selectedVersion === release.version
                   return (
                     <AccordionItem
                       key={release.version}
                       value={release.version}
                       className={cn(
-                        "rounded-lg border transition-all",
+                        'rounded-lg border transition-all',
                         checked
-                          ? "border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15"
-                          : "border-ring/40 hover:border-[#60a5fa] bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5",
+                          ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
+                          : 'border-ring/40 hover:border-[#60a5fa] bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
                       )}
                     >
                       <AccordionTrigger
@@ -242,33 +202,22 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                         <div className="flex items-center justify-between gap-3 w-full py-2.5 min-w-0">
                           <div className="flex flex-col gap-2 flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium truncate">
-                                {release.name || release.version}
-                              </span>
+                              <span className="text-sm font-medium truncate">{release.name || release.version}</span>
                               {release.is_prerelease && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-xs border-none rounded-sm px-2 text-amber-400 bg-amber-500/10"
-                                >
+                                <Badge variant="outline" className="text-xs border-none rounded-sm px-2 text-amber-400 bg-amber-500/10">
                                   Pre-Release
                                 </Badge>
                               )}
                             </div>
-                            <span className="text-xs text-muted-foreground">
-                              {release.published_at}
-                            </span>
+                            <span className="text-xs text-muted-foreground">{release.published_at}</span>
                           </div>
                           <div
                             className={cn(
-                              "size-4 rounded-full border-2 shrink-0 transition-colors flex items-center justify-center",
-                              checked
-                                ? "border-primary bg-primary"
-                                : "border-muted-foreground/50",
+                              'size-4 rounded-full border-2 shrink-0 transition-colors flex items-center justify-center',
+                              checked ? 'border-primary bg-primary' : 'border-muted-foreground/50'
                             )}
                           >
-                            {checked && (
-                              <div className="size-2 rounded-full bg-primary-foreground" />
-                            )}
+                            {checked && <div className="size-2 rounded-full bg-primary-foreground" />}
                           </div>
                         </div>
                       </AccordionTrigger>
@@ -276,11 +225,8 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                         <AccordionContent className="px-3 pb-3 pt-0">
                           <div className="border-t border-ring/20 pt-2.5">
                             <div className="max-h-48 overflow-y-auto overflow-x-hidden w-full">
-                              <div className={cn(mdClass, "min-w-0")}>
-                                <ReactMarkdown
-                                  remarkPlugins={[remarkGfm]}
-                                  components={{ img: () => null }}
-                                >
+                              <div className={cn(mdClass, 'min-w-0')}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: () => null }}>
                                   {release.body}
                                 </ReactMarkdown>
                               </div>
@@ -289,54 +235,40 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                         </AccordionContent>
                       )}
                     </AccordionItem>
-                  );
+                  )
                 })}
               </Accordion>
             ) : (
-              <RadioGroup
-                value={selectedVersion}
-                onValueChange={setSelectedVersion}
-                className="py-1 px-0.5 gap-1.5"
-              >
+              <RadioGroup value={selectedVersion} onValueChange={setSelectedVersion} className="py-1 px-0.5 gap-1.5">
                 {releases.map((release) => {
-                  const checked = selectedVersion === release.version;
+                  const checked = selectedVersion === release.version
                   return (
                     <label
                       key={release.version}
                       htmlFor={release.version}
                       className={cn(
-                        "flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all",
+                        'flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all',
                         checked
-                          ? "border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15"
-                          : "border-ring/40 hover:border-[#60a5fa] bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:bg-linear-to-b from-blue-500/15 to-blue-500/5",
+                          ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
+                          : 'border-ring/40 hover:border-[#60a5fa] bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:bg-linear-to-b from-blue-500/15 to-blue-500/5'
                       )}
                     >
-                      <span className="text-sm font-medium truncate">
-                        {release.name || release.version}
-                      </span>
-                      <RadioGroupItem
-                        value={release.version}
-                        id={release.version}
-                        className="mt-0.5 shrink-0"
-                      />
+                      <span className="text-sm font-medium truncate">{release.name || release.version}</span>
+                      <RadioGroupItem value={release.version} id={release.version} className="mt-0.5 shrink-0" />
                     </label>
-                  );
+                  )
                 })}
               </RadioGroup>
             )}
           </ScrollArea>
 
           <DialogFooter className="shrink-0">
-            <Button
-              onClick={install}
-              disabled={!selectedVersion || installing}
-              className="w-full h-9"
-            >
-              {installing ? "Установка..." : "Установить"}
+            <Button onClick={install} disabled={!selectedVersion || installing} className="w-full">
+              {installing ? 'Установка...' : 'Установить'}
             </Button>
           </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

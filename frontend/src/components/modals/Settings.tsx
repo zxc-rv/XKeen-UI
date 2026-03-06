@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { IconSettings, IconX, IconAlertCircle } from '@tabler/icons-react'
+import { IconSettings, IconX, IconAlertCircle, IconPlus } from '@tabler/icons-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -99,8 +99,8 @@ export function SettingsModal() {
           <ScrollArea className="flex-1 min-h-0">
             <div className="px-1">
               <TabsContent value="gui">
-                <div className="mb-3 p-3 rounded-lg bg-[#2a1f0d] border border-amber-500/20 text-xs tracking-wide text-amber-400 flex items-start gap-2">
-                  <IconAlertCircle size={19} className="shrink-0 mt-0.5" />
+                <div className="my-2 p-3 rounded-lg bg-[#2a1f0d] border border-amber-500/20 text-xs tracking-wide text-amber-400 flex items-start gap-2">
+                  <IconAlertCircle size={19} className="shrink-0" />
                   <span>Функция экспериментальная. Перед включением сделайте бэкап конфигураций. Несовместимо с комментариями.</span>
                 </div>
                 <SwitchRow
@@ -148,13 +148,16 @@ export function SettingsModal() {
                     <p className="text-xs text-muted-foreground">Прокси не добавлены</p>
                   ) : (
                     settings.githubProxies.map((proxy, i) => (
-                      <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-input-background border border-border">
-                        <span className="text-xs truncate">{proxy}</span>
+                      <div
+                        key={i}
+                        className="flex items-center justify-between p-2 px-2.5 rounded-lg bg-input-background border border-border"
+                      >
+                        <span className="text-[13px] truncate">{proxy}</span>
                         <button
                           onClick={() => removeProxy(i)}
                           className="ml-2 text-muted-foreground hover:text-destructive shrink-0 transition-colors"
                         >
-                          <IconX size={16} />
+                          <IconX size={14} />
                         </button>
                       </div>
                     ))
@@ -165,10 +168,9 @@ export function SettingsModal() {
                       onChange={(e) => setNewProxy(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && addProxy()}
                       placeholder="Введите URL прокси..."
-                      className="h-9 text-sm"
                     />
-                    <Button onClick={addProxy} className="h-9 shrink-0">
-                      Добавить
+                    <Button className="font-[13px]" onClick={addProxy}>
+                      <IconPlus data-icon="inline-start" /> Добавить
                     </Button>
                   </div>
                 </div>

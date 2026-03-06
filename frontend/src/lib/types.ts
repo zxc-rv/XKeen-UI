@@ -76,6 +76,7 @@ export interface AppState {
   version: string
   isOutdatedUI: boolean
   dashboardPort: string | null
+  clashApiSecret: string | null
   connections: Connection[]
   wsConnected: boolean
   showDirtyModal: boolean
@@ -105,7 +106,7 @@ export type AppAction =
   | { type: 'SAVE_CONFIG'; index: number; content: string }
   | { type: 'SET_SETTINGS'; settings: Partial<AppSettings> }
   | { type: 'SET_VERSION'; version: string; isOutdatedUI: boolean }
-  | { type: 'SET_DASHBOARD_PORT'; port: string | null }
+  | { type: 'SET_DASHBOARD_PORT'; port: string | null; secret?: string | null }
   | { type: 'SET_CONNECTIONS'; connections: Connection[]; wsConnected?: boolean }
   | { type: 'SET_WS_CONNECTED'; connected: boolean }
   | {

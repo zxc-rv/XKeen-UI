@@ -3,9 +3,9 @@ import { IconLink, IconCopy, IconCheck, IconX, IconPlus } from '@tabler/icons-re
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useAppContext, useModalContext } from '../../lib/store'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
 
 function highlightYaml(code: string): string {
   return code
@@ -165,8 +165,8 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                   </Badge>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copy}>
-                        {copied ? <IconCheck size={14} className="text-green-500" /> : <IconCopy size={14} />}
+                      <Button variant="ghost" size="icon-sm" onClick={copy}>
+                        {copied ? <IconCheck className="text-green-500" /> : <IconCopy />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="left">Скопировать</TooltipContent>
@@ -184,11 +184,11 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
 
                 {/* Футер результата с кнопками добавления */}
                 <div className="shrink-0 flex gap-2 w-full p-2 border-t border-border bg-muted/10">
-                  <Button variant="outline" className="flex-1 h-8 text-xs gap-1.5" onClick={() => addToConfig('start')}>
-                    <IconPlus size={13} /> В начало
+                  <Button variant="outline" size="sm" className="flex-1 text-xs gap-1.5" onClick={() => addToConfig('start')}>
+                    <IconPlus /> В начало
                   </Button>
-                  <Button variant="outline" className="flex-1 h-8 text-xs gap-1.5" onClick={() => addToConfig('end')}>
-                    <IconPlus size={13} /> В конец
+                  <Button variant="outline" size="sm" className="flex-1 text-xs gap-1.5" onClick={() => addToConfig('end')}>
+                    <IconPlus /> В конец
                   </Button>
                 </div>
               </div>
@@ -196,23 +196,27 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
 
             {/* Блок ввода*/}
             <div className="shrink-0 flex flex-col gap-3 mt-auto pt-1">
-              <div className="relative">
-                <Input
+              <InputGroup>
+                <InputGroupInput
                   value={uri}
                   onChange={(e) => setUri(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && isValidUri && generate()}
                   placeholder="vless://..."
                   className={uri ? 'pr-7' : ''}
                 />
-                {uri && (
-                  <button
-                    onClick={() => setUri('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <IconX size={14} />
-                  </button>
-                )}
-              </div>
+                <InputGroupAddon align="inline-end">
+                  {uri && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setUri('')}
+                      className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                    >
+                      <IconX size={13} />
+                    </Button>
+                  )}
+                </InputGroupAddon>
+              </InputGroup>
 
               <Button onClick={generate} disabled={!isValidUri} className="w-full">
                 Сгенерировать

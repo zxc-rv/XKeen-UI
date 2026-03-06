@@ -28,6 +28,7 @@ const initialState: AppState = {
   version: '',
   isOutdatedUI: false,
   dashboardPort: null,
+  clashApiSecret: null,
   connections: [],
   wsConnected: false,
   showDirtyModal: false,
@@ -85,7 +86,7 @@ const useStore = create<StoreState>((set) => ({
         case 'SET_VERSION':
           return { version: action.version, isOutdatedUI: action.isOutdatedUI }
         case 'SET_DASHBOARD_PORT':
-          return { dashboardPort: action.port }
+          return { dashboardPort: action.port, ...(action.secret !== undefined ? { clashApiSecret: action.secret } : {}) }
         case 'SET_CONNECTIONS':
           return {
             connections: action.connections,
@@ -177,6 +178,7 @@ export function useAppContext() {
         version: s.version,
         isOutdatedUI: s.isOutdatedUI,
         dashboardPort: s.dashboardPort,
+        clashApiSecret: s.clashApiSecret,
       })
     )
   )
@@ -218,18 +220,35 @@ export function useConnections() {
   return useStore(useShallow((s) => ({ connections: s.connections, connected: s.wsConnected })))
 }
 
-// getConnections() для чтения без подписки (Selectors selectProxy callback)
+export function useWsConnected() {
+  return useStore((s) => s.wsConnected)
+}
+
+export function useConnectionsCount() {
+  return useStore((s) => s.connections.length)
+}
+
+export function subscribeConnections(callback: (connections: Connection[]) => void): () => void {
+  let prev = useStore.getState().connections
+  return useStore.subscribe((s) => {
+    if (s.connections !== prev) {
+      prev = s.connections
+      callback(s.connections)
+    }
+  })
+}
+
 export function getConnections(): Connection[] {
   return useStore.getState().connections
 }
 
-export function useConnectionsSync(dashboardPort: string | null) {
+export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?: string | null) {
   const dispatch = useStore((s) => s.dispatch)
 
   useEffect(() => {
     if (!dashboardPort) return
 
-    const baseWsUrl = `ws://${location.hostname}:${dashboardPort}/connections?interval=1000`
+    const baseWsUrl = `ws://${location.hostname}:${dashboardPort}/connections?interval=1000${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
     const isIOSSafari =
       /iP(ad|od|hone)/i.test(navigator.userAgent) && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent)
 
@@ -295,8 +314,47 @@ export function useConnectionsSync(dashboardPort: string | null) {
       dispatch({ type: 'SET_CONNECTIONS', connections: [], wsConnected: false })
       if (touchHandler) document.removeEventListener('touchstart', touchHandler)
     }
-  }, [dashboardPort, dispatch])
+  }, [dashboardPort, clashApiSecret, dispatch])
 }
+
+// ─── Shared proxies store ───────────────────────────────────────────────────────
+
+interface ProxiesStore {
+  proxies: Record<string, any>
+  testingAll: Record<string, boolean>
+  testingSingle: Record<string, boolean>
+  loading: boolean
+  error: boolean
+}
+
+export const useProxiesStore = create<ProxiesStore>(() => ({
+  proxies: {},
+  testingAll: {},
+  testingSingle: {},
+  loading: false,
+  error: false,
+}))
+
+export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {
+  useProxiesStore.setState({ loading: true, error: false })
+  try {
+    const res = await fetch(`${baseUrl}/proxies`, { headers: authHeaders })
+    const data = await res.json()
+    if (data.proxies) useProxiesStore.setState({ proxies: data.proxies, loading: false })
+    else useProxiesStore.setState({ loading: false, error: true })
+  } catch {
+    useProxiesStore.setState({ loading: false, error: true })
+  }
+}
+
+export function resetClashProxies(): void {
+  useProxiesStore.setState({ proxies: {}, testingAll: {}, testingSingle: {}, loading: false, error: false })
+}
+
+// ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────
+
+export const useNowStore = create<{ tick: number }>(() => ({ tick: 0 }))
+setInterval(() => useNowStore.setState((s) => ({ tick: s.tick + 1 })), 1000)
 
 // ─── Provider (no-op wrapper for API compatibility) ────────────────────────────
 
