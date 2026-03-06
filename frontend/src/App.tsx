@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { AppProvider, useAppContext, useModalContext, fetchClashProxies, resetClashProxies } from './lib/store'
+import { AppProvider, useAppContext, useModalContext, fetchClashProxies } from './lib/store'
 import { apiCall, capitalize } from './lib/api'
 import { stripJsonComments } from './lib/utils'
 import { StatusBar } from './components/status/StatusBar'
@@ -148,7 +148,7 @@ function AppContent() {
     }
   }
 
-  async function loadConfigs(core?: string): Promise<Config[]> {
+  async function loadConfigs(core?: string, skipProxies = false): Promise<Config[]> {
     dispatch({ type: 'SET_CONFIGS_LOADING', loading: true })
     try {
       const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs')
@@ -160,7 +160,7 @@ function AppContent() {
         const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
         dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
         const activeCores = core ?? state.currentCore
-        if (port && activeCores === 'mihomo') {
+        if (port && activeCores === 'mihomo' && !skipProxies && state.serviceStatus !== 'pending') {
           const authHeaders = secret ? { Authorization: `Bearer ${secret}` } : undefined
           fetchClashProxies(`http://${location.hostname}:${port}`, authHeaders)
         }
@@ -181,26 +181,39 @@ function AppContent() {
       showToast('Это ядро уже активно', 'error')
       return
     }
-    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Переключение...' })
-    const result = await apiCall<any>('POST', 'control', { action: 'switchCore', core })
-    showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `${result.error}`, result.success ? 'success' : 'error')
-    if (!result.success) {
-      const data = await apiCall<any>('GET', 'control')
-      if (data.success) dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
-      else dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
-      return
-    }
     dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
-    resetClashProxies()
-    dispatch({ type: 'SET_CORE_INFO', currentCore: core, coreVersions: state.coreVersions, availableCores: state.availableCores })
-    const configs = await loadConfigs(core)
+    dispatch({
+      type: 'SET_CORE_INFO',
+      currentCore: core,
+      coreVersions: state.coreVersions,
+      availableCores: state.availableCores,
+    })
+    dispatch({
+      type: 'SET_SERVICE_STATUS',
+      status: 'pending',
+      pendingText: 'Переключение...',
+    })
+    const configs = await loadConfigs(core, true)
     const mihomoYamlEmpty =
       core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
+    const result = await apiCall<any>('POST', 'control', {
+      action: 'switchCore',
+      core,
+    })
+    showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `Ошибка: ${result.error}`, result.success ? 'success' : 'error')
     const data = await apiCall<any>('GET', 'control')
     if (data.success) {
-      dispatch({ type: 'SET_CORE_INFO', currentCore: data.currentCore, coreVersions: data.versions, availableCores: data.cores })
-      dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
-      if (mihomoYamlEmpty) await loadConfigs(core)
+      dispatch({
+        type: 'SET_CORE_INFO',
+        currentCore: data.currentCore,
+        coreVersions: data.versions,
+        availableCores: data.cores,
+      })
+      dispatch({
+        type: 'SET_SERVICE_STATUS',
+        status: data.running ? 'running' : 'stopped',
+      })
+      if (result.success && mihomoYamlEmpty) await loadConfigs(core)
     }
   }
 

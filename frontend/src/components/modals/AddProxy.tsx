@@ -159,14 +159,12 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
             {result && (
               <div className="flex flex-col flex-1 min-h-0 rounded-lg border border-border bg-card overflow-hidden">
                 {/* Хедер результата */}
-                <div className="shrink-0 flex items-center justify-between w-full px-3 py-2 border-b border-border bg-muted/30">
-                  <Badge variant="outline" className="font-mono text-xs tracking-wide px-2 py-0.5">
-                    {result.protocol}
-                  </Badge>
+                <div className="shrink-0 flex items-center justify-between w-full px-3 py-1 border-b border-border bg-muted/30">
+                  <Badge className="text-[10px] tracking-wider px-2 pb-2.5 pt-2.25 bg-blue-500/10! text-blue-400">{result.protocol}</Badge>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="ghost" size="icon-sm" onClick={copy}>
-                        {copied ? <IconCheck className="text-green-500" /> : <IconCopy />}
+                        {copied ? <IconCheck className="text-green-500" /> : <IconCopy className="size-4.5" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="left">Скопировать</TooltipContent>

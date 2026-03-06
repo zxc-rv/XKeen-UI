@@ -61,7 +61,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     prevStatusRef.current = serviceStatus
     if (serviceStatus === 'running' && prev === 'pending' && dashboardPort && currentCore === 'mihomo') {
       const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
-      fetchClashProxies(`http://${location.hostname}:${dashboardPort}`, authHeaders)
+      setTimeout(() => {
+        fetchClashProxies(`http://${location.hostname}:${dashboardPort}`, authHeaders)
+      }, 500)
     }
   }, [serviceStatus])
 

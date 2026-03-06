@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
 import { getConnections, useProxiesStore, fetchClashProxies } from '../../../lib/store'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Badge } from '@/components/ui/badge'
 
 interface ProxyHistory {
   time: string
@@ -39,6 +38,7 @@ interface Props {
 }
 
 const NO_DELAY_TYPES = new Set(['reject', 'dns', 'pass', 'relay'])
+const SELECTOR_TYPES = new Set(['Selector', 'Fallback', 'URLTest', 'LoadBalance'])
 
 // Только testing state — proxies живут в useProxiesStore
 interface SelectorsStore {
@@ -86,6 +86,9 @@ const ProxyCard = memo(function ProxyCard({
   const showDelayBadge = !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) && (delay !== null || isTestingSingle)
   const transport = proxy.xudp ? 'xudp' : proxy.udp ? 'udp' : 'tcp'
 
+  const isSelector = proxy.type === 'Selector'
+  const nowProxy = useProxiesStore((s) => (isSelector && proxy.now ? (s.proxies[proxy.now] as ProxyInfo | undefined) : undefined))
+
   return (
     <div
       className={cn(
@@ -96,7 +99,31 @@ const ProxyCard = memo(function ProxyCard({
       )}
       onClick={() => onSelect(selectorName, proxyName)}
     >
-      <span className="text-xs font-medium truncate text-start">{proxyName}</span>
+      <div className="flex items-center gap-1.5 min-w-0">
+        {proxy.icon && (
+          <img
+            src={proxy.icon}
+            alt=""
+            className="size-4 shrink-0 object-contain rounded-sm"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+        )}
+        <span className="text-xs font-medium truncate">{proxyName}</span>
+        {isSelector && proxy.now && (
+          <>
+            <IconCircleArrowRightFilled size={10} className="text-muted-foreground shrink-0" />
+            {nowProxy?.icon && (
+              <img
+                src={nowProxy.icon}
+                alt=""
+                className="size-3 shrink-0 object-contain rounded-sm"
+                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+              />
+            )}
+            <span className="text-muted-foreground text-[10px] truncate">{proxy.now}</span>
+          </>
+        )}
+      </div>
 
       <div className="flex items-center justify-between gap-1">
         <span className="text-muted-foreground text-xs">
@@ -143,6 +170,50 @@ const ProxyCard = memo(function ProxyCard({
   )
 })
 
+/* ====================== NOW-СТРОКА СЕЛЕКТОРА ====================== */
+const SelectorNowRow = memo(function SelectorNowRow({ selectorName }: { selectorName: string }) {
+  const chainStr = useProxiesStore((s): string => {
+    const parts: string[] = []
+    let current = (s.proxies[selectorName] as ProxyInfo | undefined)?.now
+    const visited = new Set<string>()
+    while (current && !visited.has(current)) {
+      visited.add(current)
+      const proxy = s.proxies[current] as ProxyInfo | undefined
+      parts.push(current, proxy?.icon ?? '')
+      if (proxy?.type !== 'Selector' || !proxy.now) break
+      current = proxy.now
+    }
+    return parts.join('\x00')
+  })
+
+  const chain = useMemo(() => {
+    if (!chainStr) return []
+    const parts = chainStr.split('\x00')
+    return Array.from({ length: parts.length / 2 }, (_, i) => ({ name: parts[i * 2], icon: parts[i * 2 + 1] || undefined }))
+  }, [chainStr])
+
+  if (chain.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-1 mt-1.5 mb-1 flex-wrap">
+      {chain.map((item) => (
+        <div key={item.name} className="flex items-center gap-1">
+          <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
+          {item.icon && (
+            <img
+              src={item.icon}
+              alt=""
+              className="size-4 shrink-0 object-contain rounded-sm"
+              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+            />
+          )}
+          <span className="text-muted-foreground truncate text-xs">{item.name}</span>
+        </div>
+      ))}
+    </div>
+  )
+})
+
 /* ====================== СТРОКА СЕЛЕКТОРА ====================== */
 const SelectorRow = memo(function SelectorRow({
   selectorName,
@@ -165,26 +236,25 @@ const SelectorRow = memo(function SelectorRow({
   return (
     <div className="rounded-xl border border-border bg-input-background p-4">
       <div className="flex items-center justify-between mb-2.5">
-        <div className="flex items-center gap-2 min-w-0 pl-0.5">
-          {selector.icon && (
-            <img
-              src={selector.icon}
-              alt=""
-              className="size-6 shrink-0 object-contain rounded-sm"
-              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-            />
-          )}
-          <span className="font-medium text-[15px] truncate">{selectorName}</span>
-          {selector.now && (
-            <>
-              <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
-              <span className="text-muted-foreground text-xs truncate">{selector.now}</span>
-            </>
-          )}
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2">
+            {selector.icon && (
+              <img
+                src={selector.icon}
+                alt=""
+                className="size-6 shrink-0 object-contain rounded-sm"
+                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+              />
+            )}
+            <span className="font-medium text-[15px] truncate">{selectorName}</span>
+          </div>
+          {selector.now && <SelectorNowRow selectorName={selectorName} />}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="outline">Selector ({allProxies.length})</Badge>
+          <span className="text-xs text-gray-400">
+            {selector.type} ({allProxies.length})
+          </span>
           <Button variant="outline" size="icon-sm" onClick={() => onTestAll(selectorName)} disabled={isTesting}>
             {isTesting ? <IconLoader2 size={13} className="animate-spin" /> : <IconBoltFilled size={13} />}
           </Button>
@@ -208,12 +278,12 @@ export function SelectorsPanel({ dashboardPort, mode, clashApiSecret }: Props) {
   const selectorNames = useProxiesStore(
     useShallow((s) => {
       const allSelectors = Object.values(s.proxies).filter((p: any) => {
-        if (p.type !== 'Selector' || p.hidden) return false
+        if (!SELECTOR_TYPES.has(p.type) || p.hidden) return false
         return mode === 'global' ? p.name === 'GLOBAL' : p.name !== 'GLOBAL'
       }) as ProxyInfo[]
       const globalProxy = s.proxies['GLOBAL'] as ProxyInfo | undefined
       if (!globalProxy?.all) return allSelectors.map((p) => p.name)
-      const globalOrder = globalProxy.all.filter((name) => (s.proxies[name] as any)?.type === 'Selector')
+      const globalOrder = globalProxy.all.filter((name) => SELECTOR_TYPES.has((s.proxies[name] as any)?.type))
       const orderMap = new Map(globalOrder.map((name, i) => [name, i]))
       return [...allSelectors].sort((a, b) => (orderMap.get(a.name) ?? Infinity) - (orderMap.get(b.name) ?? Infinity)).map((p) => p.name)
     })

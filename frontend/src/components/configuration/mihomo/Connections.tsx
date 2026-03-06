@@ -135,7 +135,7 @@ function ProxyIcon({ name, className }: { name: string; className?: string }) {
     <img
       src={icon}
       alt=""
-      className={className ?? 'size-4 shrink-0 object-contain'}
+      className={className ?? 'size-5 shrink-0 object-contain mr-1'}
       onError={(e) => {
         ;(e.target as HTMLImageElement).style.display = 'none'
       }}
