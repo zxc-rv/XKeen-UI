@@ -1,4 +1,4 @@
-import { createElement, Fragment, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { createElement, Fragment, useCallback, useEffect, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState, AppAction, AppSettings, ToastMessage, Connection } from './types'
@@ -27,7 +27,7 @@ const initialState: AppState = {
   settings: initialSettings,
   version: '',
   isOutdatedUI: false,
-  dashboardPort: null,
+  clashApiPort: null,
   clashApiSecret: null,
   connections: [],
   wsConnected: false,
@@ -86,7 +86,7 @@ const useStore = create<StoreState>((set) => ({
         case 'SET_VERSION':
           return { version: action.version, isOutdatedUI: action.isOutdatedUI }
         case 'SET_DASHBOARD_PORT':
-          return { dashboardPort: action.port, ...(action.secret !== undefined ? { clashApiSecret: action.secret } : {}) }
+          return { clashApiPort: action.port, ...(action.secret !== undefined ? { clashApiSecret: action.secret } : {}) }
         case 'SET_CONNECTIONS':
           return {
             connections: action.connections,
@@ -177,7 +177,7 @@ export function useAppContext() {
         settings: s.settings,
         version: s.version,
         isOutdatedUI: s.isOutdatedUI,
-        dashboardPort: s.dashboardPort,
+        clashApiPort: s.clashApiPort,
         clashApiSecret: s.clashApiSecret,
       })
     )
@@ -242,14 +242,13 @@ export function getConnections(): Connection[] {
   return useStore.getState().connections
 }
 
-export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?: string | null, connectSignal = 0) {
+export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?: string | null) {
   const dispatch = useStore((s) => s.dispatch)
-  const connectRef = useRef<(() => void) | undefined>(undefined)
 
   useEffect(() => {
-    if (!dashboardPort) return
+    if (!clashApiPort) return
 
-    const wsUrl = `ws://${location.hostname}:${dashboardPort}/connections?interval=1000${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
+    const wsUrl = `ws://${location.hostname}:${clashApiPort}/connections?interval=1000${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
 
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -279,9 +278,7 @@ export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?
         try {
           const data = JSON.parse(e.data)
           if (Array.isArray(data.connections)) dispatch({ type: 'SET_CONNECTIONS', connections: data.connections })
-        } catch {
-          /* */
-        }
+        } catch {}
       }
 
       ws.onerror = () => ws?.close()
@@ -295,17 +292,35 @@ export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?
       }
     }
 
-    connectRef.current = connect
-    connect()
+    const isIOSSafari =
+      /iP(ad|od|hone)/i.test(navigator.userAgent) && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent)
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && (!ws || ws.readyState !== WebSocket.OPEN)) {
+        retryCount = 0
+        connect()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    setTimeout(connect, 0)
+
+    let touchHandler: (() => void) | null = null
+    if (isIOSSafari) {
+      touchHandler = () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) connect()
+      }
+      document.addEventListener('touchstart', touchHandler, { once: true })
+    }
 
     return () => {
       isActive = false
       cleanup()
       dispatch({ type: 'SET_CONNECTIONS', connections: [], wsConnected: false })
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      if (touchHandler) document.removeEventListener('touchstart', touchHandler)
     }
-  }, [dashboardPort, clashApiSecret, dispatch, connectSignal])
-
-  return connectRef
+  }, [clashApiPort, clashApiSecret, dispatch])
 }
 
 // ─── Shared proxies store ───────────────────────────────────────────────────────
@@ -331,9 +346,7 @@ export async function refreshClashProxies(baseUrl: string, authHeaders?: Headers
     const res = await fetch(`${baseUrl}/proxies`, { headers: authHeaders })
     const data = await res.json()
     if (data.proxies) useProxiesStore.setState({ proxies: data.proxies })
-  } catch {
-    /* */
-  }
+  } catch {}
 }
 
 export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {
@@ -350,6 +363,18 @@ export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersIn
 
 export function resetClashProxies(): void {
   useProxiesStore.setState({ proxies: {}, testingAll: {}, testingSingle: {}, loading: false, error: false })
+}
+
+export function syncClashApiPort(): void {
+  const { configs, currentCore, dispatch } = useStore.getState()
+  const yamlConfig = configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
+  const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
+  const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
+  dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
+  if (port && currentCore === 'mihomo') {
+    const authHeaders = secret ? { Authorization: `Bearer ${secret}` } : undefined
+    fetchClashProxies(`http://${location.hostname}:${port}`, authHeaders)
+  }
 }
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────

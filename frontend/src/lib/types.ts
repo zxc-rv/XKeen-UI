@@ -75,7 +75,7 @@ export interface AppState {
   settings: AppSettings
   version: string
   isOutdatedUI: boolean
-  dashboardPort: string | null
+  clashApiPort: string | null
   clashApiSecret: string | null
   connections: Connection[]
   wsConnected: boolean

@@ -53,7 +53,7 @@ type SortColumn = 'host' | 'chains' | 'source' | 'start' | 'upload' | 'download'
 type SortDirection = 'asc' | 'desc'
 
 interface Props {
-  dashboardPort: string
+  clashApiPort: string
 }
 
 // ─── Local store ───────────────────────────────────────────────────────────────
@@ -560,13 +560,13 @@ const ConnectionsBody = memo(function ConnectionsBody({
 
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
-export function ConnectionsPanel({ dashboardPort }: Props) {
+export function ConnectionsPanel({ clashApiPort }: Props) {
   const [filter, setFilter] = useState('')
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const baseUrl = `http://${location.hostname}:${dashboardPort}`
+  const baseUrl = `http://${location.hostname}:${clashApiPort}`
 
   const toggleSort = useCallback((column: SortColumn) => {
     setSortColumn((prev) => {

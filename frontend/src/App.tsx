@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { AppProvider, useAppContext, useModalContext, fetchClashProxies } from './lib/store'
+import { AppProvider, useAppContext, useModalContext, fetchClashProxies, syncClashApiPort } from './lib/store'
 import { apiCall, capitalize } from './lib/api'
 import { stripJsonComments } from './lib/utils'
 import { StatusBar } from './components/status/StatusBar'
@@ -182,24 +182,11 @@ function AppContent() {
       return
     }
     dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
-    dispatch({
-      type: 'SET_CORE_INFO',
-      currentCore: core,
-      coreVersions: state.coreVersions,
-      availableCores: state.availableCores,
-    })
-    dispatch({
-      type: 'SET_SERVICE_STATUS',
-      status: 'pending',
-      pendingText: 'Переключение...',
-    })
+    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Переключение...' })
     const configs = await loadConfigs(core, true)
     const mihomoYamlEmpty =
       core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
-    const result = await apiCall<any>('POST', 'control', {
-      action: 'switchCore',
-      core,
-    })
+    const result = await apiCall<any>('POST', 'control', { action: 'switchCore', core })
     showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `Ошибка: ${result.error}`, result.success ? 'success' : 'error')
     const data = await apiCall<any>('GET', 'control')
     if (data.success) {
@@ -209,11 +196,9 @@ function AppContent() {
         coreVersions: data.versions,
         availableCores: data.cores,
       })
-      dispatch({
-        type: 'SET_SERVICE_STATUS',
-        status: data.running ? 'running' : 'stopped',
-      })
+      dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
       if (result.success && mihomoYamlEmpty) await loadConfigs(core)
+      else if (result.success) syncClashApiPort()
     }
   }
 

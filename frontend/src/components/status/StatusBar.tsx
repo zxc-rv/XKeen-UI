@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '../../lib/utils'
-import { useAppContext } from '../../lib/store'
+import { useAppContext, syncClashApiPort } from '../../lib/store'
 import { apiCall, capitalize } from '../../lib/api'
 import { AuroraText } from '@/components/ui/aurora-text'
 import { ShineBorder } from '@/components/ui/shine-border'
@@ -77,10 +77,8 @@ export function StatusBar({
     setPending('Запуск...')
     const result = await apiCall<any>('POST', 'control', { action: 'start' })
     showToast(result.success ? 'XKeen запущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
-    dispatch({
-      type: 'SET_SERVICE_STATUS',
-      status: result.success ? 'running' : 'stopped',
-    })
+    dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
+    if (result.success) syncClashApiPort()
     checkStatus()
   }
 
@@ -93,10 +91,10 @@ export function StatusBar({
 
   async function restartService() {
     setPending('Перезапуск...')
-    const result = await apiCall<any>('POST', 'control', {
-      action: 'hardRestart',
-    })
+    const result = await apiCall<any>('POST', 'control', { action: 'hardRestart' })
     showToast(result.success ? 'XKeen перезапущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
+    dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
+    if (result.success) syncClashApiPort()
     checkStatus()
   }
 

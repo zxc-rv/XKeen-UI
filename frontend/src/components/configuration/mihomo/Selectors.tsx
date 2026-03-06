@@ -33,7 +33,7 @@ interface ProxyInfo {
 type ClashMode = 'rule' | 'global' | 'direct'
 
 interface Props {
-  dashboardPort: string
+  clashApiPort: string
   mode: ClashMode
   clashApiSecret: string | null
 }
@@ -305,7 +305,7 @@ const SelectorRow = memo(function SelectorRow({
 })
 
 /* ====================== ОСНОВНОЙ КОМПОНЕНТ ====================== */
-export function SelectorsPanel({ dashboardPort, mode, clashApiSecret }: Props) {
+export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
   const loading = useProxiesStore((s) => s.loading)
   const error = useProxiesStore((s) => s.error)
 
@@ -323,7 +323,7 @@ export function SelectorsPanel({ dashboardPort, mode, clashApiSecret }: Props) {
     })
   )
 
-  const baseUrl = `http://${location.hostname}:${dashboardPort}`
+  const baseUrl = `http://${location.hostname}:${clashApiPort}`
   const authHeaders = useMemo(() => (clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined), [clashApiSecret])
 
   const testDelay = useCallback(

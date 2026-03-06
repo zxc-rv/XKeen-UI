@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn, stripJsonComments } from '../../lib/utils'
-import { useAppContext, useConnectionsSync, useWsConnected, fetchClashProxies } from '../../lib/store'
+import { useAppContext, useConnectionsSync, syncClashApiPort } from '../../lib/store'
 import { apiCall, getFileLanguage } from '../../lib/api'
 import { MonacoEditor, type MonacoEditorRef } from './MonacoEditor'
 import { RoutingPanel } from './xray/GuiRouting'
@@ -41,11 +41,9 @@ interface Props {
 
 export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext()
-  const { configs, isConfigsLoading, currentCore, serviceStatus, settings, dashboardPort, clashApiSecret } = state
+  const { configs, isConfigsLoading, currentCore, serviceStatus, settings, clashApiPort, clashApiSecret } = state
 
-  const wsConnected = useWsConnected()
-  const [wsConnectSignal, setWsConnectSignal] = useState(0)
-  useConnectionsSync(currentCore === 'mihomo' ? dashboardPort : null, clashApiSecret, wsConnectSignal)
+  useConnectionsSync(currentCore === 'mihomo' ? clashApiPort : null, clashApiSecret)
 
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending'
@@ -54,19 +52,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   useEffect(() => {
     if (!isRunning) setActivePanel('config')
   }, [isRunning])
-
-  // Refetch proxies after restart (pending → running)
-  const prevStatusRef = useRef(serviceStatus)
-  useEffect(() => {
-    const prev = prevStatusRef.current
-    prevStatusRef.current = serviceStatus
-    if (serviceStatus === 'running' && prev === 'pending' && dashboardPort && currentCore === 'mihomo') {
-      const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
-      setTimeout(() => {
-        fetchClashProxies(`http://${location.hostname}:${dashboardPort}`, authHeaders)
-      }, 500)
-    }
-  }, [serviceStatus])
 
   const [activeConfigIndex, setActiveConfigIndex] = useState(0)
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
@@ -79,7 +64,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
   const viewStatesRef = useRef<Record<string, any>>({})
-  const restoredTabRef = useRef(false)
 
   useEffect(() => {
     configsRef.current = configs
@@ -88,21 +72,33 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     activeIndexRef.current = activeConfigIndex
   }, [activeConfigIndex])
 
+  const prevConfigFilenamesKeyRef = useRef('')
+
   useEffect(() => {
-    if (configs.length === 0 || restoredTabRef.current) return
-    restoredTabRef.current = true
-    const savedFile = localStorage.getItem('lastSelectedTab')
-    if (!savedFile) return
-    const index = configs.findIndex((c) => c.file === savedFile)
-    if (index > 0) {
-      setActiveConfigIndex(index)
-      activeIndexRef.current = index
+    if (configs.length === 0) return
+    const key = configs.map((c) => c.file).join(',')
+    const isFirstLoad = prevConfigFilenamesKeyRef.current === ''
+    prevConfigFilenamesKeyRef.current = key
+
+    if (isFirstLoad) {
+      const savedFile = localStorage.getItem('lastSelectedTab')
+      const index = savedFile ? configs.findIndex((c) => c.file === savedFile) : -1
+      if (index > 0) {
+        setActiveConfigIndex(index)
+        activeIndexRef.current = index
+      }
+      return
     }
+
+    const yamlIndex = configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
+    const next = yamlIndex >= 0 ? yamlIndex : 0
+    setActiveConfigIndex(next)
+    activeIndexRef.current = next
   }, [configs])
 
   useEffect(() => {
-    if (currentCore !== 'mihomo' || !dashboardPort) return
-    const baseUrl = `http://${location.hostname}:${dashboardPort}`
+    if (currentCore !== 'mihomo' || !clashApiPort) return
+    const baseUrl = `http://${location.hostname}:${clashApiPort}`
     const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
     fetch(`${baseUrl}/configs`, { headers: authHeaders })
       .then((r) => r.json())
@@ -110,26 +106,26 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
         if (data.mode) setMode(data.mode as ClashMode)
       })
       .catch(() => {})
-  }, [currentCore, dashboardPort, clashApiSecret])
+  }, [currentCore, clashApiPort, clashApiSecret])
 
   const changeMode = useCallback(
     async (newMode: ClashMode) => {
       if (newMode === mode) return
       setMode(newMode)
-      if (!dashboardPort) return
+      if (!clashApiPort) return
       const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
-      await fetch(`http://${location.hostname}:${dashboardPort}/configs`, {
+      await fetch(`http://${location.hostname}:${clashApiPort}/configs`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ mode: newMode }),
       })
     },
-    [dashboardPort, mode, clashApiSecret]
+    [clashApiPort, mode, clashApiSecret]
   )
 
   async function updateAllProviders(type: 'rules' | 'proxies', setLoading: (v: boolean) => void) {
-    if (!dashboardPort) return
-    const baseUrl = `http://${location.hostname}:${dashboardPort}`
+    if (!clashApiPort) return
+    const baseUrl = `http://${location.hostname}:${clashApiPort}`
     const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
     setLoading(true)
     try {
@@ -250,6 +246,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     })
     showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
+    if (r?.success) syncClashApiPort()
   }
 
   function isGuiActive(cfg: Config) {
@@ -284,7 +281,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const coreConfigs = configs.filter((c) => !c.file.endsWith('.lst'))
   const xkeenConfigs = configs.filter((c) => c.file.endsWith('.lst'))
 
-  const isMihomo = currentCore === 'mihomo' && !!dashboardPort
+  const isMihomo = currentCore === 'mihomo' && !!clashApiPort
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -297,9 +294,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 onValueChange={(value) => {
                   const panel = value as 'config' | 'selectors' | 'connections'
                   setActivePanel(panel)
-                  if ((panel === 'selectors' || panel === 'connections') && !wsConnected) {
-                    setWsConnectSignal((s) => s + 1)
-                  }
                 }}
                 className="flex-row!"
               >
@@ -427,10 +421,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           {isMihomo && (
             <>
               <div className={cn(activePanel !== 'selectors' && 'hidden')}>
-                <SelectorsPanel dashboardPort={dashboardPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
+                <SelectorsPanel clashApiPort={clashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
               </div>
               <div className={cn(activePanel !== 'connections' && 'hidden')}>
-                <ConnectionsPanel dashboardPort={dashboardPort!} />
+                <ConnectionsPanel clashApiPort={clashApiPort!} />
               </div>
             </>
           )}
