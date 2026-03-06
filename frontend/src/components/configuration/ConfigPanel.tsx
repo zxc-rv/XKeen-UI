@@ -300,14 +300,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 }}
                 className="flex-row!"
               >
-                <TabsList variant="line" className="p-0 gap-3">
-                  <TabsTrigger value="config" className="text-lg font-semibold p-0">
+                <TabsList variant="line" className="mb-2 md:mb-0 p-0 gap-3">
+                  <TabsTrigger value="config" className="text-sm md:text-lg font-semibold p-0">
                     Конфигурация
                   </TabsTrigger>
-                  <TabsTrigger value="selectors" className="text-lg font-semibold p-0" disabled={!isRunning}>
+                  <TabsTrigger value="selectors" className="text-sm md:text-lg font-semibold p-0" disabled={!isRunning}>
                     Селекторы
                   </TabsTrigger>
-                  <TabsTrigger value="connections" className="text-lg font-semibold p-0" disabled={!isRunning}>
+                  <TabsTrigger value="connections" className="text-sm md:text-lg font-semibold p-0" disabled={!isRunning}>
                     Соединения
                   </TabsTrigger>
                 </TabsList>
