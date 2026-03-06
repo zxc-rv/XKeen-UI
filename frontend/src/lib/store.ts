@@ -1,4 +1,4 @@
-import { createElement, Fragment, useCallback, useEffect, type ReactNode } from 'react'
+import { createElement, Fragment, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState, AppAction, AppSettings, ToastMessage, Connection } from './types'
@@ -242,24 +242,19 @@ export function getConnections(): Connection[] {
   return useStore.getState().connections
 }
 
-export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?: string | null) {
+export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?: string | null, connectSignal = 0) {
   const dispatch = useStore((s) => s.dispatch)
+  const connectRef = useRef<(() => void) | undefined>(undefined)
 
   useEffect(() => {
     if (!dashboardPort) return
 
-    const baseWsUrl = `ws://${location.hostname}:${dashboardPort}/connections?interval=1000${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
-    const isIOSSafari =
-      /iP(ad|od|hone)/i.test(navigator.userAgent) && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent)
+    const wsUrl = `ws://${location.hostname}:${dashboardPort}/connections?interval=1000${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
 
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let isActive = true
     let retryCount = 0
-
-    function getWsUrl() {
-      return baseWsUrl + '&t=' + Date.now()
-    }
 
     function cleanup() {
       if (reconnectTimer) clearTimeout(reconnectTimer)
@@ -273,7 +268,7 @@ export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?
     function connect() {
       if (!isActive || document.visibilityState !== 'visible') return
       cleanup()
-      ws = new WebSocket(getWsUrl())
+      ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
         dispatch({ type: 'SET_WS_CONNECTED', connected: true })
@@ -284,7 +279,9 @@ export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?
         try {
           const data = JSON.parse(e.data)
           if (Array.isArray(data.connections)) dispatch({ type: 'SET_CONNECTIONS', connections: data.connections })
-        } catch {}
+        } catch {
+          /* */
+        }
       }
 
       ws.onerror = () => ws?.close()
@@ -298,23 +295,17 @@ export function useConnectionsSync(dashboardPort: string | null, clashApiSecret?
       }
     }
 
-    setTimeout(connect, 0)
-
-    let touchHandler: (() => void) | null = null
-    if (isIOSSafari) {
-      touchHandler = () => {
-        if (!ws || ws.readyState !== WebSocket.OPEN) connect()
-      }
-      document.addEventListener('touchstart', touchHandler, { once: true })
-    }
+    connectRef.current = connect
+    connect()
 
     return () => {
       isActive = false
       cleanup()
       dispatch({ type: 'SET_CONNECTIONS', connections: [], wsConnected: false })
-      if (touchHandler) document.removeEventListener('touchstart', touchHandler)
     }
-  }, [dashboardPort, clashApiSecret, dispatch])
+  }, [dashboardPort, clashApiSecret, dispatch, connectSignal])
+
+  return connectRef
 }
 
 // ─── Shared proxies store ───────────────────────────────────────────────────────
@@ -340,7 +331,9 @@ export async function refreshClashProxies(baseUrl: string, authHeaders?: Headers
     const res = await fetch(`${baseUrl}/proxies`, { headers: authHeaders })
     const data = await res.json()
     if (data.proxies) useProxiesStore.setState({ proxies: data.proxies })
-  } catch {}
+  } catch {
+    /* */
+  }
 }
 
 export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {

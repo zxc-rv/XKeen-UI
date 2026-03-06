@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn, stripJsonComments } from '../../lib/utils'
-import { useAppContext, useConnectionsSync, fetchClashProxies } from '../../lib/store'
+import { useAppContext, useConnectionsSync, useWsConnected, fetchClashProxies } from '../../lib/store'
 import { apiCall, getFileLanguage } from '../../lib/api'
 import { MonacoEditor, type MonacoEditorRef } from './MonacoEditor'
 import { RoutingPanel } from './xray/GuiRouting'
@@ -43,8 +43,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const { state, dispatch, showToast } = useAppContext()
   const { configs, isConfigsLoading, currentCore, serviceStatus, settings, dashboardPort, clashApiSecret } = state
 
-  const [wsEnabled, setWsEnabled] = useState(false)
-  useConnectionsSync(wsEnabled ? dashboardPort : null, clashApiSecret)
+  const wsConnected = useWsConnected()
+  const [wsConnectSignal, setWsConnectSignal] = useState(0)
+  useConnectionsSync(currentCore === 'mihomo' ? dashboardPort : null, clashApiSecret, wsConnectSignal)
 
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending'
@@ -296,7 +297,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 onValueChange={(value) => {
                   const panel = value as 'config' | 'selectors' | 'connections'
                   setActivePanel(panel)
-                  if (panel === 'selectors' || panel === 'connections') setWsEnabled(true)
+                  if ((panel === 'selectors' || panel === 'connections') && !wsConnected) {
+                    setWsConnectSignal((s) => s + 1)
+                  }
                 }}
                 className="flex-row!"
               >
