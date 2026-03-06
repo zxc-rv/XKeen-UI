@@ -313,17 +313,17 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     }
 
     log("INFO", "Установка обновления...".into());
-    let (run, source) = (crate::controller::get_pid(&req.core).is_some(), tmp_dir.join(&req.core));
+    let (run, source) = (!crate::controller::get_pid(&req.core).is_empty(), tmp_dir.join(&req.core));
     if fs::rename(&source, &target).await.is_ok() {
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run { log("INFO", format!("Перезапуск {}...", core_cap)); crate::controller::soft_restart(&req.core).await; }
     } else {
         log("WARN", "Атомарная замена не удалась, фолбек на копирование...".into());
         let init = state.init_file.read().unwrap().clone();
-        if run { _ = Command::new(&init).arg("stop").status().await; }
+        if run { if let Some(ref init) = init { _ = Command::new(init).arg("stop").status().await; } }
         if let Err(e) = fs::copy(&source, &target).await { return response(false, Some(format!("Ошибка установки: {}", e))); }
         _ = fs::remove_file(&source).await; _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
-        if run { log("INFO", "Запуск XKeen...".into()); _ = Command::new(&init).arg("start").status(); }
+        if run { if let Some(ref init) = init { log("INFO", "Запуск XKeen...".into()); _ = Command::new(init).arg("start").status(); } }
     }
 
     log("INFO", format!("Обновление {} до {} завершено", core_cap, ver));

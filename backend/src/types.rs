@@ -21,7 +21,7 @@ pub type GeoCache = std::collections::HashMap<String, (std::time::SystemTime, bo
 pub struct AppState {
     pub core: Arc<RwLock<CoreInfo>>,
     pub settings: Arc<RwLock<AppSettings>>,
-    pub init_file: Arc<RwLock<String>>,
+    pub init_file: Arc<RwLock<Option<String>>>,
     pub http_client: reqwest::Client,
     pub update_checker: UpdateChecker,
     pub geo_cache: Arc<RwLock<GeoCache>>,

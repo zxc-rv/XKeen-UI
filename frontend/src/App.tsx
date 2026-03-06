@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { AppProvider, useAppContext, useModalContext } from './lib/store'
+import { AppProvider, useAppContext, useModalContext, fetchClashProxies, resetClashProxies } from './lib/store'
 import { apiCall, capitalize } from './lib/api'
 import { stripJsonComments } from './lib/utils'
 import { StatusBar } from './components/status/StatusBar'
@@ -39,7 +39,12 @@ interface ModalManagerProps {
 }
 
 const ModalManager = memo(function ModalManager({
-  onSwitchCore, onInstalled, onGenerate, onAddToConfig, onImportTemplate, openModal,
+  onSwitchCore,
+  onInstalled,
+  onGenerate,
+  onAddToConfig,
+  onImportTemplate,
+  openModal,
 }: ModalManagerProps) {
   const { modals, dispatch } = useModalContext()
 
@@ -138,7 +143,9 @@ function AppContent() {
         if (data.show_toast?.core)
           showToast({ title: 'Доступно обновление', body: `Доступна новая версия ${capitalize(state.currentCore)}` })
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   async function loadConfigs(core?: string): Promise<Config[]> {
@@ -150,33 +157,50 @@ function AppContent() {
         dispatch({ type: 'SET_CONFIGS', configs })
         const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
         const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
-        dispatch({ type: 'SET_DASHBOARD_PORT', port })
+        const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
+        dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
+        const activeCores = core ?? state.currentCore
+        if (port && activeCores === 'mihomo') {
+          const authHeaders = secret ? { Authorization: `Bearer ${secret}` } : undefined
+          fetchClashProxies(`http://${location.hostname}:${port}`, authHeaders)
+        }
         return configs
       } else {
         dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
-        showToast('Ошибка загрузки конфигураций', 'error')
+        showToast('Не удалось загрузить конфигурации', 'error')
       }
     } catch (e: any) {
       dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
-      showToast(`Ошибка загрузки: ${e.message}`, 'error')
+      showToast(`${e.message}`, 'error')
     }
     return []
   }
 
   async function switchCore(core: string) {
-    if (core === state.currentCore) { showToast('Это ядро уже активно', 'error'); return }
-    dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
-    dispatch({ type: 'SET_CORE_INFO', currentCore: core, coreVersions: state.coreVersions, availableCores: state.availableCores })
-    const configs = await loadConfigs(core)
-    const mihomoYamlEmpty = core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
+    if (core === state.currentCore) {
+      showToast('Это ядро уже активно', 'error')
+      return
+    }
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Переключение...' })
     const result = await apiCall<any>('POST', 'control', { action: 'switchCore', core })
-    showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `Ошибка: ${result.error}`, result.success ? 'success' : 'error')
+    showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `${result.error}`, result.success ? 'success' : 'error')
+    if (!result.success) {
+      const data = await apiCall<any>('GET', 'control')
+      if (data.success) dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
+      else dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+      return
+    }
+    dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
+    resetClashProxies()
+    dispatch({ type: 'SET_CORE_INFO', currentCore: core, coreVersions: state.coreVersions, availableCores: state.availableCores })
+    const configs = await loadConfigs(core)
+    const mihomoYamlEmpty =
+      core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
     const data = await apiCall<any>('GET', 'control')
     if (data.success) {
       dispatch({ type: 'SET_CORE_INFO', currentCore: data.currentCore, coreVersions: data.versions, availableCores: data.cores })
       dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
-      if (result.success && mihomoYamlEmpty) await loadConfigs(core)
+      if (mihomoYamlEmpty) await loadConfigs(core)
     }
   }
 
@@ -206,7 +230,10 @@ function AppContent() {
 
     if (core === 'mihomo') {
       targetIndex = state.configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-      if (targetIndex === -1) { showToast('Файл config.yaml не найден', 'error'); return }
+      if (targetIndex === -1) {
+        showToast('Файл config.yaml не найден', 'error')
+        return
+      }
     } else {
       try {
         try {
@@ -214,11 +241,21 @@ function AppContent() {
           if (!Array.isArray(obj.outbounds)) throw new Error()
         } catch {
           targetIndex = state.configs.findIndex((cfg) => {
-            try { return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds) } catch { return false }
+            try {
+              return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds)
+            } catch {
+              return false
+            }
           })
-          if (targetIndex === -1) { showToast('Массив outbounds не найден', 'error'); return }
+          if (targetIndex === -1) {
+            showToast('Массив outbounds не найден', 'error')
+            return
+          }
         }
-      } catch (e: any) { showToast(`Ошибка: ${e.message}`, 'error'); return }
+      } catch (e: any) {
+        showToast(`${e.message}`, 'error')
+        return
+      }
     }
 
     if (targetIndex !== configActionsRef.current.getActiveIndex()) configActionsRef.current.switchTab(targetIndex)
@@ -235,14 +272,22 @@ function AppContent() {
       const scrollToLine = (editor: any, line: number) => setTimeout(() => editor.revealLineInCenter(Math.max(1, line)), 100)
       const insertAtOffset = (offset: number, text: string, scrollLine?: number) => {
         const pos = model.getPositionAt(offset)
-        monacoEditor.executeEdits('add-to-config', [{ range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column }, text }])
+        monacoEditor.executeEdits('add-to-config', [
+          {
+            range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column },
+            text,
+          },
+        ])
         scrollToLine(monacoEditor, scrollLine ?? pos.lineNumber)
       }
 
       if (core === 'mihomo') {
         const marker = type === 'proxy' ? 'proxies:' : 'proxy-providers:'
         const markerIdx = current.indexOf(marker)
-        if (markerIdx === -1) { insertAtOffset(current.length, `\n${marker}\n${generated}`, lineAtOffset(current, current.length) + 2); return }
+        if (markerIdx === -1) {
+          insertAtOffset(current.length, `\n${marker}\n${generated}`, lineAtOffset(current, current.length) + 2)
+          return
+        }
         const markerLineEnd = current.indexOf('\n', markerIdx) + 1
         if (position === 'start') {
           insertAtOffset(markerLineEnd, generated, lineAtOffset(current, markerLineEnd))
@@ -259,15 +304,14 @@ function AppContent() {
           else obj.outbounds.push(JSON.parse(generated))
           monacoEditor.executeEdits('add-to-config', [{ range: model.getFullModelRange(), text: JSON.stringify(obj, null, 2) }])
           scrollToLine(monacoEditor, position === 'start' ? 1 : model.getLineCount())
-        } catch (e: any) { showToast(`Ошибка парсинга: ${e.message}`, 'error') }
+        } catch (e: any) {
+          showToast(`Ошибка парсинга: ${e.message}`, 'error')
+        }
       }
     }, 150)
   }
 
-  const openModal = useCallback(
-    (modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }),
-    [dispatch]
-  )
+  const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
 
   return (
     <div className="min-h-dvh flex flex-col bg-background">

@@ -87,10 +87,7 @@ export function StatusBar({
   async function stopService() {
     setPending('Остановка...')
     const result = await apiCall<any>('POST', 'control', { action: 'stop' })
-    showToast(
-      result.success ? 'XKeen остановлен' : `Ошибка остановки: ${result.output || result.error}`,
-      result.success ? 'success' : 'error'
-    )
+    showToast(result.success ? 'XKeen остановлен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     checkStatus()
   }
 
@@ -99,10 +96,7 @@ export function StatusBar({
     const result = await apiCall<any>('POST', 'control', {
       action: 'hardRestart',
     })
-    showToast(
-      result.success ? 'XKeen перезапущен' : `Ошибка перезапуска: ${result.output || result.error}`,
-      result.success ? 'success' : 'error'
-    )
+    showToast(result.success ? 'XKeen перезапущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     checkStatus()
   }
 
@@ -138,8 +132,8 @@ export function StatusBar({
                 {isRunning && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={restartService} disabled={isPending}>
-                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconRefresh size={15} />}
+                      <Button variant="outline" size="icon-sm" onClick={restartService} disabled={isPending}>
+                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconRefresh />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Перезапустить</TooltipContent>
@@ -150,12 +144,12 @@ export function StatusBar({
                     <TooltipTrigger asChild>
                       <Button
                         variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-green-500 hover:text-green-400 hover:border-green-500/50"
+                        size="icon-sm"
+                        className="text-green-500 hover:text-green-400 hover:border-green-500/50"
                         onClick={startService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerPlayFilled size={15} />}
+                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerPlayFilled />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Запустить</TooltipContent>
@@ -166,12 +160,12 @@ export function StatusBar({
                     <TooltipTrigger asChild>
                       <Button
                         variant="outline"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:border-destructive/50"
+                        size="icon-sm"
+                        className="text-destructive hover:text-destructive"
                         onClick={stopService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerStopFilled size={15} />}
+                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerStopFilled />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Остановить</TooltipContent>
@@ -194,8 +188,8 @@ export function StatusBar({
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" className="h-9 gap-2" onClick={onOpenCoreManage}>
-                  <IconCpu className="size-5" />
+                <Button variant="outline" onClick={onOpenCoreManage}>
+                  <IconCpu data-icon="inline-start" className="size-4.5" />
                   <span className="text-[13px]">{capitalize(currentCore)}</span>
                   {coreVersions[currentCore as keyof typeof coreVersions] && (
                     <span className="text-xs mt-0.5 text-muted-foreground/60">
@@ -217,12 +211,12 @@ export function StatusBar({
                     variant="outline"
                     onClick={() => onOpenUpdate('self')}
                     className={cn(
-                      'relative h-9 text-xs tracking-wider overflow-hidden',
+                      'relative text-xs tracking-wider overflow-hidden',
                       isOutdatedUI ? 'text-cyan-300 hover:text-cyan-300 border-none!' : ''
                     )}
                   >
                     {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}
-                    <IconBox className="size-5" />
+                    <IconBox data-icon="inline-start" className="size-4.5" />
                     {version}
                   </Button>
                 </TooltipTrigger>
@@ -234,8 +228,8 @@ export function StatusBar({
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={onOpenSettings}>
-                  <IconSettings className="size-5" />
+                <Button variant="outline" size="icon" onClick={onOpenSettings}>
+                  <IconSettings className="size-4.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Настройки</TooltipContent>

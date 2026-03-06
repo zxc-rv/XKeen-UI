@@ -21,7 +21,9 @@ async fn main() {
     }
     println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, get_arch());
 
-    let init_file = if Path::new(S99XKEEN).exists() { S99XKEEN } else { S24XRAY }.to_string();
+    let init_file: Option<String> = if Path::new(S99XKEEN).exists() { Some(S99XKEEN.to_string()) }
+        else if Path::new(S24XRAY).exists() { Some(S24XRAY.to_string()) }
+        else { log("WARN", format!("Не найден файл инициализации ({} или {})", S99XKEEN, S24XRAY)); None };
     let geo_cache = Arc::new(RwLock::new(std::collections::HashMap::new()));
     let gc_clone = geo_cache.clone();
     tokio::task::spawn_blocking(move || {
@@ -30,7 +32,7 @@ async fn main() {
     let (log_tx, _) = broadcast::channel::<String>(16);
     let log_tx_arc = Arc::new(log_tx);
     let state = AppState {
-        core: Arc::new(RwLock::new(detect_core(&init_file))),
+        core: Arc::new(RwLock::new(detect_core(init_file.as_deref()))),
         settings: Arc::new(RwLock::new(load_settings())),
         init_file: Arc::new(RwLock::new(init_file)),
         http_client: reqwest::Client::builder().user_agent("XKeen-UI").timeout(std::time::Duration::from_secs(120)).build().unwrap(),
@@ -68,8 +70,9 @@ fn get_arch() -> &'static str {
     if std::env::consts::ARCH == "mips" && cfg!(target_endian = "little") { "mipsle" } else { std::env::consts::ARCH }
 }
 
-fn detect_core(init_file: &str) -> CoreInfo {
-    if std::fs::read_to_string(init_file).unwrap_or_default().contains("name_client=\"mihomo\"") {
+fn detect_core(init_file: Option<&str>) -> CoreInfo {
+    let content = init_file.and_then(|p| std::fs::read_to_string(p).ok()).unwrap_or_default();
+    if content.contains("name_client=\"mihomo\"") {
         CoreInfo { name: "mihomo".into(), conf_dir: MIHOMO_CONF.into(), is_json: false }
     } else {
         CoreInfo { name: "xray".into(), conf_dir: XRAY_CONF.into(), is_json: true }

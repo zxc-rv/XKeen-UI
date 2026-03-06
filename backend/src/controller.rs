@@ -1,6 +1,6 @@
 use axum::{extract::State, response::{IntoResponse, Json}};
 use serde::Deserialize;
-use std::{collections::HashMap, path::Path, os::unix::fs::PermissionsExt, fs::Permissions, io::Read};
+use std::{collections::HashMap, path::Path, os::unix::fs::PermissionsExt, fs::Permissions};
 use nix::{sys::{signal::{kill, Signal}, resource::{setrlimit, Resource}}, unistd::{Gid, Pid, setgid, setsid}};
 use tokio::{fs::{self, set_permissions}, process::Command};
 use crate::types::*;
@@ -15,19 +15,18 @@ fn get_core_info(name: &str) -> CoreInfo {
     }
 }
 
-pub fn get_pid(name: &str) -> Option<i32> {
-    let mut buf = Vec::new();
-    std::fs::read_dir("/proc").ok()?.filter_map(|e| {
-        let p = e.ok()?.path();
-        let pid = p.file_name()?.to_str()?.parse::<i32>().ok()?;
-        buf.clear();
-        std::fs::File::open(p.join("comm")).ok()?.read_to_end(&mut buf).ok()?;
-        (buf.strip_suffix(b"\n")? == name.as_bytes()).then_some(pid)
-    }).next()
+pub fn get_pid(name: &str) -> Vec<i32> {
+    let Ok(entries) = std::fs::read_dir("/proc") else { return vec![] };
+    entries.filter_map(|entry| {
+        let path = entry.ok()?.path();
+        let pid = path.file_name()?.to_str()?.parse::<i32>().ok()?;
+        let comm = std::fs::read_to_string(path.join("comm")).ok()?;
+        (comm.trim_end_matches('\n') == name).then_some(pid)
+    }).collect()
 }
 
 pub async fn soft_restart(core: &str) {
-    if let Some(p) = get_pid(core) { _ = kill(Pid::from_raw(p), Signal::SIGKILL); }
+    for pid in get_pid(core) { _ = kill(Pid::from_raw(pid), Signal::SIGKILL); }
     let mut cmd = Command::new(core);
     match core {
         "mihomo" => { cmd.env("CLASH_HOME_DIR", MIHOMO_CONF); }
@@ -45,15 +44,17 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     let mut current_core = state.core.read().unwrap().clone();
     let core_name = current_core.name.clone();
 
-    if tokio::task::spawn_blocking(move || get_pid(&core_name)).await.unwrap_or(None).is_none() {
+    if tokio::task::spawn_blocking(move || get_pid(&core_name)).await.unwrap_or_default().is_empty() {
         let alt_core = if current_core.name == "mihomo" { "xray" } else { "mihomo" };
         let alt_string = alt_core.to_string();
 
-        current_core = if tokio::task::spawn_blocking(move || get_pid(&alt_string)).await.unwrap_or(None).is_some() {
+        current_core = if !tokio::task::spawn_blocking(move || get_pid(&alt_string)).await.unwrap_or_default().is_empty() {
             get_core_info(alt_core)
         } else {
-            let init_file_path = state.init_file.read().unwrap().clone();
-            let configuration = tokio::fs::read_to_string(&init_file_path).await.unwrap_or_default();
+            let configuration = {
+                let path = state.init_file.read().unwrap().clone();
+                if let Some(p) = path { tokio::fs::read_to_string(p).await.unwrap_or_default() } else { String::new() }
+            };
             get_core_info(if configuration.contains("name_client=\"mihomo\"") { "mihomo" } else { "xray" })
         };
         *state.core.write().unwrap() = current_core.clone();
@@ -85,7 +86,7 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
         }
 
         let binary_string = core_binary.to_string();
-        if tokio::task::spawn_blocking(move || get_pid(&binary_string)).await.unwrap_or(None).is_some() {
+        if !tokio::task::spawn_blocking(move || get_pid(&binary_string)).await.unwrap_or_default().is_empty() {
             running_status = true;
         }
     }
@@ -112,11 +113,13 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             let old = state.core.read().unwrap().name.clone();
             if old == req.core { return Json(ApiResponse { success: true, error: None, data: None }); }
 
-            let init_file = state.init_file.read().unwrap().clone();
+            let Some(init_file) = [S99XKEEN, S24XRAY].iter().find(|p| Path::new(p).exists()).map(|s| s.to_string()) else {
+                return Json(ApiResponse { success: false, error: Some("Не найден init файл XKeen".into()), data: None });
+            };
+            *state.init_file.write().unwrap() = Some(init_file.clone());
             _ = Command::new(&init_file).arg("stop").status().await;
 
-            let new_init_file = if Path::new(S99XKEEN).exists() { S99XKEEN.to_string() } else { S24XRAY.to_string() };
-            *state.init_file.write().unwrap() = new_init_file.clone();
+            let new_init_file = init_file;
 
             if let Ok(content) = fs::read_to_string(&new_init_file).await {
                 let new_content = content.replace(&format!("name_client=\"{}\"", old), &format!("name_client=\"{}\"", req.core));
@@ -159,12 +162,12 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 _ = fs::write(ERROR_LOG, b"").await;
             }
 
-            let init_file = state.init_file.read().unwrap().clone();
+            let Some(init_file) = [S99XKEEN, S24XRAY].iter().find(|p| Path::new(p).exists()).map(|s| s.to_string()) else {
+                return Json(ApiResponse { success: false, error: Some("Не найден init файл XKeen".into()), data: None });
+            };
+            *state.init_file.write().unwrap() = Some(init_file.clone());
             if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
-                let s = Command::new(&init_file).arg(arg).stdout(f.try_clone().unwrap()).stderr(f).status().await;
-                if matches!(s, Ok(c) if !c.success()) {
-                    return Json(ApiResponse { success: false, error: Some("Process error".into()), data: None });
-                }
+                _ = Command::new(&init_file).arg(arg).stdout(f.try_clone().unwrap()).stderr(f).status().await;
             } else {
                 _ = Command::new(&init_file).arg(arg).status().await;
             }
