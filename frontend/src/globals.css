@@ -1,15 +1,15 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/jetbrains-mono";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
 
 @font-face {
-  font-family: "Noto Color Emoji";
+  font-family: 'Noto Color Emoji';
   font-style: normal;
   font-weight: 400;
   font-display: block;
-  src: url("assets/NotoColorEmoji.ttf") format("truetype");
+  src: url('assets/NotoColorEmoji.ttf') format('truetype');
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -85,9 +85,8 @@
 }
 
 @theme inline {
-  --font-sans: "Inter Variable", sans-serif, "Noto Color Emoji";
-  --font-mono:
-    ui-monospace, "JetBrains Mono Variable", monospace, "Noto Color Emoji";
+  --font-sans: 'Inter Variable', sans-serif, 'Noto Color Emoji';
+  --font-mono: ui-monospace, 'JetBrains Mono Variable', monospace, 'Noto Color Emoji';
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

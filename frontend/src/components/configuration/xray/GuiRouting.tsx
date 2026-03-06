@@ -379,7 +379,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
       style={{ background: 'var(--color-input-background)' }}
       className={cn(
         'rounded-xl border p-3 flex flex-col gap-2 transition-all duration-150 select-none',
-        isDragging ? 'border-primary/60 shadow-lg shadow-black/30 scale-[0.99] opacity-80' : 'border-border'
+        isDragging ? 'border-[#60a5fa] scale-[0.99] opacity-80' : 'border-border'
       )}
     >
       {/* Header */}
@@ -450,7 +450,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
       {/* Condition fields */}
       {conditionFields.map((fieldName) => {
         const cfg = RULE_FIELDS[fieldName as FieldName]
-        const otherFields = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => f !== fieldName && !(f in rule))
+        const otherFields = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => f === fieldName || !(f in rule))
 
         return (
           <div key={fieldName} className="flex items-start gap-2">
@@ -464,8 +464,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
                 popper
                 className="w-fit shrink-0 flex items-center justify-between gap-2 h-9 px-3 rounded-md border border-border bg-input-background hover:bg-muted text-[13px] font-medium transition-colors focus:ring-0 [&>svg]:opacity-50"
               >
-                <span className="truncate">{fieldName}</span>
-                <SelectValue placeholder={fieldName} className="hidden" />
+                <SelectValue placeholder={fieldName} />
               </SelectTrigger>
               <SelectContent position="popper">
                 {otherFields.map((f) => (
@@ -572,10 +571,13 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
       {/* Outbound row */}
       <div className="flex items-center gap-2">
         <Select value={outboundType} onValueChange={(v) => switchOutbound(v as 'outboundTag' | 'balancerTag')}>
-          <SelectTrigger className="w-fit min-w-32.5 shrink-0 h-9 px-2.5 border-blue-500/40 bg-input-background hover:bg-blue-500/10 text-blue-400 text-[13px] font-bold transition-colors [&>svg]:text-blue-400/60">
+          <SelectTrigger
+            popper
+            className="min-w-34 shrink-0 border-blue-500/40 hover:bg-blue-500/10 text-blue-400 text-[13px] font-bold transition-colors [&>svg]:text-blue-400/60"
+          >
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="border-blue-500/40">
+          <SelectContent position="popper" className="border-blue-500/40">
             <SelectItem value="outboundTag" className="text-[13px] font-medium">
               outboundTag
             </SelectItem>
@@ -586,10 +588,13 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
         </Select>
 
         <Select value={outboundValue} onValueChange={changeOutboundValue}>
-          <SelectTrigger className="h-9 flex-1 text-[13px] border-blue-500/40 bg-input-background hover:bg-blue-500/10 transition-colors [&>svg]:text-blue-400/60">
+          <SelectTrigger
+            popper
+            className="flex-1 text-[13px] border-blue-500/40 hover:bg-blue-500/10 transition-colors [&>svg]:text-blue-400/60"
+          >
             <SelectValue placeholder="Выберите outbound..." />
           </SelectTrigger>
-          <SelectContent className="border-blue-500/40">
+          <SelectContent position="popper" className="border-blue-500/40">
             {(isBalancer ? available.balancers : available.outbounds).length === 0 ? (
               <div className="text-xs text-muted-foreground px-2 py-1.5">
                 {isBalancer ? 'Балансиры не найдены' : 'Аутбаунды не найдены'}
