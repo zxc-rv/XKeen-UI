@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
-import { getConnections, useProxiesStore, fetchClashProxies } from '../../../lib/store'
+import { getConnections, useProxiesStore, fetchClashProxies, refreshClashProxies } from '../../../lib/store'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 
 interface ProxyHistory {
@@ -23,6 +23,7 @@ interface ProxyInfo {
   alive: boolean
   hidden?: boolean
   now?: string
+  fixed?: string
   all?: string[]
   history: ProxyHistory[]
   'provider-name'?: string
@@ -77,6 +78,7 @@ const ProxyCard = memo(function ProxyCard({
 }) {
   const proxy = useProxiesStore((s) => s.proxies[proxyName] as ProxyInfo | undefined)
   const isActive = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.now === proxyName)
+  const isFixed = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.fixed === proxyName)
   const isTestingSingle = useSelectorsStore((s) => !!s.testingSingle[proxyName])
 
   if (!proxy) return null
@@ -86,16 +88,36 @@ const ProxyCard = memo(function ProxyCard({
   const showDelayBadge = !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) && (delay !== null || isTestingSingle)
   const transport = proxy.xudp ? 'xudp' : proxy.udp ? 'udp' : 'tcp'
 
-  const isSelector = proxy.type === 'Selector'
-  const nowProxy = useProxiesStore((s) => (isSelector && proxy.now ? (s.proxies[proxy.now] as ProxyInfo | undefined) : undefined))
+  const isSelectorType = SELECTOR_TYPES.has(proxy.type)
+  const chainStr = useProxiesStore((s): string => {
+    if (!isSelectorType || !proxy.now) return ''
+    const parts: string[] = [proxyName, proxy.icon ?? '']
+    let current: string | undefined = proxy.now
+    const visited = new Set<string>()
+    while (current && !visited.has(current)) {
+      visited.add(current)
+      const p = s.proxies[current] as ProxyInfo | undefined
+      parts.push(current, p?.icon ?? '')
+      if (!p || !SELECTOR_TYPES.has(p.type) || !p.now) break
+      current = p.now
+    }
+    return parts.join('\x00')
+  })
+  const chain = useMemo(() => {
+    if (!chainStr) return []
+    const parts = chainStr.split('\x00')
+    return Array.from({ length: parts.length / 2 }, (_, i) => ({ name: parts[i * 2], icon: parts[i * 2 + 1] || undefined }))
+  }, [chainStr])
 
   return (
     <div
       className={cn(
         'flex flex-col gap-2 px-3 py-2.5 rounded-sm border cursor-pointer transition-all text-sm',
-        isActive
-          ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
-          : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
+        isFixed
+          ? 'border-purple-400 bg-linear-to-b from-purple-500/25 to-purple-500/15'
+          : isActive
+            ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
+            : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
       )}
       onClick={() => onSelect(selectorName, proxyName)}
     >
@@ -108,20 +130,32 @@ const ProxyCard = memo(function ProxyCard({
             onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
           />
         )}
-        <span className="text-xs font-medium truncate">{proxyName}</span>
-        {isSelector && proxy.now && (
-          <>
-            <IconCircleArrowRightFilled size={10} className="text-muted-foreground shrink-0" />
-            {nowProxy?.icon && (
-              <img
-                src={nowProxy.icon}
-                alt=""
-                className="size-3 shrink-0 object-contain rounded-sm"
-                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-              />
-            )}
-            <span className="text-muted-foreground text-[10px] truncate">{proxy.now}</span>
-          </>
+        {chain.length > 0 ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-xs font-medium truncate">{proxyName}</span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="p-2">
+              <div className="flex items-center gap-1 flex-wrap">
+                {chain.map((item, i) => (
+                  <div key={item.name} className="flex items-center gap-1">
+                    {i > 0 && <IconCircleArrowRightFilled size={10} className="text-muted-foreground shrink-0" />}
+                    {item.icon && (
+                      <img
+                        src={item.icon}
+                        alt=""
+                        className="size-3.5 shrink-0 object-contain rounded-sm"
+                        onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+                      />
+                    )}
+                    <span className="text-xs">{item.name}</span>
+                  </div>
+                ))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-xs font-medium truncate">{proxyName}</span>
         )}
       </div>
 
@@ -180,7 +214,7 @@ const SelectorNowRow = memo(function SelectorNowRow({ selectorName }: { selector
       visited.add(current)
       const proxy = s.proxies[current] as ProxyInfo | undefined
       parts.push(current, proxy?.icon ?? '')
-      if (proxy?.type !== 'Selector' || !proxy.now) break
+      if (!proxy || !SELECTOR_TYPES.has(proxy.type) || !proxy.now) break
       current = proxy.now
     }
     return parts.join('\x00')
@@ -339,6 +373,7 @@ export function SelectorsPanel({ dashboardPort, mode, clashApiSecret }: Props) {
             headers: { 'Content-Type': 'application/json', ...authHeaders },
             body: JSON.stringify({ name: proxyName }),
           })
+          await refreshClashProxies(baseUrl, authHeaders)
           const affected = getConnections()
             .filter((conn) => conn.chains?.includes(selectorName))
             .map((conn) => conn.id)
@@ -356,30 +391,33 @@ export function SelectorsPanel({ dashboardPort, mode, clashApiSecret }: Props) {
 
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: true } }))
 
-      const targets = selector.all.filter((name) => {
-        const proxy = useProxiesStore.getState().proxies[name] as ProxyInfo | undefined
-        return !proxy || !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
-      })
-
-      for (let i = 0; i < targets.length; i += 5) {
-        const chunk = targets.slice(i, i + 5)
-        const results = await Promise.all(chunk.map(async (name) => ({ name, delay: await testDelay(name) })))
+      try {
+        const res = await fetch(
+          `${baseUrl}/group/${encodeURIComponent(selectorName)}/delay?url=https://www.youtube.com/generate_204&timeout=5000`,
+          { headers: authHeaders }
+        )
+        const delays: Record<string, number> = await res.json()
 
         useProxiesStore.setState((state) => {
           const next = { ...state.proxies }
-          for (const { name, delay } of results) {
+          for (const [name, delay] of Object.entries(delays)) {
             const proxy = state.proxies[name] as ProxyInfo | undefined
             if (!proxy) continue
-            const newHistory = delay !== null ? [...proxy.history, { time: new Date().toISOString(), delay }].slice(-10) : proxy.history
-            next[name] = { ...proxy, history: newHistory, alive: delay !== null }
+            const effectiveDelay = delay > 0 ? delay : null
+            const newHistory =
+              effectiveDelay !== null
+                ? [...proxy.history, { time: new Date().toISOString(), delay: effectiveDelay }].slice(-10)
+                : proxy.history
+            next[name] = { ...proxy, history: newHistory, alive: effectiveDelay !== null }
           }
           return { proxies: next }
         })
-      }
+      } catch {}
 
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
+      await refreshClashProxies(baseUrl, authHeaders)
     },
-    [testDelay]
+    [baseUrl, authHeaders]
   )
 
   if (loading) {

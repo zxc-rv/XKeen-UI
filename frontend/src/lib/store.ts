@@ -335,6 +335,14 @@ export const useProxiesStore = create<ProxiesStore>(() => ({
   error: false,
 }))
 
+export async function refreshClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {
+  try {
+    const res = await fetch(`${baseUrl}/proxies`, { headers: authHeaders })
+    const data = await res.json()
+    if (data.proxies) useProxiesStore.setState({ proxies: data.proxies })
+  } catch {}
+}
+
 export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {
   useProxiesStore.setState({ loading: true, error: false })
   try {
