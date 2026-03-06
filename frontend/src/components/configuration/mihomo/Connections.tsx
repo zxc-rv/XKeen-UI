@@ -151,7 +151,7 @@ function ChainTooltip({ chains }: { chains: string[] }) {
           <span key={i} className="flex items-center gap-1">
             {i > 0 && <IconCircleArrowRightFilled size={11} className="text-muted-foreground shrink-0" />}
             <ProxyIcon name={chain} className="size-4 shrink-0 object-contain" />
-            <span className="text-xs">{chain}</span>
+            <span className="text-[13px]">{chain}</span>
           </span>
         ))}
       </div>
@@ -237,7 +237,7 @@ const ConnectionRow = memo(function ConnectionRow({
               {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
             </span>
           </TooltipTrigger>
-          <TooltipContent side="top">{`${host}:${conn.metadata.destinationPort}`}</TooltipContent>
+          <TooltipContent side="top" className="text-[13px]">{`${host}:${conn.metadata.destinationPort}`}</TooltipContent>
         </Tooltip>
       </TableCell>
       <TableCell className="text-[13px] text-muted-foreground">
@@ -248,7 +248,7 @@ const ConnectionRow = memo(function ConnectionRow({
               <span className="opacity-60">:{conn.metadata.sourcePort}</span>
             </span>
           </TooltipTrigger>
-          <TooltipContent side="top">{`${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`}</TooltipContent>
+          <TooltipContent side="top" className="text-[13px]">{`${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`}</TooltipContent>
         </Tooltip>
       </TableCell>
       <TableCell className="text-[13px] text-muted-foreground">
@@ -426,12 +426,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
       <ConnectionsStatus />
 
       <InputGroup>
-        <InputGroupInput
-          value={filter}
-          onChange={(e) => onFilterChange(e.target.value)}
-          placeholder="Фильтр"
-          className={`h-9 pl-7 text-xs ${filter ? 'pr-7' : ''}`}
-        />
+        <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
         <InputGroupAddon>
           <IconSearch />
         </InputGroupAddon>

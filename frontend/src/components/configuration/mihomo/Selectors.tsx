@@ -133,7 +133,7 @@ const ProxyCard = memo(function ProxyCard({
         {chain.length > 0 ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="text-xs font-medium truncate">{proxyName}</span>
+              <span className="text-[13px] font-medium truncate">{proxyName}</span>
             </TooltipTrigger>
             <TooltipContent side="top" className="p-2">
               <div className="flex items-center gap-1 flex-wrap">
@@ -148,14 +148,14 @@ const ProxyCard = memo(function ProxyCard({
                         onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
                       />
                     )}
-                    <span className="text-xs">{item.name}</span>
+                    <span className="text-[13px]">{item.name}</span>
                   </div>
                 ))}
               </div>
             </TooltipContent>
           </Tooltip>
         ) : (
-          <span className="text-xs font-medium truncate">{proxyName}</span>
+          <span className="text-[13px] font-medium truncate">{proxyName}</span>
         )}
       </div>
 
@@ -185,7 +185,7 @@ const ProxyCard = memo(function ProxyCard({
               <TooltipContent side="top" className="p-2">
                 <div className="flex flex-col gap-1 min-w-35">
                   {proxy.history.map((entry, i) => (
-                    <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                    <div key={i} className="flex items-center justify-between gap-3 text-[13px]">
                       <span className="tabular-nums">
                         {new Date(entry.time).toLocaleString('sv-SE', { hour12: false }).replace('T', ' ')}
                       </span>
@@ -241,7 +241,7 @@ const SelectorNowRow = memo(function SelectorNowRow({ selectorName }: { selector
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
           )}
-          <span className="text-muted-foreground truncate text-xs">{item.name}</span>
+          <span className="text-muted-foreground truncate text-[13px]">{item.name}</span>
         </div>
       ))}
     </div>
