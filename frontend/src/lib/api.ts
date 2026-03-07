@@ -1,5 +1,9 @@
 const RETRY_DELAYS = [500, 1000, 2000, 4000, 8000]
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export async function apiCall<T = unknown>(method: string, endpoint: string, body?: unknown): Promise<T> {
   const maxRetries = method === 'GET' ? 5 : 0
 
@@ -16,7 +20,7 @@ export async function apiCall<T = unknown>(method: string, endpoint: string, bod
         continue
       }
 
-      return await response.json() as T
+      return (await response.json()) as T
     } catch (error) {
       if (attempt === maxRetries) throw error
       await delay(RETRY_DELAYS[attempt])
@@ -24,10 +28,6 @@ export async function apiCall<T = unknown>(method: string, endpoint: string, bod
   }
 
   throw new Error('Max retries exceeded')
-}
-
-export function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 export function getFileLanguage(filename: string): string {

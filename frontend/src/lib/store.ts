@@ -114,7 +114,7 @@ const useStore = create<StoreState>((set) => ({
 
 type ShowToastFn = (message: string | { title: string; body: string }, type?: 'success' | 'error') => void
 
-export type CoreState = Omit<
+type CoreState = Omit<
   AppState,
   | 'showDirtyModal'
   | 'showCoreManageModal'
@@ -131,7 +131,7 @@ export type CoreState = Omit<
   | 'wsConnected'
 >
 
-export type ModalState = Pick<
+type ModalState = Pick<
   AppState,
   | 'showDirtyModal'
   | 'showCoreManageModal'
@@ -216,16 +216,8 @@ export function useToastContext() {
 
 // ─── Connections hook — WS sync ────────────────────────────────────────────────
 
-export function useConnections() {
-  return useStore(useShallow((s) => ({ connections: s.connections, connected: s.wsConnected })))
-}
-
 export function useWsConnected() {
   return useStore((s) => s.wsConnected)
-}
-
-export function useConnectionsCount() {
-  return useStore((s) => s.connections.length)
 }
 
 export function subscribeConnections(callback: (connections: Connection[]) => void): () => void {
@@ -363,10 +355,6 @@ export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersIn
   } catch {
     useProxiesStore.setState({ loading: false, error: true })
   }
-}
-
-export function resetClashProxies(): void {
-  useProxiesStore.setState({ proxies: {}, testingAll: {}, testingSingle: {}, loading: false, error: false })
 }
 
 export function syncClashApiPort(): void {

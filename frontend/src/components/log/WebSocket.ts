@@ -1,7 +1,6 @@
 import { useRef, useCallback, useEffect } from 'react'
 
-export type LogLine = string
-export type WsMessageHandler = (data: WsMessage) => void
+type WsMessageHandler = (data: WsMessage) => void
 
 export interface WsMessage {
   type: string
