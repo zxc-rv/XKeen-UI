@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { IconTrash, IconMaximize, IconMinimize, IconChevronDown, IconSearch, IconX, IconFile } from '@tabler/icons-react'
+import { IconTrash, IconMaximize, IconMinimize, IconChevronDown, IconX, IconFile, IconFilter } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -279,7 +279,7 @@ export function LogPanel() {
                     onChange={(e) => handleFilterChange(e.target.value)}
                   />
                   <InputGroupAddon>
-                    <IconSearch />
+                    <IconFilter />
                   </InputGroupAddon>
                   <InputGroupAddon align="inline-end">
                     {filter && (

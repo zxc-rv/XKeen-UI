@@ -7,8 +7,8 @@ import {
   IconArrowUp,
   IconArrowDown,
   IconArrowsSort,
-  IconSearch,
   IconCircleArrowRightFilled,
+  IconFilter,
 } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -423,7 +423,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
       <InputGroup>
         <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
         <InputGroupAddon>
-          <IconSearch />
+          <IconFilter />
         </InputGroupAddon>
         <InputGroupAddon align="inline-end">
           {filter && (
