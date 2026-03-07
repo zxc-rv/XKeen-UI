@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/ui/spinner'
-import { getConnections, useProxiesStore, fetchClashProxies, refreshClashProxies } from '../../../lib/store'
+import { getConnections, useProxiesStore, fetchClashProxies } from '../../../lib/store'
+import { clashFetch } from '../../../lib/api'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 
 interface ProxyHistory {
@@ -41,7 +42,6 @@ interface Props {
 const NO_DELAY_TYPES = new Set(['reject', 'dns', 'pass', 'relay'])
 const SELECTOR_TYPES = new Set(['Selector', 'Fallback', 'URLTest', 'LoadBalance'])
 
-// Только testing state — proxies живут в useProxiesStore
 interface SelectorsStore {
   testingAll: Record<string, boolean>
   testingSingle: Record<string, boolean>
@@ -322,42 +322,29 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
     })
   )
 
-  const baseUrl = `http://${location.hostname}:${clashApiPort}`
-  const authHeaders = useMemo(() => (clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined), [clashApiSecret])
-
-  const testDelay = useCallback(
-    async (proxyName: string): Promise<number | null> => {
-      try {
-        const res = await fetch(
-          `${baseUrl}/proxies/${encodeURIComponent(proxyName)}/delay?url=https://www.gstatic.com/generate_204&timeout=5000`,
-          { headers: authHeaders }
-        )
-        const data = await res.json()
-        return data.delay ?? null
-      } catch {
-        return null
-      }
-    },
-    [baseUrl, authHeaders]
-  )
-
-  const applyDelayResult = useCallback((proxyName: string, delay: number | null) => {
-    useProxiesStore.setState((state) => {
-      const proxy = state.proxies[proxyName] as ProxyInfo | undefined
-      if (!proxy) return {}
-      const newHistory = delay !== null ? [...proxy.history, { time: new Date().toISOString(), delay }].slice(-10) : proxy.history
-      return { proxies: { ...state.proxies, [proxyName]: { ...proxy, history: newHistory, alive: delay !== null } } }
-    })
-  }, [])
-
   const testSingle = useCallback(
     async (proxyName: string) => {
       useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: true } }))
-      const delay = await testDelay(proxyName)
-      applyDelayResult(proxyName, delay)
+      let delay: number | null = null
+      try {
+        const data = await clashFetch<{ delay?: number }>(
+          clashApiPort,
+          `proxies/${encodeURIComponent(proxyName)}/delay?url=https://www.gstatic.com/generate_204&timeout=5000`,
+          { secret: clashApiSecret }
+        )
+        delay = data.delay ?? null
+      } catch {
+        /* */
+      }
+      useProxiesStore.setState((state) => {
+        const proxy = state.proxies[proxyName] as ProxyInfo | undefined
+        if (!proxy) return {}
+        const newHistory = delay !== null ? [...proxy.history, { time: new Date().toISOString(), delay }].slice(-10) : proxy.history
+        return { proxies: { ...state.proxies, [proxyName]: { ...proxy, history: newHistory, alive: delay !== null } } }
+      })
       useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
     },
-    [testDelay, applyDelayResult]
+    [clashApiPort, clashApiSecret]
   )
 
   const selectProxy = useCallback(
@@ -367,22 +354,24 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
       }))
       ;(async () => {
         try {
-          await fetch(`${baseUrl}/proxies/${encodeURIComponent(selectorName)}`, {
+          await clashFetch(clashApiPort, `proxies/${encodeURIComponent(selectorName)}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-            body: JSON.stringify({ name: proxyName }),
+            secret: clashApiSecret,
+            body: { name: proxyName },
           })
-          await refreshClashProxies(baseUrl, authHeaders)
+          await fetchClashProxies(clashApiPort, clashApiSecret, true)
           const affected = getConnections()
             .filter((conn) => conn.chains?.includes(selectorName))
             .map((conn) => conn.id)
-          await Promise.all(affected.map((id) => fetch(`${baseUrl}/connections/${id}`, { method: 'DELETE', headers: authHeaders })))
+          await Promise.all(
+            affected.map((id) => clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret }))
+          )
         } catch {
           /* */
         }
       })()
     },
-    [baseUrl, authHeaders]
+    [clashApiPort, clashApiSecret]
   )
 
   const testAll = useCallback(
@@ -393,11 +382,11 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: true } }))
 
       try {
-        const res = await fetch(
-          `${baseUrl}/group/${encodeURIComponent(selectorName)}/delay?url=https://www.youtube.com/generate_204&timeout=5000`,
-          { headers: authHeaders }
+        const delays = await clashFetch<Record<string, number>>(
+          clashApiPort,
+          `group/${encodeURIComponent(selectorName)}/delay?url=https://www.youtube.com/generate_204&timeout=5000`,
+          { secret: clashApiSecret }
         )
-        const delays: Record<string, number> = await res.json()
 
         useProxiesStore.setState((state) => {
           const next = { ...state.proxies }
@@ -418,9 +407,9 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
       }
 
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
-      await refreshClashProxies(baseUrl, authHeaders)
+      await fetchClashProxies(clashApiPort, clashApiSecret, true)
     },
-    [baseUrl, authHeaders]
+    [clashApiPort, clashApiSecret]
   )
 
   if (loading) {
@@ -444,7 +433,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
             </EmptyTitle>
           </EmptyHeader>
           <EmptyContent>
-            <Button variant="outline" size="sm" onClick={() => fetchClashProxies(baseUrl, authHeaders)}>
+            <Button variant="outline" size="sm" onClick={() => fetchClashProxies(clashApiPort, clashApiSecret)}>
               Повторить
             </Button>
           </EmptyContent>

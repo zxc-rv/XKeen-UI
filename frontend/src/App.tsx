@@ -159,8 +159,7 @@ function AppContent() {
         dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
         const activeCores = core ?? state.currentCore
         if (port && activeCores === 'mihomo' && !skipProxies && state.serviceStatus !== 'pending') {
-          const authHeaders = secret ? { Authorization: `Bearer ${secret}` } : undefined
-          fetchClashProxies(`http://${location.hostname}:${port}`, authHeaders)
+          fetchClashProxies(port, secret)
         }
         return configs
       } else {

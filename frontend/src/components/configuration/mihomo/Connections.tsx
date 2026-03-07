@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useWsConnected, subscribeConnections, useProxiesStore, useNowStore } from '../../../lib/store'
+import { clashFetch } from '../../../lib/api'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -54,13 +55,13 @@ type SortDirection = 'asc' | 'desc'
 
 interface Props {
   clashApiPort: string
+  clashApiSecret: string | null
 }
 
 // ─── Local store ───────────────────────────────────────────────────────────────
 
 const useConnectionsStore = create<{ map: Map<string, Connection> }>(() => ({ map: new Map() }))
 
-// Синхронизация WS → локальный стор на уровне модуля, вне React
 subscribeConnections((connections) => {
   useConnectionsStore.setState({ map: new Map(connections.map((c) => [c.id, c])) })
 })
@@ -381,7 +382,7 @@ const ConnectionDialog = memo(function ConnectionDialog({
   )
 })
 
-// ─── Header Subcomponents (изолируем ререндеры) ────────────────────────────────
+// ─── Header Subcomponents ─────────────────────────────────────────────────────
 
 const ConnectionsStatus = memo(function ConnectionsStatus() {
   const connected = useWsConnected()
@@ -502,7 +503,6 @@ const ConnectionsBody = memo(function ConnectionsBody({
 }) {
   const connected = useWsConnected()
 
-  // Завернули селектор в useShallow, теперь ререндер будет только при реальном изменении массива
   const filteredIds = useConnectionsStore(
     useShallow((s) => {
       const connections = Array.from(s.map.values())
@@ -550,13 +550,11 @@ const ConnectionsBody = memo(function ConnectionsBody({
 
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
-export function ConnectionsPanel({ clashApiPort }: Props) {
+export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
   const [filter, setFilter] = useState('')
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-
-  const baseUrl = `http://${location.hostname}:${clashApiPort}`
 
   const toggleSort = useCallback((column: SortColumn) => {
     setSortColumn((prev) => {
@@ -578,19 +576,19 @@ export function ConnectionsPanel({ clashApiPort }: Props) {
   }, [])
 
   const closeAll = useCallback(async () => {
-    await fetch(`${baseUrl}/connections`, { method: 'DELETE' })
+    await clashFetch(clashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret })
     setSelectedId(null)
-  }, [baseUrl])
+  }, [clashApiPort, clashApiSecret])
 
   const clearFilter = useCallback(() => setFilter(''), [])
 
   const handleCloseConnection = useCallback(
     async (id: string, e?: React.MouseEvent) => {
       if (e) e.stopPropagation()
-      await fetch(`${baseUrl}/connections/${id}`, { method: 'DELETE' })
+      await clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret })
       setSelectedId((prev) => (prev === id ? null : prev))
     },
-    [baseUrl]
+    [clashApiPort, clashApiSecret]
   )
 
   const handleSelectConnection = useCallback((conn: Connection) => {

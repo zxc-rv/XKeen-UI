@@ -19,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn, stripJsonComments } from '../../lib/utils'
 import { useAppContext, useConnectionsSync, syncClashApiPort } from '../../lib/store'
-import { apiCall, getFileLanguage } from '../../lib/api'
+import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
 import { MonacoEditor, type MonacoEditorRef } from './MonacoEditor'
 import { RoutingPanel } from './xray/GuiRouting'
 import { GuiLog } from './xray/GuiLog'
@@ -48,7 +48,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending'
 
-  // Redirect to config tab when service is not running
   useEffect(() => {
     if (!isRunning) setActivePanel('config')
   }, [isRunning])
@@ -98,44 +97,33 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
   useEffect(() => {
     if (currentCore !== 'mihomo' || !clashApiPort) return
-    const baseUrl = `http://${location.hostname}:${clashApiPort}`
-    const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
-    fetch(`${baseUrl}/configs`, { headers: authHeaders })
-      .then((r) => r.json())
+    clashFetch<{ mode?: ClashMode }>(clashApiPort, 'configs', { secret: clashApiSecret })
       .then((data) => {
-        if (data.mode) setMode(data.mode as ClashMode)
+        if (data.mode) setMode(data.mode)
       })
       .catch(() => {})
   }, [currentCore, clashApiPort, clashApiSecret])
 
   const changeMode = useCallback(
     async (newMode: ClashMode) => {
-      if (newMode === mode) return
+      if (newMode === mode || !clashApiPort) return
       setMode(newMode)
-      if (!clashApiPort) return
-      const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
-      const baseUrl = `http://${location.hostname}:${clashApiPort}`
-      await fetch(`${baseUrl}/configs`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ mode: newMode }),
-      })
-      await fetch(`${baseUrl}/connections`, { method: 'DELETE', headers: authHeaders })
+      await clashFetch(clashApiPort, 'configs', { method: 'PATCH', secret: clashApiSecret, body: { mode: newMode } })
+      await clashFetch(clashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret })
     },
-    [clashApiPort, mode, clashApiSecret]
+    [clashApiPort, clashApiSecret, mode]
   )
 
   async function updateAllProviders(type: 'rules' | 'proxies', setLoading: (v: boolean) => void) {
     if (!clashApiPort) return
-    const baseUrl = `http://${location.hostname}:${clashApiPort}`
-    const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
     setLoading(true)
     try {
-      const res = await fetch(`${baseUrl}/providers/${type}`, { headers: authHeaders })
-      const data = await res.json()
+      const data = await clashFetch<{ providers?: Record<string, unknown> }>(clashApiPort, `providers/${type}`, { secret: clashApiSecret })
       const names = Object.keys(data.providers ?? {})
       await Promise.all(
-        names.map((name) => fetch(`${baseUrl}/providers/${type}/${encodeURIComponent(name)}`, { method: 'PUT', headers: authHeaders }))
+        names.map((name) =>
+          clashFetch(clashApiPort, `providers/${type}/${encodeURIComponent(name)}`, { method: 'PUT', secret: clashApiSecret })
+        )
       )
       showToast(`Наборы ${type === 'rules' ? 'правил' : 'прокси'} обновлены`)
     } catch {
@@ -424,7 +412,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 <SelectorsPanel clashApiPort={clashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
               </div>
               <div className={cn(activePanel !== 'connections' && 'hidden')}>
-                <ConnectionsPanel clashApiPort={clashApiPort!} />
+                <ConnectionsPanel clashApiPort={clashApiPort!} clashApiSecret={clashApiSecret ?? null} />
               </div>
             </>
           )}

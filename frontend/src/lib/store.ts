@@ -1,6 +1,8 @@
 import { createElement, Fragment, useCallback, useEffect, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
+import { clashFetch } from './api'
+import { clashWsUrl } from './websocket'
 import type { AppState, AppAction, AppSettings, ToastMessage, Connection } from './types'
 
 // ─── Zustand store ─────────────────────────────────────────────────────────────
@@ -240,7 +242,7 @@ export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?:
   useEffect(() => {
     if (!clashApiPort) return
 
-    const wsUrl = `ws://${location.hostname}:${clashApiPort}/connections${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
+    const wsUrl = clashWsUrl(clashApiPort, 'connections', clashApiSecret)
 
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -335,25 +337,14 @@ export const useProxiesStore = create<ProxiesStore>(() => ({
   error: false,
 }))
 
-export async function refreshClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {
+export async function fetchClashProxies(port: string, secret?: string | null, silent = false): Promise<void> {
+  if (!silent) useProxiesStore.setState({ loading: true, error: false })
   try {
-    const res = await fetch(`${baseUrl}/proxies`, { headers: authHeaders })
-    const data = await res.json()
-    if (data.proxies) useProxiesStore.setState({ proxies: data.proxies })
+    const data = await clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret })
+    if (data.proxies) useProxiesStore.setState({ proxies: data.proxies, ...(!silent && { loading: false }) })
+    else if (!silent) useProxiesStore.setState({ loading: false, error: true })
   } catch {
-    /* */
-  }
-}
-
-export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {
-  useProxiesStore.setState({ loading: true, error: false })
-  try {
-    const res = await fetch(`${baseUrl}/proxies`, { headers: authHeaders })
-    const data = await res.json()
-    if (data.proxies) useProxiesStore.setState({ proxies: data.proxies, loading: false })
-    else useProxiesStore.setState({ loading: false, error: true })
-  } catch {
-    useProxiesStore.setState({ loading: false, error: true })
+    if (!silent) useProxiesStore.setState({ loading: false, error: true })
   }
 }
 
@@ -363,10 +354,7 @@ export function syncClashApiPort(): void {
   const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
   const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
   dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
-  if (port && currentCore === 'mihomo') {
-    const authHeaders = secret ? { Authorization: `Bearer ${secret}` } : undefined
-    fetchClashProxies(`http://${location.hostname}:${port}`, authHeaders)
-  }
+  if (port && currentCore === 'mihomo') fetchClashProxies(port, secret)
 }
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────

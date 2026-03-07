@@ -1,5 +1,10 @@
 import { useRef, useCallback, useEffect } from 'react'
 
+export function clashWsUrl(port: string, path: string, secret?: string | null) {
+  const base = `ws://${location.hostname}:${port}/${path}`
+  return secret ? `${base}?token=${secret}` : base
+}
+
 type WsMessageHandler = (data: WsMessage) => void
 
 export interface WsMessage {

@@ -30,6 +30,24 @@ export async function apiCall<T = unknown>(method: string, endpoint: string, bod
   throw new Error('Max retries exceeded')
 }
 
+export async function clashFetch<T = unknown>(
+  port: string,
+  path: string,
+  options?: { method?: string; secret?: string | null; body?: unknown }
+): Promise<T> {
+  const { method = 'GET', secret, body } = options ?? {}
+  const res = await fetch(`http://${location.hostname}:${port}/${path}`, {
+    method,
+    headers: {
+      ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  if (res.status === 204 || res.headers.get('content-length') === '0') return {} as T
+  return res.json() as T
+}
+
 export function getFileLanguage(filename: string): string {
   if (filename.endsWith('.json')) return 'json'
   if (filename.endsWith('.yaml') || filename.endsWith('.yml')) return 'yaml'

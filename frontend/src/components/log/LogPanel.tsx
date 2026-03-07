@@ -5,9 +5,9 @@ import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '../../lib/utils'
-import { useWebSocket } from './WebSocket'
+import { useWebSocket } from '../../lib/websocket'
 import { useAppContext } from '../../lib/store'
-import type { WsMessage } from './WebSocket'
+import type { WsMessage } from '../../lib/websocket'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']
