@@ -248,7 +248,7 @@ export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?:
   useEffect(() => {
     if (!clashApiPort) return
 
-    const wsUrl = `ws://${location.hostname}:${clashApiPort}/connections?interval=1000${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
+    const wsUrl = `ws://${location.hostname}:${clashApiPort}/connections${clashApiSecret ? `&token=${clashApiSecret}` : ''}`
 
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null

@@ -114,11 +114,13 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
       setMode(newMode)
       if (!clashApiPort) return
       const authHeaders = clashApiSecret ? { Authorization: `Bearer ${clashApiSecret}` } : undefined
-      await fetch(`http://${location.hostname}:${clashApiPort}/configs`, {
+      const baseUrl = `http://${location.hostname}:${clashApiPort}`
+      await fetch(`${baseUrl}/configs`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify({ mode: newMode }),
       })
+      await fetch(`${baseUrl}/connections`, { method: 'DELETE', headers: authHeaders })
     },
     [clashApiPort, mode, clashApiSecret]
   )
