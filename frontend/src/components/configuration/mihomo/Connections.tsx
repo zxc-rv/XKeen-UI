@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useCallback } from 'react'
+import { useState, memo, useCallback } from 'react'
 import { create } from 'zustand'
 import {
   IconX,
@@ -345,14 +345,9 @@ const ConnectionDialog = memo(function ConnectionDialog({
   onClose: () => void
   onCloseConnection: (id: string) => Promise<void>
 }) {
-  const [snapshot, setSnapshot] = useState<Connection | null>(null)
-
   const liveConn = useConnectionsStore((s) => (connId ? (s.map.get(connId) ?? null) : null))
-
-  useEffect(() => {
-    if (liveConn) setSnapshot(liveConn)
-  }, [liveConn])
-
+  const [snapshot, setSnapshot] = useState<Connection | null>(null)
+  if (liveConn !== null && liveConn !== snapshot) setSnapshot(liveConn)
   const conn = liveConn ?? snapshot
   const isClosed = !!connId && !liveConn
 

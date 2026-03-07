@@ -15,6 +15,7 @@ export function useWebSocket(onMessage: WsMessageHandler) {
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const currentFileRef = useRef('error.log')
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const connectRef = useRef<() => void>(() => {})
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -36,7 +37,7 @@ export function useWebSocket(onMessage: WsMessageHandler) {
     ws.onclose = (event) => {
       console.warn(`WebSocket disconnected: ${event.code}. Reconnecting...`)
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current)
-      reconnectTimeoutRef.current = setTimeout(connect, 1000)
+      reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), 1000)
     }
 
     ws.onerror = () => ws.close()
@@ -47,10 +48,14 @@ export function useWebSocket(onMessage: WsMessageHandler) {
         if (data.type === 'pong') return
         onMessage(data)
       } catch {
-        // ignore parse errors
+        /* */
       }
     }
   }, [onMessage])
+
+  useEffect(() => {
+    connectRef.current = connect
+  }, [connect])
 
   useEffect(() => {
     connect()
@@ -67,18 +72,24 @@ export function useWebSocket(onMessage: WsMessageHandler) {
     }
   }, [])
 
-  const switchFile = useCallback((filename: string) => {
-    currentFileRef.current = filename
-    send({ type: 'switchFile', file: filename })
-  }, [send])
+  const switchFile = useCallback(
+    (filename: string) => {
+      currentFileRef.current = filename
+      send({ type: 'switchFile', file: filename })
+    },
+    [send]
+  )
 
-  const applyFilter = useCallback((filter: string) => {
-    if (!filter.trim()) {
-      send({ type: 'reload' })
-    } else {
-      send({ type: 'filter', query: filter })
-    }
-  }, [send])
+  const applyFilter = useCallback(
+    (filter: string) => {
+      if (!filter.trim()) {
+        send({ type: 'reload' })
+      } else {
+        send({ type: 'filter', query: filter })
+      }
+    },
+    [send]
+  )
 
   const clearLog = useCallback(() => send({ type: 'clear' }), [send])
   const reload = useCallback(() => send({ type: 'reload' }), [send])

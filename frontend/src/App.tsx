@@ -18,13 +18,11 @@ import type { Config } from './lib/types'
 
 function useLazyMount(open: boolean, delay = 200) {
   const [mounted, setMounted] = useState(open)
+  if (open && !mounted) setMounted(true)
   useEffect(() => {
-    if (open) {
-      setMounted(true)
-    } else {
-      const timer = setTimeout(() => setMounted(false), delay)
-      return () => clearTimeout(timer)
-    }
+    if (open) return
+    const timer = setTimeout(() => setMounted(false), delay)
+    return () => clearTimeout(timer)
   }, [open, delay])
   return mounted
 }

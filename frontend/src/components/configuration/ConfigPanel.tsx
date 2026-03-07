@@ -93,7 +93,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     const yamlIndex = configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
     const next = yamlIndex >= 0 ? yamlIndex : 0
     setActiveConfigIndex(next)
-    activeIndexRef.current = next
+    activeIndexRef.current = next // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configFilenamesKey])
 
   useEffect(() => {
@@ -172,7 +172,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     setMonacoReady(true)
     const config = configsRef.current[activeIndexRef.current]
     if (config) loadConfigIntoEditor(config)
-  }, [editorRef, loadConfigIntoEditor])
+  }, [loadConfigIntoEditor])
 
   const handleContentChange = useCallback(
     (content: string, isDirty: boolean) => {

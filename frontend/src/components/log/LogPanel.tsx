@@ -101,6 +101,7 @@ export function LogPanel() {
 
   useEffect(() => {
     ws.reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.settings.timezone])
 
   function switchFile(filename: string) {

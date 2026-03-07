@@ -278,7 +278,9 @@ export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?:
         try {
           const data = JSON.parse(e.data)
           if (Array.isArray(data.connections)) dispatch({ type: 'SET_CONNECTIONS', connections: data.connections })
-        } catch {}
+        } catch {
+          /* */
+        }
       }
 
       ws.onerror = () => ws?.close()
@@ -346,7 +348,9 @@ export async function refreshClashProxies(baseUrl: string, authHeaders?: Headers
     const res = await fetch(`${baseUrl}/proxies`, { headers: authHeaders })
     const data = await res.json()
     if (data.proxies) useProxiesStore.setState({ proxies: data.proxies })
-  } catch {}
+  } catch {
+    /* */
+  }
 }
 
 export async function fetchClashProxies(baseUrl: string, authHeaders?: HeadersInit): Promise<void> {

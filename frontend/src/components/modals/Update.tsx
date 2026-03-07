@@ -50,6 +50,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
 
   useEffect(() => {
     if (modals.showUpdateModal) fetchReleases()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modals.showUpdateModal, updateModalCore])
 
   async function fetchReleases() {

@@ -62,7 +62,7 @@ export function StatusBar({
     const interval = setInterval(() => {
       if (state.serviceStatus !== 'pending') checkStatus()
     }, 15000)
-    return () => clearInterval(interval)
+    return () => clearInterval(interval) // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.serviceStatus])
 
   function setPending(text: string) {

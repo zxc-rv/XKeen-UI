@@ -60,11 +60,9 @@ export function GeoScanModal() {
   }
 
   useEffect(() => {
-    if (modals.showGeoScanModal) {
-      setGeoType('domain')
-      loadGeoFiles()
-    }
-  }, [modals.showGeoScanModal])
+    loadGeoFiles()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function switchType(type: GeoType) {
     setGeoType(type)

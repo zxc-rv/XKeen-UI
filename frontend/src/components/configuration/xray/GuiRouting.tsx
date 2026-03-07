@@ -37,7 +37,9 @@ function parseRules(content: string): Rule[] {
   try {
     const json = JSON.parse(stripJsonComments(content))
     if (json?.routing?.rules && Array.isArray(json.routing.rules)) return JSON.parse(JSON.stringify(json.routing.rules))
-  } catch {}
+  } catch {
+    /* */
+  }
   return []
 }
 
@@ -100,19 +102,25 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         const j = JSON.parse(stripJsonComments(c.content))
         outbounds = j.outbounds?.filter((o: any) => o.tag).map((o: any) => o.tag) ?? []
       }
-    } catch {}
+    } catch {
+      /* */
+    }
     try {
       const c = configs.find((x) => x.file.toLowerCase().includes('inbound'))
       if (c) {
         const j = JSON.parse(stripJsonComments(c.content))
         inbounds = j.inbounds?.filter((i: any) => i.tag).map((i: any) => i.tag) ?? []
       }
-    } catch {}
+    } catch {
+      /* */
+    }
     try {
       const content = configs[activeConfigIndex]?.content ?? editorRef.current?.getValue() ?? ''
       const j = JSON.parse(stripJsonComments(content))
       balancers = j.routing?.balancers?.filter((b: any) => b.tag).map((b: any) => b.tag) ?? []
-    } catch {}
+    } catch {
+      /* */
+    }
     setAvailable({
       outbounds: [...new Set(outbounds)],
       inbounds: [...new Set(inbounds)],
@@ -126,6 +134,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
     rulesRef.current = parsed
     setRules(parsed)
     loadAvailable()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConfigIndex])
 
   const syncToEditor = useCallback(

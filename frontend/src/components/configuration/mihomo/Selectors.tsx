@@ -81,25 +81,18 @@ const ProxyCard = memo(function ProxyCard({
   const isFixed = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.fixed === proxyName)
   const isTestingSingle = useSelectorsStore((s) => !!s.testingSingle[proxyName])
 
-  if (!proxy) return null
-
-  const delay = getLastDelay(proxy)
-  // Показываем badge только если тест уже запускался (delay !== null) или идёт тестирование
-  const showDelayBadge = !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) && (delay !== null || isTestingSingle)
-  const transport = proxy.xudp ? 'xudp' : proxy.udp ? 'udp' : 'tcp'
-
-  const isSelectorType = SELECTOR_TYPES.has(proxy.type)
   const chainStr = useProxiesStore((s): string => {
-    if (!isSelectorType || !proxy.now) return ''
-    const parts: string[] = [proxyName, proxy.icon ?? '']
-    let current: string | undefined = proxy.now
+    const p = s.proxies[proxyName] as ProxyInfo | undefined
+    if (!p || !SELECTOR_TYPES.has(p.type) || !p.now) return ''
+    const parts: string[] = [proxyName, p.icon ?? '']
+    let current: string | undefined = p.now
     const visited = new Set<string>()
     while (current && !visited.has(current)) {
       visited.add(current)
-      const p = s.proxies[current] as ProxyInfo | undefined
-      parts.push(current, p?.icon ?? '')
-      if (!p || !SELECTOR_TYPES.has(p.type) || !p.now) break
-      current = p.now
+      const next = s.proxies[current] as ProxyInfo | undefined
+      parts.push(current, next?.icon ?? '')
+      if (!next || !SELECTOR_TYPES.has(next.type) || !next.now) break
+      current = next.now
     }
     return parts.join('\x00')
   })
@@ -108,6 +101,12 @@ const ProxyCard = memo(function ProxyCard({
     const parts = chainStr.split('\x00')
     return Array.from({ length: parts.length / 2 }, (_, i) => ({ name: parts[i * 2], icon: parts[i * 2 + 1] || undefined }))
   }, [chainStr])
+
+  if (!proxy) return null
+
+  const delay = getLastDelay(proxy)
+  const showDelayBadge = !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) && (delay !== null || isTestingSingle)
+  const transport = proxy.xudp ? 'xudp' : proxy.udp ? 'udp' : 'tcp'
 
   return (
     <div
@@ -378,7 +377,9 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
             .filter((conn) => conn.chains?.includes(selectorName))
             .map((conn) => conn.id)
           await Promise.all(affected.map((id) => fetch(`${baseUrl}/connections/${id}`, { method: 'DELETE', headers: authHeaders })))
-        } catch {}
+        } catch {
+          /* */
+        }
       })()
     },
     [baseUrl, authHeaders]
@@ -412,7 +413,9 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
           }
           return { proxies: next }
         })
-      } catch {}
+      } catch {
+        /* */
+      }
 
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
       await refreshClashProxies(baseUrl, authHeaders)

@@ -26,6 +26,7 @@ export function TemplateModal({ onImport }: { onImport: (url: string) => Promise
 
   useEffect(() => {
     if (modals.showTemplateModal) loadTemplates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modals.showTemplateModal, currentCore])
 
   async function loadTemplates() {
