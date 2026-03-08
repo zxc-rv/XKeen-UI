@@ -22,6 +22,7 @@
     "hooks": "@/hooks"
   },
   "registries": {
+    "@acme": "https://acme.com/r/{name}.json",
     "@magicui": "https://magicui.design/r/{name}"
   }
 }

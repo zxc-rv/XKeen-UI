@@ -1,8 +1,16 @@
 import { useRef, useCallback, useEffect } from 'react'
 
 export function clashWsUrl(port: string, path: string, secret?: string | null) {
-  const base = `ws://${location.hostname}:${port}/${path}`
-  return secret ? `${base}?token=${secret}` : base
+  const normalizedPath = path.replace(/^\/+/, '')
+  const token = secret ? `?token=${encodeURIComponent(secret)}` : ''
+
+  if (import.meta.env.DEV) {
+    const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${location.host}/clash-ws/${normalizedPath}${token}`
+  }
+
+  const base = `ws://${location.hostname}:${port}/${normalizedPath}`
+  return `${base}${token}`
 }
 
 type WsMessageHandler = (data: WsMessage) => void

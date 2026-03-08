@@ -10,6 +10,9 @@ config.json
 .zed
 target
 Cargo.lock
+.agents
+.claude
+skills-lock.json
 
 # Logs
 logs

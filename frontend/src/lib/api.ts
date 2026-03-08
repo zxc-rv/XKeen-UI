@@ -4,6 +4,11 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function getClashHttpBase(port: string): string {
+  if (import.meta.env.DEV) return '/clash'
+  return `http://${location.hostname}:${port}`
+}
+
 export async function apiCall<T = unknown>(method: string, endpoint: string, body?: unknown): Promise<T> {
   const maxRetries = method === 'GET' ? 5 : 0
 
@@ -36,7 +41,10 @@ export async function clashFetch<T = unknown>(
   options?: { method?: string; secret?: string | null; body?: unknown }
 ): Promise<T> {
   const { method = 'GET', secret, body } = options ?? {}
-  const res = await fetch(`http://${location.hostname}:${port}/${path}`, {
+  const normalizedPath = path.replace(/^\/+/, '')
+  const base = getClashHttpBase(port)
+
+  const res = await fetch(`${base}/${normalizedPath}`, {
     method,
     headers: {
       ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
