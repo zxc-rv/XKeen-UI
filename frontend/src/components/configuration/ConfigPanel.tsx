@@ -9,16 +9,27 @@ import {
   IconCheck,
   IconX,
   IconDotsFilled,
+  IconExternalLinkFilled,
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn, stripJsonComments } from '../../lib/utils'
-import { useAppContext, useConnectionsSync, syncClashApiPort } from '../../lib/store'
+import { useAppContext, useConnectionsSync, useSettings, syncClashApiPort } from '../../lib/store'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
 import { MonacoEditor, type MonacoEditorRef } from './MonacoEditor'
 import { RoutingPanel } from './xray/GuiRouting'
@@ -40,8 +51,10 @@ interface Props {
 }
 
 export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, editorRef, configActionsRef }: Props) {
-  const { state, dispatch, showToast } = useAppContext()
-  const { configs, isConfigsLoading, currentCore, serviceStatus, settings, clashApiPort, clashApiSecret } = state
+  const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
+  const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret } = state
+  const guiRouting = useSettings((s) => s.guiRouting)
+  const guiLog = useSettings((s) => s.guiLog)
 
   useConnectionsSync(currentCore === 'mihomo' ? clashApiPort : null, clashApiSecret)
 
@@ -168,13 +181,16 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     (content: string, isDirty: boolean) => {
       const index = activeIndexRef.current
       if (index < 0) return
+      const current = configsRef.current[index]
+      if (!current) return
+      if (current.content === content && current.isDirty === isDirty) return
       dispatch({ type: 'UPDATE_CONFIG_DIRTY', index, isDirty, content })
     },
     [dispatch]
   )
 
   const handleValidationChange = useCallback((isValid: boolean, error?: string) => {
-    setValidationState({ isValid, error })
+    setValidationState((prev) => (prev?.isValid === isValid && prev?.error === error ? prev : { isValid, error }))
   }, [])
 
   function switchTab(index: number) {
@@ -239,11 +255,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
   function isGuiActive(cfg: Config) {
     const f = cfg.file.toLowerCase()
-    return (f.includes('routing') && settings.guiRouting) || (f.includes('log') && settings.guiLog)
+    return (f.includes('routing') && guiRouting) || (f.includes('log') && guiLog)
   }
 
   const isRoutingGui = useMemo(() => {
-    if (!settings.guiRouting || !activeConfig) return false
+    if (!guiRouting || !activeConfig) return false
     if (!activeConfig.file.toLowerCase().includes('routing')) return false
     try {
       const j = JSON.parse(stripJsonComments(activeConfig.content))
@@ -251,10 +267,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     } catch {
       return false
     }
-  }, [settings.guiRouting, activeConfig])
+  }, [guiRouting, activeConfig])
 
   const isLogGui = useMemo(() => {
-    if (!settings.guiLog || !activeConfig) return false
+    if (!guiLog || !activeConfig) return false
     if (!activeConfig.file.toLowerCase().includes('log')) return false
     try {
       const j = JSON.parse(stripJsonComments(activeConfig.content))
@@ -262,7 +278,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     } catch {
       return false
     }
-  }, [settings.guiLog, activeConfig])
+  }, [guiLog, activeConfig])
 
   const isAnyGui = isRoutingGui || isLogGui
 
@@ -498,7 +514,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                           <IconDotsFilled />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-max">
+                      <DropdownMenuContent align="end" className="min-w-57">
                         <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                         <DropdownMenuItem onClick={onOpenImport}>
                           <IconLink /> Добавить Прокси
@@ -509,6 +525,34 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                         <DropdownMenuItem onClick={onOpenGeoScan}>
                           <IconSearch /> Скан Геофайлов
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <IconExternalLinkFilled /> Полезные ссылки
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="min-w-55">
+                            <DropdownMenuItem
+                              onClick={() => window.open('https://github.com/Corvus-Malus/XKeen/', '_blank', 'noopener,noreferrer')}
+                            >
+                              <IconExternalLinkFilled /> Инструкция XKeen
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => window.open('https://jameszero.net/faq-xkeen.htm', '_blank', 'noopener,noreferrer')}
+                            >
+                              <IconExternalLinkFilled /> FAQ XKeen
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => window.open('https://xtls.github.io/ru/config', '_blank', 'noopener,noreferrer')}
+                            >
+                              <IconExternalLinkFilled /> Документация Xray
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => window.open('https://wiki.metacubex.one/ru/config/general', '_blank', 'noopener,noreferrer')}
+                            >
+                              <IconExternalLinkFilled /> Документация Mihomo
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </ButtonGroup>

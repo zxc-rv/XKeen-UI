@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { AppProvider, useAppContext, useModalContext, fetchClashProxies, syncClashApiPort } from './lib/store'
+import { AppProvider, useAppActions, useModalContext, fetchClashProxies, syncClashApiPort, getAppState } from './lib/store'
 import { apiCall, capitalize } from './lib/api'
 import { stripJsonComments } from './lib/utils'
 import { StatusBar } from './components/status/StatusBar'
@@ -76,7 +76,7 @@ const ModalManager = memo(function ModalManager({
 })
 
 function AppContent() {
-  const { state, dispatch, showToast } = useAppContext()
+  const { dispatch, showToast } = useAppActions()
   const editorRef = useRef<MonacoEditorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
     switchTab: () => {},
@@ -90,7 +90,8 @@ function AppContent() {
   async function init() {
     try {
       await loadSettings()
-      checkStatus()
+      const currentCore = await checkStatus()
+      if (currentCore) await loadConfigs(currentCore)
       checkVersion()
     } catch {
       showToast('Ошибка инициализации', 'error')
@@ -117,15 +118,16 @@ function AppContent() {
 
   async function checkStatus() {
     const data = await apiCall<any>('GET', 'control')
-    if (!data.success) return
+    if (!data.success) return null
+    const currentCore = data.currentCore || 'xray'
     dispatch({
       type: 'SET_CORE_INFO',
-      currentCore: data.currentCore || 'xray',
+      currentCore,
       coreVersions: data.versions || {},
       availableCores: data.cores || [],
     })
     dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
-    await loadConfigs(data.currentCore)
+    return currentCore
   }
 
   async function checkVersion() {
@@ -139,7 +141,7 @@ function AppContent() {
         })
         if (data.show_toast?.ui) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI' })
         if (data.show_toast?.core)
-          showToast({ title: 'Доступно обновление', body: `Доступна новая версия ${capitalize(state.currentCore)}` })
+          showToast({ title: 'Доступно обновление', body: `Доступна новая версия ${capitalize(getAppState().currentCore)}` })
       }
     } catch {
       /* ignore */
@@ -157,8 +159,9 @@ function AppContent() {
         const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
         const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
         dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
-        const activeCores = core ?? state.currentCore
-        if (port && activeCores === 'mihomo' && !skipProxies && state.serviceStatus !== 'pending') {
+        const appState = getAppState()
+        const activeCores = core ?? appState.currentCore
+        if (port && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus !== 'pending') {
           fetchClashProxies(port, secret)
         }
         return configs
@@ -174,7 +177,8 @@ function AppContent() {
   }
 
   async function switchCore(core: string) {
-    if (core === state.currentCore) {
+    const appState = getAppState()
+    if (core === appState.currentCore) {
       showToast('Это ядро уже активно', 'error')
       return
     }
@@ -200,14 +204,15 @@ function AppContent() {
   }
 
   function generateConfig(uri: string) {
+    const currentCore = getAppState().currentCore
     if (typeof (window as any).generateConfigForCore === 'function')
-      return (window as any).generateConfigForCore(uri, state.currentCore, editorRef.current?.getValue() ?? '')
+      return (window as any).generateConfigForCore(uri, currentCore, editorRef.current?.getValue() ?? '')
     throw new Error('Parser not loaded')
   }
 
   async function importTemplate(url: string) {
     const activeIndex = configActionsRef.current.getActiveIndex()
-    const active = state.configs[activeIndex]
+    const active = getAppState().configs[activeIndex]
     if (active?.isDirty && !confirm('Несохраненные изменения будут потеряны. Продолжить?')) throw new Error('Отменено')
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -220,11 +225,12 @@ function AppContent() {
   }
 
   function addToConfig(generated: string, type: string, position: 'start' | 'end') {
-    const core = state.currentCore
+    const appState = getAppState()
+    const core = appState.currentCore
     let targetIndex = configActionsRef.current.getActiveIndex()
 
     if (core === 'mihomo') {
-      targetIndex = state.configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
+      targetIndex = appState.configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
       if (targetIndex === -1) {
         showToast('Файл config.yaml не найден', 'error')
         return
@@ -232,10 +238,10 @@ function AppContent() {
     } else {
       try {
         try {
-          const obj = JSON.parse(stripJsonComments(state.configs[targetIndex].content))
+          const obj = JSON.parse(stripJsonComments(appState.configs[targetIndex].content))
           if (!Array.isArray(obj.outbounds)) throw new Error()
         } catch {
-          targetIndex = state.configs.findIndex((cfg) => {
+          targetIndex = appState.configs.findIndex((cfg) => {
             try {
               return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds)
             } catch {
@@ -315,6 +321,7 @@ function AppContent() {
           <StatusBar
             onOpenCoreManage={() => openModal('showCoreManageModal')}
             onOpenSettings={() => openModal('showSettingsModal')}
+            onRefreshStatus={() => void checkStatus()}
             onOpenUpdate={(core) => {
               dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
               openModal('showUpdateModal')
@@ -333,7 +340,7 @@ function AppContent() {
       <Toast />
       <ModalManager
         onSwitchCore={switchCore}
-        onInstalled={checkStatus}
+        onInstalled={() => void checkStatus()}
         onGenerate={generateConfig}
         onAddToConfig={addToConfig}
         onImportTemplate={importTemplate}

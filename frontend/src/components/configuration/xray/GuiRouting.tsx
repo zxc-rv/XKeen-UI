@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useCallback, forwardRef, startTransition } from 'react'
+import { useState, useRef, useEffect, useCallback, forwardRef, memo } from 'react'
 import { IconPlus, IconX, IconGripVertical, IconPencil, IconCheck } from '@tabler/icons-react'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn, stripJsonComments } from '../../../lib/utils'
-import { useAppContext } from '../../../lib/store'
+import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import { apiCall } from '../../../lib/api'
 import type { MonacoEditorRef } from '../MonacoEditor'
 import type { Config } from '../../../lib/types'
@@ -79,18 +79,35 @@ interface Props {
 }
 
 export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
-  const { showToast, state, dispatch } = useAppContext()
+  const { showToast, dispatch } = useAppActions()
+  const { serviceStatus, currentCore } = useCoreRuntimeState()
+  const autoApply = useSettings((s) => s.autoApply)
   const [rules, setRules] = useState<Rule[]>([])
   const [available, setAvailable] = useState<AvailableTags>({
     outbounds: [],
     inbounds: [],
     balancers: [],
   })
+  const configsRef = useRef(configs)
+  const activeConfigIndexRef = useRef(activeConfigIndex)
+  const autoApplyRef = useRef(autoApply)
+  const serviceStatusRef = useRef(serviceStatus)
+  const currentCoreRef = useRef(currentCore)
   const rulesRef = useRef<Rule[]>([])
   const cardRefs = useRef<(HTMLDivElement | null)[]>([])
+  const cardRefHandlersRef = useRef<Record<number, (el: HTMLDivElement | null) => void>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+
+  const getCardRef = useCallback((index: number) => {
+    if (!cardRefHandlersRef.current[index]) {
+      cardRefHandlersRef.current[index] = (el: HTMLDivElement | null) => {
+        cardRefs.current[index] = el
+      }
+    }
+    return cardRefHandlersRef.current[index]
+  }, [])
 
   function loadAvailable() {
     let outbounds: string[] = [],
@@ -137,6 +154,20 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConfigIndex])
 
+  useEffect(() => {
+    configsRef.current = configs
+    activeConfigIndexRef.current = activeConfigIndex
+  }, [configs, activeConfigIndex])
+
+  useEffect(() => {
+    autoApplyRef.current = autoApply
+  }, [autoApply])
+
+  useEffect(() => {
+    serviceStatusRef.current = serviceStatus
+    currentCoreRef.current = currentCore
+  }, [serviceStatus, currentCore])
+
   const syncToEditor = useCallback(
     async (newRules: Rule[], triggerSoftRestart = false) => {
       const wrapper = editorRef.current
@@ -151,8 +182,9 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         const text = JSON.stringify(json, null, 2)
         monacoEditor.executeEdits('gui-routing', [{ range: model.getFullModelRange(), text }])
 
-        if (triggerSoftRestart && state.settings.autoApply && state.serviceStatus === 'running') {
-          const activeConfig = configs[activeConfigIndex]
+        if (triggerSoftRestart && autoApplyRef.current && serviceStatusRef.current === 'running') {
+          const activeIndex = activeConfigIndexRef.current
+          const activeConfig = configsRef.current[activeIndex]
           if (activeConfig) {
             const content = monacoEditor.getValue()
             await apiCall<any>('PUT', 'configs', {
@@ -161,7 +193,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
             })
             dispatch({
               type: 'SAVE_CONFIG',
-              index: activeConfigIndex,
+              index: activeIndex,
               content,
             })
             dispatch({
@@ -171,7 +203,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
             })
             const r = await apiCall<any>('POST', 'control', {
               action: 'softRestart',
-              core: state.currentCore,
+              core: currentCoreRef.current,
             })
             showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
             dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
@@ -181,17 +213,17 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         showToast(`Ошибка синхронизации: ${e.message}`, 'error')
       }
     },
-    [editorRef, showToast, state.settings.autoApply, state.serviceStatus, state.currentCore, configs, activeConfigIndex, dispatch]
+    [editorRef, showToast, dispatch]
   )
 
-  function applyRules(newRules: Rule[], triggerSoftRestart = false) {
+  const applyRules = useCallback((newRules: Rule[], triggerSoftRestart = false) => {
     rulesRef.current = newRules
-    startTransition(() => setRules([...newRules]))
+    setRules(newRules)
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
     syncTimerRef.current = setTimeout(() => syncToEditor(newRules, triggerSoftRestart), 100)
-  }
+  }, [syncToEditor])
 
-  function startDrag(e: React.MouseEvent | React.TouchEvent, fromIndex: number) {
+  const startDrag = useCallback((e: React.MouseEvent | React.TouchEvent, fromIndex: number) => {
     if (e.cancelable) e.preventDefault()
     let current = fromIndex
     setDraggingIndex(fromIndex)
@@ -207,7 +239,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         newRules.splice(i, 0, moved)
         current = i
         rulesRef.current = newRules
-        setRules([...newRules])
+        setRules(newRules)
         setDraggingIndex(i)
         break
       }
@@ -224,7 +256,31 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
     document.addEventListener('mouseup', onUp)
     document.addEventListener('touchmove', onMove, { passive: true })
     document.addEventListener('touchend', onUp, { passive: true })
-  }
+  }, [syncToEditor])
+
+  const handleUpdateRule = useCallback(
+    (index: number, updated: Rule, triggerSoftRestart = false) => {
+      if (rulesRef.current[index] === updated) return
+      const next = [...rulesRef.current]
+      next[index] = updated
+      applyRules(next, triggerSoftRestart)
+    },
+    [applyRules]
+  )
+
+  const handleDeleteRule = useCallback(
+    (index: number) => {
+      applyRules(rulesRef.current.filter((_, i) => i !== index))
+    },
+    [applyRules]
+  )
+
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent | React.TouchEvent, index: number) => {
+      startDrag(e, index)
+    },
+    [startDrag]
+  )
 
   return (
     <div ref={scrollRef} className="absolute inset-4 overflow-y-auto flex flex-col gap-2">
@@ -232,20 +288,14 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
         {rules.map((rule, index) => (
           <RuleCard
             key={index}
-            ref={(el) => {
-              cardRefs.current[index] = el
-            }}
+            ref={getCardRef(index)}
             rule={rule}
             index={index}
             isDragging={draggingIndex === index}
             available={available}
-            onUpdate={(updated, triggerSoftRestart) => {
-              const r = [...rulesRef.current]
-              r[index] = updated
-              applyRules(r, triggerSoftRestart)
-            }}
-            onDelete={() => applyRules(rulesRef.current.filter((_, i) => i !== index))}
-            onDragStart={(e) => startDrag(e, index)}
+            onUpdate={handleUpdateRule}
+            onDelete={handleDeleteRule}
+            onDragStart={handleDragStart}
             showToast={showToast}
           />
         ))}
@@ -275,18 +325,19 @@ interface RuleCardProps {
   index: number
   isDragging: boolean
   available: AvailableTags
-  onUpdate: (r: Rule, triggerSoftRestart?: boolean) => void
-  onDelete: () => void
-  onDragStart: (e: React.MouseEvent | React.TouchEvent) => void
+  onUpdate: (index: number, r: Rule, triggerSoftRestart?: boolean) => void
+  onDelete: (index: number) => void
+  onDragStart: (e: React.MouseEvent | React.TouchEvent, index: number) => void
   showToast: (msg: string, type?: 'success' | 'error') => void
 }
 
-const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
-  { rule, index, isDragging, available, onUpdate, onDelete, onDragStart, showToast },
-  ref
-) {
-  const [editingName, setEditingName] = useState(false)
-  const [nameValue, setNameValue] = useState(rule.ruleTag ?? '')
+const RuleCard = memo(
+  forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
+    { rule, index, isDragging, available, onUpdate, onDelete, onDragStart, showToast },
+    ref
+  ) {
+    const [editingName, setEditingName] = useState(false)
+    const [nameValue, setNameValue] = useState(rule.ruleTag ?? '')
 
   const isBalancer = 'balancerTag' in rule
   const outboundType = isBalancer ? 'balancerTag' : 'outboundTag'
@@ -294,40 +345,40 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
   const conditionFields = Object.keys(rule).filter((k) => k in RULE_FIELDS)
   const availableToAdd = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => !(f in rule))
 
-  function saveName() {
-    const trimmed = nameValue.trim()
-    const updated = { ...rule }
-    if (trimmed) updated.ruleTag = trimmed
-    else delete updated.ruleTag
-    setEditingName(false)
-    onUpdate(updated)
-  }
+    function saveName() {
+      const trimmed = nameValue.trim()
+      const updated = { ...rule }
+      if (trimmed) updated.ruleTag = trimmed
+      else delete updated.ruleTag
+      setEditingName(false)
+      onUpdate(index, updated)
+    }
 
-  function addField(f: FieldName) {
-    const cfg = RULE_FIELDS[f]
-    onUpdate({
-      ...rule,
-      [f]: cfg.type === 'array' || cfg.type === 'buttons' ? [] : '',
-    })
-  }
+    function addField(f: FieldName) {
+      const cfg = RULE_FIELDS[f]
+      onUpdate(index, {
+        ...rule,
+        [f]: cfg.type === 'array' || cfg.type === 'buttons' ? [] : '',
+      })
+    }
 
-  function removeField(f: string) {
-    const u = { ...rule }
-    delete u[f]
-    onUpdate(u)
-  }
+    function removeField(f: string) {
+      const u = { ...rule }
+      delete u[f]
+      onUpdate(index, u)
+    }
 
-  function changeField(old: string, next: FieldName) {
-    const u = { ...rule }
-    delete u[old]
-    const cfg = RULE_FIELDS[next]
-    u[next] = cfg.type === 'array' || cfg.type === 'buttons' ? [] : ''
-    onUpdate(u)
-  }
+    function changeField(old: string, next: FieldName) {
+      const u = { ...rule }
+      delete u[old]
+      const cfg = RULE_FIELDS[next]
+      u[next] = cfg.type === 'array' || cfg.type === 'buttons' ? [] : ''
+      onUpdate(index, u)
+    }
 
-  function updateField(f: string, v: any) {
-    onUpdate({ ...rule, [f]: v })
-  }
+    function updateField(f: string, v: any) {
+      onUpdate(index, { ...rule, [f]: v })
+    }
 
   function addBadge(f: string, v: string) {
     if (['port', 'sourcePort'].includes(f) && !validatePort(v)) {
@@ -369,18 +420,18 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
     updateField(f, (cfg as any)?.isString ? next.join(',') : next)
   }
 
-  function switchOutbound(newType: 'outboundTag' | 'balancerTag') {
-    const u = { ...rule }
-    delete u.outboundTag
-    delete u.balancerTag
-    u[newType] = newType === 'outboundTag' ? (available.outbounds[0] ?? '') : (available.balancers[0] ?? '')
-    onUpdate(u)
-  }
+    function switchOutbound(newType: 'outboundTag' | 'balancerTag') {
+      const u = { ...rule }
+      delete u.outboundTag
+      delete u.balancerTag
+      u[newType] = newType === 'outboundTag' ? (available.outbounds[0] ?? '') : (available.balancers[0] ?? '')
+      onUpdate(index, u)
+    }
 
-  function changeOutboundValue(value: string) {
-    if (!value) return
-    onUpdate({ ...rule, [outboundType]: value }, true)
-  }
+    function changeOutboundValue(value: string) {
+      if (!value) return
+      onUpdate(index, { ...rule, [outboundType]: value }, true)
+    }
 
   return (
     <div
@@ -398,8 +449,8 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
             'p-1 rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none',
             isDragging ? 'cursor-grabbing' : 'cursor-grab'
           )}
-          onMouseDown={onDragStart}
-          onTouchStart={onDragStart}
+          onMouseDown={(e) => onDragStart(e, index)}
+          onTouchStart={(e) => onDragStart(e, index)}
         >
           <IconGripVertical size={19} />
         </div>
@@ -449,7 +500,7 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
           </div>
         )}
         <button
-          onClick={onDelete}
+          onClick={() => onDelete(index)}
           className="ml-auto text-ring hover:text-destructive hover:bg-destructive/20 rounded-md transition-colors p-1 shrink-0"
         >
           <IconX size={23} className="cursor-pointer" />
@@ -619,8 +670,16 @@ const RuleCard = forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
         </Select>
       </div>
     </div>
-  )
-})
+    )
+  }),
+  (prev, next) =>
+    prev.rule === next.rule &&
+    prev.index === next.index &&
+    prev.isDragging === next.isDragging &&
+    prev.available === next.available &&
+    prev.showToast === next.showToast
+)
+RuleCard.displayName = 'RuleCard'
 
 interface BadgeInputProps {
   badges: string[]

@@ -65,18 +65,25 @@ const useStore = create<StoreState>((set) => ({
         case 'SET_CONFIGS':
           return { configs: action.configs, isConfigsLoading: false }
         case 'UPDATE_CONFIG_DIRTY': {
+          const prevConfig = state.configs[action.index]
+          if (!prevConfig) return {}
+          const nextContent = action.content !== undefined ? action.content : prevConfig.content
+          if (prevConfig.isDirty === action.isDirty && prevConfig.content === nextContent) return {}
           const configs = [...state.configs]
           configs[action.index] = {
-            ...configs[action.index],
+            ...prevConfig,
             isDirty: action.isDirty,
             ...(action.content !== undefined ? { content: action.content } : {}),
           }
           return { configs }
         }
         case 'SAVE_CONFIG': {
+          const prevConfig = state.configs[action.index]
+          if (!prevConfig) return {}
+          if (prevConfig.content === action.content && prevConfig.savedContent === action.content && !prevConfig.isDirty) return {}
           const configs = [...state.configs]
           configs[action.index] = {
-            ...configs[action.index],
+            ...prevConfig,
             content: action.content,
             savedContent: action.content,
             isDirty: false,
@@ -131,6 +138,8 @@ type CoreState = Omit<
   | 'toasts'
   | 'connections'
   | 'wsConnected'
+  | 'settings'
+  | 'configs'
 >
 
 type ModalState = Pick<
@@ -147,9 +156,42 @@ type ModalState = Pick<
   | 'pendingSaveAction'
 >
 
+type CoreStateWithSettings = CoreState & Pick<AppState, 'settings'>
+type CoreStateWithConfigs = CoreState & Pick<AppState, 'configs'>
+type CoreStateWithConfigsAndSettings = CoreState & Pick<AppState, 'configs' | 'settings'>
+
+const selectCoreState = (s: StoreState): CoreState => ({
+  serviceStatus: s.serviceStatus,
+  pendingText: s.pendingText,
+  currentCore: s.currentCore,
+  coreVersions: s.coreVersions,
+  availableCores: s.availableCores,
+  isConfigsLoading: s.isConfigsLoading,
+  version: s.version,
+  isOutdatedUI: s.isOutdatedUI,
+  clashApiPort: s.clashApiPort,
+  clashApiSecret: s.clashApiSecret,
+})
+
+const selectCoreStateWithSettings = (s: StoreState): CoreStateWithSettings => ({
+  ...selectCoreState(s),
+  settings: s.settings,
+})
+
+const selectCoreStateWithConfigs = (s: StoreState): CoreStateWithConfigs => ({
+  ...selectCoreState(s),
+  configs: s.configs,
+})
+
+const selectCoreStateWithConfigsAndSettings = (s: StoreState): CoreStateWithConfigsAndSettings => ({
+  ...selectCoreState(s),
+  configs: s.configs,
+  settings: s.settings,
+})
+
 // ─── Hooks ─────────────────────────────────────────────────────────────────────
 
-function useShowToast(): ShowToastFn {
+export function useShowToast(): ShowToastFn {
   const dispatch = useStore((s) => s.dispatch)
   return useCallback<ShowToastFn>(
     (message, type = 'success') => {
@@ -165,28 +207,48 @@ function useShowToast(): ShowToastFn {
   )
 }
 
-export function useAppContext() {
-  const state = useStore(
-    useShallow(
-      (s): CoreState => ({
-        serviceStatus: s.serviceStatus,
-        pendingText: s.pendingText,
-        currentCore: s.currentCore,
-        coreVersions: s.coreVersions,
-        availableCores: s.availableCores,
-        configs: s.configs,
-        isConfigsLoading: s.isConfigsLoading,
-        settings: s.settings,
-        version: s.version,
-        isOutdatedUI: s.isOutdatedUI,
-        clashApiPort: s.clashApiPort,
-        clashApiSecret: s.clashApiSecret,
-      })
-    )
-  )
+export function useAppContext(): { state: CoreState; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
+export function useAppContext(options: {
+  includeConfigs: true
+}): { state: CoreStateWithConfigs; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
+export function useAppContext(options: {
+  includeSettings: true
+}): { state: CoreStateWithSettings; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
+export function useAppContext(options: {
+  includeConfigs: true
+  includeSettings: true
+}): { state: CoreStateWithConfigsAndSettings; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
+export function useAppContext(options?: { includeSettings?: boolean; includeConfigs?: boolean }) {
+  const selector = options?.includeConfigs
+    ? options?.includeSettings
+      ? selectCoreStateWithConfigsAndSettings
+      : selectCoreStateWithConfigs
+    : options?.includeSettings
+      ? selectCoreStateWithSettings
+      : selectCoreState
+  const state = useStore(useShallow(selector))
   const dispatch = useStore((s) => s.dispatch)
   const showToast = useShowToast()
   return { state, dispatch, showToast }
+}
+
+export function useAppActions() {
+  const dispatch = useStore((s) => s.dispatch)
+  const showToast = useShowToast()
+  return { dispatch, showToast }
+}
+
+export function useCoreRuntimeState() {
+  return useStore(
+    useShallow((s) => ({
+      serviceStatus: s.serviceStatus,
+      currentCore: s.currentCore,
+    }))
+  )
+}
+
+export function getAppState() {
+  return useStore.getState()
 }
 
 export function useModalContext() {
@@ -214,6 +276,10 @@ export function useToastContext() {
   const toasts = useStore((s) => s.toasts)
   const showToast = useShowToast()
   return { toasts, showToast }
+}
+
+export function useSettings<T>(selector: (settings: AppSettings) => T): T {
+  return useStore((s) => selector(s.settings))
 }
 
 // ─── Connections hook — WS sync ────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { IconRefresh, IconSettings, IconCpu, IconPlayerStopFilled, IconPlayerPlayFilled, IconBox } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -13,10 +13,12 @@ import { ShineBorder } from '@/components/ui/shine-border'
 export function StatusBar({
   onOpenCoreManage,
   onOpenSettings,
+  onRefreshStatus,
   onOpenUpdate,
 }: {
   onOpenCoreManage: () => void
   onOpenSettings: () => void
+  onRefreshStatus: () => void
   onOpenUpdate: (core: string) => void
 }) {
   const { state, dispatch, showToast } = useAppContext()
@@ -25,45 +27,12 @@ export function StatusBar({
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending' || serviceStatus === 'loading'
 
-  const lastStatusRef = useRef(serviceStatus)
-  const lastCoreRef = useRef({ currentCore, coreVersions, availableCores: state.availableCores })
-
-  useEffect(() => {
-    lastStatusRef.current = serviceStatus
-  }, [serviceStatus])
-  useEffect(() => {
-    lastCoreRef.current = { currentCore, coreVersions, availableCores: state.availableCores }
-  }, [currentCore, coreVersions, state.availableCores])
-
-  async function checkStatus() {
-    try {
-      const data = await apiCall<any>('GET', 'control')
-      if (!data.success) return
-      const newStatus: 'running' | 'stopped' = data.running ? 'running' : 'stopped'
-      const prev = lastCoreRef.current
-      const coreChanged =
-        data.currentCore !== prev.currentCore ||
-        JSON.stringify(data.versions) !== JSON.stringify(prev.coreVersions) ||
-        JSON.stringify(data.cores ?? []) !== JSON.stringify(prev.availableCores)
-      if (coreChanged)
-        dispatch({
-          type: 'SET_CORE_INFO',
-          currentCore: data.currentCore || 'xray',
-          coreVersions: data.versions || { xray: '', mihomo: '' },
-          availableCores: data.cores || [],
-        })
-      if (newStatus !== lastStatusRef.current) dispatch({ type: 'SET_SERVICE_STATUS', status: newStatus })
-    } catch {
-      /* ok */
-    }
-  }
-
   useEffect(() => {
     const interval = setInterval(() => {
-      if (state.serviceStatus !== 'pending') checkStatus()
+      if (state.serviceStatus !== 'pending') onRefreshStatus()
     }, 15000)
-    return () => clearInterval(interval) // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.serviceStatus])
+    return () => clearInterval(interval)
+  }, [state.serviceStatus, onRefreshStatus])
 
   function setPending(text: string) {
     dispatch({
@@ -79,14 +48,14 @@ export function StatusBar({
     showToast(result.success ? 'XKeen запущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
     if (result.success) syncClashApiPort()
-    checkStatus()
+    onRefreshStatus()
   }
 
   async function stopService() {
     setPending('Остановка...')
     const result = await apiCall<any>('POST', 'control', { action: 'stop' })
     showToast(result.success ? 'XKeen остановлен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
-    checkStatus()
+    onRefreshStatus()
   }
 
   async function restartService() {
@@ -95,7 +64,7 @@ export function StatusBar({
     showToast(result.success ? 'XKeen перезапущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
     if (result.success) syncClashApiPort()
-    checkStatus()
+    onRefreshStatus()
   }
 
   const statusLabel =

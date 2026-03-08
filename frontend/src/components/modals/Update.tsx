@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 import { cn } from '../../lib/utils'
-import { useAppContext, useModalContext } from '../../lib/store'
+import { useAppContext, useModalContext, useSettings } from '../../lib/store'
 import { capitalize } from '../../lib/api'
 import type { Release } from '../../lib/types'
 import { Spinner } from '@/components/ui/spinner'
@@ -34,9 +34,9 @@ const mdClass = `
 `.trim()
 
 export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
-  const { state, dispatch, showToast } = useAppContext()
+  const { dispatch, showToast } = useAppContext()
   const { modals } = useModalContext()
-  const { settings } = state
+  const backupCore = useSettings((s) => s.backupCore)
   const { updateModalCore } = modals
   const [releases, setReleases] = useState<Release[]>([])
   const [selectedVersion, setSelectedVersion] = useState('')
@@ -91,7 +91,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
         body: JSON.stringify({
           core: updateModalCore,
           version: selectedVersion,
-          backup_core: settings.backupCore,
+          backup_core: backupCore,
         }),
       })
       const data = await res.json()

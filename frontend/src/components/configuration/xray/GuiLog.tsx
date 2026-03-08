@@ -3,7 +3,7 @@ import * as prettier from 'prettier'
 import prettierBabel from 'prettier/plugins/babel'
 import { Switch } from '@/components/ui/switch'
 import { cn, stripJsonComments } from '../../../lib/utils'
-import { useAppContext } from '../../../lib/store'
+import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import { apiCall } from '../../../lib/api'
 import type { MonacoEditorRef } from '../MonacoEditor'
 import type { Config } from '../../../lib/types'
@@ -51,7 +51,9 @@ interface Props {
 }
 
 export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
-  const { showToast, state, dispatch } = useAppContext()
+  const { showToast, dispatch } = useAppActions()
+  const { serviceStatus, currentCore } = useCoreRuntimeState()
+  const autoApply = useSettings((s) => s.autoApply)
   const [cfg, setCfg] = useState<LogConfig>(() => {
     const content = configs[activeConfigIndex]?.content ?? ''
     return (
@@ -107,7 +109,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
         }
         monacoEditor.executeEdits('gui-log', [{ range: model.getFullModelRange(), text }])
 
-        if (triggerRestart && state.settings.autoApply && state.serviceStatus === 'running') {
+        if (triggerRestart && autoApply && serviceStatus === 'running') {
           const activeConfig = configs[activeConfigIndex]
           if (activeConfig) {
             const content = monacoEditor.getValue()
@@ -124,7 +126,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
             })
             const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', {
               action: 'softRestart',
-              core: state.currentCore,
+              core: currentCore,
             })
             showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
             dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
@@ -134,7 +136,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
         showToast(`Ошибка синхронизации: ${e.message}`, 'error')
       }
     },
-    [editorRef, showToast, state.settings.autoApply, state.serviceStatus, state.currentCore, configs, activeConfigIndex, dispatch]
+    [editorRef, showToast, autoApply, serviceStatus, currentCore, configs, activeConfigIndex, dispatch]
   )
 
   function update(partial: Partial<LogConfig>, triggerRestart = false) {

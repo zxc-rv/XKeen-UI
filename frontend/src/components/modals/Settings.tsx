@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react'
+import { Fragment, memo, useCallback, useState } from 'react'
 import { IconAlertCircle, IconSettings, IconX } from '@tabler/icons-react'
 import { apiCall } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
@@ -25,6 +25,8 @@ type ToggleSetting = {
   title: string
   description: string
 }
+
+type ToggleSettingHandler = (item: ToggleSetting, value: boolean) => void
 
 const guiSettings: ToggleSetting[] = [
   {
@@ -74,76 +76,191 @@ const updateSettings: ToggleSetting[] = [
   },
 ]
 
-const SwitchSettingField = ({ item, checked, onToggle }: { item: ToggleSetting; checked: boolean; onToggle: (v: boolean) => void }) => (
-  <Field orientation="horizontal" className="px-0 py-3">
-    <FieldContent>
-      <FieldLabel htmlFor={item.id}>{item.title}</FieldLabel>
-      <FieldDescription className="text-[13px]">{item.description}</FieldDescription>
-    </FieldContent>
-    <Switch id={item.id} checked={checked} onCheckedChange={onToggle} aria-label={item.title} />
-  </Field>
-)
+const SwitchSettingField = memo(function SwitchSettingField({
+  item,
+  checked,
+  onToggleSetting,
+}: {
+  item: ToggleSetting
+  checked: boolean
+  onToggleSetting: ToggleSettingHandler
+}) {
+  const onToggle = useCallback((value: boolean) => onToggleSetting(item, value), [item, onToggleSetting])
 
-export function SettingsModal() {
-  const { state, dispatch, showToast } = useAppContext()
-  const { modals } = useModalContext()
-  const { settings } = state
+  return (
+    <Field orientation="horizontal" className="px-0 py-3">
+      <FieldContent>
+        <FieldLabel htmlFor={item.id}>{item.title}</FieldLabel>
+        <FieldDescription className="text-[13px] whitespace-pre-line">{item.description}</FieldDescription>
+      </FieldContent>
+      <Switch id={item.id} checked={checked} onCheckedChange={onToggle} aria-label={item.title} />
+    </Field>
+  )
+})
+
+const ProxyRow = memo(function ProxyRow({
+  proxy,
+  index,
+  onRemove,
+}: {
+  proxy: string
+  index: number
+  onRemove: (index: number) => Promise<void>
+}) {
+  const onRemoveClick = useCallback(() => void onRemove(index), [index, onRemove])
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-9 flex flex-1 min-w-0 items-center rounded-md border bg-input-background px-2.5">
+        <span className="w-full truncate text-[13px]">{proxy}</span>
+      </div>
+      <Button variant="destructive" className="shrink-0" onClick={onRemoveClick} aria-label={`Удалить прокси ${proxy}`}>
+        Удалить
+      </Button>
+    </div>
+  )
+})
+
+const ProxySettingsField = memo(function ProxySettingsField({
+  githubProxies,
+  onAddProxy,
+  onRemoveProxy,
+}: {
+  githubProxies: string[]
+  onAddProxy: (url: string) => Promise<boolean>
+  onRemoveProxy: (index: number) => Promise<void>
+}) {
   const [newProxy, setNewProxy] = useState('')
-
   const hasNewProxy = newProxy.trim().length > 0
 
-  const close = () => dispatch({ type: 'SHOW_MODAL', modal: 'showSettingsModal', show: false })
+  const addProxy = useCallback(async () => {
+    if (!hasNewProxy) return
+    const ok = await onAddProxy(newProxy)
+    if (ok) setNewProxy('')
+  }, [hasNewProxy, newProxy, onAddProxy])
 
-  async function saveSetting(path: string, value: unknown) {
-    const [section, key] = path.split('.')
-    try {
-      const body: Record<string, unknown> = {}
-      if (['gui', 'updater', 'log'].includes(section)) body[section] = key ? { [key]: value } : value
-      const result = await apiCall<any>('PATCH', 'settings', body)
-      if (!result.success) {
-        showToast('Ошибка: ' + result.error, 'error')
+  return (
+    <Field className="px-0 py-3">
+      <FieldContent>
+        <FieldLabel htmlFor="github-proxy-input">GitHub Proxy</FieldLabel>
+        <FieldDescription className="text-[13px] text-wrap!">
+          Прокси для загрузки обновлений при отсутствии доступа к GitHub, используются по порядку сверху вниз
+        </FieldDescription>
+      </FieldContent>
+
+      {githubProxies.length === 0 ? (
+        <FieldDescription className="text-[13px] py-1">Прокси не добавлены</FieldDescription>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {githubProxies.map((proxy, index) => (
+            <ProxyRow key={proxy + index} proxy={proxy} index={index} onRemove={onRemoveProxy} />
+          ))}
+        </div>
+      )}
+
+      <Field orientation="horizontal" className="gap-2">
+        <InputGroup className="flex-1">
+          <InputGroupInput
+            id="github-proxy-input"
+            value={newProxy}
+            onChange={(e) => setNewProxy(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void addProxy()}
+            placeholder="Введите URL прокси..."
+            className={hasNewProxy ? 'pr-7' : undefined}
+          />
+          <InputGroupAddon align="inline-end">
+            {hasNewProxy && (
+              <InputGroupButton
+                aria-label="Очистить поле"
+                className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                onClick={() => setNewProxy('')}
+              >
+                <IconX />
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
+        <Button variant="default" className="shrink-0" onClick={() => void addProxy()} disabled={!hasNewProxy}>
+          Добавить
+        </Button>
+      </Field>
+    </Field>
+  )
+})
+
+export function SettingsModal() {
+  const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
+  const { modals } = useModalContext()
+  const { settings } = state
+
+  const close = useCallback(() => dispatch({ type: 'SHOW_MODAL', modal: 'showSettingsModal', show: false }), [dispatch])
+
+  const saveSetting = useCallback(
+    async (path: string, value: unknown) => {
+      const [section, key] = path.split('.')
+      try {
+        const body: Record<string, unknown> = {}
+        if (['gui', 'updater', 'log'].includes(section)) body[section] = key ? { [key]: value } : value
+        const result = await apiCall<any>('PATCH', 'settings', body)
+        if (!result.success) {
+          showToast('Ошибка: ' + result.error, 'error')
+          return false
+        }
+        return true
+      } catch (e: any) {
+        showToast(e.message, 'error')
+        console.error('Save setting failed:', e)
         return false
       }
-      return true
-    } catch (e: any) {
-      showToast(e.message, 'error')
-      console.error('Save setting failed:', e)
+    },
+    [showToast]
+  )
+
+  const toggleSetting = useCallback(
+    async (item: ToggleSetting, value: boolean) => {
+      const ok = await saveSetting(item.path, value)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { [item.key]: value } as Partial<AppSettings> })
+    },
+    [dispatch, saveSetting]
+  )
+
+  const addProxy = useCallback(
+    async (rawUrl: string) => {
+      let url = rawUrl.trim().replace(/\/+$/, '')
+      if (!url) return false
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+      if (settings.githubProxies.includes(url)) {
+        showToast('Уже добавлен', 'error')
+        return false
+      }
+      const next = [...settings.githubProxies, url]
+      const ok = await saveSetting('updater.github_proxy', next)
+      if (ok) {
+        dispatch({ type: 'SET_SETTINGS', settings: { githubProxies: next } })
+        return true
+      }
       return false
-    }
-  }
+    },
+    [dispatch, saveSetting, settings.githubProxies, showToast]
+  )
 
-  async function toggle(key: keyof typeof settings, settingPath: string, value: boolean) {
-    const ok = await saveSetting(settingPath, value)
-    if (ok) dispatch({ type: 'SET_SETTINGS', settings: { [key]: value } })
-  }
+  const removeProxy = useCallback(
+    async (index: number) => {
+      const next = settings.githubProxies.filter((_, i) => i !== index)
+      const ok = await saveSetting('updater.github_proxy', next)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { githubProxies: next } })
+    },
+    [dispatch, saveSetting, settings.githubProxies]
+  )
 
-  async function addProxy() {
-    let url = newProxy.trim().replace(/\/+$/, '')
-    if (!url) return
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
-    if (settings.githubProxies.includes(url)) {
-      showToast('Уже добавлен', 'error')
-      return
-    }
-    const next = [...settings.githubProxies, url]
-    const ok = await saveSetting('updater.github_proxy', next)
-    if (ok) {
-      dispatch({ type: 'SET_SETTINGS', settings: { githubProxies: next } })
-      setNewProxy('')
-    }
-  }
-
-  async function removeProxy(index: number) {
-    const next = settings.githubProxies.filter((_, i) => i !== index)
-    const ok = await saveSetting('updater.github_proxy', next)
-    if (ok) dispatch({ type: 'SET_SETTINGS', settings: { githubProxies: next } })
-  }
-
-  async function setTimezone(value: string) {
-    const offset = parseInt(value, 10)
-    const ok = await saveSetting('log.timezone', offset)
-    if (ok) dispatch({ type: 'SET_SETTINGS', settings: { timezone: offset } })
-  }
+  const setTimezone = useCallback(
+    async (value: string) => {
+      const offset = parseInt(value, 10)
+      const ok = await saveSetting('log.timezone', offset)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { timezone: offset } })
+    },
+    [dispatch, saveSetting]
+  )
 
   return (
     <Dialog open={modals.showSettingsModal} onOpenChange={(open) => !open && close()}>
@@ -174,11 +291,7 @@ export function SettingsModal() {
                 <FieldGroup className="gap-0!">
                   {guiSettings.map((item, index) => (
                     <Fragment key={item.id}>
-                      <SwitchSettingField
-                        item={item}
-                        checked={settings[item.key]}
-                        onToggle={(value) => toggle(item.key, item.path, value)}
-                      />
+                      <SwitchSettingField item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
                       {index < guiSettings.length - 1 && <Separator className="my-0" />}
                     </Fragment>
                   ))}
@@ -189,72 +302,11 @@ export function SettingsModal() {
                 <FieldGroup className="gap-0!">
                   {updateSettings.map((item) => (
                     <Fragment key={item.id}>
-                      <SwitchSettingField
-                        item={item}
-                        checked={settings[item.key]}
-                        onToggle={(value) => toggle(item.key, item.path, value)}
-                      />
+                      <SwitchSettingField item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
                       <Separator className="my-0" />
                     </Fragment>
                   ))}
-
-                  <Field className="px-0 py-3">
-                    <FieldContent>
-                      <FieldLabel htmlFor="github-proxy-input">GitHub Proxy</FieldLabel>
-                      <FieldDescription className="text-[13px] text-wrap!">
-                        Прокси для загрузки обновлений при отсутствии доступа к GitHub, используются по порядку сверху вниз
-                      </FieldDescription>
-                    </FieldContent>
-
-                    {settings.githubProxies.length === 0 ? (
-                      <FieldDescription className="text-[13px] py-1">Прокси не добавлены</FieldDescription>
-                    ) : (
-                      <div className="flex flex-col gap-3">
-                        {settings.githubProxies.map((proxy, index) => (
-                          <div key={proxy + index} className="flex items-center gap-2">
-                            <div className="h-9 flex flex-1 min-w-0 items-center rounded-md border bg-input-background px-2.5">
-                              <span className="w-full truncate text-[13px]">{proxy}</span>
-                            </div>
-                            <Button
-                              variant="destructive"
-                              className="shrink-0"
-                              onClick={() => removeProxy(index)}
-                              aria-label={`Удалить прокси ${proxy}`}
-                            >
-                              Удалить
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <Field orientation="horizontal" className="gap-2">
-                      <InputGroup className="flex-1">
-                        <InputGroupInput
-                          id="github-proxy-input"
-                          value={newProxy}
-                          onChange={(e) => setNewProxy(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && addProxy()}
-                          placeholder="Введите URL прокси..."
-                          className={hasNewProxy ? 'pr-7' : undefined}
-                        />
-                        <InputGroupAddon align="inline-end">
-                          {hasNewProxy && (
-                            <InputGroupButton
-                              aria-label="Очистить поле"
-                              className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
-                              onClick={() => setNewProxy('')}
-                            >
-                              <IconX />
-                            </InputGroupButton>
-                          )}
-                        </InputGroupAddon>
-                      </InputGroup>
-                      <Button variant="default" className="shrink-0" onClick={addProxy} disabled={!hasNewProxy}>
-                        Добавить
-                      </Button>
-                    </Field>
-                  </Field>
+                  <ProxySettingsField githubProxies={settings.githubProxies} onAddProxy={addProxy} onRemoveProxy={removeProxy} />
                 </FieldGroup>
               </TabsContent>
 

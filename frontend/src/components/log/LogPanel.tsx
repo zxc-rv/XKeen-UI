@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '../../lib/utils'
 import { useWebSocket } from '../../lib/websocket'
-import { useAppContext } from '../../lib/store'
+import { useSettings } from '../../lib/store'
 import type { WsMessage } from '../../lib/websocket'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
@@ -14,7 +14,7 @@ const LOG_FILES = ['error.log', 'access.log']
 const MAX_LINES = 1000
 
 export function LogPanel() {
-  const { state } = useAppContext()
+  const timezone = useSettings((s) => s.timezone)
   const [filter, setFilter] = useState('')
   const [currentFile, setCurrentFile] = useState('error.log')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -102,7 +102,7 @@ export function LogPanel() {
   useEffect(() => {
     ws.reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.settings.timezone])
+  }, [timezone])
 
   function switchFile(filename: string) {
     if (filename === currentFile) return

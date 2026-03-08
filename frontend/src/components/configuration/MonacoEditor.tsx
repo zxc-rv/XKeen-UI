@@ -1,4 +1,4 @@
-import { useEffect, useRef, useLayoutEffect, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, useLayoutEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import { jsonDefaults } from 'monaco-editor/esm/vs/language/json/monaco.contribution'
 import 'monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution'
@@ -79,6 +79,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
   const savedContentRef = useRef('')
   const filenameRef = useRef('')
   const suppressRef = useRef(false)
+  const lastValidationRef = useRef<{ isValid: boolean; error?: string } | null>(null)
 
   useLayoutEffect(() => {
     onContentChangeRef.current = onContentChange
@@ -86,13 +87,21 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
     onReadyRef.current = onReady
   })
 
-  function runValidation(editor: monaco.editor.IStandaloneCodeEditor, filename: string) {
+  const emitValidation = useCallback((isValid: boolean, error?: string) => {
+    const normalizedError = error || undefined
+    const prev = lastValidationRef.current
+    if (prev?.isValid === isValid && prev?.error === normalizedError) return
+    lastValidationRef.current = { isValid, error: normalizedError }
+    onValidationChangeRef.current(isValid, normalizedError)
+  }, [])
+
+  const runValidation = useCallback((editor: monaco.editor.IStandaloneCodeEditor, filename: string) => {
     const lang = getFileLanguage(filename)
     if (lang === 'yaml') {
       try {
         jsyaml.load(editor.getValue())
         monaco.editor.setModelMarkers(editor.getModel()!, 'yaml', [])
-        onValidationChangeRef.current(true)
+        emitValidation(true)
       } catch (e: any) {
         const line = e.mark ? e.mark.line + 1 : 1
         const col = e.mark ? e.mark.column + 1 : 1
@@ -107,7 +116,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
             endColumn: 999,
           },
         ])
-        onValidationChangeRef.current(false, msg)
+        emitValidation(false, msg)
       }
     } else if (lang === 'json') {
       setTimeout(() => {
@@ -118,12 +127,12 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
           resource: model.uri,
         })
         const err = markers.find((m) => m.severity === monaco.MarkerSeverity.Error)
-        onValidationChangeRef.current(!err, err?.message)
+        emitValidation(!err, err?.message)
       }, 300)
     } else {
-      onValidationChangeRef.current(true)
+      emitValidation(true)
     }
-  }
+  }, [emitValidation])
 
   function registerFormatters() {
     monaco.languages.registerDocumentFormattingEditProvider('json', {
@@ -278,7 +287,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
         resource: model.uri,
       })
       const err = markers.find((m) => m.severity === monaco.MarkerSeverity.Error)
-      onValidationChangeRef.current(!err, err?.message)
+      emitValidation(!err, err?.message)
     })
 
     editor.onDidChangeModelContent(() => {
@@ -299,7 +308,7 @@ export const MonacoEditor = forwardRef<MonacoEditorRef, Props>(({ onContentChang
       markerDisposable.dispose()
       editor.dispose()
     }
-  }, [])
+  }, [runValidation, emitValidation])
 
   return (
     <div className="absolute inset-4 rounded-xl overflow-hidden border border-border bg-input-background">
