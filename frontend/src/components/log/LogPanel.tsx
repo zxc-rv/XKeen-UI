@@ -11,7 +11,6 @@ import type { WsMessage } from '../../lib/websocket'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']
-const MAX_LINES = 1000
 
 export function LogPanel() {
   const timezone = useSettings((s) => s.timezone)
@@ -47,11 +46,11 @@ export function LogPanel() {
     const el = logRef.current
     if (!el) return
 
-    linesRef.current = lines.slice(-MAX_LINES)
-    const hasLines = linesRef.current.length > 0
+    linesRef.current = lines
+    const hasLines = lines.length > 0
 
     setIsEmpty(!hasLines)
-    el.innerHTML = hasLines ? linesRef.current.join('') : ''
+    el.innerHTML = hasLines ? lines.join('') : ''
 
     if (hasLines && autoScrollRef.current) {
       el.scrollTop = el.scrollHeight
@@ -65,13 +64,7 @@ export function LogPanel() {
 
     setIsEmpty(false)
     linesRef.current.push(...newLines)
-
-    if (linesRef.current.length > MAX_LINES) {
-      linesRef.current = linesRef.current.slice(-MAX_LINES)
-      el.innerHTML = linesRef.current.join('')
-    } else {
-      el.insertAdjacentHTML('beforeend', newLines.join(''))
-    }
+    el.insertAdjacentHTML('beforeend', newLines.join(''))
 
     if (autoScrollRef.current) el.scrollTop = el.scrollHeight
   }, [])
