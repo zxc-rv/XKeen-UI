@@ -286,6 +286,13 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const xkeenConfigs = configs.filter((c) => c.file.endsWith('.lst'))
 
   const isMihomo = currentCore === 'mihomo' && !!clashApiPort
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const usefulLinks = [
+    { title: 'Инструкция XKeen', url: 'https://github.com/Corvus-Malus/XKeen/' },
+    { title: 'FAQ XKeen', url: 'https://jameszero.net/faq-xkeen.htm' },
+    { title: 'Документация Xray', url: 'https://xtls.github.io/ru/config' },
+    { title: 'Документация Mihomo', url: 'https://wiki.metacubex.one/ru/config/general' },
+  ]
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -514,7 +521,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                           <IconDotsFilled />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-57">
+                      <DropdownMenuContent align="end" className="min-w-57 max-w-[calc(100vw-1rem)]">
                         <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                         <DropdownMenuItem onClick={onOpenImport}>
                           <IconLink /> Добавить Прокси
@@ -526,33 +533,29 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                           <IconSearch /> Скан Геофайлов
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <IconExternalLinkFilled /> Полезные ссылки
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="min-w-55">
-                            <DropdownMenuItem
-                              onClick={() => window.open('https://github.com/Corvus-Malus/XKeen/', '_blank', 'noopener,noreferrer')}
-                            >
-                              <IconExternalLinkFilled /> Инструкция XKeen
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => window.open('https://jameszero.net/faq-xkeen.htm', '_blank', 'noopener,noreferrer')}
-                            >
-                              <IconExternalLinkFilled /> FAQ XKeen
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => window.open('https://xtls.github.io/ru/config', '_blank', 'noopener,noreferrer')}
-                            >
-                              <IconExternalLinkFilled /> Документация Xray
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => window.open('https://wiki.metacubex.one/ru/config/general', '_blank', 'noopener,noreferrer')}
-                            >
-                              <IconExternalLinkFilled /> Документация Mihomo
-                            </DropdownMenuItem>
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
+                        {isMobile ? (
+                          <>
+                            <DropdownMenuLabel>Полезные ссылки</DropdownMenuLabel>
+                            {usefulLinks.map((link) => (
+                              <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
+                                <IconExternalLinkFilled /> {link.title}
+                              </DropdownMenuItem>
+                            ))}
+                          </>
+                        ) : (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <IconExternalLinkFilled /> Полезные ссылки
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="min-w-55 max-w-[calc(100vw-1rem)]">
+                              {usefulLinks.map((link) => (
+                                <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
+                                  <IconExternalLinkFilled /> {link.title}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </ButtonGroup>

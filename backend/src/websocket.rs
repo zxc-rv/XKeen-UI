@@ -97,10 +97,13 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (mut tx, mut rx) = socket.split();
     let mut log_rx = state.log_tx.subscribe();
     let mut path = ERROR_LOG.to_string();
+    let mut query = String::new();
     let tz = state.settings.read().unwrap().log.timezone;
+
     let p_clone = path.clone();
+    let q_clone = query.clone();
     let (t, l, mut offset) = tokio::task::spawn_blocking(move ||
-            read_log_file(p_clone, 0, "".into(), true, tz)
+            read_log_file(p_clone, 0, q_clone, true, tz)
         ).await.unwrap();
 
     let init_msg = if l.is_empty() { serde_json::json!({"type": "clear"}) } else { serde_json::json!({"type": t, "lines": l}) };
@@ -118,14 +121,16 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                 path = if v["file"] == "access.log" { ACCESS_LOG.into() } else { ERROR_LOG.into() };
 
                                 let p = path.clone();
-                                let (t, l, off) = tokio::task::spawn_blocking(move || read_log_file(p, 0, "".into(), true, tz)).await.unwrap();
+                                let q = query.clone();
+                                let (t, l, off) = tokio::task::spawn_blocking(move || read_log_file(p, 0, q, true, tz)).await.unwrap();
                                 offset = off;
 
                                 let msg = if l.is_empty() { serde_json::json!({"type": "clear"}) } else { serde_json::json!({"type": t, "lines": l}) };
                                 if tx.send(Message::Text(msg.to_string().into())).await.is_err() { break; }
                             },
                             Some("filter") | Some("reload") => {
-                                let q = v["query"].as_str().unwrap_or("").to_string();
+                                query = v["query"].as_str().unwrap_or("").to_string();
+                                let q = query.clone();
                                 let p = path.clone();
                                 let (t, l, off) = tokio::task::spawn_blocking(move || read_log_file(p, 0, q, true, tz)).await.unwrap();
                                 offset = off;
@@ -155,8 +160,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 if changed_path == path {
                     let tz = state.settings.read().unwrap().log.timezone;
                     let p = path.clone();
+                    let q = query.clone();
                     let off_curr = offset;
-                    let (t, l, new_off) = tokio::task::spawn_blocking(move || read_log_file(p, off_curr, "".into(), false, tz)).await.unwrap();
+                    let (t, l, new_off) = tokio::task::spawn_blocking(move || read_log_file(p, off_curr, q, false, tz)).await.unwrap();
                     offset = new_off;
 
                     if !l.is_empty() {

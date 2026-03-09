@@ -104,7 +104,7 @@ export function useWebSocket(onMessage: WsMessageHandler) {
   )
 
   const clearLog = useCallback(() => send({ type: 'clear' }), [send])
-  const reload = useCallback(() => send({ type: 'reload' }), [send])
+  const reload = useCallback((filter?: string) => send({ type: 'reload', query: filter ?? '' }), [send])
 
   return { switchFile, applyFilter, clearLog, reload }
 }
