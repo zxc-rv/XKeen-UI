@@ -405,7 +405,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
             <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:ml-auto">
               {isConfigsLoading ? (
                 <div className="flex gap-2">
-                  {[524, 311].map((w) => (
+                  {[525, 310].map((w) => (
                     <Skeleton key={w} className="h-9 rounded-lg p-0.75 gap-0.5" style={{ width: w }} />
                   ))}
                 </div>
@@ -496,7 +496,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           <div className="px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
             <div className="text-xs min-w-0">
               {isConfigsLoading ? (
-                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-30" />
               ) : validationState && activeConfig && isJsonOrYaml ? (
                 <span
                   className={cn(
@@ -514,7 +514,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
             <div className="flex flex-wrap items-center gap-1.5">
               {isConfigsLoading ? (
                 <div className="flex gap-1.5">
-                  {[126, 121, 136].map((w) => (
+                  {[120, 115, 133].map((w) => (
                     <Skeleton key={w} className="h-9 rounded-md" style={{ width: w }} />
                   ))}
                 </div>

@@ -285,7 +285,7 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
   )
 
   return (
-    <div ref={scrollRef} className="absolute inset-4 overflow-y-auto flex flex-col gap-2">
+    <div ref={scrollRef} className="absolute inset-4 overflow-y-auto flex flex-col gap-2 [scrollbar-width:thin]">
       <div className="flex flex-col gap-2">
         {rules.map((rule, index) => (
           <RuleCard
