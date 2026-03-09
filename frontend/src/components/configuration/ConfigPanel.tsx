@@ -31,7 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn, stripJsonComments } from '../../lib/utils'
 import { useAppContext, useConnectionsSync, useSettings, syncClashApiPort } from '../../lib/store'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
-import { MonacoEditor, type MonacoEditorRef } from './MonacoEditor'
+import { CodeMirrorEditor, type CodeMirrorRef } from './CodeMirror'
 import { RoutingPanel } from './xray/GuiRouting'
 import { GuiLog } from './xray/GuiLog'
 import { ConnectionsPanel } from './mihomo/Connections'
@@ -46,7 +46,7 @@ interface Props {
   onOpenImport: () => void
   onOpenTemplate: () => void
   onOpenGeoScan: () => void
-  editorRef: React.RefObject<MonacoEditorRef | null>
+  editorRef: React.RefObject<CodeMirrorRef | null>
   configActionsRef: React.RefObject<{ switchTab: (index: number) => void; getActiveIndex: () => number }>
 }
 
@@ -65,9 +65,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     if (!isRunning) setActivePanel('config')
   }, [isRunning])
 
-  const [activeConfigIndex, setActiveConfigIndex] = useState(0)
+  const [activeConfigFile, setActiveConfigFile] = useState<string>(() => localStorage.getItem('lastSelectedTab') ?? '')
+  const activeConfigIndex = useMemo(() => {
+    if (!configs.length) return 0
+    const idx = configs.findIndex((c) => c.file === activeConfigFile)
+    return idx >= 0 ? idx : 0
+  }, [configs, activeConfigFile])
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
-  const [monacoReady, setMonacoReady] = useState(false)
+  const [EditorReady, setEditorReady] = useState(false)
   const [activePanel, setActivePanel] = useState<'config' | 'selectors' | 'connections'>('config')
   const [mode, setMode] = useState<ClashMode>('rule')
   const [updatingRuleProviders, setUpdatingRuleProviders] = useState(false)
@@ -84,6 +89,21 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     activeIndexRef.current = activeConfigIndex
   }, [activeConfigIndex])
 
+  useEffect(() => {
+    function onBeforeUnload() {
+      const currentCfg = configsRef.current[activeIndexRef.current]
+      if (!currentCfg || !editorRef.current) return
+      const folds = editorRef.current.saveViewState()?.folds ?? []
+      try {
+        localStorage.setItem(`editor-folds:${currentCfg.file}`, JSON.stringify(folds))
+      } catch {
+        /* */
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [editorRef])
+
   const configFilenamesKey = configs.map((c) => c.file).join(',')
   const prevConfigFilenamesKeyRef = useRef('')
 
@@ -91,21 +111,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     if (configs.length === 0) return
     const isFirstLoad = prevConfigFilenamesKeyRef.current === ''
     prevConfigFilenamesKeyRef.current = configFilenamesKey
-
-    if (isFirstLoad) {
-      const savedFile = localStorage.getItem('lastSelectedTab')
-      const index = savedFile ? configs.findIndex((c) => c.file === savedFile) : -1
-      if (index > 0) {
-        setActiveConfigIndex(index)
-        activeIndexRef.current = index
-      }
-      return
-    }
+    if (isFirstLoad) return
 
     const yamlIndex = configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
     const next = yamlIndex >= 0 ? yamlIndex : 0
-    setActiveConfigIndex(next)
-    activeIndexRef.current = next // eslint-disable-next-line react-hooks/exhaustive-deps
+    setActiveConfigFile(configs[next]?.file ?? '') // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configFilenamesKey])
 
   useEffect(() => {
@@ -157,22 +167,35 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     (config: Config) => {
       if (!editorRef.current) return
       editorRef.current.setSavedContent(config.savedContent)
-      editorRef.current.setValue(config.content, config.savedContent)
+      const inMemory = viewStatesRef.current[config.file]
+      editorRef.current.setValue(config.content, config.savedContent, inMemory?.history)
       editorRef.current.setLanguage(getFileLanguage(config.file))
       editorRef.current.validate(config.file)
-      const savedState = viewStatesRef.current[config.file]
-      if (savedState) editorRef.current.restoreViewState(savedState)
+      if (inMemory) {
+        editorRef.current.restoreViewState(inMemory)
+      } else {
+        const folds = (() => {
+          try {
+            return JSON.parse(localStorage.getItem(`editor-folds:${config.file}`) ?? 'null')
+          } catch {
+            return null
+          }
+        })()
+        if (folds) editorRef.current.restoreViewState({ anchor: 0, head: 0, scrollTop: 0, scrollLeft: 0, folds })
+      }
     },
     [editorRef]
   )
 
   useEffect(() => {
     const config = configsRef.current[activeConfigIndex]
-    if (monacoReady && config && editorRef.current) loadConfigIntoEditor(config)
-  }, [activeConfigIndex, configFilenamesKey, monacoReady, loadConfigIntoEditor, editorRef])
+    if (EditorReady && config && editorRef.current) {
+      loadConfigIntoEditor(config)
+    }
+  }, [activeConfigIndex, configFilenamesKey, EditorReady, loadConfigIntoEditor, editorRef])
 
-  const handleMonacoReady = useCallback(() => {
-    setMonacoReady(true)
+  const handleEditorReady = useCallback(() => {
+    setEditorReady(true)
     const config = configsRef.current[activeIndexRef.current]
     if (config) loadConfigIntoEditor(config)
   }, [loadConfigIntoEditor])
@@ -197,11 +220,17 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     if (index === activeConfigIndex) return
     const currentCfg = configsRef.current[activeIndexRef.current]
     if (currentCfg && editorRef.current) {
-      viewStatesRef.current[currentCfg.file] = editorRef.current.saveViewState()
+      const viewState = editorRef.current.saveViewState()
+      viewStatesRef.current[currentCfg.file] = viewState
+      try {
+        localStorage.setItem(`editor-folds:${currentCfg.file}`, JSON.stringify(viewState?.folds ?? []))
+      } catch {
+        /* */
+      }
     }
-    activeIndexRef.current = index
-    setActiveConfigIndex(index)
-    localStorage.setItem('lastSelectedTab', configs[index]?.file ?? '')
+    const file = configs[index]?.file ?? ''
+    setActiveConfigFile(file)
+    localStorage.setItem('lastSelectedTab', file)
   }
 
   configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
@@ -422,10 +451,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
         </div>
 
         <div className="relative min-h-175! md:flex-1 md:min-h-0">
-          {monacoReady && activeConfig && isRoutingGui && (
+          {EditorReady && activeConfig && isRoutingGui && (
             <RoutingPanel editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
           )}
-          {monacoReady && activeConfig && isLogGui && (
+          {EditorReady && activeConfig && isLogGui && (
             <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
           )}
 
@@ -447,13 +476,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
               isMihomo && activePanel !== 'config' && 'hidden'
             )}
           >
-            <MonacoEditor
+            <CodeMirrorEditor
               ref={editorRef}
               onContentChange={handleContentChange}
               onValidationChange={handleValidationChange}
-              onReady={handleMonacoReady}
+              onReady={handleEditorReady}
+              onSave={() => saveCurrentConfig()}
             />
-            {(!monacoReady || isConfigsLoading) && (
+            {(!EditorReady || isConfigsLoading) && (
               <div className="absolute inset-4 flex items-center justify-center text-muted-foreground text-sm">
                 <Spinner className="size-5 mr-2" />
                 {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}

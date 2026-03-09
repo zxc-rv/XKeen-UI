@@ -5,11 +5,9 @@
 @import '@fontsource-variable/jetbrains-mono';
 
 @font-face {
-  font-family: 'Noto Color Emoji';
-  font-style: normal;
-  font-weight: 400;
-  font-display: block;
-  src: url('assets/NotoColorEmoji.ttf') format('truetype');
+  font-family: 'TwemojiMozilla';
+  src: url('assets/TwemojiMozilla-flags.woff2') format('woff2');
+  unicode-range: U+1F1E0-1F1FF;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -85,8 +83,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Inter Variable', sans-serif, 'Noto Color Emoji';
-  --font-mono: ui-monospace, 'JetBrains Mono Variable', monospace, 'Noto Color Emoji';
+  --font-sans: 'Inter Variable', sans-serif, 'TwemojiMozilla';
+  --font-mono: ui-monospace, 'JetBrains Mono Variable', monospace, 'TwemojiMozilla';
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -173,7 +171,6 @@
   }
   html {
     @apply font-sans;
-    scrollbar-width: thin;
     scrollbar-color: #334155 transparent;
   }
 }
@@ -273,17 +270,11 @@
   animation: dark-glow 2s ease-in-out infinite;
 }
 
-/* Prevent iOS zoom on input focus */
 @media (max-width: 768px) {
-  input,
-  select,
-  textarea {
-    font-size: 16px !important;
+  .cm-editor {
+    font-size: 13px;
   }
-}
-
-.monaco-editor .iPadShowKeyboard,
-.monaco-editor .showKeyboar,
-.monaco-editor .minimap-shadow-visible {
-  display: none !important;
+  .cm-scroller {
+    -webkit-overflow-scrolling: touch;
+  }
 }

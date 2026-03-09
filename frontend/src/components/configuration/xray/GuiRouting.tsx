@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn, stripJsonComments } from '../../../lib/utils'
 import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import { apiCall } from '../../../lib/api'
-import type { MonacoEditorRef } from '../MonacoEditor'
+import type { CodeMirrorRef } from '../CodeMirror'
 import type { Config } from '../../../lib/types'
 
 const RULE_FIELDS = {
@@ -73,7 +73,7 @@ interface AvailableTags {
 }
 
 interface Props {
-  editorRef: React.RefObject<MonacoEditorRef | null>
+  editorRef: React.RefObject<CodeMirrorRef | null>
   configs: Config[]
   activeConfigIndex: number
 }
@@ -172,21 +172,17 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
     async (newRules: Rule[], triggerSoftRestart = false) => {
       const wrapper = editorRef.current
       if (!wrapper) return
-      const monacoEditor = wrapper.getEditor()
-      if (!monacoEditor) return
-      const model = monacoEditor.getModel()
-      if (!model) return
       try {
         const json = JSON.parse(stripJsonComments(wrapper.getValue()))
         json.routing.rules = newRules
         const text = JSON.stringify(json, null, 2)
-        monacoEditor.executeEdits('gui-routing', [{ range: model.getFullModelRange(), text }])
+        wrapper.replaceAll(text)
 
         if (triggerSoftRestart && autoApplyRef.current && serviceStatusRef.current === 'running') {
           const activeIndex = activeConfigIndexRef.current
           const activeConfig = configsRef.current[activeIndex]
           if (activeConfig) {
-            const content = monacoEditor.getValue()
+            const content = wrapper.getValue()
             await apiCall<any>('PUT', 'configs', {
               file: activeConfig.file,
               content,
@@ -216,47 +212,53 @@ export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
     [editorRef, showToast, dispatch]
   )
 
-  const applyRules = useCallback((newRules: Rule[], triggerSoftRestart = false) => {
-    rulesRef.current = newRules
-    setRules(newRules)
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
-    syncTimerRef.current = setTimeout(() => syncToEditor(newRules, triggerSoftRestart), 100)
-  }, [syncToEditor])
+  const applyRules = useCallback(
+    (newRules: Rule[], triggerSoftRestart = false) => {
+      rulesRef.current = newRules
+      setRules(newRules)
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = setTimeout(() => syncToEditor(newRules, triggerSoftRestart), 100)
+    },
+    [syncToEditor]
+  )
 
-  const startDrag = useCallback((e: React.MouseEvent | React.TouchEvent, fromIndex: number) => {
-    if (e.cancelable) e.preventDefault()
-    let current = fromIndex
-    setDraggingIndex(fromIndex)
+  const startDrag = useCallback(
+    (e: React.MouseEvent | React.TouchEvent, fromIndex: number) => {
+      if (e.cancelable) e.preventDefault()
+      let current = fromIndex
+      setDraggingIndex(fromIndex)
 
-    const onMove = (ev: MouseEvent | TouchEvent) => {
-      const clientY = 'touches' in ev ? ev.touches[0].clientY : ev.clientY
-      for (let i = 0; i < cardRefs.current.length; i++) {
-        if (i === current) continue
-        const rect = cardRefs.current[i]?.getBoundingClientRect()
-        if (!rect || clientY < rect.top || clientY > rect.bottom) continue
-        const newRules = [...rulesRef.current]
-        const [moved] = newRules.splice(current, 1)
-        newRules.splice(i, 0, moved)
-        current = i
-        rulesRef.current = newRules
-        setRules(newRules)
-        setDraggingIndex(i)
-        break
+      const onMove = (ev: MouseEvent | TouchEvent) => {
+        const clientY = 'touches' in ev ? ev.touches[0].clientY : ev.clientY
+        for (let i = 0; i < cardRefs.current.length; i++) {
+          if (i === current) continue
+          const rect = cardRefs.current[i]?.getBoundingClientRect()
+          if (!rect || clientY < rect.top || clientY > rect.bottom) continue
+          const newRules = [...rulesRef.current]
+          const [moved] = newRules.splice(current, 1)
+          newRules.splice(i, 0, moved)
+          current = i
+          rulesRef.current = newRules
+          setRules(newRules)
+          setDraggingIndex(i)
+          break
+        }
       }
-    }
-    const onUp = () => {
-      syncToEditor(rulesRef.current)
-      setDraggingIndex(null)
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      document.removeEventListener('touchmove', onMove)
-      document.removeEventListener('touchend', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    document.addEventListener('touchmove', onMove, { passive: true })
-    document.addEventListener('touchend', onUp, { passive: true })
-  }, [syncToEditor])
+      const onUp = () => {
+        syncToEditor(rulesRef.current)
+        setDraggingIndex(null)
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        document.removeEventListener('touchmove', onMove)
+        document.removeEventListener('touchend', onUp)
+      }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+      document.addEventListener('touchmove', onMove, { passive: true })
+      document.addEventListener('touchend', onUp, { passive: true })
+    },
+    [syncToEditor]
+  )
 
   const handleUpdateRule = useCallback(
     (index: number, updated: Rule, triggerSoftRestart = false) => {
@@ -339,11 +341,11 @@ const RuleCard = memo(
     const [editingName, setEditingName] = useState(false)
     const [nameValue, setNameValue] = useState(rule.ruleTag ?? '')
 
-  const isBalancer = 'balancerTag' in rule
-  const outboundType = isBalancer ? 'balancerTag' : 'outboundTag'
-  const outboundValue = rule[outboundType] ?? ''
-  const conditionFields = Object.keys(rule).filter((k) => k in RULE_FIELDS)
-  const availableToAdd = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => !(f in rule))
+    const isBalancer = 'balancerTag' in rule
+    const outboundType = isBalancer ? 'balancerTag' : 'outboundTag'
+    const outboundValue = rule[outboundType] ?? ''
+    const conditionFields = Object.keys(rule).filter((k) => k in RULE_FIELDS)
+    const availableToAdd = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => !(f in rule))
 
     function saveName() {
       const trimmed = nameValue.trim()
@@ -380,45 +382,45 @@ const RuleCard = memo(
       onUpdate(index, { ...rule, [f]: v })
     }
 
-  function addBadge(f: string, v: string) {
-    if (['port', 'sourcePort'].includes(f) && !validatePort(v)) {
-      showToast('Некорректный порт. Допустимы числа или диапазоны 1-65535', 'error')
-      return
+    function addBadge(f: string, v: string) {
+      if (['port', 'sourcePort'].includes(f) && !validatePort(v)) {
+        showToast('Некорректный порт. Допустимы числа или диапазоны 1-65535', 'error')
+        return
+      }
+      const cur = getBadges(rule[f])
+      if (cur.includes(v)) return
+      const next = [...cur, v]
+      const cfg = RULE_FIELDS[f as FieldName]
+      updateField(f, cfg?.type === 'array' ? next : next.join(','))
     }
-    const cur = getBadges(rule[f])
-    if (cur.includes(v)) return
-    const next = [...cur, v]
-    const cfg = RULE_FIELDS[f as FieldName]
-    updateField(f, cfg?.type === 'array' ? next : next.join(','))
-  }
 
-  function editBadge(f: string, oldV: string, newV: string) {
-    if (!newV) return removeBadge(f, oldV)
-    if (oldV === newV) return
-    if (['port', 'sourcePort'].includes(f) && !validatePort(newV)) {
-      showToast('Некорректный порт. Допустимы числа или диапазоны 1-65535', 'error')
-      return
+    function editBadge(f: string, oldV: string, newV: string) {
+      if (!newV) return removeBadge(f, oldV)
+      if (oldV === newV) return
+      if (['port', 'sourcePort'].includes(f) && !validatePort(newV)) {
+        showToast('Некорректный порт. Допустимы числа или диапазоны 1-65535', 'error')
+        return
+      }
+      const cur = getBadges(rule[f])
+      const next = cur.map((x) => (x === oldV ? newV : x))
+      const cfg = RULE_FIELDS[f as FieldName]
+      updateField(f, cfg?.type === 'array' ? next : next.join(','))
     }
-    const cur = getBadges(rule[f])
-    const next = cur.map((x) => (x === oldV ? newV : x))
-    const cfg = RULE_FIELDS[f as FieldName]
-    updateField(f, cfg?.type === 'array' ? next : next.join(','))
-  }
 
-  function removeBadge(f: string, v: string) {
-    const next = getBadges(rule[f]).filter((x) => x !== v)
-    const cfg = RULE_FIELDS[f as FieldName]
-    updateField(f, cfg?.type === 'array' ? next : next.join(','))
-  }
+    function removeBadge(f: string, v: string) {
+      const next = getBadges(rule[f]).filter((x) => x !== v)
+      const cfg = RULE_FIELDS[f as FieldName]
+      updateField(f, cfg?.type === 'array' ? next : next.join(','))
+    }
 
-  function toggleBtn(f: string, v: string) {
-    const cfg = RULE_FIELDS[f as FieldName]
-    const cur = getBadges(rule[f])
-    let next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]
-    const optionsOrder = (cfg as any)?.options as string[] | undefined
-    if (optionsOrder) next = optionsOrder.filter((o) => next.includes(o))
-    updateField(f, (cfg as any)?.isString ? next.join(',') : next)
-  }
+    function toggleBtn(f: string, v: string) {
+      const cfg = RULE_FIELDS[f as FieldName]
+      const cur = getBadges(rule[f])
+      let next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]
+      const optionsOrder = (cfg as any)?.options as string[] | undefined
+      if (optionsOrder) next = optionsOrder.filter((o) => next.includes(o))
+      updateField(f, (cfg as any)?.isString ? next.join(',') : next)
+    }
 
     function switchOutbound(newType: 'outboundTag' | 'balancerTag') {
       const u = { ...rule }
@@ -433,243 +435,243 @@ const RuleCard = memo(
       onUpdate(index, { ...rule, [outboundType]: value }, true)
     }
 
-  return (
-    <div
-      ref={ref}
-      style={{ background: 'var(--color-input-background)' }}
-      className={cn(
-        'rounded-xl border p-3 flex flex-col gap-2 transition-all duration-150 select-none',
-        isDragging ? 'border-[#60a5fa] scale-[0.99] opacity-80' : 'border-border'
-      )}
-    >
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <div
-          className={cn(
-            'p-1 rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none',
-            isDragging ? 'cursor-grabbing' : 'cursor-grab'
-          )}
-          onMouseDown={(e) => onDragStart(e, index)}
-          onTouchStart={(e) => onDragStart(e, index)}
-        >
-          <IconGripVertical size={19} />
-        </div>
-        <Badge variant="outline" className="rounded-md w-6 h-6 p-3.5 px-4 bg-blue-500/10 text-blue-400 border-blue-500/20">
-          #{index + 1}
-        </Badge>
-        {editingName ? (
-          <div className="flex items-center gap-1 flex-1 min-w-0">
-            <input
-              value={nameValue}
-              onChange={(e) => setNameValue(e.target.value)}
-              onBlur={saveName}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveName()
-                if (e.key === 'Escape') {
-                  setEditingName(false)
-                  setNameValue(rule.ruleTag ?? '')
-                }
-              }}
-              autoFocus
-              className="h-6 text-xs bg-transparent border-b border-border outline-none flex-1 min-w-0"
-              placeholder="Название правила"
-            />
-            <button onClick={saveName} className="text-muted-foreground hover:text-foreground shrink-0">
-              <IconCheck size={14} />
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center pl-1 gap-2 flex-1 min-w-0">
-            {rule.ruleTag && <span className="text-sm truncate">{rule.ruleTag}</span>}
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      setEditingName(true)
-                      setNameValue(rule.ruleTag ?? '')
-                    }}
-                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
-                  >
-                    <IconPencil size={16} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Редактировать название</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+    return (
+      <div
+        ref={ref}
+        style={{ background: 'var(--color-input-background)' }}
+        className={cn(
+          'rounded-xl border p-3 flex flex-col gap-2 transition-all duration-150 select-none',
+          isDragging ? 'border-[#60a5fa] scale-[0.99] opacity-80' : 'border-border'
         )}
-        <button
-          onClick={() => onDelete(index)}
-          className="ml-auto text-ring hover:text-destructive hover:bg-destructive/20 rounded-md transition-colors p-1 shrink-0"
-        >
-          <IconX size={23} className="cursor-pointer" />
-        </button>
-      </div>
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2">
+          <div
+            className={cn(
+              'p-1 rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none',
+              isDragging ? 'cursor-grabbing' : 'cursor-grab'
+            )}
+            onMouseDown={(e) => onDragStart(e, index)}
+            onTouchStart={(e) => onDragStart(e, index)}
+          >
+            <IconGripVertical size={19} />
+          </div>
+          <Badge variant="outline" className="rounded-md w-6 h-6 p-3.5 px-4 bg-blue-500/10 text-blue-400 border-blue-500/20">
+            #{index + 1}
+          </Badge>
+          {editingName ? (
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <input
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveName()
+                  if (e.key === 'Escape') {
+                    setEditingName(false)
+                    setNameValue(rule.ruleTag ?? '')
+                  }
+                }}
+                autoFocus
+                className="h-6 text-xs bg-transparent border-b border-border outline-none flex-1 min-w-0"
+                placeholder="Название правила"
+              />
+              <button onClick={saveName} className="text-muted-foreground hover:text-foreground shrink-0">
+                <IconCheck size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center pl-1 gap-2 flex-1 min-w-0">
+              {rule.ruleTag && <span className="text-sm truncate">{rule.ruleTag}</span>}
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        setEditingName(true)
+                        setNameValue(rule.ruleTag ?? '')
+                      }}
+                      className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
+                    >
+                      <IconPencil size={16} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Редактировать название</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          )}
+          <button
+            onClick={() => onDelete(index)}
+            className="ml-auto text-ring hover:text-destructive hover:bg-destructive/20 rounded-md transition-colors p-1 shrink-0"
+          >
+            <IconX size={23} className="cursor-pointer" />
+          </button>
+        </div>
 
-      {/* Condition fields */}
-      {conditionFields.map((fieldName) => {
-        const cfg = RULE_FIELDS[fieldName as FieldName]
-        const otherFields = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => f === fieldName || !(f in rule))
+        {/* Condition fields */}
+        {conditionFields.map((fieldName) => {
+          const cfg = RULE_FIELDS[fieldName as FieldName]
+          const otherFields = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => f === fieldName || !(f in rule))
 
-        return (
-          <div key={fieldName} className="flex items-start gap-2">
-            <Select
-              value={fieldName}
-              onValueChange={(v) => {
-                if (v && v !== fieldName) changeField(fieldName, v as FieldName)
-              }}
-            >
-              <SelectTrigger
-                popper
-                className="w-fit shrink-0 flex items-center justify-between gap-2 h-9 px-3 rounded-md border border-border bg-input-background hover:bg-muted text-[13px] font-medium transition-colors focus:ring-0 [&>svg]:opacity-50"
+          return (
+            <div key={fieldName} className="flex items-start gap-2">
+              <Select
+                value={fieldName}
+                onValueChange={(v) => {
+                  if (v && v !== fieldName) changeField(fieldName, v as FieldName)
+                }}
               >
-                <SelectValue placeholder={fieldName} />
-              </SelectTrigger>
-              <SelectContent position="popper" align="start">
-                {otherFields.map((f) => (
-                  <SelectItem key={f} value={f} className="text-[13px] cursor-pointer">
-                    {f}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  popper
+                  className="w-fit shrink-0 flex items-center justify-between gap-2 h-9 px-3 rounded-md border border-border bg-input-background hover:bg-muted text-[13px] font-medium transition-colors focus:ring-0 [&>svg]:opacity-50"
+                >
+                  <SelectValue placeholder={fieldName} />
+                </SelectTrigger>
+                <SelectContent position="popper" align="start">
+                  {otherFields.map((f) => (
+                    <SelectItem key={f} value={f} className="text-[13px] cursor-pointer">
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <div className="flex-1 min-w-0">
-              {cfg?.type === 'buttons' || fieldName === 'inboundTag' ? (
-                <div className="cursor-pointer flex flex-wrap gap-1 items-center min-h-9 px-1 py-1 pr-1 rounded-md border border-border bg-input-background">
-                  {((fieldName === 'inboundTag' ? available.inbounds : (cfg as any).options) ?? []).map((opt: string) => {
-                    const active = getBadges(rule[fieldName]).includes(opt)
-                    const colors: Record<string, { a: string; i: string }> = {
-                      inboundTag: {
-                        a: 'text-green-400 bg-green-400/15 border-none rounded-sm',
-                        i: 'text-green-400/25 bg-green-400/3 border-none rounded-sm hover:bg-green-400/15',
-                      },
-                      protocol: {
-                        a: 'text-purple-400 bg-purple-400/15 border-none rounded-sm',
-                        i: 'text-purple-400/25 bg-purple-400/3 border-none rounded-sm hover:bg-purple-400/15',
-                      },
-                      network: {
-                        a: 'text-blue-400 bg-blue-400/15 border-none rounded-sm',
-                        i: 'text-blue-400/25 bg-blue-400/3 border-none rounded-sm hover:bg-blue-400/15',
-                      },
-                    }
-                    const c = colors[fieldName] || {
-                      a: 'text-primary-400 bg-primary-400/15 border-none rounded-sm',
-                      i: 'text-primary-400/25 bg-primary-400/3 border-none rounded-sm hover:bg-primary-400/15',
-                    }
+              <div className="flex-1 min-w-0">
+                {cfg?.type === 'buttons' || fieldName === 'inboundTag' ? (
+                  <div className="cursor-pointer flex flex-wrap gap-1 items-center min-h-9 px-1 py-1 pr-1 rounded-md border border-border bg-input-background">
+                    {((fieldName === 'inboundTag' ? available.inbounds : (cfg as any).options) ?? []).map((opt: string) => {
+                      const active = getBadges(rule[fieldName]).includes(opt)
+                      const colors: Record<string, { a: string; i: string }> = {
+                        inboundTag: {
+                          a: 'text-green-400 bg-green-400/15 border-none rounded-sm',
+                          i: 'text-green-400/25 bg-green-400/3 border-none rounded-sm hover:bg-green-400/15',
+                        },
+                        protocol: {
+                          a: 'text-purple-400 bg-purple-400/15 border-none rounded-sm',
+                          i: 'text-purple-400/25 bg-purple-400/3 border-none rounded-sm hover:bg-purple-400/15',
+                        },
+                        network: {
+                          a: 'text-blue-400 bg-blue-400/15 border-none rounded-sm',
+                          i: 'text-blue-400/25 bg-blue-400/3 border-none rounded-sm hover:bg-blue-400/15',
+                        },
+                      }
+                      const c = colors[fieldName] || {
+                        a: 'text-primary-400 bg-primary-400/15 border-none rounded-sm',
+                        i: 'text-primary-400/25 bg-primary-400/3 border-none rounded-sm hover:bg-primary-400/15',
+                      }
 
-                    return (
-                      <button
-                        key={opt}
-                        onClick={() => toggleBtn(fieldName, opt)}
-                        className={cn(
-                          'cursor-pointer px-3 py-0.75 rounded text-xs font-medium border transition-colors',
-                          active ? c.a : c.i
-                        )}
-                      >
-                        {fieldName === 'network' || fieldName === 'protocol' ? opt.toUpperCase() : opt}
-                      </button>
-                    )
-                  })}
-                  {fieldName === 'inboundTag' && available.inbounds.length === 0 && (
-                    <span className="text-xs text-muted-foreground">Inbound теги не найдены</span>
-                  )}
-                  <button
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      removeField(fieldName)
-                    }}
-                    className="ml-auto shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors p-1"
-                  >
-                    <IconX size={14} />
-                  </button>
+                      return (
+                        <button
+                          key={opt}
+                          onClick={() => toggleBtn(fieldName, opt)}
+                          className={cn(
+                            'cursor-pointer px-3 py-0.75 rounded text-xs font-medium border transition-colors',
+                            active ? c.a : c.i
+                          )}
+                        >
+                          {fieldName === 'network' || fieldName === 'protocol' ? opt.toUpperCase() : opt}
+                        </button>
+                      )
+                    })}
+                    {fieldName === 'inboundTag' && available.inbounds.length === 0 && (
+                      <span className="text-xs text-muted-foreground">Inbound теги не найдены</span>
+                    )}
+                    <button
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        removeField(fieldName)
+                      }}
+                      className="ml-auto shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors p-1"
+                    >
+                      <IconX size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <BadgeInput
+                    badges={getBadges(rule[fieldName])}
+                    placeholder={cfg?.placeholder ?? ''}
+                    fieldType={fieldName}
+                    onAdd={(v) => addBadge(fieldName, v)}
+                    onRemove={(v) => removeBadge(fieldName, v)}
+                    onRemoveField={() => removeField(fieldName)}
+                    onEdit={(oldV, newV) => editBadge(fieldName, oldV, newV)}
+                  />
+                )}
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Add condition */}
+        {availableToAdd.length > 0 && (
+          <Select
+            value=""
+            onValueChange={(v) => {
+              if (v) addField(v as FieldName)
+            }}
+          >
+            <SelectTrigger
+              popper
+              className="flex items-center justify-center gap-1.5 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors border border-dashed border-border rounded-lg px-3 py-2 w-full h-auto min-h-9 bg-transparent focus:ring-0 [&>svg]:hidden"
+            >
+              <span className="flex gap-1">
+                <IconPlus size={13} />
+                Добавить условие
+              </span>
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {availableToAdd.map((f) => (
+                <SelectItem key={f} value={f} className="text-sm cursor-pointer">
+                  {f}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Outbound row */}
+        <div className="flex items-center gap-2">
+          <Select value={outboundType} onValueChange={(v) => switchOutbound(v as 'outboundTag' | 'balancerTag')}>
+            <SelectTrigger
+              popper
+              className="min-w-34 shrink-0 border-blue-500/40 hover:bg-blue-500/10 text-blue-400 text-[13px] font-bold transition-colors [&>svg]:text-blue-400/60"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" className="border-blue-500/40">
+              <SelectItem value="outboundTag" className="text-[13px] font-medium">
+                outboundTag
+              </SelectItem>
+              <SelectItem value="balancerTag" className="text-[13px] font-medium">
+                balancerTag
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={outboundValue} onValueChange={changeOutboundValue}>
+            <SelectTrigger
+              popper
+              className="flex-1 text-[13px] border-blue-500/40 hover:bg-blue-500/10 transition-colors [&>svg]:text-blue-400/60"
+            >
+              <SelectValue placeholder="Выберите outbound..." />
+            </SelectTrigger>
+            <SelectContent position="popper" className="border-blue-500/40">
+              {(isBalancer ? available.balancers : available.outbounds).length === 0 ? (
+                <div className="text-xs text-muted-foreground px-2 py-1.5">
+                  {isBalancer ? 'Балансиры не найдены' : 'Аутбаунды не найдены'}
                 </div>
               ) : (
-                <BadgeInput
-                  badges={getBadges(rule[fieldName])}
-                  placeholder={cfg?.placeholder ?? ''}
-                  fieldType={fieldName}
-                  onAdd={(v) => addBadge(fieldName, v)}
-                  onRemove={(v) => removeBadge(fieldName, v)}
-                  onRemoveField={() => removeField(fieldName)}
-                  onEdit={(oldV, newV) => editBadge(fieldName, oldV, newV)}
-                />
+                (isBalancer ? available.balancers : available.outbounds).map((tag) => (
+                  <SelectItem key={tag} value={tag} className="text-[13px]">
+                    {tag}
+                  </SelectItem>
+                ))
               )}
-            </div>
-          </div>
-        )
-      })}
-
-      {/* Add condition */}
-      {availableToAdd.length > 0 && (
-        <Select
-          value=""
-          onValueChange={(v) => {
-            if (v) addField(v as FieldName)
-          }}
-        >
-          <SelectTrigger
-            popper
-            className="flex items-center justify-center gap-1.5 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors border border-dashed border-border rounded-lg px-3 py-2 w-full h-auto min-h-9 bg-transparent focus:ring-0 [&>svg]:hidden"
-          >
-            <span className="flex gap-1">
-              <IconPlus size={13} />
-              Добавить условие
-            </span>
-          </SelectTrigger>
-          <SelectContent position="popper">
-            {availableToAdd.map((f) => (
-              <SelectItem key={f} value={f} className="text-sm cursor-pointer">
-                {f}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      {/* Outbound row */}
-      <div className="flex items-center gap-2">
-        <Select value={outboundType} onValueChange={(v) => switchOutbound(v as 'outboundTag' | 'balancerTag')}>
-          <SelectTrigger
-            popper
-            className="min-w-34 shrink-0 border-blue-500/40 hover:bg-blue-500/10 text-blue-400 text-[13px] font-bold transition-colors [&>svg]:text-blue-400/60"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent position="popper" className="border-blue-500/40">
-            <SelectItem value="outboundTag" className="text-[13px] font-medium">
-              outboundTag
-            </SelectItem>
-            <SelectItem value="balancerTag" className="text-[13px] font-medium">
-              balancerTag
-            </SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={outboundValue} onValueChange={changeOutboundValue}>
-          <SelectTrigger
-            popper
-            className="flex-1 text-[13px] border-blue-500/40 hover:bg-blue-500/10 transition-colors [&>svg]:text-blue-400/60"
-          >
-            <SelectValue placeholder="Выберите outbound..." />
-          </SelectTrigger>
-          <SelectContent position="popper" className="border-blue-500/40">
-            {(isBalancer ? available.balancers : available.outbounds).length === 0 ? (
-              <div className="text-xs text-muted-foreground px-2 py-1.5">
-                {isBalancer ? 'Балансиры не найдены' : 'Аутбаунды не найдены'}
-              </div>
-            ) : (
-              (isBalancer ? available.balancers : available.outbounds).map((tag) => (
-                <SelectItem key={tag} value={tag} className="text-[13px]">
-                  {tag}
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-    </div>
     )
   }),
   (prev, next) =>

@@ -5,7 +5,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn, stripJsonComments } from '../../../lib/utils'
 import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import { apiCall } from '../../../lib/api'
-import type { MonacoEditorRef } from '../MonacoEditor'
+import type { CodeMirrorRef } from '../CodeMirror'
 import type { Config } from '../../../lib/types'
 
 const LOG_LEVELS = ['none', 'error', 'warning', 'info', 'debug'] as const
@@ -45,7 +45,7 @@ function parseLogConfig(content: string): LogConfig | null {
 }
 
 interface Props {
-  editorRef: React.RefObject<MonacoEditorRef | null>
+  editorRef: React.RefObject<CodeMirrorRef | null>
   configs: Config[]
   activeConfigIndex: number
 }
@@ -78,10 +78,6 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
     async (newCfg: LogConfig, triggerRestart = false) => {
       const wrapper = editorRef.current
       if (!wrapper) return
-      const monacoEditor = wrapper.getEditor()
-      if (!monacoEditor) return
-      const model = monacoEditor.getModel()
-      if (!model) return
       try {
         const json = JSON.parse(stripJsonComments(wrapper.getValue()))
         json.log = {
@@ -107,12 +103,12 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
         } catch {
           /* */
         }
-        monacoEditor.executeEdits('gui-log', [{ range: model.getFullModelRange(), text }])
+        wrapper.replaceAll(text)
 
         if (triggerRestart && autoApply && serviceStatus === 'running') {
           const activeConfig = configs[activeConfigIndex]
           if (activeConfig) {
-            const content = monacoEditor.getValue()
+            const content = wrapper.getValue()
             await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: activeConfig.file, content })
             dispatch({
               type: 'SAVE_CONFIG',

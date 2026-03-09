@@ -13,7 +13,7 @@ import { ImportModal } from './components/modals/AddProxy'
 import { TemplateModal } from './components/modals/Templates'
 import { SettingsModal } from './components/modals/Settings'
 import { GeoScanModal } from './components/modals/GeoScan'
-import type { MonacoEditorRef } from './components/configuration/MonacoEditor'
+import type { CodeMirrorRef } from './components/configuration/CodeMirror'
 import type { Config } from './lib/types'
 
 function useLazyMount(open: boolean, delay = 200) {
@@ -77,7 +77,7 @@ const ModalManager = memo(function ModalManager({
 
 function AppContent() {
   const { dispatch, showToast } = useAppActions()
-  const editorRef = useRef<MonacoEditorRef | null>(null)
+  const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
     switchTab: () => {},
     getActiveIndex: () => 0,
@@ -264,22 +264,12 @@ function AppContent() {
     setTimeout(() => {
       const editorWrapper = editorRef.current
       if (!editorWrapper) return
-      const monacoEditor = editorWrapper.getEditor()
-      if (!monacoEditor) return
-      const model = monacoEditor.getModel()
-      if (!model) return
       const current = editorWrapper.getValue()
       const lineAtOffset = (text: string, offset: number) => text.slice(0, Math.min(offset, text.length)).split('\n').length
-      const scrollToLine = (editor: any, line: number) => setTimeout(() => editor.revealLineInCenter(Math.max(1, line)), 100)
+      const scrollToLine = (line: number) => setTimeout(() => editorWrapper.revealLine(Math.max(1, line)), 100)
       const insertAtOffset = (offset: number, text: string, scrollLine?: number) => {
-        const pos = model.getPositionAt(offset)
-        monacoEditor.executeEdits('add-to-config', [
-          {
-            range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column },
-            text,
-          },
-        ])
-        scrollToLine(monacoEditor, scrollLine ?? pos.lineNumber)
+        editorWrapper.replaceRange(offset, offset, text)
+        scrollToLine(scrollLine ?? editorWrapper.offsetToLineColumn(offset).lineNumber)
       }
 
       if (core === 'mihomo') {
@@ -303,8 +293,8 @@ function AppContent() {
           const obj = JSON.parse(stripJsonComments(current))
           if (position === 'start') obj.outbounds.unshift(JSON.parse(generated))
           else obj.outbounds.push(JSON.parse(generated))
-          monacoEditor.executeEdits('add-to-config', [{ range: model.getFullModelRange(), text: JSON.stringify(obj, null, 2) }])
-          scrollToLine(monacoEditor, position === 'start' ? 1 : model.getLineCount())
+          editorWrapper.replaceAll(JSON.stringify(obj, null, 2))
+          scrollToLine(position === 'start' ? 1 : editorWrapper.getLineCount())
         } catch (e: any) {
           showToast(`Ошибка парсинга: ${e.message}`, 'error')
         }

@@ -27,11 +27,11 @@ export default defineConfig(() => {
       },
     },
     build: {
-      chunkSizeWarningLimit: 4000,
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (id.includes('monaco-editor')) return 'monaco-editor'
+            if (id.includes('@codemirror') || id.includes('/codemirror/')) return 'codemirror'
             if (id.includes('prettier')) return 'prettier'
           },
         },
