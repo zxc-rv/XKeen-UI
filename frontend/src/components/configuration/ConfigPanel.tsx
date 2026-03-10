@@ -90,15 +90,17 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   }, [activeConfigIndex])
 
   const saveViewState = useCallback(
-    (file: string) => {
+    (file: string, isDirty?: boolean) => {
       if (!editorRef.current) return
       const state = editorRef.current.saveViewState()
       if (state) {
         viewStatesRef.current[file] = state
-        try {
-          localStorage.setItem(`editor-folds:${file}`, JSON.stringify(state.folds ?? []))
-        } catch {
-          /* */
+        if (!isDirty) {
+          try {
+            localStorage.setItem(`editor-folds:${file}`, JSON.stringify(state.folds ?? []))
+          } catch {
+            /* */
+          }
         }
       }
     },
@@ -108,7 +110,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   useEffect(() => {
     function onBeforeUnload() {
       const currentCfg = configsRef.current[activeIndexRef.current]
-      if (currentCfg) saveViewState(currentCfg.file)
+      if (currentCfg) saveViewState(currentCfg.file, currentCfg.isDirty)
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
@@ -229,7 +231,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   function switchTab(index: number) {
     if (index === activeConfigIndex) return
     const currentCfg = configsRef.current[activeIndexRef.current]
-    if (currentCfg) saveViewState(currentCfg.file)
+    if (currentCfg) saveViewState(currentCfg.file, currentCfg.isDirty)
 
     const file = configs[index]?.file ?? ''
     setActiveConfigFile(file)
@@ -253,6 +255,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     if (result.success) {
       editorRef.current.setSavedContent(content)
       dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
+      saveViewState(cfg.file, false)
       showToast(`Файл "${cfg.file.split('/').pop()}" сохранен`)
     } else {
       showToast(`Ошибка сохранения: ${result.error}`, 'error')
@@ -274,6 +277,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     if (!saveResult.success) return showToast(`Ошибка сохранения: ${saveResult.error}`, 'error')
     editorRef.current.setSavedContent(content)
     dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
+    saveViewState(cfg.file, false)
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Перезапуск...' })
     const lang = getFileLanguage(cfg.file)
     const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', {
@@ -290,28 +294,29 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     return (f.includes('routing') && guiRouting) || (f.includes('log') && guiLog)
   }
 
-  // Чекаем savedContent, чтобы парсинг не вешал браузер при каждом нажатии клавиши
+  const fileForGui = activeConfig?.file
+  const contentForGui = activeConfig?.savedContent
   const isRoutingGui = useMemo(() => {
-    if (!guiRouting || !activeConfig) return false
-    if (!activeConfig.file.toLowerCase().includes('routing')) return false
+    if (!guiRouting || !fileForGui) return false
+    if (!fileForGui.toLowerCase().includes('routing')) return false
     try {
-      const j = JSON.parse(stripJsonComments(activeConfig.savedContent))
+      const j = JSON.parse(stripJsonComments(contentForGui || ''))
       return j && typeof j.routing === 'object'
     } catch {
       return false
     }
-  }, [guiRouting, activeConfig?.file, activeConfig?.savedContent])
+  }, [guiRouting, fileForGui, contentForGui])
 
   const isLogGui = useMemo(() => {
-    if (!guiLog || !activeConfig) return false
-    if (!activeConfig.file.toLowerCase().includes('log')) return false
+    if (!guiLog || !fileForGui) return false
+    if (!fileForGui.toLowerCase().includes('log')) return false
     try {
-      const j = JSON.parse(stripJsonComments(activeConfig.savedContent))
+      const j = JSON.parse(stripJsonComments(contentForGui || ''))
       return j && typeof j.log === 'object'
     } catch {
       return false
     }
-  }, [guiLog, activeConfig?.file, activeConfig?.savedContent])
+  }, [guiLog, fileForGui, contentForGui])
 
   const isAnyGui = isRoutingGui || isLogGui
 
@@ -604,8 +609,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 }
 
 function hasComments(content: string) {
-  // Умная регулярка: игнорим //, если перед ними есть двоеточие (как в http://)
-  // и ловим ямловские комменты с # в начале строки или после пробелов
   return /(?<!:)\/\/|\/\*[\s\S]*?\*\//.test(content) || /^\s*#/m.test(content)
 }
 

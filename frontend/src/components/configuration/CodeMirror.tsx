@@ -367,20 +367,26 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     if (!content.trim()) return
 
     try {
-      let text = content
+      const cursorOffset = view.state.selection.main.head
+      let text: string
+      let newCursor: number
+
       if (language === 'json') {
-        text = await prettier.format(content, {
+        const result = await prettier.formatWithCursor(content, {
+          cursorOffset,
           parser: 'json',
           plugins: [prettierBabel, prettierEstree],
           printWidth: 120,
           endOfLine: 'lf',
         })
-        text = text
+        text = result.formatted
           .replace(/\n{3,}/g, '\n\n')
           .replace(/\s+$/gm, '')
           .replace(/\n$/, '')
+        newCursor = result.cursorOffset
       } else if (language === 'yaml') {
-        text = await prettier.format(content, {
+        const result = await prettier.formatWithCursor(content, {
+          cursorOffset,
           parser: 'yaml',
           plugins: [prettierYaml],
           printWidth: 200,
@@ -388,21 +394,28 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
           singleQuote: true,
           endOfLine: 'lf',
         })
+        text = result.formatted
+        newCursor = result.cursorOffset
       } else {
         return
       }
       if (text === content) return
 
-      const head = Math.min(view.state.selection.main.head, text.length)
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
-        selection: EditorSelection.cursor(head),
+        selection: EditorSelection.cursor(Math.min(newCursor, text.length)),
+        scrollIntoView: true,
       })
       runValidation(view, filenameRef.current)
     } catch {
       /* ignore formatting errors */
     }
   }, [runValidation])
+
+  const formatRef = useRef(format)
+  useLayoutEffect(() => {
+    formatRef.current = format
+  })
 
   useImperativeHandle(
     ref,
@@ -577,7 +590,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         {
           key: 'Shift-Alt-f',
           run: () => {
-            void format()
+            void formatRef.current()
             return true
           },
         },
