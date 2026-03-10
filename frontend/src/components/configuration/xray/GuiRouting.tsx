@@ -78,7 +78,7 @@ interface Props {
   activeConfigIndex: number
 }
 
-export function RoutingPanel({ editorRef, configs, activeConfigIndex }: Props) {
+export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   const { showToast, dispatch } = useAppActions()
   const { serviceStatus, currentCore } = useCoreRuntimeState()
   const autoApply = useSettings((s) => s.autoApply)

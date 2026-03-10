@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy } from 'react'
 import {
   IconDeviceFloppy,
   IconLink,
@@ -31,14 +31,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn, stripJsonComments } from '../../lib/utils'
 import { useAppContext, useConnectionsSync, useSettings, syncClashApiPort } from '../../lib/store'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
-import { CodeMirrorEditor, type CodeMirrorRef } from './CodeMirror'
-import { RoutingPanel } from './xray/GuiRouting'
-import { GuiLog } from './xray/GuiLog'
-import { ConnectionsPanel } from './mihomo/Connections'
-import { SelectorsPanel } from './mihomo/Selectors'
+import type { CodeMirrorRef } from './CodeMirror'
 import type { Config } from '../../lib/types'
 import { ButtonGroup } from '../ui/button-group'
 import { Spinner } from '../ui/spinner'
+
+const GuiRouting = lazy(() => import('./xray/GuiRouting').then((m) => ({ default: m.GuiRouting })))
+const GuiLog = lazy(() => import('./xray/GuiLog').then((m) => ({ default: m.GuiLog })))
+const ConnectionsPanel = lazy(() => import('./mihomo/Connections').then((m) => ({ default: m.ConnectionsPanel })))
+const SelectorsPanel = lazy(() => import('./mihomo/Selectors').then((m) => ({ default: m.SelectorsPanel })))
+type CodeMirrorEditorComponent = typeof import('./CodeMirror').CodeMirrorEditor
 
 type ClashMode = 'rule' | 'global' | 'direct'
 
@@ -77,6 +79,17 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const [mode, setMode] = useState<ClashMode>('rule')
   const [updatingRuleProviders, setUpdatingRuleProviders] = useState(false)
   const [updatingProxyProviders, setUpdatingProxyProviders] = useState(false)
+  const [CodeMirrorEditorLazy, setCodeMirrorEditorLazy] = useState<CodeMirrorEditorComponent | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void import('./CodeMirror').then((m) => {
+      if (active) setCodeMirrorEditorLazy(() => m.CodeMirrorEditor)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
@@ -461,7 +474,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
         <div className="relative min-h-175! md:flex-1 md:min-h-0">
           {EditorReady && activeConfig && isRoutingGui && (
-            <RoutingPanel editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
           )}
           {EditorReady && activeConfig && isLogGui && (
             <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
@@ -485,13 +498,17 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
               isMihomo && activePanel !== 'config' && 'hidden'
             )}
           >
-            <CodeMirrorEditor
-              ref={editorRef}
-              onContentChange={handleContentChange}
-              onValidationChange={handleValidationChange}
-              onReady={handleEditorReady}
-              onSave={() => saveCurrentConfig()}
-            />
+            {CodeMirrorEditorLazy ? (
+              <CodeMirrorEditorLazy
+                ref={editorRef}
+                onContentChange={handleContentChange}
+                onValidationChange={handleValidationChange}
+                onReady={handleEditorReady}
+                onSave={() => saveCurrentConfig()}
+              />
+            ) : (
+              <div className="absolute inset-4 rounded-xl overflow-hidden border border-border bg-input-background" />
+            )}
             {(!EditorReady || isConfigsLoading) && (
               <div className="absolute inset-4 flex items-center justify-center text-muted-foreground text-sm">
                 <Spinner className="size-5 mr-2" />

@@ -23,10 +23,6 @@ import { yamlLanguage } from '@codemirror/lang-yaml'
 import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import { selectSelectionMatches } from '@codemirror/search'
 import { parse as parseJsonc, printParseErrorCode, type ParseError } from 'jsonc-parser'
-import * as prettier from 'prettier'
-import prettierBabel from 'prettier/plugins/babel'
-import prettierEstree from 'prettier/plugins/estree'
-import prettierYaml from 'prettier/plugins/yaml'
 import * as jsyaml from 'js-yaml'
 import { getFileLanguage } from '../../lib/api'
 
@@ -368,6 +364,11 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
       let newCursor: number
 
       if (language === 'json') {
+        const [prettier, prettierBabel, prettierEstree] = await Promise.all([
+          import('prettier'),
+          import('prettier/plugins/babel'),
+          import('prettier/plugins/estree'),
+        ])
         const result = await prettier.formatWithCursor(content, {
           cursorOffset,
           parser: 'json',
@@ -381,6 +382,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
           .replace(/\n$/, '')
         newCursor = result.cursorOffset
       } else if (language === 'yaml') {
+        const [prettier, prettierYaml] = await Promise.all([import('prettier'), import('prettier/plugins/yaml')])
         const result = await prettier.formatWithCursor(content, {
           cursorOffset,
           parser: 'yaml',

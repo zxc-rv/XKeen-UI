@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, lazy } from 'react'
 import { AppProvider, useAppActions, useModalContext, fetchClashProxies, syncClashApiPort, getAppState } from './lib/store'
 import { apiCall, capitalize } from './lib/api'
 import { stripJsonComments } from './lib/utils'
@@ -6,15 +6,16 @@ import { StatusBar } from './components/status/StatusBar'
 import { ConfigPanel } from './components/configuration/ConfigPanel'
 import { LogPanel } from './components/log/LogPanel'
 import { Toast } from './components/ui/toast'
-import { CommentsWarningModal } from './components/modals/CommentsWarning'
-import { CoreManageModal } from './components/modals/CoreManagement'
-import { UpdateModal } from './components/modals/Update'
-import { ImportModal } from './components/modals/AddProxy'
-import { TemplateModal } from './components/modals/Templates'
-import { SettingsModal } from './components/modals/Settings'
-import { GeoScanModal } from './components/modals/GeoScan'
 import type { CodeMirrorRef } from './components/configuration/CodeMirror'
 import type { Config } from './lib/types'
+
+const CommentsWarningModal = lazy(() => import('./components/modals/CommentsWarning').then((m) => ({ default: m.CommentsWarningModal })))
+const CoreManageModal = lazy(() => import('./components/modals/CoreManagement').then((m) => ({ default: m.CoreManageModal })))
+const UpdateModal = lazy(() => import('./components/modals/Update').then((m) => ({ default: m.UpdateModal })))
+const ImportModal = lazy(() => import('./components/modals/AddProxy').then((m) => ({ default: m.ImportModal })))
+const TemplateModal = lazy(() => import('./components/modals/Templates').then((m) => ({ default: m.TemplateModal })))
+const SettingsModal = lazy(() => import('./components/modals/Settings').then((m) => ({ default: m.SettingsModal })))
+const GeoScanModal = lazy(() => import('./components/modals/GeoScan').then((m) => ({ default: m.GeoScanModal })))
 
 function useLazyMount(open: boolean, delay = 200) {
   const [mounted, setMounted] = useState(open)

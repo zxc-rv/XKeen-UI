@@ -1,6 +1,4 @@
 import { useState, useCallback } from 'react'
-import * as prettier from 'prettier'
-import prettierBabel from 'prettier/plugins/babel'
 import { Switch } from '@/components/ui/switch'
 import { cn, stripJsonComments } from '../../../lib/utils'
 import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
@@ -88,6 +86,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
         }
         let text = JSON.stringify(json, null, 2)
         try {
+          const [prettier, prettierBabel] = await Promise.all([import('prettier'), import('prettier/plugins/babel')])
           const formatted = await prettier.format(text, {
             parser: 'json',
             plugins: [prettierBabel],
