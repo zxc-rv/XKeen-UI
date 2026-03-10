@@ -89,20 +89,30 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     activeIndexRef.current = activeConfigIndex
   }, [activeConfigIndex])
 
+  const saveViewState = useCallback(
+    (file: string) => {
+      if (!editorRef.current) return
+      const state = editorRef.current.saveViewState()
+      if (state) {
+        viewStatesRef.current[file] = state
+        try {
+          localStorage.setItem(`editor-folds:${file}`, JSON.stringify(state.folds ?? []))
+        } catch {
+          /* */
+        }
+      }
+    },
+    [editorRef]
+  )
+
   useEffect(() => {
     function onBeforeUnload() {
       const currentCfg = configsRef.current[activeIndexRef.current]
-      if (!currentCfg || !editorRef.current) return
-      const folds = editorRef.current.saveViewState()?.folds ?? []
-      try {
-        localStorage.setItem(`editor-folds:${currentCfg.file}`, JSON.stringify(folds))
-      } catch {
-        /* */
-      }
+      if (currentCfg) saveViewState(currentCfg.file)
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [editorRef])
+  }, [saveViewState])
 
   const configFilenamesKey = configs.map((c) => c.file).join(',')
   const prevConfigFilenamesKeyRef = useRef('')
@@ -219,15 +229,8 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   function switchTab(index: number) {
     if (index === activeConfigIndex) return
     const currentCfg = configsRef.current[activeIndexRef.current]
-    if (currentCfg && editorRef.current) {
-      const viewState = editorRef.current.saveViewState()
-      viewStatesRef.current[currentCfg.file] = viewState
-      try {
-        localStorage.setItem(`editor-folds:${currentCfg.file}`, JSON.stringify(viewState?.folds ?? []))
-      } catch {
-        /* */
-      }
-    }
+    if (currentCfg) saveViewState(currentCfg.file)
+
     const file = configs[index]?.file ?? ''
     setActiveConfigFile(file)
     localStorage.setItem('lastSelectedTab', file)
@@ -287,27 +290,28 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     return (f.includes('routing') && guiRouting) || (f.includes('log') && guiLog)
   }
 
+  // Чекаем savedContent, чтобы парсинг не вешал браузер при каждом нажатии клавиши
   const isRoutingGui = useMemo(() => {
     if (!guiRouting || !activeConfig) return false
     if (!activeConfig.file.toLowerCase().includes('routing')) return false
     try {
-      const j = JSON.parse(stripJsonComments(activeConfig.content))
+      const j = JSON.parse(stripJsonComments(activeConfig.savedContent))
       return j && typeof j.routing === 'object'
     } catch {
       return false
     }
-  }, [guiRouting, activeConfig])
+  }, [guiRouting, activeConfig?.file, activeConfig?.savedContent])
 
   const isLogGui = useMemo(() => {
     if (!guiLog || !activeConfig) return false
     if (!activeConfig.file.toLowerCase().includes('log')) return false
     try {
-      const j = JSON.parse(stripJsonComments(activeConfig.content))
+      const j = JSON.parse(stripJsonComments(activeConfig.savedContent))
       return j && typeof j.log === 'object'
     } catch {
       return false
     }
-  }, [guiLog, activeConfig])
+  }, [guiLog, activeConfig?.file, activeConfig?.savedContent])
 
   const isAnyGui = isRoutingGui || isLogGui
 
@@ -600,7 +604,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 }
 
 function hasComments(content: string) {
-  return /\/\/|\/\*[\s\S]*?\*\//.test(content)
+  // Умная регулярка: игнорим //, если перед ними есть двоеточие (как в http://)
+  // и ловим ямловские комменты с # в начале строки или после пробелов
+  return /(?<!:)\/\/|\/\*[\s\S]*?\*\//.test(content) || /^\s*#/m.test(content)
 }
 
 function hasCriticalChanges(oldContent: string, newContent: string, language: string): boolean {

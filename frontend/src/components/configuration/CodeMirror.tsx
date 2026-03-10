@@ -279,13 +279,13 @@ const editorTheme = (isMobile: boolean) =>
       },
       '.cm-line': { padding: '0 4px' },
       '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#c0caf5' },
-      '.cm-selectionBackground': { backgroundColor: '#2d4f8e' },
-      '&.cm-focused .cm-selectionBackground': { backgroundColor: '#2d4f8e' },
+      '.cm-selectionBackground': { backgroundColor: '#2d4f8e !important' },
+      '&.cm-focused .cm-selectionBackground': { backgroundColor: '#2d4f8e !important' },
       '.cm-selectionMatch': { backgroundColor: '#1e3a5f' },
       '.cm-activeLine': { backgroundColor: 'transparent' },
       '.cm-activeLineGutter': { backgroundColor: 'transparent', color: '#a9b1d6' },
-      '.cm-lineNumbers': { minWidth: '3ch' },
-      '.cm-lineNumbers .cm-gutterElement': { minWidth: '3ch', textAlign: 'right' },
+      '.cm-lineNumbers': { minWidth: '3ch !important' },
+      '.cm-lineNumbers .cm-gutterElement': { minWidth: '3ch !important', textAlign: 'right' },
       '.cm-gutters': {
         display: isMobile ? 'none' : 'flex',
         backgroundColor: '#080e1d',
@@ -353,6 +353,11 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     },
     [emitValidation]
   )
+
+  const runValidationRef = useRef(runValidation)
+  useLayoutEffect(() => {
+    runValidationRef.current = runValidation
+  })
 
   const format = useCallback(async () => {
     const view = viewRef.current
@@ -605,7 +610,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         const content = update.state.doc.toString()
         const isDirty = content !== savedContentRef.current
         onContentChangeRef.current(content, isDirty)
-        runValidation(update.view, filenameRef.current)
+        runValidationRef.current(update.view, filenameRef.current)
       }),
     ]
     extensionsRef.current = extensions
@@ -614,10 +619,6 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
       parent: containerRef.current,
     })
     viewRef.current = view
-    const editorStyle = document.createElement('style')
-    editorStyle.textContent =
-      '.cm-scroller { overflow-y: scroll !important; } .cm-lineNumbers { min-width: 3ch !important; } .cm-lineNumbers .cm-gutterElement { min-width: 3ch !important; } .cm-selectionBackground { background-color: #2d4f8e !important; }'
-    document.head.appendChild(editorStyle)
     document.fonts.ready.then(() => {
       view.requestMeasure()
       onReadyRef.current?.()
@@ -626,9 +627,8 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     return () => {
       view.destroy()
       viewRef.current = null
-      editorStyle.remove()
-    } // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runValidation])
+    }
+  }, [])
 
   return (
     <div className="absolute inset-4 rounded-xl overflow-hidden border border-border bg-input-background">
