@@ -18,7 +18,7 @@ import {
 } from '@codemirror/language'
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
 import { tags } from '@lezer/highlight'
-import { json } from '@codemirror/lang-json'
+import { jsonLanguage } from '@codemirror/lang-json'
 import { yamlLanguage } from '@codemirror/lang-yaml'
 import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import { parse as parseJsonc, printParseErrorCode, type ParseError } from 'jsonc-parser'
@@ -128,11 +128,51 @@ const yamlFlatIndent = indentService.of((context, pos) => {
   return line.text.match(/^(\s*)/)?.[1].length ?? 0
 })
 
-function getLanguageExtension(language: EditorLanguage): Extension {
-  if (language === 'yaml') {
-    return [new LanguageSupport(yamlLanguage), yamlScalarDecorator, yamlFlatIndent]
+const jsoncLang = jsonLanguage.configure({ dialect: 'jsonc' })
+
+const commentDecoration = Decoration.mark({ attributes: { style: 'color: #565f89; font-style: italic' } })
+
+function buildJsoncCommentDecorations(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>()
+  const content = view.state.doc.toString()
+  const commentRe = /(?<!:|\w)\/\/[^\n]*|\/\*[\s\S]*?\*\//g
+  for (const match of content.matchAll(commentRe)) builder.add(match.index!, match.index! + match[0].length, commentDecoration)
+  return builder.finish()
+}
+
+const jsoncCommentDecorator = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    constructor(view: EditorView) {
+      this.decorations = buildJsoncCommentDecorations(view)
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.viewportChanged) this.decorations = buildJsoncCommentDecorations(update.view)
+    }
+  },
+  { decorations: (plugin) => plugin.decorations }
+)
+
+const jsoncEagerParser = ViewPlugin.fromClass(
+  class {
+    constructor(view: EditorView) {
+      ensureSyntaxTree(view.state, view.state.doc.length, 1000)
+    }
+    update(update: ViewUpdate) {
+      if (update.docChanged) ensureSyntaxTree(update.view.state, update.view.state.doc.length, 1000)
+    }
   }
-  if (language === 'json') return json()
+)
+
+const jsoncExtension = new LanguageSupport(jsoncLang, [
+  jsoncLang.data.of({ commentTokens: { line: '//' } }),
+  jsoncEagerParser,
+  Prec.highest(jsoncCommentDecorator),
+])
+
+function getLanguageExtension(language: EditorLanguage): Extension {
+  if (language === 'yaml') return [new LanguageSupport(yamlLanguage), yamlScalarDecorator, yamlFlatIndent]
+  if (language === 'json') return jsoncExtension
   return []
 }
 
