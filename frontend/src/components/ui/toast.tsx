@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { IconX, IconAlertCircle, IconCircleCheck } from '@tabler/icons-react'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { useAppContext, useToastContext } from '../../lib/store'
@@ -8,11 +7,6 @@ import { LazyMotion, domMax, m, AnimatePresence } from 'framer-motion'
 function AlertItem({ alert }: { alert: ToastMessage }) {
   const { dispatch } = useAppContext()
   const isError = alert.type === 'error'
-
-  useEffect(() => {
-    const timer = setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id: alert.id }), 5000)
-    return () => clearTimeout(timer)
-  }, [alert.id, dispatch])
 
   return (
     <m.div

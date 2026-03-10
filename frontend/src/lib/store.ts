@@ -121,7 +121,7 @@ const useStore = create<StoreState>((set) => ({
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type ShowToastFn = (message: string | { title: string; body: string }, type?: 'success' | 'error') => void
+type ShowToastFn = (message: string | { title: string; body: string; persistent?: boolean }, type?: 'success' | 'error') => void
 
 type CoreState = Omit<
   AppState,
@@ -191,7 +191,7 @@ const selectCoreStateWithConfigsAndSettings = (s: StoreState): CoreStateWithConf
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────────
 
-export function useShowToast(): ShowToastFn {
+function useShowToast(): ShowToastFn {
   const dispatch = useStore((s) => s.dispatch)
   return useCallback<ShowToastFn>(
     (message, type = 'success') => {
@@ -199,25 +199,30 @@ export function useShowToast(): ShowToastFn {
       const toast: ToastMessage =
         typeof message === 'string'
           ? { id, title: type === 'error' ? 'Ошибка' : 'Успех', body: message, type }
-          : { id, title: message.title, body: message.body, type }
+          : { id, title: message.title, body: message.body, type, ...(message.persistent ? { persistent: true } : {}) }
       dispatch({ type: 'ADD_TOAST', toast })
-      setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id }), 5000)
+      if (!toast.persistent) setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id }), 5000)
     },
     [dispatch]
   )
 }
 
 export function useAppContext(): { state: CoreState; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
-export function useAppContext(options: {
-  includeConfigs: true
-}): { state: CoreStateWithConfigs; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
-export function useAppContext(options: {
-  includeSettings: true
-}): { state: CoreStateWithSettings; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
-export function useAppContext(options: {
-  includeConfigs: true
-  includeSettings: true
-}): { state: CoreStateWithConfigsAndSettings; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
+export function useAppContext(options: { includeConfigs: true }): {
+  state: CoreStateWithConfigs
+  dispatch: (action: AppAction) => void
+  showToast: ShowToastFn
+}
+export function useAppContext(options: { includeSettings: true }): {
+  state: CoreStateWithSettings
+  dispatch: (action: AppAction) => void
+  showToast: ShowToastFn
+}
+export function useAppContext(options: { includeConfigs: true; includeSettings: true }): {
+  state: CoreStateWithConfigsAndSettings
+  dispatch: (action: AppAction) => void
+  showToast: ShowToastFn
+}
 export function useAppContext(options?: { includeSettings?: boolean; includeConfigs?: boolean }) {
   const selector = options?.includeConfigs
     ? options?.includeSettings

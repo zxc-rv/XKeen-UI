@@ -116,7 +116,7 @@ function AppContent() {
       })
   }
 
-  async function checkStatus() {
+  const checkStatus = useCallback(async () => {
     const data = await apiCall<any>('GET', 'control')
     if (!data.success) return null
     const currentCore = data.currentCore || 'xray'
@@ -128,7 +128,7 @@ function AppContent() {
     })
     dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
     return currentCore
-  }
+  }, [dispatch])
 
   async function checkVersion() {
     try {
@@ -139,169 +139,186 @@ function AppContent() {
           version: data.version.replace(/^v/i, ''),
           isOutdatedUI: !!data.outdated?.ui,
         })
-        if (data.show_toast?.ui) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI' })
+        if (data.show_toast?.ui) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true })
         if (data.show_toast?.core)
-          showToast({ title: 'Доступно обновление', body: `Доступна новая версия ${capitalize(getAppState().currentCore)}` })
+          showToast({
+            title: 'Доступно обновление',
+            body: `Доступна новая версия ${capitalize(getAppState().currentCore)}`,
+            persistent: true,
+          })
       }
     } catch {
       /* ignore */
     }
   }
 
-  async function loadConfigs(core?: string, skipProxies = false): Promise<Config[]> {
-    dispatch({ type: 'SET_CONFIGS_LOADING', loading: true })
-    try {
-      const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs')
-      if (result.success && result.configs) {
-        const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
-        dispatch({ type: 'SET_CONFIGS', configs })
-        const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-        const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
-        const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
-        dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
-        const appState = getAppState()
-        const activeCores = core ?? appState.currentCore
-        if (port && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus !== 'pending') {
-          fetchClashProxies(port, secret)
+  const loadConfigs = useCallback(
+    async (core?: string, skipProxies = false): Promise<Config[]> => {
+      dispatch({ type: 'SET_CONFIGS_LOADING', loading: true })
+      try {
+        const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs')
+        if (result.success && result.configs) {
+          const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
+          dispatch({ type: 'SET_CONFIGS', configs })
+          const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
+          const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
+          const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
+          dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
+          const appState = getAppState()
+          const activeCores = core ?? appState.currentCore
+          if (port && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus !== 'pending') {
+            fetchClashProxies(port, secret)
+          }
+          return configs
+        } else {
+          dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
+          showToast('Не удалось загрузить конфигурации', 'error')
         }
-        return configs
-      } else {
+      } catch (e: any) {
         dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
-        showToast('Не удалось загрузить конфигурации', 'error')
+        showToast(`${e.message}`, 'error')
       }
-    } catch (e: any) {
-      dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
-      showToast(`${e.message}`, 'error')
-    }
-    return []
-  }
+      return []
+    },
+    [dispatch, showToast]
+  )
 
-  async function switchCore(core: string) {
-    const appState = getAppState()
-    if (core === appState.currentCore) {
-      showToast('Это ядро уже активно', 'error')
-      return
-    }
-    dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
-    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Переключение...' })
-    const configs = await loadConfigs(core, true)
-    const mihomoYamlEmpty =
-      core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
-    const result = await apiCall<any>('POST', 'control', { action: 'switchCore', core })
-    showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `Ошибка: ${result.error}`, result.success ? 'success' : 'error')
-    const data = await apiCall<any>('GET', 'control')
-    if (data.success) {
-      dispatch({
-        type: 'SET_CORE_INFO',
-        currentCore: data.currentCore,
-        coreVersions: data.versions,
-        availableCores: data.cores,
-      })
-      dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
-      if (result.success && mihomoYamlEmpty) await loadConfigs(core)
-      else if (result.success) syncClashApiPort()
-    }
-  }
+  const switchCore = useCallback(
+    async (core: string) => {
+      const appState = getAppState()
+      if (core === appState.currentCore) {
+        showToast('Это ядро уже активно', 'error')
+        return
+      }
+      dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
+      dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Переключение...' })
+      const configs = await loadConfigs(core, true)
+      const mihomoYamlEmpty =
+        core === 'mihomo' && !configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content.trim()
+      const result = await apiCall<any>('POST', 'control', { action: 'switchCore', core })
+      showToast(result.success ? `Ядро изменено на ${capitalize(core)}` : `Ошибка: ${result.error}`, result.success ? 'success' : 'error')
+      const data = await apiCall<any>('GET', 'control')
+      if (data.success) {
+        dispatch({
+          type: 'SET_CORE_INFO',
+          currentCore: data.currentCore,
+          coreVersions: data.versions,
+          availableCores: data.cores,
+        })
+        dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
+        if (result.success && mihomoYamlEmpty) await loadConfigs(core)
+        else if (result.success) syncClashApiPort()
+      }
+    },
+    [dispatch, showToast, loadConfigs]
+  )
 
-  function generateConfig(uri: string) {
+  const generateConfig = useCallback((uri: string) => {
     const currentCore = getAppState().currentCore
     if (typeof (window as any).generateConfigForCore === 'function')
       return (window as any).generateConfigForCore(uri, currentCore, editorRef.current?.getValue() ?? '')
     throw new Error('Parser not loaded')
-  }
+  }, [])
 
-  async function importTemplate(url: string) {
-    const activeIndex = configActionsRef.current.getActiveIndex()
-    const active = getAppState().configs[activeIndex]
-    if (active?.isDirty && !confirm('Несохраненные изменения будут потеряны. Продолжить?')) throw new Error('Отменено')
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const content = await res.text()
-    if (editorRef.current) {
-      editorRef.current.setValue(content)
-      dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: activeIndex, isDirty: true, content })
-    }
-    showToast('Шаблон импортирован')
-  }
-
-  function addToConfig(generated: string, type: string, position: 'start' | 'end') {
-    const appState = getAppState()
-    const core = appState.currentCore
-    let targetIndex = configActionsRef.current.getActiveIndex()
-
-    if (core === 'mihomo') {
-      targetIndex = appState.configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-      if (targetIndex === -1) {
-        showToast('Файл config.yaml не найден', 'error')
-        return
+  const importTemplate = useCallback(
+    async (url: string) => {
+      const activeIndex = configActionsRef.current.getActiveIndex()
+      const active = getAppState().configs[activeIndex]
+      if (active?.isDirty && !confirm('Несохраненные изменения будут потеряны. Продолжить?')) throw new Error('Отменено')
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const content = await res.text()
+      if (editorRef.current) {
+        editorRef.current.setValue(content)
+        dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: activeIndex, isDirty: true, content })
       }
-    } else {
-      try {
-        try {
-          const obj = JSON.parse(stripJsonComments(appState.configs[targetIndex].content))
-          if (!Array.isArray(obj.outbounds)) throw new Error()
-        } catch {
-          targetIndex = appState.configs.findIndex((cfg) => {
-            try {
-              return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds)
-            } catch {
-              return false
-            }
-          })
-          if (targetIndex === -1) {
-            showToast('Массив outbounds не найден', 'error')
-            return
-          }
-        }
-      } catch (e: any) {
-        showToast(`${e.message}`, 'error')
-        return
-      }
-    }
+      showToast('Шаблон импортирован')
+    },
+    [dispatch, showToast]
+  )
 
-    if (targetIndex !== configActionsRef.current.getActiveIndex()) configActionsRef.current.switchTab(targetIndex)
-
-    setTimeout(() => {
-      const editorWrapper = editorRef.current
-      if (!editorWrapper) return
-      const current = editorWrapper.getValue()
-      const lineAtOffset = (text: string, offset: number) => text.slice(0, Math.min(offset, text.length)).split('\n').length
-      const scrollToLine = (line: number) => setTimeout(() => editorWrapper.revealLine(Math.max(1, line)), 100)
-      const insertAtOffset = (offset: number, text: string, scrollLine?: number) => {
-        editorWrapper.replaceRange(offset, offset, text)
-        scrollToLine(scrollLine ?? editorWrapper.offsetToLineColumn(offset).lineNumber)
-      }
+  const addToConfig = useCallback(
+    (generated: string, type: string, position: 'start' | 'end') => {
+      const appState = getAppState()
+      const core = appState.currentCore
+      let targetIndex = configActionsRef.current.getActiveIndex()
 
       if (core === 'mihomo') {
-        const marker = type === 'proxy' ? 'proxies:' : 'proxy-providers:'
-        const markerIdx = current.indexOf(marker)
-        if (markerIdx === -1) {
-          insertAtOffset(current.length, `\n${marker}\n${generated}`, lineAtOffset(current, current.length) + 2)
+        targetIndex = appState.configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
+        if (targetIndex === -1) {
+          showToast('Файл config.yaml не найден', 'error')
           return
-        }
-        const markerLineEnd = current.indexOf('\n', markerIdx) + 1
-        if (position === 'start') {
-          insertAtOffset(markerLineEnd, generated, lineAtOffset(current, markerLineEnd))
-        } else {
-          const afterMarker = markerLineEnd
-          const nextKeyMatch = current.slice(afterMarker).search(/^[a-zA-Z]/m)
-          const insertOffset = nextKeyMatch === -1 ? current.length : afterMarker + nextKeyMatch
-          insertAtOffset(insertOffset, generated + '\n', lineAtOffset(current, insertOffset) - 1)
         }
       } else {
         try {
-          const obj = JSON.parse(stripJsonComments(current))
-          if (position === 'start') obj.outbounds.unshift(JSON.parse(generated))
-          else obj.outbounds.push(JSON.parse(generated))
-          editorWrapper.replaceAll(JSON.stringify(obj, null, 2))
-          scrollToLine(position === 'start' ? 1 : editorWrapper.getLineCount())
+          try {
+            const obj = JSON.parse(stripJsonComments(appState.configs[targetIndex].content))
+            if (!Array.isArray(obj.outbounds)) throw new Error()
+          } catch {
+            targetIndex = appState.configs.findIndex((cfg) => {
+              try {
+                return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds)
+              } catch {
+                return false
+              }
+            })
+            if (targetIndex === -1) {
+              showToast('Массив outbounds не найден', 'error')
+              return
+            }
+          }
         } catch (e: any) {
-          showToast(`Ошибка парсинга: ${e.message}`, 'error')
+          showToast(`${e.message}`, 'error')
+          return
         }
       }
-    }, 150)
-  }
 
+      if (targetIndex !== configActionsRef.current.getActiveIndex()) configActionsRef.current.switchTab(targetIndex)
+
+      setTimeout(() => {
+        const editorWrapper = editorRef.current
+        if (!editorWrapper) return
+        const current = editorWrapper.getValue()
+        const lineAtOffset = (text: string, offset: number) => text.slice(0, Math.min(offset, text.length)).split('\n').length
+        const scrollToLine = (line: number) => setTimeout(() => editorWrapper.revealLine(Math.max(1, line)), 100)
+        const insertAtOffset = (offset: number, text: string, scrollLine?: number) => {
+          editorWrapper.replaceRange(offset, offset, text)
+          scrollToLine(scrollLine ?? editorWrapper.offsetToLineColumn(offset).lineNumber)
+        }
+
+        if (core === 'mihomo') {
+          const marker = type === 'proxy' ? 'proxies:' : 'proxy-providers:'
+          const markerIdx = current.indexOf(marker)
+          if (markerIdx === -1) {
+            insertAtOffset(current.length, `\n${marker}\n${generated}`, lineAtOffset(current, current.length) + 2)
+            return
+          }
+          const markerLineEnd = current.indexOf('\n', markerIdx) + 1
+          if (position === 'start') {
+            insertAtOffset(markerLineEnd, generated, lineAtOffset(current, markerLineEnd))
+          } else {
+            const afterMarker = markerLineEnd
+            const nextKeyMatch = current.slice(afterMarker).search(/^[a-zA-Z]/m)
+            const insertOffset = nextKeyMatch === -1 ? current.length : afterMarker + nextKeyMatch
+            insertAtOffset(insertOffset, generated + '\n', lineAtOffset(current, insertOffset) - 1)
+          }
+        } else {
+          try {
+            const obj = JSON.parse(stripJsonComments(current))
+            if (position === 'start') obj.outbounds.unshift(JSON.parse(generated))
+            else obj.outbounds.push(JSON.parse(generated))
+            editorWrapper.replaceAll(JSON.stringify(obj, null, 2))
+            scrollToLine(position === 'start' ? 1 : editorWrapper.getLineCount())
+          } catch (e: any) {
+            showToast(`Ошибка парсинга: ${e.message}`, 'error')
+          }
+        }
+      }, 150)
+    },
+    [showToast]
+  )
+
+  const onInstalled = useCallback(() => void checkStatus(), [checkStatus])
   const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
 
   return (
@@ -330,7 +347,7 @@ function AppContent() {
       <Toast />
       <ModalManager
         onSwitchCore={switchCore}
-        onInstalled={() => void checkStatus()}
+        onInstalled={onInstalled}
         onGenerate={generateConfig}
         onAddToConfig={addToConfig}
         onImportTemplate={importTemplate}

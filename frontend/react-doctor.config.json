@@ -1,0 +1,15 @@
+{
+  "ignore": {
+    "rules": [
+      "react-doctor/require-reduced-motion",
+      "jsx-a11y/no-autofocus",
+      "jsx-a11y/click-events-have-key-events",
+      "jsx-a11y/no-static-element-interactions"
+    ],
+    "files": [
+      "src/components/ui/**",
+      "src/components/configuration/monaco.d.ts",
+      "node_modules/**"
+    ]
+  }
+}

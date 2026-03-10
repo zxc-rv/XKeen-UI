@@ -31,6 +31,7 @@ export interface ToastMessage {
   title: string
   body: string
   type: 'success' | 'error'
+  persistent?: boolean
 }
 
 export interface ConnectionMetadata {
