@@ -300,10 +300,6 @@ const editorTheme = (isMobile: boolean) =>
         backgroundColor: '#080e1d',
         color: '#c0caf5',
       },
-      '.cm-indent-markers': {
-        '--indent-marker-bg-color': '#1e2233',
-        '--indent-marker-active-bg-color': '#2a3150',
-      },
       '@media all and (hover:none)': {
         '.cm-content.cm-content, .cm-line.cm-line': {
           caretColor: '#ffffff !important',
@@ -610,7 +606,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
       ]),
       Prec.highest(syntaxHighlighting(tokyoNightHighlight)),
       languageCompartmentRef.current.of(getLanguageExtension(languageRef.current)),
-      indentationMarkers({ hideFirstIndent: true, highlightActiveBlock: true }),
+      indentationMarkers({ thickness: 2, colors: { activeDark: '#57a8d4' } }),
       editorTheme(isMobile),
       EditorView.contentAttributes.of({
         spellcheck: 'false',
