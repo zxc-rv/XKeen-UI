@@ -21,6 +21,7 @@ import { tags } from '@lezer/highlight'
 import { jsonLanguage } from '@codemirror/lang-json'
 import { yamlLanguage } from '@codemirror/lang-yaml'
 import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
+import { selectSelectionMatches } from '@codemirror/search'
 import { parse as parseJsonc, printParseErrorCode, type ParseError } from 'jsonc-parser'
 import * as prettier from 'prettier'
 import prettierBabel from 'prettier/plugins/babel'
@@ -573,6 +574,17 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
           run: () => {
             void format()
             return true
+          },
+        },
+        {
+          key: 'Mod-F2',
+          run: (view) => {
+            const sel = view.state.selection.main
+            if (sel.empty) {
+              const word = view.state.wordAt(sel.head)
+              if (word) view.dispatch({ selection: { anchor: word.from, head: word.to } })
+            }
+            return selectSelectionMatches(view)
           },
         },
         indentWithTab,
