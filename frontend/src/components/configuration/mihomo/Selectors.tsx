@@ -384,7 +384,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
       try {
         const delays = await clashFetch<Record<string, number>>(
           clashApiPort,
-          `group/${encodeURIComponent(selectorName)}/delay?url=https://www.youtube.com/generate_204&timeout=5000`,
+          `group/${encodeURIComponent(selectorName)}/delay?url=https://www.gstatic.com/generate_204&timeout=5000`,
           { secret: clashApiSecret }
         )
 
