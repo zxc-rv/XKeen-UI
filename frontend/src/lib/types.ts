@@ -69,7 +69,7 @@ export interface AppState {
   serviceStatus: ServiceStatus
   pendingText: string
   currentCore: string
-  coreVersions: { xray: string; mihomo: string }
+  coreVersions: Record<string, string>
   availableCores: string[]
   configs: Config[]
   isConfigsLoading: boolean
@@ -98,7 +98,7 @@ export type AppAction =
   | {
       type: 'SET_CORE_INFO'
       currentCore: string
-      coreVersions: { xray: string; mihomo: string }
+      coreVersions: Record<string, string>
       availableCores: string[]
     }
   | { type: 'SET_CONFIGS_LOADING'; loading: boolean }

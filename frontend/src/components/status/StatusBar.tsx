@@ -150,48 +150,45 @@ export function StatusBar({
         </div>
 
         <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
-          {isConfigsLoading ? (
-            <Skeleton className="h-9 w-32 rounded-md" />
+          {isConfigsLoading || !version ? (
+            <Skeleton className="h-9 w-35.75 rounded-md" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="outline" onClick={onOpenCoreManage}>
                   <IconCpu data-icon="inline-start" className="size-4.5" />
                   <span className="text-[13px]">{capitalize(currentCore)}</span>
-                  {coreVersions[currentCore as keyof typeof coreVersions] && (
-                    <span className="text-muted-foreground/60 mt-0.5 text-xs">
-                      {coreVersions[currentCore as keyof typeof coreVersions]}
-                    </span>
+                  {coreVersions[currentCore] && (
+                    <span className="text-muted-foreground/60 mt-0.5 text-xs">{coreVersions[currentCore]}</span>
                   )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Управление ядром</TooltipContent>
             </Tooltip>
           )}
-          {version &&
-            (isConfigsLoading ? (
-              <Skeleton className="h-9 w-14 rounded-md" />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    onClick={() => onOpenUpdate('self')}
-                    className={cn(
-                      'relative overflow-hidden text-xs tracking-wider',
-                      isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
-                    )}
-                  >
-                    {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}
-                    <IconBox data-icon="inline-start" className="size-4.5" />
-                    {version}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{isOutdatedUI ? 'Доступно обновление' : 'Версия XKeen UI'}</TooltipContent>
-              </Tooltip>
-            ))}
-          {isConfigsLoading ? (
-            <Skeleton className="h-9 w-9 rounded-md" />
+          {isConfigsLoading || !version ? (
+            <Skeleton className="h-9 w-18.75 rounded-md" />
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenUpdate('self')}
+                  className={cn(
+                    'relative overflow-hidden text-xs tracking-wider',
+                    isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
+                  )}
+                >
+                  {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}
+                  <IconBox data-icon="inline-start" className="size-4.5" />
+                  {version}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{isOutdatedUI ? 'Доступно обновление' : 'Версия XKeen UI'}</TooltipContent>
+            </Tooltip>
+          )}
+          {isConfigsLoading || !version ? (
+            <Skeleton className="size-9 rounded-md" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>

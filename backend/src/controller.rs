@@ -1,6 +1,6 @@
 use axum::{extract::State, response::{IntoResponse, Json}};
 use serde::Deserialize;
-use std::{collections::HashMap, path::Path, os::unix::fs::PermissionsExt, fs::Permissions};
+use std::{path::Path, os::unix::fs::PermissionsExt, fs::Permissions};
 use nix::{sys::{signal::{kill, Signal}, resource::{setrlimit, Resource}}, unistd::{Gid, Pid, setgid, setsid}};
 use tokio::{fs::{self, set_permissions}, process::Command};
 use crate::types::*;
@@ -60,38 +60,25 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
         *state.core.write().unwrap() = current_core.clone();
     }
 
-    let mut core_versions = HashMap::new();
+    let ((xray_exists, xray_running), (mihomo_exists, mihomo_running)) = tokio::join!(
+        async {
+            let exists = tokio::fs::metadata("/opt/sbin/xray").await.is_ok();
+            let running = exists && tokio::task::spawn_blocking(|| !get_pid("xray").is_empty()).await.unwrap_or(false);
+            (exists, running)
+        },
+        async {
+            let exists = tokio::fs::metadata("/opt/sbin/mihomo").await.is_ok();
+            let running = exists && tokio::task::spawn_blocking(|| !get_pid("mihomo").is_empty()).await.unwrap_or(false);
+            (exists, running)
+        }
+    );
+
     let mut available_cores = Vec::new();
-    let mut running_status = false;
+    if xray_exists { available_cores.push("xray".to_string()); }
+    if mihomo_exists { available_cores.push("mihomo".to_string()); }
+    let running_status = xray_running || mihomo_running;
 
-    for core_binary in ["xray", "mihomo"] {
-        if tokio::fs::metadata(format!("/opt/sbin/{}", core_binary)).await.is_ok() {
-            available_cores.push(core_binary.to_string());
-            let command_output = Command::new(core_binary)
-                .arg(if core_binary == "mihomo" { "-v" } else { "version" })
-                .output().await.ok();
-
-            if let Some(output) = command_output {
-                let output_string = String::from_utf8_lossy(&output.stdout);
-                let parts: Vec<&str> = output_string.split_whitespace().collect();
-                let version = match core_binary {
-                    "xray" if parts.len() > 1 => {
-                         if parts[1].starts_with('v') { parts[1].into() } else { format!("v{}", parts[1]) }
-                    },
-                    "mihomo" if parts.len() > 2 => parts[2].into(),
-                    _ => "?".into()
-                };
-                core_versions.insert(core_binary.to_string(), version);
-            }
-        }
-
-        let binary_string = core_binary.to_string();
-        if !tokio::task::spawn_blocking(move || get_pid(&binary_string)).await.unwrap_or_default().is_empty() {
-            running_status = true;
-        }
-    }
-
-    Json(serde_json::json!({ "success": true, "cores": available_cores, "currentCore": current_core.name, "running": running_status, "versions": core_versions }))
+    Json(serde_json::json!({ "success": true, "cores": available_cores, "currentCore": current_core.name, "running": running_status }))
 }
 
 async fn check_core_config(core: &str) -> Result<(), String> {

@@ -17,7 +17,7 @@ import { memo, useCallback, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
-import { subscribeConnections, useNowStore, useProxiesStore, useWsConnected } from '../../../lib/store'
+import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useWsConnected } from '../../../lib/store'
 
 interface ConnectionMetadata {
   network: string
@@ -60,10 +60,14 @@ interface Props {
 
 // ─── Local store ───────────────────────────────────────────────────────────────
 
-const useConnectionsStore = create<{ map: Map<string, Connection> }>(() => ({ map: new Map() }))
+const toMap = (connections: Connection[]) => new Map(connections.map((c) => [c.id, c]))
+
+const useConnectionsStore = create<{ map: Map<string, Connection> }>(() => ({
+  map: toMap(getConnections()),
+}))
 
 subscribeConnections((connections) => {
-  useConnectionsStore.setState({ map: new Map(connections.map((c) => [c.id, c])) })
+  useConnectionsStore.setState({ map: toMap(connections) })
 })
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

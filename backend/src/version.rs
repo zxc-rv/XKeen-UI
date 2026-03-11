@@ -1,5 +1,6 @@
 use axum::{extract::State, response::{IntoResponse, Json}};
 use std::time::{Duration, Instant};
+use tokio::process::Command;
 use crate::{types::{VERSION, AppState}, updater};
 
 pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -9,10 +10,33 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
     };
 
     let (ui, core) = (*state.update_checker.ui_outdated.read().unwrap(), *state.update_checker.core_outdated.read().unwrap());
+
+    let (xray_version, mihomo_version) = tokio::join!(
+        async {
+            Command::new("xray").arg("version").output().await.ok().and_then(|o| {
+                let s = String::from_utf8_lossy(&o.stdout);
+                let parts: Vec<&str> = s.split_whitespace().collect();
+                (parts.len() > 1).then(|| if parts[1].starts_with('v') { parts[1].to_string() } else { format!("v{}", parts[1]) })
+            })
+        },
+        async {
+            Command::new("mihomo").arg("-v").output().await.ok().and_then(|o| {
+                let s = String::from_utf8_lossy(&o.stdout);
+                let parts: Vec<&str> = s.split_whitespace().collect();
+                (parts.len() > 2).then(|| parts[2].to_string())
+            })
+        }
+    );
+
+    let mut core_versions = serde_json::Map::new();
+    if let Some(v) = xray_version { core_versions.insert("xray".into(), v.into()); }
+    if let Some(v) = mihomo_version { core_versions.insert("mihomo".into(), v.into()); }
+
     Json(serde_json::json!({
-        "success": true, "version": VERSION,
-        "outdated": { "ui": ui, "core": core },
-        "show_toast": { "ui": check(ui, &state.update_checker.last_ui_toast), "core": check(core, &state.update_checker.last_core_toast) }
+        "success": true, "appVersion": VERSION,
+        "outdated": { "app": ui, "core": core },
+        "show_toast": { "app": check(ui, &state.update_checker.last_ui_toast), "core": check(core, &state.update_checker.last_core_toast) },
+        "coreVersions": core_versions
     }))
 }
 

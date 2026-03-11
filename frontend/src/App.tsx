@@ -84,39 +84,7 @@ function AppContent() {
     getActiveIndex: () => 0,
   })
 
-  useEffect(() => {
-    init()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function init() {
-    try {
-      await loadSettings()
-      const currentCore = await checkStatus()
-      if (currentCore) await loadConfigs(currentCore)
-      checkVersion()
-    } catch {
-      showToast('Ошибка инициализации', 'error')
-    }
-  }
-
-  async function loadSettings() {
-    const data = await apiCall<any>('GET', 'settings')
-    if (data.success)
-      dispatch({
-        type: 'SET_SETTINGS',
-        settings: {
-          autoApply: data.gui.auto_apply,
-          guiRouting: data.gui.routing,
-          guiLog: data.gui.log,
-          autoCheckUI: data.updater.auto_check_ui ?? true,
-          autoCheckCore: data.updater.auto_check_core ?? true,
-          backupCore: data.updater.backup_core,
-          githubProxies: data.updater.github_proxy || [],
-          timezone: data.log.timezone,
-        },
-      })
-  }
-
+  // Сначала объявляем то, что мемоизировано и будет использоваться везде
   const checkStatus = useCallback(async () => {
     const data = await apiCall<any>('GET', 'control')
     if (!data.success) return null
@@ -124,34 +92,12 @@ function AppContent() {
     dispatch({
       type: 'SET_CORE_INFO',
       currentCore,
-      coreVersions: data.versions || {},
+      coreVersions: getAppState().coreVersions,
       availableCores: data.cores || [],
     })
     dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
     return currentCore
   }, [dispatch])
-
-  async function checkVersion() {
-    try {
-      const data = await apiCall<any>('GET', 'version')
-      if (data.success && data.version) {
-        dispatch({
-          type: 'SET_VERSION',
-          version: data.version.replace(/^v/i, ''),
-          isOutdatedUI: !!data.outdated?.ui,
-        })
-        if (data.show_toast?.ui) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true })
-        if (data.show_toast?.core)
-          showToast({
-            title: 'Доступно обновление',
-            body: `Доступна новая версия ${capitalize(getAppState().currentCore)}`,
-            persistent: true,
-          })
-      }
-    } catch {
-      /* ignore */
-    }
-  }
 
   const loadConfigs = useCallback(
     async (core?: string, skipProxies = false): Promise<Config[]> => {
@@ -184,6 +130,70 @@ function AppContent() {
     [dispatch, showToast]
   )
 
+  useEffect(() => {
+    const loadSettings = async () => {
+      const data = await apiCall<any>('GET', 'settings')
+      if (data.success)
+        dispatch({
+          type: 'SET_SETTINGS',
+          settings: {
+            autoApply: data.gui.auto_apply,
+            guiRouting: data.gui.routing,
+            guiLog: data.gui.log,
+            autoCheckUI: data.updater.auto_check_ui ?? true,
+            autoCheckCore: data.updater.auto_check_core ?? true,
+            backupCore: data.updater.backup_core,
+            githubProxies: data.updater.github_proxy || [],
+            timezone: data.log.timezone,
+          },
+        })
+    }
+
+    const checkVersion = async () => {
+      try {
+        const data = await apiCall<any>('GET', 'version')
+        if (data.success && data.appVersion) {
+          dispatch({
+            type: 'SET_VERSION',
+            version: data.appVersion.replace(/^v/i, ''),
+            isOutdatedUI: !!data.outdated?.app,
+          })
+          if (data.coreVersions) {
+            const appState = getAppState()
+            dispatch({
+              type: 'SET_CORE_INFO',
+              currentCore: appState.currentCore,
+              coreVersions: { ...appState.coreVersions, ...data.coreVersions },
+              availableCores: appState.availableCores,
+            })
+          }
+          if (data.show_toast?.app) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true })
+          if (data.show_toast?.core)
+            showToast({
+              title: 'Доступно обновление',
+              body: `Доступна новая версия ${capitalize(getAppState().currentCore)}`,
+              persistent: true,
+            })
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const init = async () => {
+      try {
+        await loadSettings()
+        const currentCore = await checkStatus()
+        if (currentCore) loadConfigs(currentCore)
+        checkVersion()
+      } catch {
+        showToast('Ошибка инициализации', 'error')
+      }
+    }
+
+    init()
+  }, [checkStatus, loadConfigs, dispatch, showToast])
+
   const switchCore = useCallback(
     async (core: string) => {
       const appState = getAppState()
@@ -203,7 +213,7 @@ function AppContent() {
         dispatch({
           type: 'SET_CORE_INFO',
           currentCore: data.currentCore,
-          coreVersions: data.versions,
+          coreVersions: getAppState().coreVersions,
           availableCores: data.cores,
         })
         dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })

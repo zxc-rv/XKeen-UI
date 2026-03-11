@@ -1,3 +1,4 @@
+import { autocompletion, completeAnyWord } from '@codemirror/autocomplete'
 import { historyField, indentWithTab } from '@codemirror/commands'
 import { jsonLanguage } from '@codemirror/lang-json'
 import { yamlLanguage } from '@codemirror/lang-yaml'
@@ -295,11 +296,6 @@ const editorTheme = (isMobile: boolean) =>
         backgroundColor: '#080e1d',
         color: '#c0caf5',
       },
-      '@media all and (hover:none)': {
-        '.cm-content.cm-content, .cm-line.cm-line': {
-          caretColor: '#ffffff !important',
-        },
-      },
     },
     { dark: true }
   )
@@ -557,6 +553,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     const isMobile = window.innerWidth < 768
     const extensions: Extension[] = [
       basicSetup,
+      autocompletion({ override: [completeAnyWord] }),
       Prec.highest(
         lineNumbers({
           formatNumber: (n) => String(n).padStart(3, '\u00a0'),

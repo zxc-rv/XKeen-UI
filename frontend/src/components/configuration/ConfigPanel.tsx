@@ -40,7 +40,7 @@ const GuiRouting = lazy(() => import('./xray/GuiRouting').then((m) => ({ default
 const GuiLog = lazy(() => import('./xray/GuiLog').then((m) => ({ default: m.GuiLog })))
 const ConnectionsPanel = lazy(() => import('./mihomo/Connections').then((m) => ({ default: m.ConnectionsPanel })))
 const SelectorsPanel = lazy(() => import('./mihomo/Selectors').then((m) => ({ default: m.SelectorsPanel })))
-type CodeMirrorEditorComponent = typeof import('./CodeMirror').CodeMirrorEditor
+const CodeMirrorEditorLazy = lazy(() => import('./CodeMirror').then((m) => ({ default: m.CodeMirrorEditor })))
 
 type ClashMode = 'rule' | 'global' | 'direct'
 
@@ -74,22 +74,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     return idx >= 0 ? idx : 0
   }, [configs, activeConfigFile])
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
-  const [EditorReady, setEditorReady] = useState(false)
+
+  const [isEditorMounted, setIsEditorMounted] = useState(false)
+
   const [activePanel, setActivePanel] = useState<'config' | 'selectors' | 'connections'>('config')
+  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['config']))
   const [mode, setMode] = useState<ClashMode>('rule')
   const [updatingRuleProviders, setUpdatingRuleProviders] = useState(false)
   const [updatingProxyProviders, setUpdatingProxyProviders] = useState(false)
-  const [CodeMirrorEditorLazy, setCodeMirrorEditorLazy] = useState<CodeMirrorEditorComponent | null>(null)
-
-  useEffect(() => {
-    let active = true
-    void import('./CodeMirror').then((m) => {
-      if (active) setCodeMirrorEditorLazy(() => m.CodeMirrorEditor)
-    })
-    return () => {
-      active = false
-    }
-  }, [])
 
   const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
@@ -133,14 +125,15 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
   const prevConfigFilenamesKeyRef = useRef('')
 
   useEffect(() => {
-    if (configs.length === 0) return
+    const currentConfigs = configsRef.current
+    if (currentConfigs.length === 0) return
     const isFirstLoad = prevConfigFilenamesKeyRef.current === ''
     prevConfigFilenamesKeyRef.current = configFilenamesKey
     if (isFirstLoad) return
 
-    const yamlIndex = configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
+    const yamlIndex = currentConfigs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
     const next = yamlIndex >= 0 ? yamlIndex : 0
-    setActiveConfigFile(configs[next]?.file ?? '') // eslint-disable-next-line react-hooks/exhaustive-deps
+    setActiveConfigFile(currentConfigs[next]?.file ?? '')
   }, [configFilenamesKey])
 
   useEffect(() => {
@@ -214,16 +207,16 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
   useEffect(() => {
     const config = configsRef.current[activeConfigIndex]
-    if (EditorReady && config && editorRef.current) {
+    if (editorRef.current && config) {
       loadConfigIntoEditor(config)
     }
-  }, [activeConfigIndex, configFilenamesKey, EditorReady, loadConfigIntoEditor, editorRef])
+  }, [activeConfigIndex, configFilenamesKey, loadConfigIntoEditor, editorRef])
 
   const handleEditorReady = useCallback(() => {
-    setEditorReady(true)
+    setIsEditorMounted(true)
     const config = configsRef.current[activeIndexRef.current]
-    if (config) loadConfigIntoEditor(config)
-  }, [loadConfigIntoEditor])
+    if (config && editorRef.current) loadConfigIntoEditor(config)
+  }, [loadConfigIntoEditor, editorRef])
 
   const handleContentChange = useCallback(
     (content: string, isDirty: boolean) => {
@@ -356,6 +349,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 onValueChange={(value) => {
                   const panel = value as 'config' | 'selectors' | 'connections'
                   setActivePanel(panel)
+                  setMountedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
                 }}
                 className="flex-row!"
               >
@@ -473,21 +467,25 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
         </div>
 
         <div className="relative min-h-175! md:min-h-0 md:flex-1">
-          {EditorReady && activeConfig && isRoutingGui && (
+          {isEditorMounted && activeConfig && isRoutingGui && (
             <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
           )}
-          {EditorReady && activeConfig && isLogGui && (
+          {isEditorMounted && activeConfig && isLogGui && (
             <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
           )}
 
           {isMihomo && (
             <>
-              <div className={cn(activePanel !== 'selectors' && 'hidden')}>
-                <SelectorsPanel clashApiPort={clashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
-              </div>
-              <div className={cn(activePanel !== 'connections' && 'hidden')}>
-                <ConnectionsPanel clashApiPort={clashApiPort!} clashApiSecret={clashApiSecret ?? null} />
-              </div>
+              {mountedPanels.has('selectors') && (
+                <div className={cn(activePanel !== 'selectors' && 'hidden')}>
+                  <SelectorsPanel clashApiPort={clashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
+                </div>
+              )}
+              {mountedPanels.has('connections') && (
+                <div className={cn(activePanel !== 'connections' && 'hidden')}>
+                  <ConnectionsPanel clashApiPort={clashApiPort!} clashApiSecret={clashApiSecret ?? null} />
+                </div>
+              )}
             </>
           )}
 
@@ -498,18 +496,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
               isMihomo && activePanel !== 'config' && 'hidden'
             )}
           >
-            {CodeMirrorEditorLazy ? (
-              <CodeMirrorEditorLazy
-                ref={editorRef}
-                onContentChange={handleContentChange}
-                onValidationChange={handleValidationChange}
-                onReady={handleEditorReady}
-                onSave={() => saveCurrentConfig()}
-              />
-            ) : (
-              <div className="border-border bg-input-background absolute inset-4 overflow-hidden rounded-xl border" />
-            )}
-            {(!EditorReady || isConfigsLoading) && (
+            <CodeMirrorEditorLazy
+              ref={editorRef}
+              onContentChange={handleContentChange}
+              onValidationChange={handleValidationChange}
+              onReady={handleEditorReady}
+              onSave={() => saveCurrentConfig()}
+            />
+            {(!isEditorMounted || isConfigsLoading) && (
               <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
                 <Spinner className="mr-2 size-5" />
                 {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}
@@ -540,7 +534,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
             <div className="flex flex-wrap items-center gap-1.5">
               {isConfigsLoading ? (
                 <div className="flex gap-1.5">
-                  {[120, 115, 133].map((w) => (
+                  {[120, 116, 133].map((w) => (
                     <Skeleton key={w} className="h-9 rounded-md" style={{ width: w }} />
                   ))}
                 </div>
