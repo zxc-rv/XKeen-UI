@@ -1,20 +1,19 @@
-import { useState, useEffect } from 'react'
-import { IconDownload, IconPlaylistX } from '@tabler/icons-react'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Spinner } from '@/components/ui/spinner'
+import { IconDownload, IconPlaylistX, IconRefresh } from '@tabler/icons-react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
-import { cn } from '../../lib/utils'
-import { useAppContext, useModalContext, useSettings } from '../../lib/store'
 import { capitalize } from '../../lib/api'
+import { useAppContext, useModalContext, useSettings } from '../../lib/store'
 import type { Release } from '../../lib/types'
-import { Spinner } from '@/components/ui/spinner'
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyContent } from '@/components/ui/empty'
-import { IconRefresh } from '@tabler/icons-react'
+import { cn } from '../../lib/utils'
 
 const mdClass = `
   text-xs text-muted-foreground leading-relaxed
@@ -115,15 +114,15 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
 
   return (
     <Dialog open={modals.showUpdateModal} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-[95vw]! md:w-187.5 w-full p-0!">
-        <div className="flex flex-col max-h-[90dvh] overflow-hidden p-6 gap-4">
+      <DialogContent className="w-full max-w-[95vw]! p-0! md:w-187.5">
+        <div className="flex max-h-[90dvh] flex-col gap-4 overflow-hidden p-6">
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
               <IconDownload size={24} className="text-chart-2" />
               Обновление {coreLabel}
             </DialogTitle>
 
-            <DialogDescription className="flex items-center justify-between w-full" asChild>
+            <DialogDescription className="flex w-full items-center justify-between" asChild>
               <div>
                 Выберите версию для установки
                 <span className="flex items-center gap-1.5">
@@ -131,7 +130,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                     <Badge
                       variant="outline"
                       className={cn(
-                        'rounded-full px-2 h-5 text-xs font-medium border-none',
+                        'h-5 rounded-full border-none px-2 text-xs font-medium',
                         source === 'github' ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'
                       )}
                     >
@@ -139,7 +138,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                     </Badge>
                   )}
                   {!loading && releases.length > 0 && (
-                    <Badge variant="outline" className="rounded-full w-6 h-6 bg-blue-500/10 text-blue-400 border-blue-500/20">
+                    <Badge variant="outline" className="h-6 w-6 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
                       {releases.length}
                     </Badge>
                   )}
@@ -156,8 +155,8 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
             }}
           >
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground min-h-88">
-                <Spinner className="size-10 text-chart-2" />
+              <div className="text-muted-foreground flex min-h-88 flex-col items-center justify-center gap-3 py-16">
+                <Spinner className="text-chart-2 size-10" />
                 <span className="text-sm tracking-normal">Загрузка релизов...</span>
               </div>
             ) : releases.length === 0 ? (
@@ -169,7 +168,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                   <EmptyTitle className="text-[16px] tracking-normal">Нет доступных релизов</EmptyTitle>
                 </EmptyHeader>
                 <EmptyContent>
-                  <Button variant="outline" size="sm" onClick={fetchReleases} className="gap-1.5 bg-card! hover:bg-input!">
+                  <Button variant="outline" size="sm" onClick={fetchReleases} className="bg-card! hover:bg-input! gap-1.5">
                     <IconRefresh size={14} />
                     Повторить
                   </Button>
@@ -181,7 +180,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                 collapsible
                 value={openVersion}
                 onValueChange={setOpenVersion}
-                className="py-1 px-0.5 flex flex-col gap-1.5"
+                className="flex flex-col gap-1.5 px-0.5 py-1"
               >
                 {releases.map((release) => {
                   const checked = selectedVersion === release.version
@@ -193,39 +192,39 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                         'rounded-lg border transition-all',
                         checked
                           ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
-                          : 'border-ring/40 hover:border-[#60a5fa] bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
+                          : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
                       )}
                     >
                       <AccordionTrigger
-                        className="px-3 py-0 hover:no-underline *:data-[slot=accordion-trigger-icon]:hidden min-w-0 overflow-hidden"
+                        className="min-w-0 overflow-hidden px-3 py-0 hover:no-underline *:data-[slot=accordion-trigger-icon]:hidden"
                         onClick={() => setSelectedVersion(release.version)}
                       >
-                        <div className="flex items-center justify-between gap-3 w-full py-2.5 min-w-0">
-                          <div className="flex flex-col gap-2 flex-1 min-w-0">
+                        <div className="flex w-full min-w-0 items-center justify-between gap-3 py-2.5">
+                          <div className="flex min-w-0 flex-1 flex-col gap-2">
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium truncate">{release.name || release.version}</span>
+                              <span className="truncate text-sm font-medium">{release.name || release.version}</span>
                               {release.is_prerelease && (
-                                <Badge variant="outline" className="text-xs border-none rounded-sm px-2 text-amber-400 bg-amber-500/10">
+                                <Badge variant="outline" className="rounded-sm border-none bg-amber-500/10 px-2 text-xs text-amber-400">
                                   Pre-Release
                                 </Badge>
                               )}
                             </div>
-                            <span className="text-xs text-muted-foreground">{release.published_at}</span>
+                            <span className="text-muted-foreground text-xs">{release.published_at}</span>
                           </div>
                           <div
                             className={cn(
-                              'size-4 rounded-full border-2 shrink-0 transition-colors flex items-center justify-center',
+                              'flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
                               checked ? 'border-primary bg-primary' : 'border-muted-foreground/50'
                             )}
                           >
-                            {checked && <div className="size-2 rounded-full bg-primary-foreground" />}
+                            {checked && <div className="bg-primary-foreground size-2 rounded-full" />}
                           </div>
                         </div>
                       </AccordionTrigger>
                       {release.body && (
-                        <AccordionContent className="px-3 pb-3 pt-0">
-                          <div className="border-t border-ring/20 pt-2.5">
-                            <div className="max-h-48 overflow-y-auto overflow-x-hidden w-full">
+                        <AccordionContent className="px-3 pt-0 pb-3">
+                          <div className="border-ring/20 border-t pt-2.5">
+                            <div className="max-h-48 w-full overflow-x-hidden overflow-y-auto">
                               <div className={cn(mdClass, 'min-w-0')}>
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: () => null }}>
                                   {release.body}
@@ -240,7 +239,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                 })}
               </Accordion>
             ) : (
-              <RadioGroup value={selectedVersion} onValueChange={setSelectedVersion} className="py-1 px-0.5 gap-1.5">
+              <RadioGroup value={selectedVersion} onValueChange={setSelectedVersion} className="gap-1.5 px-0.5 py-1">
                 {releases.map((release) => {
                   const checked = selectedVersion === release.version
                   return (
@@ -248,13 +247,13 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                       key={release.version}
                       htmlFor={release.version}
                       className={cn(
-                        'flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all',
+                        'flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-3 py-2.5 transition-all',
                         checked
                           ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
-                          : 'border-ring/40 hover:border-[#60a5fa] bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:bg-linear-to-b from-blue-500/15 to-blue-500/5'
+                          : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] from-blue-500/15 to-blue-500/5 hover:border-[#60a5fa] hover:bg-linear-to-b'
                       )}
                     >
-                      <span className="text-sm font-medium truncate">{release.name || release.version}</span>
+                      <span className="truncate text-sm font-medium">{release.name || release.version}</span>
                       <RadioGroupItem value={release.version} id={release.version} className="mt-0.5 shrink-0" />
                     </label>
                   )

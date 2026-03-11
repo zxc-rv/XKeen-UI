@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 export function clashWsUrl(port: string, path: string, secret?: string | null) {
   const normalizedPath = path.replace(/^\/+/, '')

@@ -1,8 +1,8 @@
-import { IconX, IconAlertCircle, IconCircleCheck } from '@tabler/icons-react'
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { IconAlertCircle, IconCircleCheck, IconX } from '@tabler/icons-react'
+import { AnimatePresence, LazyMotion, domMax, m } from 'framer-motion'
 import { useAppContext, useToastContext } from '../../lib/store'
 import type { ToastMessage } from '../../lib/types'
-import { LazyMotion, domMax, m, AnimatePresence } from 'framer-motion'
 
 function AlertItem({ alert }: { alert: ToastMessage }) {
   const { dispatch } = useAppContext()
@@ -18,7 +18,7 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
         transition: { duration: 0.35, ease: [0.215, 0.61, 0.355, 1] },
       }}
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-      className="w-full max-w-100px"
+      className="max-w-100px w-full"
     >
       <Alert variant={isError ? 'destructive' : 'default'} className="relative">
         {isError ? <IconAlertCircle className="size-4.5" /> : <IconCircleCheck className="size-4.5" />}
@@ -26,7 +26,7 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
         {alert.body && <AlertDescription>{alert.body}</AlertDescription>}
         <button
           onClick={() => dispatch({ type: 'REMOVE_TOAST', id: alert.id })}
-          className="absolute right-2 top-2 rounded-md p-1 opacity-70 hover:opacity-100"
+          className="absolute top-2 right-2 rounded-md p-1 opacity-70 hover:opacity-100"
         >
           <IconX size={18} />
         </button>
@@ -40,7 +40,7 @@ export function Toast() {
 
   return (
     <LazyMotion features={domMax}>
-      <div className="fixed bottom-6 left-0 right-0 z-100 flex flex-col items-center gap-2 px-4 md:left-auto md:right-6 md:items-end md:px-0 md:w-90">
+      <div className="fixed right-0 bottom-6 left-0 z-100 flex flex-col items-center gap-2 px-4 md:right-6 md:left-auto md:w-90 md:items-end md:px-0">
         <AnimatePresence>
           {toasts.map((alert) => (
             <AlertItem key={alert.id} alert={alert} />

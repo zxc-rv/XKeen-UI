@@ -6,10 +6,6 @@
       "jsx-a11y/click-events-have-key-events",
       "jsx-a11y/no-static-element-interactions"
     ],
-    "files": [
-      "src/components/ui/**",
-      "src/components/configuration/monaco.d.ts",
-      "node_modules/**"
-    ]
+    "files": ["src/components/ui/**", "src/components/configuration/monaco.d.ts", "node_modules/**"]
   }
 }

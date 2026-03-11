@@ -1,14 +1,14 @@
-import { useState, useEffect } from 'react'
-import { IconFileText } from '@tabler/icons-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { cn } from '../../lib/utils'
-import { useAppContext, useModalContext } from '../../lib/store'
-import { capitalize } from '../../lib/api'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Spinner } from '@/components/ui/spinner'
+import { IconFileText } from '@tabler/icons-react'
+import { useEffect, useState } from 'react'
+import { capitalize } from '../../lib/api'
+import { useAppContext, useModalContext } from '../../lib/store'
+import { cn } from '../../lib/utils'
 
 const TEMPLATES_URL = 'https://raw.githubusercontent.com/zxc-rv/assets/main/config_templates/templates.json'
 let templatesCache: Record<string, { name: string; url: string }[]> | null = null
@@ -63,40 +63,40 @@ export function TemplateModal({ onImport }: { onImport: (url: string) => Promise
 
   return (
     <Dialog open={modals.showTemplateModal} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-140! max-h-[80vh] flex flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[80vh] max-w-140! flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
             <IconFileText size={24} className="text-chart-2" />
             Импорт шаблона
-            <span className="text-sm font-normal text-muted-foreground"></span>
+            <span className="text-muted-foreground text-sm font-normal"></span>
           </DialogTitle>
-          <DialogDescription className="flex items-center justify-between w-full">
+          <DialogDescription className="flex w-full items-center justify-between">
             <span>
               Выберите готовый шаблон конфигурации для <span className="text-chart-2 font-semibold">{capitalize(currentCore)}</span>
             </span>
-            {!loading && <Badge className="rounded-full w-6 h-6 bg-blue-500/10 text-blue-400 border-blue-500/20">{templates.length}</Badge>}
+            {!loading && <Badge className="h-6 w-6 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">{templates.length}</Badge>}
           </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="flex-1">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
-              <Spinner className="size-10 text-chart-2" />
+            <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-12">
+              <Spinner className="text-chart-2 size-10" />
               <span className="text-xs">Загрузка шаблонов...</span>
             </div>
           ) : templates.length === 0 ? (
-            <p className="text-center py-12 text-muted-foreground text-sm">Нет доступных шаблонов</p>
+            <p className="text-muted-foreground py-12 text-center text-sm">Нет доступных шаблонов</p>
           ) : (
-            <RadioGroup value={selectedUrl} onValueChange={setSelectedUrl} className="py-1 gap-1.5">
+            <RadioGroup value={selectedUrl} onValueChange={setSelectedUrl} className="gap-1.5 py-1">
               {templates.map((template, i) => (
                 <div
                   key={i}
                   onClick={() => setSelectedUrl(template.url)}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-3.5 rounded-lg border cursor-pointer transition-all',
+                    'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3.5 transition-all',
                     selectedUrl === template.url
                       ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
-                      : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b from-blue-500/15 to-blue-500/5'
+                      : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] from-blue-500/15 to-blue-500/5 hover:border-[#60a5fa] hover:bg-linear-to-b'
                   )}
                 >
                   <RadioGroupItem value={template.url} id={`tpl-${i}`} className="shrink-0" />

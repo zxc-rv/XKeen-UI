@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { IconTrash, IconMaximize, IconMinimize, IconChevronDown, IconX, IconFile, IconFilter } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '../../lib/utils'
-import { useWebSocket } from '../../lib/websocket'
+import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconTrash, IconX } from '@tabler/icons-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSettings } from '../../lib/store'
+import { cn } from '../../lib/utils'
 import type { WsMessage } from '../../lib/websocket'
+import { useWebSocket } from '../../lib/websocket'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']
@@ -239,7 +239,7 @@ export function LogPanel() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="md:shrink-0 pb-3 relative h-70 w-full">
+      <div className="relative h-70 w-full pb-3 md:shrink-0">
         <div
           ref={backdropRef}
           className="fixed inset-0 z-40 bg-black/50 opacity-0"
@@ -252,18 +252,18 @@ export function LogPanel() {
         <div
           ref={containerRef}
           className={cn(
-            'flex flex-col rounded-xl border border-border bg-card overflow-hidden',
-            isFullscreen ? 'fixed inset-x-3 sm:inset-x-4 bottom-3 z-50 shadow-2xl sm:max-w-500 sm:mx-auto' : 'absolute inset-0 z-10 w-full'
+            'border-border bg-card flex flex-col overflow-hidden rounded-xl border',
+            isFullscreen ? 'fixed inset-x-3 bottom-3 z-50 shadow-2xl sm:inset-x-4 sm:mx-auto sm:max-w-500' : 'absolute inset-0 z-10 w-full'
           )}
           style={{
             height: isFullscreen ? 'calc(100dvh - 1.25rem)' : '100%',
             willChange: isAnimating ? 'transform, border-radius' : 'auto',
           }}
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 pt-4 shrink-0">
+          <div className="flex shrink-0 flex-col justify-between gap-3 px-4 pt-4 sm:flex-row sm:items-center">
             <h2 className="text-lg font-semibold select-none">Журнал</h2>
             <div className="flex flex-wrap items-center gap-1.5">
-              <div className="relative flex items-center flex-1 sm:flex-none min-w-30">
+              <div className="relative flex min-w-30 flex-1 items-center sm:flex-none">
                 <InputGroup className="w-40">
                   <InputGroupInput
                     placeholder="Фильтр"
@@ -304,7 +304,7 @@ export function LogPanel() {
                   ))}
                 </SelectContent>
               </Select>
-              <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+              <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}>
@@ -325,21 +325,21 @@ export function LogPanel() {
             </div>
           </div>
 
-          <div className="relative flex-1 min-h-0">
-            <div className="absolute inset-4 rounded-md bg-input-background overflow-hidden border">
+          <div className="relative min-h-0 flex-1">
+            <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
               {isEmpty && (
                 <Empty className="h-full gap-0">
                   <EmptyMedia variant="icon" className="size-8.5">
                     <IconFile className="text-muted-foreground size-5" />
                   </EmptyMedia>
-                  <EmptyTitle className="font-mono text-[13px] text-ring tracking-normal">Журнал пуст</EmptyTitle>
+                  <EmptyTitle className="text-ring font-mono text-[13px] tracking-normal">Журнал пуст</EmptyTitle>
                 </Empty>
               )}
               <div
                 ref={logRef}
                 tabIndex={0}
                 className={cn(
-                  'text-[#dbdbdb] font-mono text-[13px] leading-[1.6] h-full overflow-y-auto [scrollbar-width:thin] px-3 py-1.5 wrap-anywhere contain-content',
+                  'h-full overflow-y-auto px-3 py-1.5 font-mono text-[13px] leading-[1.6] wrap-anywhere text-[#dbdbdb] contain-content [scrollbar-width:thin]',
                   isAnimating && 'pointer-events-none'
                 )}
                 onScroll={handleScroll}
@@ -351,7 +351,7 @@ export function LogPanel() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                className="absolute bottom-8 right-8 z-10 shadow-lg bg-background/80 backdrop-blur!"
+                className="bg-background/80 absolute right-8 bottom-8 z-10 shadow-lg backdrop-blur!"
                 onClick={handleScrollToBottom}
               >
                 <IconChevronDown size={14} />

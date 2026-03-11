@@ -1,10 +1,10 @@
-import { useState, useCallback } from 'react'
 import { Switch } from '@/components/ui/switch'
-import { cn, stripJsonComments } from '../../../lib/utils'
-import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
+import { useCallback, useState } from 'react'
 import { apiCall } from '../../../lib/api'
-import type { CodeMirrorRef } from '../CodeMirror'
+import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
+import { cn, stripJsonComments } from '../../../lib/utils'
+import type { CodeMirrorRef } from '../CodeMirror'
 
 const LOG_LEVELS = ['none', 'error', 'warning', 'info', 'debug'] as const
 type LogLevel = (typeof LOG_LEVELS)[number]
@@ -144,28 +144,28 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
   const color = LEVEL_COLOR[cfg.loglevel]
 
   return (
-    <div className="absolute inset-0 overflow-y-auto p-4 sm:p-6 flex flex-col gap-6 sm:gap-8">
+    <div className="absolute inset-0 flex flex-col gap-6 overflow-y-auto p-4 sm:gap-8 sm:p-6">
       <section className="flex flex-col gap-3">
-        <h3 className="font-semibold text-base">Access Log</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <h3 className="text-base font-semibold">Access Log</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <PathButton label="none" active={!cfg.access || cfg.access === 'none'} onClick={() => update({ access: 'none' }, true)} />
           <PathButton label={ACCESS_PATH} active={cfg.access === ACCESS_PATH} onClick={() => update({ access: ACCESS_PATH }, true)} />
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="font-semibold text-base">Error Log</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <h3 className="text-base font-semibold">Error Log</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <PathButton label="none" active={!cfg.error || cfg.error === 'none'} onClick={() => update({ error: 'none' }, true)} />
           <PathButton label={ERROR_PATH} active={cfg.error === ERROR_PATH} onClick={() => update({ error: ERROR_PATH }, true)} />
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="font-semibold text-base">Log Level</h3>
+        <h3 className="text-base font-semibold">Log Level</h3>
         <div className="px-2">
-          <div className="relative h-8 flex items-center">
-            <div className="absolute inset-x-0 h-1.5 rounded-full bg-muted" />
+          <div className="relative flex h-8 items-center">
+            <div className="bg-muted absolute inset-x-0 h-1.5 rounded-full" />
             <div
               className="absolute left-0 h-1.5 rounded-full transition-all duration-200"
               style={{
@@ -180,7 +180,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
                 <button
                   key={l}
                   onClick={() => update({ loglevel: l }, true)}
-                  className="cursor-pointer absolute -translate-x-1/2 w-4 h-4 rounded-full border-2 transition-all duration-200 hover:scale-125 z-10"
+                  className="absolute z-10 h-4 w-4 -translate-x-1/2 cursor-pointer rounded-full border-2 transition-all duration-200 hover:scale-125"
                   style={{
                     left: `${pct}%`,
                     background: active ? color : 'var(--color-muted)',
@@ -191,7 +191,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
               )
             })}
           </div>
-          <div className="relative h-5 mt-1">
+          <div className="relative mt-1 h-5">
             {LOG_LEVELS.map((l, i) => {
               const pct = (i / (LOG_LEVELS.length - 1)) * 100
               return (
@@ -199,7 +199,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
                   key={l}
                   onClick={() => update({ loglevel: l }, true)}
                   className={cn(
-                    'absolute -translate-x-1/2 text-[10px] uppercase tracking-wide font-medium transition-colors whitespace-nowrap',
+                    'absolute -translate-x-1/2 text-[10px] font-medium tracking-wide whitespace-nowrap uppercase transition-colors',
                     i <= levelIndex ? 'text-foreground' : 'text-muted-foreground/40'
                   )}
                   style={{ left: `${pct}%` }}
@@ -213,10 +213,10 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="font-semibold text-base">DNS Log</h3>
+        <h3 className="text-base font-semibold">DNS Log</h3>
         <div className="flex items-center gap-3">
           <Switch checked={cfg.dnsLog} onCheckedChange={(v) => update({ dnsLog: v }, true)} />
-          <span className="text-sm text-muted-foreground">{cfg.dnsLog ? 'Включено' : 'Выключено'}</span>
+          <span className="text-muted-foreground text-sm">{cfg.dnsLog ? 'Включено' : 'Выключено'}</span>
         </div>
       </section>
     </div>
@@ -228,7 +228,7 @@ function PathButton({ label, active, onClick }: { label: string; active: boolean
     <button
       onClick={onClick}
       className={cn(
-        'cursor-pointer h-11 px-4 rounded-lg border text-sm font-medium transition-all truncate',
+        'h-11 cursor-pointer truncate rounded-lg border px-4 text-sm font-medium transition-all',
         active
           ? 'border-chart-2 bg-blue-500/10 text-blue-400'
           : 'border-border bg-card text-muted-foreground hover:border-chart-2 hover:text-foreground'

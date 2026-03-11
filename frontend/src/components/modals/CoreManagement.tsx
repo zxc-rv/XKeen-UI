@@ -1,8 +1,8 @@
-import { IconCpu } from '@tabler/icons-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
+import { IconCpu } from '@tabler/icons-react'
 import { useAppContext, useModalContext } from '../../lib/store'
 
 interface Props {
@@ -45,17 +45,17 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium">{core.label}</span>
                       {isActive && (
-                        <Badge variant="outline" className="text-xs border-none rounded-sm px-2 text-green-400 bg-green-500/10">
+                        <Badge variant="outline" className="rounded-sm border-none bg-green-500/10 px-2 text-xs text-green-400">
                           Активно
                         </Badge>
                       )}
                       {!isInstalled && (
-                        <Badge variant="outline" className="text-xs border-none rounded-sm px-2 text-red-400 bg-red-500/10">
+                        <Badge variant="outline" className="rounded-sm border-none bg-red-500/10 px-2 text-xs text-red-400">
                           Не установлено
                         </Badge>
                       )}
                     </div>
-                    {isInstalled && <p className="text-xs mt-0.5 text-muted-foreground">{version || 'Установлено'}</p>}
+                    {isInstalled && <p className="text-muted-foreground mt-0.5 text-xs">{version || 'Установлено'}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     {!isActive && isInstalled && (

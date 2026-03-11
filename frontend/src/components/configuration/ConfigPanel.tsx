@@ -1,19 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy } from 'react'
-import {
-  IconDeviceFloppy,
-  IconLink,
-  IconFileText,
-  IconSearch,
-  IconRefresh,
-  IconCode,
-  IconCheck,
-  IconX,
-  IconDotsFilled,
-  IconExternalLinkFilled,
-} from '@tabler/icons-react'
-import * as jsyaml from 'js-yaml'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,16 +10,31 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { cn, stripJsonComments } from '../../lib/utils'
-import { useAppContext, useConnectionsSync, useSettings, syncClashApiPort } from '../../lib/store'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  IconCheck,
+  IconCode,
+  IconDeviceFloppy,
+  IconDotsFilled,
+  IconExternalLinkFilled,
+  IconFileText,
+  IconLink,
+  IconRefresh,
+  IconSearch,
+  IconX,
+} from '@tabler/icons-react'
+import * as jsyaml from 'js-yaml'
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
-import type { CodeMirrorRef } from './CodeMirror'
+import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
+import { cn, stripJsonComments } from '../../lib/utils'
 import { ButtonGroup } from '../ui/button-group'
 import { Spinner } from '../ui/spinner'
+import type { CodeMirrorRef } from './CodeMirror'
 
 const GuiRouting = lazy(() => import('./xray/GuiRouting').then((m) => ({ default: m.GuiRouting })))
 const GuiLog = lazy(() => import('./xray/GuiLog').then((m) => ({ default: m.GuiLog })))
@@ -347,9 +347,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col rounded-xl border border-border bg-card overflow-hidden md:flex-1 md:min-h-0">
-        <div className={cn('px-3 sm:px-4 pt-3 sm:pt-4 flex flex-col md:flex-row md:items-start gap-2 shrink-0')}>
-          <div className="flex items-center gap-2 shrink-0">
+      <div className="border-border bg-card flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
+        <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
+          <div className="flex shrink-0 items-center gap-2">
             {isMihomo ? (
               <Tabs
                 value={activePanel}
@@ -359,20 +359,20 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 }}
                 className="flex-row!"
               >
-                <TabsList variant="line" className="mb-2 md:mb-0 p-0 gap-3">
-                  <TabsTrigger value="config" className="text-sm md:text-lg font-semibold p-0">
+                <TabsList variant="line" className="mb-2 gap-3 p-0 md:mb-0">
+                  <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
                     Конфигурация
                   </TabsTrigger>
-                  <TabsTrigger value="selectors" className="text-sm md:text-lg font-semibold p-0" disabled={!isRunning}>
+                  <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
                     Селекторы
                   </TabsTrigger>
-                  <TabsTrigger value="connections" className="text-sm md:text-lg font-semibold p-0" disabled={!isRunning}>
+                  <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
                     Соединения
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
             ) : (
-              <h2 className="text-lg font-semibold shrink-0 select-none">Конфигурация</h2>
+              <h2 className="shrink-0 text-lg font-semibold select-none">Конфигурация</h2>
             )}
           </div>
 
@@ -385,7 +385,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 onClick={() => updateAllProviders('rules', setUpdatingRuleProviders)}
               >
                 {updatingRuleProviders ? (
-                  <IconRefresh data-icon="inline-start" className="animate-spin direction-[reverse]" />
+                  <IconRefresh data-icon="inline-start" className="direction-[reverse] animate-spin" />
                 ) : (
                   <IconRefresh data-icon="inline-start" />
                 )}
@@ -398,7 +398,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 onClick={() => updateAllProviders('proxies', setUpdatingProxyProviders)}
               >
                 {updatingProxyProviders ? (
-                  <IconRefresh data-icon="inline-start" className="animate-spin direction-[reverse]" />
+                  <IconRefresh data-icon="inline-start" className="direction-[reverse] animate-spin" />
                 ) : (
                   <IconRefresh data-icon="inline-start" />
                 )}
@@ -409,7 +409,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
 
           {isMihomo && activePanel === 'selectors' && (
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Режим маршрутизации</span>
+              <span className="text-muted-foreground text-xs">Режим маршрутизации</span>
               <Select value={mode} onValueChange={(value) => changeMode(value as ClashMode)}>
                 <SelectTrigger className="w-30">
                   <SelectValue />
@@ -424,11 +424,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           )}
 
           {(!isMihomo || activePanel === 'config') && (
-            <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:ml-auto">
+            <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] md:ml-auto [&::-webkit-scrollbar]:hidden">
               {isConfigsLoading ? (
                 <div className="flex gap-2">
                   {[525, 310].map((w) => (
-                    <Skeleton key={w} className="h-9 rounded-lg p-0.75 gap-0.5" style={{ width: w }} />
+                    <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
                   ))}
                 </div>
               ) : (
@@ -448,7 +448,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                             .split('/')
                             .pop()
                             ?.replace(/\.[^.]+$/, '')}
-                          {config.isDirty && <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                          {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
                         </TabsTrigger>
                       ))}
                     </TabsList>
@@ -461,7 +461,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                             .split('/')
                             .pop()
                             ?.replace(/\.[^.]+$/, '')}
-                          {config.isDirty && <span className="absolute top-0.75 right-0.75 w-1.5 h-1.5 rounded-full bg-amber-400" />}
+                          {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
                         </TabsTrigger>
                       ))}
                     </TabsList>
@@ -472,7 +472,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           )}
         </div>
 
-        <div className="relative min-h-175! md:flex-1 md:min-h-0">
+        <div className="relative min-h-175! md:min-h-0 md:flex-1">
           {EditorReady && activeConfig && isRoutingGui && (
             <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
           )}
@@ -494,7 +494,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
           <div
             className={cn(
               'absolute inset-0',
-              isAnyGui && 'invisible opacity-0 pointer-events-none',
+              isAnyGui && 'pointer-events-none invisible opacity-0',
               isMihomo && activePanel !== 'config' && 'hidden'
             )}
           >
@@ -507,11 +507,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                 onSave={() => saveCurrentConfig()}
               />
             ) : (
-              <div className="absolute inset-4 rounded-xl overflow-hidden border border-border bg-input-background" />
+              <div className="border-border bg-input-background absolute inset-4 overflow-hidden rounded-xl border" />
             )}
             {(!EditorReady || isConfigsLoading) && (
-              <div className="absolute inset-4 flex items-center justify-center text-muted-foreground text-sm">
-                <Spinner className="size-5 mr-2" />
+              <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
+                <Spinner className="mr-2 size-5" />
                 {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}
               </div>
             )}
@@ -519,14 +519,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
         </div>
 
         {(!isMihomo || activePanel === 'config') && (
-          <div className="px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
-            <div className="text-xs min-w-0">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className="min-w-0 text-xs">
               {isConfigsLoading ? (
                 <Skeleton className="h-4 w-30" />
               ) : validationState && activeConfig && isJsonOrYaml ? (
                 <span
                   className={cn(
-                    'flex items-center gap-1.5 tracking-wide text-[13px]',
+                    'flex items-center gap-1.5 text-[13px] tracking-wide',
                     validationState.isValid ? 'text-green-400/90' : 'text-red-500'
                   )}
                 >
@@ -551,7 +551,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                       <Button
                         size="default"
                         disabled={!canApply}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-green-600 text-white hover:bg-green-700"
                         onClick={() => saveAndApply()}
                       >
                         <IconRefresh data-icon="inline-start" /> Применить
@@ -577,7 +577,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                           <IconDotsFilled />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-57 max-w-[calc(100vw-1rem)]">
+                      <DropdownMenuContent align="end" className="max-w-[calc(100vw-1rem)] min-w-57">
                         <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                         <DropdownMenuItem onClick={onOpenImport}>
                           <IconLink /> Добавить Прокси
@@ -603,7 +603,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                             <DropdownMenuSubTrigger>
                               <IconExternalLinkFilled /> Полезные ссылки
                             </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="min-w-55 max-w-[calc(100vw-1rem)]">
+                            <DropdownMenuSubContent className="max-w-[calc(100vw-1rem)] min-w-55">
                               {usefulLinks.map((link) => (
                                 <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
                                   <IconExternalLinkFilled /> {link.title}

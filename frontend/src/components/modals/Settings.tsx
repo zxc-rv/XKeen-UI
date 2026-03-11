@@ -1,8 +1,3 @@
-import { Fragment, memo, useCallback, useState } from 'react'
-import { IconAlertCircle, IconSettings, IconX } from '@tabler/icons-react'
-import { apiCall } from '../../lib/api'
-import { useAppContext, useModalContext } from '../../lib/store'
-import type { AppSettings } from '../../lib/types'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -13,6 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { IconAlertCircle, IconSettings, IconX } from '@tabler/icons-react'
+import { Fragment, memo, useCallback, useState } from 'react'
+import { apiCall } from '../../lib/api'
+import { useAppContext, useModalContext } from '../../lib/store'
+import type { AppSettings } from '../../lib/types'
 
 type BooleanSettingKey = {
   [K in keyof AppSettings]: AppSettings[K] extends boolean ? K : never
@@ -111,7 +111,7 @@ const ProxyRow = memo(function ProxyRow({
 
   return (
     <div className="flex items-center gap-2">
-      <div className="h-9 flex flex-1 min-w-0 items-center rounded-md border bg-input-background px-2.5">
+      <div className="bg-input-background flex h-9 min-w-0 flex-1 items-center rounded-md border px-2.5">
         <span className="w-full truncate text-[13px]">{proxy}</span>
       </div>
       <Button variant="destructive" className="shrink-0" onClick={onRemoveClick} aria-label={`Удалить прокси ${proxy}`}>
@@ -149,7 +149,7 @@ const ProxySettingsField = memo(function ProxySettingsField({
       </FieldContent>
 
       {githubProxies.length === 0 ? (
-        <FieldDescription className="text-[13px] py-1">Прокси не добавлены</FieldDescription>
+        <FieldDescription className="py-1 text-[13px]">Прокси не добавлены</FieldDescription>
       ) : (
         <div className="flex flex-col gap-3">
           {githubProxies.map((proxy, index) => (
@@ -264,26 +264,26 @@ export function SettingsModal() {
 
   return (
     <Dialog open={modals.showSettingsModal} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-xl! flex flex-col overflow-hidden h-[79dvh]! md:h-142!">
+      <DialogContent className="flex h-[79dvh]! max-w-xl! flex-col overflow-hidden md:h-142!">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <IconSettings size={24} className="text-chart-2" /> Настройки
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="gui" className="flex flex-col flex-1 overflow-hidden">
-          <TabsList variant="line" className="shrink-0 justify-start rounded-none border-b border-border px-0 gap-3">
+        <Tabs defaultValue="gui" className="flex flex-1 flex-col overflow-hidden">
+          <TabsList variant="line" className="border-border shrink-0 justify-start gap-3 rounded-none border-b px-0">
             <TabsTrigger value="gui">Режим GUI</TabsTrigger>
             <TabsTrigger value="updates">Обновления</TabsTrigger>
             <TabsTrigger value="logs">Журнал</TabsTrigger>
           </TabsList>
 
-          <ScrollArea className="flex-1 min-h-0">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="pr-2">
               <TabsContent value="gui">
-                <Alert className="my-2 p-2.75 border-amber-500/20 bg-[#2a1f0d] text-amber-400">
-                  <IconAlertCircle className="text-amber-400 size-4.5" />
-                  <AlertDescription className="text-xs tracking-wide text-amber-400 leading-4.25">
+                <Alert className="my-2 border-amber-500/20 bg-[#2a1f0d] p-2.75 text-amber-400">
+                  <IconAlertCircle className="size-4.5 text-amber-400" />
+                  <AlertDescription className="text-xs leading-4.25 tracking-wide text-amber-400">
                     Функция экспериментальная. Перед включением сделайте бэкап конфигураций. Несовместимо с комментариями.
                   </AlertDescription>
                 </Alert>

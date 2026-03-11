@@ -1,14 +1,14 @@
-import { useCallback, memo, useMemo } from 'react'
-import { create } from 'zustand'
-import { useShallow } from 'zustand/react/shallow'
-import { IconLoader2, IconBoltFilled, IconCircleArrowRightFilled, IconPlugX } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
+import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { Spinner } from '@/components/ui/spinner'
-import { getConnections, useProxiesStore, fetchClashProxies } from '../../../lib/store'
+import { IconBoltFilled, IconCircleArrowRightFilled, IconLoader2, IconPlugX } from '@tabler/icons-react'
+import { memo, useCallback, useMemo } from 'react'
+import { create } from 'zustand'
+import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
-import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { fetchClashProxies, getConnections, useProxiesStore } from '../../../lib/store'
 
 interface ProxyHistory {
   time: string
@@ -111,7 +111,7 @@ const ProxyCard = memo(function ProxyCard({
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 px-3 py-2.5 rounded-sm border cursor-pointer transition-all text-sm',
+        'flex cursor-pointer flex-col gap-2 rounded-sm border px-3 py-2.5 text-sm transition-all',
         isFixed
           ? 'border-purple-400 bg-linear-to-b from-purple-500/25 to-purple-500/15'
           : isActive
@@ -120,22 +120,22 @@ const ProxyCard = memo(function ProxyCard({
       )}
       onClick={() => onSelect(selectorName, proxyName)}
     >
-      <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex min-w-0 items-center gap-1.5">
         {proxy.icon && (
           <img
             src={proxy.icon}
             alt=""
-            className="size-4 shrink-0 object-contain rounded-sm"
+            className="size-4 shrink-0 rounded-sm object-contain"
             onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
           />
         )}
         {chain.length > 0 ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="text-[13px] font-medium truncate">{proxyName}</span>
+              <span className="truncate text-[13px] font-medium">{proxyName}</span>
             </TooltipTrigger>
             <TooltipContent side="top" className="p-2">
-              <div className="flex items-center gap-1 flex-wrap">
+              <div className="flex flex-wrap items-center gap-1">
                 {chain.map((item, i) => (
                   <div key={item.name} className="flex items-center gap-1">
                     {i > 0 && <IconCircleArrowRightFilled size={10} className="text-muted-foreground shrink-0" />}
@@ -143,7 +143,7 @@ const ProxyCard = memo(function ProxyCard({
                       <img
                         src={item.icon}
                         alt=""
-                        className="size-3.5 shrink-0 object-contain rounded-sm"
+                        className="size-3.5 shrink-0 rounded-sm object-contain"
                         onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
                       />
                     )}
@@ -154,7 +154,7 @@ const ProxyCard = memo(function ProxyCard({
             </TooltipContent>
           </Tooltip>
         ) : (
-          <span className="text-[13px] font-medium truncate">{proxyName}</span>
+          <span className="truncate text-[13px] font-medium">{proxyName}</span>
         )}
       </div>
 
@@ -168,7 +168,7 @@ const ProxyCard = memo(function ProxyCard({
             <TooltipTrigger asChild>
               <span
                 className={cn(
-                  'text-xs tabular-nums shrink-0 font-medium transition-opacity cursor-pointer',
+                  'shrink-0 cursor-pointer text-xs font-medium tabular-nums transition-opacity',
                   delayColor(delay),
                   isTestingSingle && 'opacity-40'
                 )}
@@ -182,13 +182,13 @@ const ProxyCard = memo(function ProxyCard({
             </TooltipTrigger>
             {proxy.history.length > 0 && (
               <TooltipContent side="top" className="p-2">
-                <div className="flex flex-col gap-1 min-w-35">
+                <div className="flex min-w-35 flex-col gap-1">
                   {proxy.history.map((entry, i) => (
                     <div key={i} className="flex items-center justify-between gap-3 text-[13px]">
                       <span className="tabular-nums">
                         {new Date(entry.time).toLocaleString('sv-SE', { hour12: false }).replace('T', ' ')}
                       </span>
-                      <span className={cn('tabular-nums font-medium', delayColor(entry.delay))}>
+                      <span className={cn('font-medium tabular-nums', delayColor(entry.delay))}>
                         {entry.delay ? `${entry.delay}ms` : '—'}
                       </span>
                     </div>
@@ -228,7 +228,7 @@ const SelectorNowRow = memo(function SelectorNowRow({ selectorName }: { selector
   if (chain.length === 0) return null
 
   return (
-    <div className="flex items-center gap-1 mt-1.5 mb-1 flex-wrap">
+    <div className="mt-1.5 mb-1 flex flex-wrap items-center gap-1">
       {chain.map((item) => (
         <div key={item.name} className="flex items-center gap-1">
           <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
@@ -236,7 +236,7 @@ const SelectorNowRow = memo(function SelectorNowRow({ selectorName }: { selector
             <img
               src={item.icon}
               alt=""
-              className="size-4 shrink-0 object-contain rounded-sm"
+              className="size-4 shrink-0 rounded-sm object-contain"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
           )}
@@ -267,24 +267,24 @@ const SelectorRow = memo(function SelectorRow({
   const allProxies = selector.all ?? []
 
   return (
-    <div className="rounded-xl border border-border bg-input-background p-4">
-      <div className="flex items-center justify-between mb-2.5">
-        <div className="flex flex-col min-w-0">
+    <div className="border-border bg-input-background rounded-xl border p-4">
+      <div className="mb-2.5 flex items-center justify-between">
+        <div className="flex min-w-0 flex-col">
           <div className="flex items-center gap-2">
             {selector.icon && (
               <img
                 src={selector.icon}
                 alt=""
-                className="size-6 shrink-0 object-contain rounded-sm"
+                className="size-6 shrink-0 rounded-sm object-contain"
                 onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
               />
             )}
-            <span className="font-medium text-[15px] truncate">{selectorName}</span>
+            <span className="truncate text-[15px] font-medium">{selectorName}</span>
           </div>
           {selector.now && <SelectorNowRow selectorName={selectorName} />}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           <span className="text-xs text-gray-400">
             {selector.type} ({allProxies.length})
           </span>
@@ -294,7 +294,7 @@ const SelectorRow = memo(function SelectorRow({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {allProxies.map((proxyName) => (
           <ProxyCard key={proxyName} proxyName={proxyName} selectorName={selectorName} onSelect={onSelect} onTestSingle={onTestSingle} />
         ))}
@@ -414,8 +414,8 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
 
   if (loading) {
     return (
-      <div className="absolute inset-4 flex items-center justify-center text-muted-foreground text-sm">
-        <Spinner className="size-5 mr-2" /> Загрузка...
+      <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
+        <Spinner className="mr-2 size-5" /> Загрузка...
       </div>
     )
   }
@@ -423,7 +423,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
   if (error || selectorNames.length === 0) {
     return (
       <div className="absolute inset-4">
-        <Empty className="absolute inset-0 gap-3 text-muted-foreground rounded-xl border border-dashed border-border">
+        <Empty className="text-muted-foreground border-border absolute inset-0 gap-3 rounded-xl border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <IconPlugX />
@@ -444,7 +444,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="absolute inset-4 overflow-y-auto flex flex-col gap-4">
+      <div className="absolute inset-4 flex flex-col gap-4 overflow-y-auto">
         {selectorNames.map((name) => (
           <SelectorRow key={name} selectorName={name} onTestAll={testAll} onSelect={selectProxy} onTestSingle={testSingle} />
         ))}

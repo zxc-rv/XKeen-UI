@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { IconLink, IconCopy, IconCheck, IconX, IconPlus } from '@tabler/icons-react'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { IconCheck, IconCopy, IconLink, IconPlus, IconX } from '@tabler/icons-react'
+import { useState } from 'react'
 import { useAppContext, useModalContext } from '../../lib/store'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '../ui/input-group'
 
@@ -144,7 +144,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
   return (
     <TooltipProvider delayDuration={300}>
       <Dialog open={modals.showImportModal} onOpenChange={(open) => !open && close()}>
-        <DialogContent className="flex flex-col max-h-[90dvh] w-auto! min-w-[min(90vw,480px)]! max-w-[min(90vw,900px)]! overflow-hidden">
+        <DialogContent className="flex max-h-[90dvh] w-auto! max-w-[min(90vw,900px)]! min-w-[min(90vw,480px)]! flex-col overflow-hidden">
           {/* Шапка модалки*/}
           <DialogHeader className="shrink-0 pb-1">
             <DialogTitle className="flex items-center gap-2 pb-2">
@@ -154,13 +154,13 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
           </DialogHeader>
 
           {/* Основная контентная часть */}
-          <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
             {/* Блок с результатом */}
             {result && (
-              <div className="flex flex-col flex-1 min-h-0 rounded-lg border border-border bg-card overflow-hidden">
+              <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
                 {/* Хедер результата */}
-                <div className="shrink-0 flex items-center justify-between w-full px-3 py-1 border-b border-border bg-muted/30">
-                  <Badge className="text-[10px] tracking-wider px-2 pb-2.5 pt-2.25 bg-blue-500/10! text-blue-400">{result.protocol}</Badge>
+                <div className="border-border bg-muted/30 flex w-full shrink-0 items-center justify-between border-b px-3 py-1">
+                  <Badge className="bg-blue-500/10! px-2 pt-2.25 pb-2.5 text-[10px] tracking-wider text-blue-400">{result.protocol}</Badge>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="ghost" size="icon-sm" onClick={copy}>
@@ -171,9 +171,9 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                   </Tooltip>
                 </div>
 
-                <div className="flex-1 overflow-auto min-h-0 bg-input-background">
+                <div className="bg-input-background min-h-0 flex-1 overflow-auto">
                   <pre
-                    className="p-3 text-[13px] font-mono tracking-tight m-0"
+                    className="m-0 p-3 font-mono text-[13px] tracking-tight"
                     dangerouslySetInnerHTML={{
                       __html: highlightCode(result.content),
                     }}
@@ -181,11 +181,11 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                 </div>
 
                 {/* Футер результата с кнопками добавления */}
-                <div className="shrink-0 flex gap-2 w-full p-2 border-t border-border bg-muted/10">
-                  <Button variant="outline" size="sm" className="flex-1 text-xs gap-1.5" onClick={() => addToConfig('start')}>
+                <div className="border-border bg-muted/10 flex w-full shrink-0 gap-2 border-t p-2">
+                  <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs" onClick={() => addToConfig('start')}>
                     <IconPlus /> В начало
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1 text-xs gap-1.5" onClick={() => addToConfig('end')}>
+                  <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs" onClick={() => addToConfig('end')}>
                     <IconPlus /> В конец
                   </Button>
                 </div>
@@ -193,7 +193,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
             )}
 
             {/* Блок ввода*/}
-            <div className="shrink-0 flex flex-col gap-3 mt-auto pt-1">
+            <div className="mt-auto flex shrink-0 flex-col gap-3 pt-1">
               <InputGroup>
                 <InputGroupInput
                   value={uri}

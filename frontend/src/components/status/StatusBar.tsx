@@ -1,14 +1,14 @@
-import { useEffect } from 'react'
-import { IconRefresh, IconSettings, IconCpu, IconPlayerStopFilled, IconPlayerPlayFilled, IconBox } from '@tabler/icons-react'
+import { AuroraText } from '@/components/ui/aurora-text'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { ShineBorder } from '@/components/ui/shine-border'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
-import { cn } from '../../lib/utils'
-import { useAppContext, syncClashApiPort } from '../../lib/store'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { IconBox, IconCpu, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
+import { useEffect } from 'react'
 import { apiCall, capitalize } from '../../lib/api'
-import { AuroraText } from '@/components/ui/aurora-text'
-import { ShineBorder } from '@/components/ui/shine-border'
+import { syncClashApiPort, useAppContext } from '../../lib/store'
+import { cn } from '../../lib/utils'
 
 export function StatusBar({
   onOpenCoreManage,
@@ -82,8 +82,8 @@ export function StatusBar({
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 sm:p-4 rounded-xl border border-border bg-card shrink-0 z-40 relative">
-        <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 order-2 md:order-1">
+      <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
+        <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
           <div className={badgeClasses} style={badgeBg}>
             {shineColors && <ShineBorder duration={8} borderWidth={2} shineColor={shineColors} />}
             {statusLabel}
@@ -100,7 +100,7 @@ export function StatusBar({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="outline" size="icon-sm" onClick={restartService} disabled={isPending}>
-                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconRefresh />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Перезапустить</TooltipContent>
@@ -112,11 +112,11 @@ export function StatusBar({
                       <Button
                         variant="outline"
                         size="icon-sm"
-                        className="text-green-500 hover:text-green-400 hover:border-green-500/50"
+                        className="text-green-500 hover:border-green-500/50 hover:text-green-400"
                         onClick={startService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerPlayFilled />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Запустить</TooltipContent>
@@ -132,7 +132,7 @@ export function StatusBar({
                         onClick={stopService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerStopFilled />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerStopFilled />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Остановить</TooltipContent>
@@ -143,13 +143,13 @@ export function StatusBar({
           </div>
         </div>
 
-        <div className="flex justify-center items-center order-1 md:order-2 md:absolute md:left-1/2 md:-translate-x-1/2">
-          <AuroraText className="text-[28px] font-semibold animate-dark-glow" colors={['#00D3F2', '#2B7FFF', '#155DFC']}>
+        <div className="order-1 flex items-center justify-center md:absolute md:left-1/2 md:order-2 md:-translate-x-1/2">
+          <AuroraText className="animate-dark-glow text-[28px] font-semibold" colors={['#00D3F2', '#2B7FFF', '#155DFC']}>
             XKeen UI
           </AuroraText>
         </div>
 
-        <div className="flex items-center justify-center md:justify-end gap-1.5 order-3 ml-auto w-full md:w-auto">
+        <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
           {isConfigsLoading ? (
             <Skeleton className="h-9 w-32 rounded-md" />
           ) : (
@@ -159,7 +159,7 @@ export function StatusBar({
                   <IconCpu data-icon="inline-start" className="size-4.5" />
                   <span className="text-[13px]">{capitalize(currentCore)}</span>
                   {coreVersions[currentCore as keyof typeof coreVersions] && (
-                    <span className="text-xs mt-0.5 text-muted-foreground/60">
+                    <span className="text-muted-foreground/60 mt-0.5 text-xs">
                       {coreVersions[currentCore as keyof typeof coreVersions]}
                     </span>
                   )}
@@ -178,8 +178,8 @@ export function StatusBar({
                     variant="outline"
                     onClick={() => onOpenUpdate('self')}
                     className={cn(
-                      'relative text-xs tracking-wider overflow-hidden',
-                      isOutdatedUI ? 'text-cyan-300 hover:text-cyan-300 border-none!' : ''
+                      'relative overflow-hidden text-xs tracking-wider',
+                      isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
                     )}
                   >
                     {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}

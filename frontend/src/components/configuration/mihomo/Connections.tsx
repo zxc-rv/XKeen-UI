@@ -1,23 +1,23 @@
-import { useState, memo, useCallback } from 'react'
-import { create } from 'zustand'
-import {
-  IconX,
-  IconTrash,
-  IconWifi,
-  IconArrowUp,
-  IconArrowDown,
-  IconArrowsSort,
-  IconCircleArrowRightFilled,
-  IconFilter,
-} from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useWsConnected, subscribeConnections, useProxiesStore, useNowStore } from '../../../lib/store'
-import { clashFetch } from '../../../lib/api'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  IconArrowDown,
+  IconArrowsSort,
+  IconArrowUp,
+  IconCircleArrowRightFilled,
+  IconFilter,
+  IconTrash,
+  IconWifi,
+  IconX,
+} from '@tabler/icons-react'
+import { memo, useCallback, useState } from 'react'
+import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
+import { clashFetch } from '../../../lib/api'
+import { subscribeConnections, useNowStore, useProxiesStore, useWsConnected } from '../../../lib/store'
 
 interface ConnectionMetadata {
   network: string
@@ -122,8 +122,8 @@ function SortIcon({ column, sortColumn, sortDirection }: { column: SortColumn; s
 function MetaRow({ label, value }: { label: string; value: string | number | null | undefined }) {
   if (!value && value !== 0) return null
   return (
-    <div className="flex gap-2 py-1.5 border-b border-border last:border-0">
-      <span className="text-muted-foreground shrink-0 w-40 text-xs">{label}</span>
+    <div className="border-border flex gap-2 border-b py-1.5 last:border-0">
+      <span className="text-muted-foreground w-40 shrink-0 text-xs">{label}</span>
       <span className="text-xs break-all">{String(value)}</span>
     </div>
   )
@@ -136,7 +136,7 @@ function ProxyIcon({ name, className }: { name: string; className?: string }) {
     <img
       src={icon}
       alt=""
-      className={className ?? 'size-5 shrink-0 object-contain mr-1'}
+      className={className ?? 'mr-1 size-5 shrink-0 object-contain'}
       onError={(e) => {
         ;(e.target as HTMLImageElement).style.display = 'none'
       }}
@@ -205,13 +205,13 @@ const ConnectionRow = memo(function ConnectionRow({
   const last = reversedChains.at(-1)
 
   return (
-    <TableRow className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => onSelect(conn)}>
-      <TableCell className="text-[13px] max-w-40 pl-3">
+    <TableRow className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => onSelect(conn)}>
+      <TableCell className="max-w-40 pl-3 text-[13px]">
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex items-center gap-1 min-w-0">
+            <div className="flex min-w-0 items-center gap-1">
               {first && (
-                <div className="flex items-center gap-1 min-w-0 shrink truncate">
+                <div className="flex min-w-0 shrink items-center gap-1 truncate">
                   <ProxyIcon name={first} />
                   <span className="truncate">{first}</span>
                 </div>
@@ -219,7 +219,7 @@ const ConnectionRow = memo(function ConnectionRow({
               {reversedChains.length > 1 && (
                 <>
                   <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
-                  <div className="flex items-center gap-1 min-w-0 shrink truncate">
+                  <div className="flex min-w-0 shrink items-center gap-1 truncate">
                     <ProxyIcon name={last!} />
                     <span className="truncate">{last}</span>
                   </div>
@@ -230,10 +230,10 @@ const ConnectionRow = memo(function ConnectionRow({
           <ChainTooltip chains={reversedChains} />
         </Tooltip>
       </TableCell>
-      <TableCell className="text-[13px] max-w-48">
+      <TableCell className="max-w-48 text-[13px]">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex items-center min-w-0 overflow-hidden">
+            <span className="flex min-w-0 items-center overflow-hidden">
               <span className="truncate">{host}</span>
               {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
             </span>
@@ -241,7 +241,7 @@ const ConnectionRow = memo(function ConnectionRow({
           <TooltipContent side="top" className="text-[13px]">{`${host}:${conn.metadata.destinationPort}`}</TooltipContent>
         </Tooltip>
       </TableCell>
-      <TableCell className="text-[13px] text-muted-foreground">
+      <TableCell className="text-muted-foreground text-[13px]">
         <Tooltip>
           <TooltipTrigger asChild>
             <span>
@@ -252,17 +252,17 @@ const ConnectionRow = memo(function ConnectionRow({
           <TooltipContent side="top" className="text-[13px]">{`${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`}</TooltipContent>
         </Tooltip>
       </TableCell>
-      <TableCell className="text-[13px] text-muted-foreground">
+      <TableCell className="text-muted-foreground text-[13px]">
         <TrafficCell connId={connId} />
       </TableCell>
-      <TableCell className="text-[13px] text-muted-foreground tabular-nums">
+      <TableCell className="text-muted-foreground text-[13px] tabular-nums">
         <TimeAgoCell isoString={conn.start} />
       </TableCell>
       <TableCell>
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 text-muted-foreground hover:text-red-400"
+          className="text-muted-foreground h-6 w-6 hover:text-red-400"
           onClick={(e) => onClose(conn.id, e)}
         >
           <IconX size={13} />
@@ -279,12 +279,12 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn
 
   return (
     <>
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Цепочка</p>
+      <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">Цепочка</p>
       <div className="mb-4 flex flex-wrap items-center gap-1">
         {reversedChains.map((chain, i) => (
           <span key={i} className="flex items-center gap-1">
             {i > 0 && <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />}
-            <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-muted text-foreground">
+            <span className="bg-muted text-foreground flex items-center gap-1 rounded-md px-2 py-0.5 text-xs">
               <ProxyIcon name={chain} className="size-3.5 shrink-0 object-contain" />
               {chain || '—'}
             </span>
@@ -292,7 +292,7 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn
         ))}
       </div>
 
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Правило</p>
+      <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">Правило</p>
       <div className="mb-4 text-xs">
         <span className="text-blue-400">{conn.rule}</span>
         {conn.rulePayload && <span className="text-muted-foreground ml-1">{conn.rulePayload}</span>}
@@ -300,8 +300,8 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn
 
       <ConnectionDialogTraffic conn={conn} />
 
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Метаданные</p>
-      <div className="rounded-lg border border-border px-3">
+      <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">Метаданные</p>
+      <div className="border-border rounded-lg border px-3">
         <MetaRow label="Протокол" value={conn.metadata.network?.toUpperCase()} />
         <MetaRow label="Тип" value={conn.metadata.type} />
         <MetaRow label="Хост" value={conn.metadata.host} />
@@ -323,7 +323,7 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn
 function ConnectionDialogTraffic({ conn }: { conn: Connection }) {
   return (
     <>
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Трафик</p>
+      <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">Трафик</p>
       <div className="mb-4 flex gap-4 text-xs">
         <span>↑ {formatBytes(conn.upload)}</span>
         <span>↓ {formatBytes(conn.download)}</span>
@@ -334,7 +334,7 @@ function ConnectionDialogTraffic({ conn }: { conn: Connection }) {
 
 const ConnectionDialogTitle = memo(function ConnectionDialogTitle({ conn }: { conn: Connection }) {
   const title = conn.metadata.host || conn.metadata.destinationIP || 'Соединение'
-  return <DialogTitle className="text-base truncate pr-8">{title}</DialogTitle>
+  return <DialogTitle className="truncate pr-8 text-base">{title}</DialogTitle>
 })
 
 const ConnectionDialog = memo(function ConnectionDialog({
@@ -354,10 +354,10 @@ const ConnectionDialog = memo(function ConnectionDialog({
 
   return (
     <Dialog open={!!connId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg! overflow-hidden flex flex-col max-h-[80dvh]!">
+      <DialogContent className="flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden">
         <DialogHeader className="shrink-0">{conn && <ConnectionDialogTitle conn={conn} />}</DialogHeader>
 
-        <div className="overflow-y-auto flex-1 min-h-0">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {conn && (
             <>
               <ConnectionDialogMeta conn={conn} />
@@ -388,7 +388,7 @@ const ConnectionsStatus = memo(function ConnectionsStatus() {
   const connected = useWsConnected()
   const totalCount = useConnectionsStore((s) => s.map.size)
   return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+    <div className="text-muted-foreground flex shrink-0 items-center gap-2 text-sm">
       {connected ? <IconWifi size={24} className="text-green-400" /> : <IconWifi size={24} className="text-red-400" />}
       <span className="tabular-nums">{totalCount}</span>
     </div>
@@ -418,7 +418,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onCloseAll: () => void
 }) {
   return (
-    <div className="flex items-center gap-2 p-3 border-b border-border shrink-0">
+    <div className="border-border flex shrink-0 items-center gap-2 border-b p-3">
       <ConnectionsStatus />
 
       <InputGroup>
@@ -537,7 +537,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
     <TableBody>
       {filteredIds.length === 0 ? (
         <TableRow>
-          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+          <TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
             {!connected ? 'Подключение...' : filter ? 'Нет совпадений' : 'Нет активных соединений'}
           </TableCell>
         </TableRow>
@@ -607,7 +607,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="absolute inset-4 rounded-xl overflow-hidden border border-border bg-input-background flex flex-col">
+      <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
         <ConnectionsHeader filter={filter} onFilterChange={setFilter} onClearFilter={clearFilter} onCloseAll={closeAll} />
 
         <div className="flex-1 overflow-auto">

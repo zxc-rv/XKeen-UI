@@ -1,16 +1,16 @@
-import { useState, useEffect } from 'react'
-import { IconSearch, IconServer, IconWorld, IconX } from '@tabler/icons-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '../../lib/utils'
-import { useAppContext, useModalContext } from '../../lib/store'
 import { Spinner } from '@/components/ui/spinner'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { IconSearch, IconServer, IconWorld, IconX } from '@tabler/icons-react'
+import { useEffect, useState } from 'react'
+import { useAppContext, useModalContext } from '../../lib/store'
+import { cn } from '../../lib/utils'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 type GeoType = 'domain' | 'ip'
@@ -136,16 +136,16 @@ export function GeoScanModal() {
         </DialogHeader>
 
         <Tabs value={geoType} onValueChange={(value) => switchType(value as GeoType)} className="shrink-0">
-          <TabsList className="w-full! bg-transparent border border-border overflow-hidden rounded-lg p-0 h-full!">
+          <TabsList className="border-border h-full! w-full! overflow-hidden rounded-lg border bg-transparent p-0">
             <TabsTrigger
               value="domain"
-              className="h-full flex-1 gap-1.5 rounded-none py-2 border-none! bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
+              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
             >
               <IconWorld size={16} /> GeoSite
             </TabsTrigger>
             <TabsTrigger
               value="ip"
-              className="h-full flex-1 gap-1.5 rounded-none py-2 border-none! bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary!"
+              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
             >
               <IconServer size={16} /> GeoIP
             </TabsTrigger>
@@ -153,22 +153,22 @@ export function GeoScanModal() {
         </Tabs>
 
         {/* Files header */}
-        <div className="flex items-center justify-between shrink-0 -my-2">
+        <div className="-my-2 flex shrink-0 items-center justify-between">
           <div className="flex items-center gap-2 pl-1">
             <Checkbox
               id="select-all"
               checked={allSelected}
               onCheckedChange={() => setSelectedFiles(allSelected ? [] : [...currentFiles])}
             />
-            <Label htmlFor="select-all" className="text-xs text-muted-foreground cursor-pointer tracking-wide">
+            <Label htmlFor="select-all" className="text-muted-foreground cursor-pointer text-xs tracking-wide">
               Все файлы
             </Label>
           </div>
           <Badge
             variant="outline"
             className={cn(
-              'rounded-full w-6 h-6 p-0 text-xs',
-              geoType === 'domain' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+              'h-6 w-6 rounded-full p-0 text-xs',
+              geoType === 'domain' ? 'border-red-500/20 bg-red-500/10 text-red-400' : 'border-blue-500/20 bg-blue-500/10 text-blue-400'
             )}
           >
             {currentFiles.length}
@@ -176,32 +176,32 @@ export function GeoScanModal() {
         </div>
 
         {/* File list — fixed height, scrollable */}
-        <ScrollArea className="min-h-62.5 max-h-62.5 rounded-lg border border-border bg-input-background overflow-y-auto relative">
+        <ScrollArea className="border-border bg-input-background relative max-h-62.5 min-h-62.5 overflow-y-auto rounded-lg border">
           {loading ? (
-            <div className="p-1.5 space-y-1">
+            <div className="space-y-1 p-1.5">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} className="h-9 rounded-md" />
               ))}
             </div>
           ) : currentFiles.length === 0 ? (
             <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-xs text-muted-foreground tracking-wide">Геофайлы не найдены</p>
+              <p className="text-muted-foreground text-xs tracking-wide">Геофайлы не найдены</p>
             </div>
           ) : (
-            <div className="rounded-lg p-1.5 space-y-1">
+            <div className="space-y-1 rounded-lg p-1.5">
               {currentFiles.map((file) => {
                 const status = fileStatuses[file]
                 const isChecked = selectedFiles.includes(file)
                 return (
                   <div key={file} className={cn('rounded-md transition-colors', status?.status === 'found' && 'bg-card')}>
-                    <div className="flex items-center gap-3 px-3 h-9 py-1.5">
+                    <div className="flex h-9 items-center gap-3 px-3 py-1.5">
                       <Checkbox id={`file-${file}`} checked={isChecked} onCheckedChange={() => toggleFile(file)} />
-                      <Label htmlFor={`file-${file}`} className="flex-1 text-xs font-normal tracking-wide cursor-pointer truncate">
+                      <Label htmlFor={`file-${file}`} className="flex-1 cursor-pointer truncate text-xs font-normal tracking-wide">
                         {file}
                       </Label>
                       {status && status.status !== 'idle' && (
                         <span
-                          className={cn('text-xs shrink-0 font-mono', {
+                          className={cn('shrink-0 font-mono text-xs', {
                             'text-muted-foreground animate-pulse': status.status === 'scanning',
                             'text-green-500': status.status === 'found',
                             'text-destructive/60': status.status === 'not-found',
@@ -216,7 +216,7 @@ export function GeoScanModal() {
                       )}
                     </div>
                     {status?.categories.length > 0 && (
-                      <div className="px-3 pb-2 flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-1.5 px-3 pb-2">
                         {status.categories.map((cat) => (
                           <Badge
                             key={cat}
@@ -225,7 +225,7 @@ export function GeoScanModal() {
                               navigator.clipboard.writeText(`"ext:${file}:${cat}"`).then(() => showToast('Категория скопирована'))
                             }
                             className={cn(
-                              'cursor-pointer h-6 p-2 pt-2.5 text-[11px] tracking-wide rounded-sm border-none transition-colors',
+                              'h-6 cursor-pointer rounded-sm border-none p-2 pt-2.5 text-[11px] tracking-wide transition-colors',
                               geoType === 'domain'
                                 ? 'bg-red-400/15 text-red-400 hover:bg-red-400/25'
                                 : 'bg-blue-400/15 text-blue-400 hover:bg-blue-400/25'

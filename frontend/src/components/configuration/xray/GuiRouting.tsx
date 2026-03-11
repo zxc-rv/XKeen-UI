@@ -1,13 +1,13 @@
-import { useState, useRef, useEffect, useCallback, forwardRef, memo } from 'react'
-import { IconPlus, IconX, IconGripVertical, IconPencil, IconCheck } from '@tabler/icons-react'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn, stripJsonComments } from '../../../lib/utils'
-import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
+import { IconCheck, IconGripVertical, IconPencil, IconPlus, IconX } from '@tabler/icons-react'
+import { forwardRef, memo, useCallback, useEffect, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
-import type { CodeMirrorRef } from '../CodeMirror'
+import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
+import { cn, stripJsonComments } from '../../../lib/utils'
+import type { CodeMirrorRef } from '../CodeMirror'
 
 const RULE_FIELDS = {
   domain: {
@@ -285,7 +285,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   )
 
   return (
-    <div ref={scrollRef} className="absolute inset-4 overflow-y-auto flex flex-col gap-2 [scrollbar-width:thin]">
+    <div ref={scrollRef} className="absolute inset-4 flex flex-col gap-2 overflow-y-auto [scrollbar-width:thin]">
       <div className="flex flex-col gap-2">
         {rules.map((rule, index) => (
           <RuleCard
@@ -314,7 +314,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
             50
           )
         }}
-        className="flex items-center cursor-pointer justify-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#60a5fa] transition-colors border-2 border-dashed border-ring/60 hover:border-chart-2 hover:border-solid rounded-xl px-3 py-2.5 w-full mt-1"
+        className="text-muted-foreground border-ring/60 hover:border-chart-2 mt-1 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-2.5 text-sm font-medium transition-colors hover:border-solid hover:text-[#60a5fa]"
       >
         <IconPlus size={17} /> Добавить правило
       </button>
@@ -440,15 +440,15 @@ const RuleCard = memo(
         ref={ref}
         style={{ background: 'var(--color-input-background)' }}
         className={cn(
-          'rounded-xl border p-3 flex flex-col gap-2 transition-all duration-150 select-none',
-          isDragging ? 'border-[#60a5fa] scale-[0.99] opacity-80' : 'border-border'
+          'flex flex-col gap-2 rounded-xl border p-3 transition-all duration-150 select-none',
+          isDragging ? 'scale-[0.99] border-[#60a5fa] opacity-80' : 'border-border'
         )}
       >
         {/* Header */}
         <div className="flex items-center gap-2">
           <div
             className={cn(
-              'p-1 rounded transition-colors text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none',
+              'text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none rounded p-1 transition-colors',
               isDragging ? 'cursor-grabbing' : 'cursor-grab'
             )}
             onMouseDown={(e) => onDragStart(e, index)}
@@ -456,11 +456,11 @@ const RuleCard = memo(
           >
             <IconGripVertical size={19} />
           </div>
-          <Badge variant="outline" className="rounded-md w-6 h-6 p-3.5 px-4 bg-blue-500/10 text-blue-400 border-blue-500/20">
+          <Badge variant="outline" className="h-6 w-6 rounded-md border-blue-500/20 bg-blue-500/10 p-3.5 px-4 text-blue-400">
             #{index + 1}
           </Badge>
           {editingName ? (
-            <div className="flex items-center gap-1 flex-1 min-w-0">
+            <div className="flex min-w-0 flex-1 items-center gap-1">
               <input
                 value={nameValue}
                 onChange={(e) => setNameValue(e.target.value)}
@@ -473,7 +473,7 @@ const RuleCard = memo(
                   }
                 }}
                 autoFocus
-                className="h-6 text-xs bg-transparent border-b border-border outline-none flex-1 min-w-0"
+                className="border-border h-6 min-w-0 flex-1 border-b bg-transparent text-xs outline-none"
                 placeholder="Название правила"
               />
               <button onClick={saveName} className="text-muted-foreground hover:text-foreground shrink-0">
@@ -481,8 +481,8 @@ const RuleCard = memo(
               </button>
             </div>
           ) : (
-            <div className="flex items-center pl-1 gap-2 flex-1 min-w-0">
-              {rule.ruleTag && <span className="text-sm truncate">{rule.ruleTag}</span>}
+            <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
+              {rule.ruleTag && <span className="truncate text-sm">{rule.ruleTag}</span>}
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -491,7 +491,7 @@ const RuleCard = memo(
                         setEditingName(true)
                         setNameValue(rule.ruleTag ?? '')
                       }}
-                      className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0"
+                      className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 transition-colors"
                     >
                       <IconPencil size={16} />
                     </button>
@@ -503,7 +503,7 @@ const RuleCard = memo(
           )}
           <button
             onClick={() => onDelete(index)}
-            className="ml-auto text-ring hover:text-destructive hover:bg-destructive/20 rounded-md transition-colors p-1 shrink-0"
+            className="text-ring hover:text-destructive hover:bg-destructive/20 ml-auto shrink-0 rounded-md p-1 transition-colors"
           >
             <IconX size={23} className="cursor-pointer" />
           </button>
@@ -524,22 +524,22 @@ const RuleCard = memo(
               >
                 <SelectTrigger
                   popper
-                  className="w-fit shrink-0 flex items-center justify-between gap-2 h-9 px-3 rounded-md border border-border bg-input-background hover:bg-muted text-[13px] font-medium transition-colors focus:ring-0 [&>svg]:opacity-50"
+                  className="border-border bg-input-background hover:bg-muted flex h-9 w-fit shrink-0 items-center justify-between gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors focus:ring-0 [&>svg]:opacity-50"
                 >
                   <SelectValue placeholder={fieldName} />
                 </SelectTrigger>
                 <SelectContent position="popper" align="start">
                   {otherFields.map((f) => (
-                    <SelectItem key={f} value={f} className="text-[13px] cursor-pointer">
+                    <SelectItem key={f} value={f} className="cursor-pointer text-[13px]">
                       {f}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 {cfg?.type === 'buttons' || fieldName === 'inboundTag' ? (
-                  <div className="cursor-pointer flex flex-wrap gap-1 items-center min-h-9 px-1 py-1 pr-1 rounded-md border border-border bg-input-background">
+                  <div className="border-border bg-input-background flex min-h-9 cursor-pointer flex-wrap items-center gap-1 rounded-md border px-1 py-1 pr-1">
                     {((fieldName === 'inboundTag' ? available.inbounds : (cfg as any).options) ?? []).map((opt: string) => {
                       const active = getBadges(rule[fieldName]).includes(opt)
                       const colors: Record<string, { a: string; i: string }> = {
@@ -566,7 +566,7 @@ const RuleCard = memo(
                           key={opt}
                           onClick={() => toggleBtn(fieldName, opt)}
                           className={cn(
-                            'cursor-pointer px-3 py-0.75 rounded text-xs font-medium border transition-colors',
+                            'cursor-pointer rounded border px-3 py-0.75 text-xs font-medium transition-colors',
                             active ? c.a : c.i
                           )}
                         >
@@ -575,14 +575,14 @@ const RuleCard = memo(
                       )
                     })}
                     {fieldName === 'inboundTag' && available.inbounds.length === 0 && (
-                      <span className="text-xs text-muted-foreground">Inbound теги не найдены</span>
+                      <span className="text-muted-foreground text-xs">Inbound теги не найдены</span>
                     )}
                     <button
                       onMouseDown={(e) => {
                         e.preventDefault()
                         removeField(fieldName)
                       }}
-                      className="ml-auto shrink-0 text-muted-foreground/40 hover:text-destructive transition-colors p-1"
+                      className="text-muted-foreground/40 hover:text-destructive ml-auto shrink-0 p-1 transition-colors"
                     >
                       <IconX size={14} />
                     </button>
@@ -613,7 +613,7 @@ const RuleCard = memo(
           >
             <SelectTrigger
               popper
-              className="flex items-center justify-center gap-1.5 text-xs tracking-wide text-muted-foreground hover:text-foreground transition-colors border border-dashed border-border rounded-lg px-3 py-2 w-full h-auto min-h-9 bg-transparent focus:ring-0 [&>svg]:hidden"
+              className="text-muted-foreground hover:text-foreground border-border flex h-auto min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed bg-transparent px-3 py-2 text-xs tracking-wide transition-colors focus:ring-0 [&>svg]:hidden"
             >
               <span className="flex gap-1">
                 <IconPlus size={13} />
@@ -622,7 +622,7 @@ const RuleCard = memo(
             </SelectTrigger>
             <SelectContent position="popper">
               {availableToAdd.map((f) => (
-                <SelectItem key={f} value={f} className="text-sm cursor-pointer">
+                <SelectItem key={f} value={f} className="cursor-pointer text-sm">
                   {f}
                 </SelectItem>
               ))}
@@ -635,7 +635,7 @@ const RuleCard = memo(
           <Select value={outboundType} onValueChange={(v) => switchOutbound(v as 'outboundTag' | 'balancerTag')}>
             <SelectTrigger
               popper
-              className="min-w-34 shrink-0 border-blue-500/40 hover:bg-blue-500/10 text-blue-400 text-[13px] font-bold transition-colors [&>svg]:text-blue-400/60"
+              className="min-w-34 shrink-0 border-blue-500/40 text-[13px] font-bold text-blue-400 transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
             >
               <SelectValue />
             </SelectTrigger>
@@ -652,13 +652,13 @@ const RuleCard = memo(
           <Select value={outboundValue} onValueChange={changeOutboundValue}>
             <SelectTrigger
               popper
-              className="flex-1 text-[13px] border-blue-500/40 hover:bg-blue-500/10 transition-colors [&>svg]:text-blue-400/60"
+              className="flex-1 border-blue-500/40 text-[13px] transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
             >
               <SelectValue placeholder="Выберите outbound..." />
             </SelectTrigger>
             <SelectContent position="popper" className="border-blue-500/40">
               {(isBalancer ? available.balancers : available.outbounds).length === 0 ? (
-                <div className="text-xs text-muted-foreground px-2 py-1.5">
+                <div className="text-muted-foreground px-2 py-1.5 text-xs">
                   {isBalancer ? 'Балансиры не найдены' : 'Аутбаунды не найдены'}
                 </div>
               ) : (
@@ -736,7 +736,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
 
   return (
     <div
-      className="relative flex flex-wrap gap-1 items-center min-h-9 px-1 py-1 pr-7 rounded-md border border-border bg-input-background cursor-text"
+      className="border-border bg-input-background relative flex min-h-9 cursor-text flex-wrap items-center gap-1 rounded-md border px-1 py-1 pr-7"
       onClick={() => {
         if (editingIndex === null) inputRef.current?.focus()
       }}
@@ -762,7 +762,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
             onClick={(e) => e.stopPropagation()}
             autoFocus
             style={{ width: Math.max(editingValue.length * 8, 60) + 'px' }}
-            className={cn('px-1.5 py-0.5 rounded text-xs border outline-none', color)}
+            className={cn('rounded border px-1.5 py-0.5 text-xs outline-none', color)}
           />
         ) : (
           <span
@@ -772,7 +772,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
               startEdit(i)
             }}
             className={cn(
-              'inline-flex items-center gap-0.5 pl-3 pr-2.25 py-0.75 rounded text-xs tracking-wide border cursor-pointer hover:opacity-75 transition-opacity select-none max-w-full break-all',
+              'inline-flex max-w-full cursor-pointer items-center gap-0.5 rounded border py-0.75 pr-2.25 pl-3 text-xs tracking-wide break-all transition-opacity select-none hover:opacity-75',
               color
             )}
           >
@@ -784,7 +784,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
                 onRemove(badge)
               }}
               onClick={(e) => e.stopPropagation()}
-              className="opacity-50 text-sm hover:opacity-100 ml-1 transition-opacity leading-none"
+              className="ml-1 text-sm leading-none opacity-50 transition-opacity hover:opacity-100"
             >
               <IconX size={12} />
             </button>
@@ -809,7 +809,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
           }}
           onBlur={() => commitNew(input)}
           placeholder={badges.length === 0 ? placeholder : ''}
-          className="pl-1 pr-1 flex-1 min-w-5 bg-transparent outline-none md:text-[13px] placeholder:text-muted-foreground/50 placeholder:text-[13px]"
+          className="placeholder:text-muted-foreground/50 min-w-5 flex-1 bg-transparent pr-1 pl-1 outline-none placeholder:text-[13px] md:text-[13px]"
         />
       )}
       <button
@@ -819,7 +819,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
           onRemoveField()
         }}
         onClick={(e) => e.stopPropagation()}
-        className="absolute top-1.5 right-1 text-muted-foreground/40 hover:text-destructive transition-colors p-1"
+        className="text-muted-foreground/40 hover:text-destructive absolute top-1.5 right-1 p-1 transition-colors"
       >
         <IconX size={14} />
       </button>

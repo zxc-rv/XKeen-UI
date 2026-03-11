@@ -2,8 +2,8 @@ import { createElement, Fragment, useCallback, useEffect, type ReactNode } from 
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
+import type { AppAction, AppSettings, AppState, Connection, ToastMessage } from './types'
 import { clashWsUrl } from './websocket'
-import type { AppState, AppAction, AppSettings, ToastMessage, Connection } from './types'
 
 // ─── Zustand store ─────────────────────────────────────────────────────────────
 

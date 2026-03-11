@@ -1,13 +1,13 @@
-import { memo, useCallback, useEffect, useRef, useState, lazy } from 'react'
-import { AppProvider, useAppActions, useModalContext, fetchClashProxies, syncClashApiPort, getAppState } from './lib/store'
-import { apiCall, capitalize } from './lib/api'
-import { stripJsonComments } from './lib/utils'
-import { StatusBar } from './components/status/StatusBar'
+import { lazy, memo, useCallback, useEffect, useRef, useState } from 'react'
+import type { CodeMirrorRef } from './components/configuration/CodeMirror'
 import { ConfigPanel } from './components/configuration/ConfigPanel'
 import { LogPanel } from './components/log/LogPanel'
+import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
-import type { CodeMirrorRef } from './components/configuration/CodeMirror'
+import { apiCall, capitalize } from './lib/api'
+import { AppProvider, fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext } from './lib/store'
 import type { Config } from './lib/types'
+import { stripJsonComments } from './lib/utils'
 
 const CommentsWarningModal = lazy(() => import('./components/modals/CommentsWarning').then((m) => ({ default: m.CommentsWarningModal })))
 const CoreManageModal = lazy(() => import('./components/modals/CoreManagement').then((m) => ({ default: m.CoreManageModal })))
@@ -323,9 +323,9 @@ function AppContent() {
   const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
 
   return (
-    <div className="min-h-dvh flex flex-col bg-background">
-      <main className="flex-1 flex flex-col">
-        <div className="w-full max-w-7xl mx-auto flex-1 flex flex-col gap-3 py-3 px-3">
+    <div className="bg-background flex min-h-dvh flex-col">
+      <main className="flex flex-1 flex-col">
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-3">
           <StatusBar
             onOpenCoreManage={() => openModal('showCoreManageModal')}
             onOpenSettings={() => openModal('showSettingsModal')}

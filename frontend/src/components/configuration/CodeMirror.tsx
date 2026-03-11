@@ -1,29 +1,28 @@
-import { useEffect, useRef, useLayoutEffect, forwardRef, useImperativeHandle, useCallback } from 'react'
-import { basicSetup } from 'codemirror'
-import { lineNumbers } from '@codemirror/view'
-import { foldKeymap as foldKeymapCmd } from '@codemirror/language'
-import { EditorSelection, EditorState, Compartment, Prec, type Extension, RangeSetBuilder } from '@codemirror/state'
-import { EditorView, keymap, ViewPlugin, Decoration, type DecorationSet, type ViewUpdate } from '@codemirror/view'
-import { indentWithTab, historyField } from '@codemirror/commands'
-import {
-  HighlightStyle,
-  syntaxHighlighting,
-  foldedRanges,
-  foldEffect,
-  unfoldEffect,
-  LanguageSupport,
-  syntaxTree,
-  ensureSyntaxTree,
-  indentService,
-} from '@codemirror/language'
-import { indentationMarkers } from '@replit/codemirror-indentation-markers'
-import { tags } from '@lezer/highlight'
+import { historyField, indentWithTab } from '@codemirror/commands'
 import { jsonLanguage } from '@codemirror/lang-json'
 import { yamlLanguage } from '@codemirror/lang-yaml'
+import {
+  ensureSyntaxTree,
+  foldedRanges,
+  foldEffect,
+  foldKeymap as foldKeymapCmd,
+  HighlightStyle,
+  indentService,
+  LanguageSupport,
+  syntaxHighlighting,
+  syntaxTree,
+  unfoldEffect,
+} from '@codemirror/language'
 import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import { selectSelectionMatches } from '@codemirror/search'
-import { parse as parseJsonc, printParseErrorCode, type ParseError } from 'jsonc-parser'
+import { Compartment, EditorSelection, EditorState, Prec, RangeSetBuilder, type Extension } from '@codemirror/state'
+import { Decoration, EditorView, keymap, lineNumbers, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
+import { tags } from '@lezer/highlight'
+import { indentationMarkers } from '@replit/codemirror-indentation-markers'
+import { basicSetup } from 'codemirror'
 import * as jsyaml from 'js-yaml'
+import { parse as parseJsonc, printParseErrorCode, type ParseError } from 'jsonc-parser'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import { getFileLanguage } from '../../lib/api'
 
 type EditorLanguage = 'json' | 'yaml' | 'text'
@@ -642,8 +641,8 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   }, [])
 
   return (
-    <div className="absolute inset-4 rounded-xl overflow-hidden border border-border bg-input-background">
-      <div ref={containerRef} className="w-full h-full" />
+    <div className="border-border bg-input-background absolute inset-4 overflow-hidden rounded-xl border">
+      <div ref={containerRef} className="h-full w-full" />
     </div>
   )
 })
