@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconTrash, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useSettings } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { WsMessage } from '../../lib/websocket'
@@ -34,6 +35,7 @@ export function LogPanel() {
   useEffect(() => {
     return () => {
       if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
+      document.body.style.overflow = ''
     }
   }, [])
 
@@ -110,13 +112,13 @@ export function LogPanel() {
     filterTimerRef.current = setTimeout(() => ws.applyFilter(value), 100)
   }
 
-  function checkScrollPosition() {
+  const checkScrollPosition = useCallback(() => {
     const el = logRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.clientHeight <= el.scrollTop + 40
     autoScrollRef.current = atBottom
     setShowScrollBtn(!atBottom)
-  }
+  }, [])
 
   function handleScroll() {
     if (isAnimating || scrollTickingRef.current) return
@@ -143,63 +145,83 @@ export function LogPanel() {
   }
 
   const toggleFullscreen = useCallback(() => {
-    if (isAnimatingRef.current) return
     const el = containerRef.current
     if (!el) {
-      setIsFullscreen((v) => !v)
+      setIsFullscreen((v) => {
+        const next = !v
+        isFullscreenRef.current = next
+        document.body.style.overflow = next ? 'hidden' : ''
+        return next
+      })
       return
     }
 
     const first = el.getBoundingClientRect()
     const nextFullscreen = !isFullscreenRef.current
-
-    document.body.style.overflow = nextFullscreen ? 'hidden' : ''
     isFullscreenRef.current = nextFullscreen
-    isAnimatingRef.current = true
-    setIsFullscreen(nextFullscreen)
-    setIsAnimating(true)
+
+    if (nextFullscreen) document.body.style.overflow = 'hidden'
 
     const backdrop = backdropRef.current
     if (backdrop) {
-      backdrop.style.transition = 'none'
-      backdrop.style.opacity = nextFullscreen ? '0' : '1'
+      if (!isAnimatingRef.current) {
+        backdrop.style.transition = 'none'
+        backdrop.style.opacity = nextFullscreen ? '0' : '1'
+      }
       requestAnimationFrame(() => {
         backdrop.style.transition = 'opacity 0.2s'
         backdrop.style.opacity = nextFullscreen ? '1' : '0'
       })
     }
 
-    requestAnimationFrame(() => {
-      const last = el.getBoundingClientRect()
+    el.style.transition = 'none'
 
-      const dx = first.left - last.left
-      const dy = first.top - last.top
-      const scaleX = first.width / last.width
-      const scaleY = first.height / last.height
-
-      el.style.transition = 'none'
-      el.style.transform = `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`
-      el.style.transformOrigin = 'top left'
-
-      requestAnimationFrame(() => {
-        el.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
-        el.style.transform = ''
-
-        const onTransitionEnd = (e: TransitionEvent) => {
-          if (e.target !== el || e.propertyName !== 'transform') return
-          el.removeEventListener('transitionend', onTransitionEnd)
-          requestAnimationFrame(() => {
-            el.style.transition = ''
-            el.style.transformOrigin = ''
-            isAnimatingRef.current = false
-            setIsAnimating(false)
-            checkScrollPosition()
-          })
-        }
-        el.addEventListener('transitionend', onTransitionEnd)
-      })
+    flushSync(() => {
+      setIsFullscreen(nextFullscreen)
+      setIsAnimating(true)
     })
-  }, [])
+
+    isAnimatingRef.current = true
+
+    el.style.willChange = 'transform, border-radius'
+    el.style.transform = ''
+    const last = el.getBoundingClientRect()
+
+    const dx = first.left - last.left
+    const dy = first.top - last.top
+    const scaleX = first.width / last.width
+    const scaleY = first.height / last.height
+
+    el.style.transform = `translate(${dx}px, ${dy}px) scale(${scaleX}, ${scaleY})`
+    el.style.transformOrigin = 'top left'
+
+    void el.offsetHeight
+
+    el.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+    el.style.transform = ''
+
+    const onTransitionEnd = (e: TransitionEvent) => {
+      if (e.target !== el || e.propertyName !== 'transform') return
+      el.removeEventListener('transitionend', onTransitionEnd)
+
+      if (!isFullscreenRef.current) {
+        document.body.style.overflow = ''
+      }
+
+      el.style.transition = ''
+      el.style.transformOrigin = ''
+      el.style.willChange = ''
+      isAnimatingRef.current = false
+      setIsAnimating(false)
+      checkScrollPosition()
+    }
+
+    if ((el as any)._onTransitionEnd) {
+      el.removeEventListener('transitionend', (el as any)._onTransitionEnd)
+    }
+    ;(el as any)._onTransitionEnd = onTransitionEnd
+    el.addEventListener('transitionend', onTransitionEnd)
+  }, [checkScrollPosition])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -253,11 +275,10 @@ export function LogPanel() {
           ref={containerRef}
           className={cn(
             'border-border bg-card flex flex-col overflow-hidden rounded-xl border',
-            isFullscreen ? 'fixed inset-x-3 bottom-3 z-50 shadow-2xl sm:inset-x-4 sm:mx-auto sm:max-w-500' : 'absolute inset-0 z-10 w-full'
+            isFullscreen ? 'fixed inset-x-3 bottom-3 z-50 shadow-2xl sm:inset-x-4 sm:mx-auto sm:max-w-400' : 'absolute inset-0 z-10 w-full'
           )}
           style={{
             height: isFullscreen ? 'calc(100dvh - 1.25rem)' : '100%',
-            willChange: isAnimating ? 'transform, border-radius' : 'auto',
           }}
         >
           <div className="flex shrink-0 flex-col justify-between gap-3 px-4 pt-4 sm:flex-row sm:items-center">
