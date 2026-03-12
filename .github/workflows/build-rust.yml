@@ -6,6 +6,8 @@ on:
         description: "Release version (e.g. v1.0.0)"
         required: true
         type: string
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,7 +24,7 @@ jobs:
             name: mips32le
             toolchain: nightly
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set version
         run: |
           sed -i 's/^version = .*/version = "${{ inputs.version }}"/' backend/Cargo.toml
@@ -55,7 +57,7 @@ jobs:
         run: |
           cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/xkeen-ui ../xkeen-ui-${{ matrix.name }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: xkeen-ui-${{ matrix.name }}
           path: xkeen-ui-${{ matrix.name }}
@@ -63,7 +65,7 @@ jobs:
   static:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -79,7 +81,7 @@ jobs:
       - name: Pack static files
         run: tar -czf xkeen-ui-static.tar.gz -C frontend/dist .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: xkeen-ui-static
           path: xkeen-ui-static.tar.gz
@@ -90,10 +92,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - uses: softprops/action-gh-release@v2
