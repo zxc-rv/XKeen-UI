@@ -27,8 +27,9 @@ import {
   IconX,
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
-import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
+import { LazyBoundary, lazyLoad } from '../../lib/loader'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
 import { cn, stripJsonComments } from '../../lib/utils'
@@ -36,11 +37,11 @@ import { ButtonGroup } from '../ui/button-group'
 import { Spinner } from '../ui/spinner'
 import type { CodeMirrorRef } from './CodeMirror'
 
-const GuiRouting = lazy(() => import('./xray/GuiRouting').then((m) => ({ default: m.GuiRouting })))
-const GuiLog = lazy(() => import('./xray/GuiLog').then((m) => ({ default: m.GuiLog })))
-const ConnectionsPanel = lazy(() => import('./mihomo/Connections').then((m) => ({ default: m.ConnectionsPanel })))
-const SelectorsPanel = lazy(() => import('./mihomo/Selectors').then((m) => ({ default: m.SelectorsPanel })))
-const CodeMirrorEditorLazy = lazy(() => import('./CodeMirror').then((m) => ({ default: m.CodeMirrorEditor })))
+const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
+const GuiLog = lazyLoad(() => import('./xray/GuiLog'), 'GuiLog')
+const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
+const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
+const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
 type ClashMode = 'rule' | 'global' | 'direct'
 
@@ -480,12 +481,16 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
             <>
               {mountedPanels.has('selectors') && (
                 <div className={cn(activePanel !== 'selectors' && 'hidden')}>
-                  <SelectorsPanel clashApiPort={clashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
+                  <LazyBoundary>
+                    <SelectorsPanel clashApiPort={clashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
+                  </LazyBoundary>
                 </div>
               )}
               {mountedPanels.has('connections') && (
                 <div className={cn(activePanel !== 'connections' && 'hidden')}>
-                  <ConnectionsPanel clashApiPort={clashApiPort!} clashApiSecret={clashApiSecret ?? null} />
+                  <LazyBoundary>
+                    <ConnectionsPanel clashApiPort={clashApiPort!} clashApiSecret={clashApiSecret ?? null} />
+                  </LazyBoundary>
                 </div>
               )}
             </>

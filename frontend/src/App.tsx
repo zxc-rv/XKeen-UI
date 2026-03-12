@@ -1,21 +1,22 @@
-import { lazy, memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import type { CodeMirrorRef } from './components/configuration/CodeMirror'
 import { ConfigPanel } from './components/configuration/ConfigPanel'
 import { LogPanel } from './components/log/LogPanel'
 import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
+import { LazyBoundary, lazyLoad } from './lib/loader'
 import { AppProvider, fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext } from './lib/store'
 import type { Config } from './lib/types'
 import { stripJsonComments } from './lib/utils'
 
-const CommentsWarningModal = lazy(() => import('./components/modals/CommentsWarning').then((m) => ({ default: m.CommentsWarningModal })))
-const CoreManageModal = lazy(() => import('./components/modals/CoreManagement').then((m) => ({ default: m.CoreManageModal })))
-const UpdateModal = lazy(() => import('./components/modals/Update').then((m) => ({ default: m.UpdateModal })))
-const ImportModal = lazy(() => import('./components/modals/AddProxy').then((m) => ({ default: m.ImportModal })))
-const TemplateModal = lazy(() => import('./components/modals/Templates').then((m) => ({ default: m.TemplateModal })))
-const SettingsModal = lazy(() => import('./components/modals/Settings').then((m) => ({ default: m.SettingsModal })))
-const GeoScanModal = lazy(() => import('./components/modals/GeoScan').then((m) => ({ default: m.GeoScanModal })))
+const CommentsWarningModal = lazyLoad(() => import('./components/modals/CommentsWarning'), 'CommentsWarningModal')
+const CoreManageModal = lazyLoad(() => import('./components/modals/CoreManagement'), 'CoreManageModal')
+const UpdateModal = lazyLoad(() => import('./components/modals/Update'), 'UpdateModal')
+const ImportModal = lazyLoad(() => import('./components/modals/AddProxy'), 'ImportModal')
+const TemplateModal = lazyLoad(() => import('./components/modals/Templates'), 'TemplateModal')
+const SettingsModal = lazyLoad(() => import('./components/modals/Settings'), 'SettingsModal')
+const GeoScanModal = lazyLoad(() => import('./components/modals/GeoScan'), 'GeoScanModal')
 
 function useLazyMount(open: boolean, delay = 200) {
   const [mounted, setMounted] = useState(open)
@@ -57,21 +58,47 @@ const ModalManager = memo(function ModalManager({
 
   return (
     <>
-      {mountCommentsWarning && <CommentsWarningModal />}
-      {mountCoreManage && (
-        <CoreManageModal
-          onSwitchCore={onSwitchCore}
-          onOpenUpdate={(core) => {
-            dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
-            openModal('showUpdateModal')
-          }}
-        />
+      {mountCommentsWarning && (
+        <LazyBoundary>
+          <CommentsWarningModal />
+        </LazyBoundary>
       )}
-      {mountUpdate && <UpdateModal onInstalled={onInstalled} />}
-      {mountImport && <ImportModal onGenerate={onGenerate} onAddToConfig={onAddToConfig} />}
-      {mountTemplate && <TemplateModal onImport={onImportTemplate} />}
-      {mountSettings && <SettingsModal />}
-      {mountGeoScan && <GeoScanModal />}
+      {mountCoreManage && (
+        <LazyBoundary>
+          <CoreManageModal
+            onSwitchCore={onSwitchCore}
+            onOpenUpdate={(core: string) => {
+              dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
+              openModal('showUpdateModal')
+            }}
+          />
+        </LazyBoundary>
+      )}
+      {mountUpdate && (
+        <LazyBoundary>
+          <UpdateModal onInstalled={onInstalled} />
+        </LazyBoundary>
+      )}
+      {mountImport && (
+        <LazyBoundary>
+          <ImportModal onGenerate={onGenerate} onAddToConfig={onAddToConfig} />
+        </LazyBoundary>
+      )}
+      {mountTemplate && (
+        <LazyBoundary>
+          <TemplateModal onImport={onImportTemplate} />
+        </LazyBoundary>
+      )}
+      {mountSettings && (
+        <LazyBoundary>
+          <SettingsModal />
+        </LazyBoundary>
+      )}
+      {mountGeoScan && (
+        <LazyBoundary>
+          <GeoScanModal />
+        </LazyBoundary>
+      )}
     </>
   )
 })
@@ -340,7 +367,7 @@ function AppContent() {
             onOpenCoreManage={() => openModal('showCoreManageModal')}
             onOpenSettings={() => openModal('showSettingsModal')}
             onRefreshStatus={() => void checkStatus()}
-            onOpenUpdate={(core) => {
+            onOpenUpdate={(core: string) => {
               dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
               openModal('showUpdateModal')
             }}

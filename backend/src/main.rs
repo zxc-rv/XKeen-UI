@@ -1,6 +1,6 @@
 mod types; mod settings; mod logger; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo;
 use std::{env, path::Path, sync::{Arc, RwLock}, net::SocketAddr, process::exit};
-use axum::{Router, routing::{get, get_service}};
+use axum::{Router, response::Response, routing::{get, get_service}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
@@ -44,7 +44,6 @@ async fn main() {
     };
     version::start_update_checker(state.clone());
 
-    let cache = SetResponseHeaderLayer::overriding(CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
     let no_cache = SetResponseHeaderLayer::overriding(CACHE_CONTROL, HeaderValue::from_static("no-store"));
 
     let app = Router::new()
@@ -58,7 +57,14 @@ async fn main() {
         .route("/api/geo/ip", get(geo::get_geoip))
         .route("/ws", get(websocket::ws_handler))
         .route("/", get_service(ServeFile::new(format!("{}/index.html", STATIC_DIR))).layer(no_cache))
-        .fallback_service(get_service(ServeDir::new(STATIC_DIR)).layer(cache))
+        .fallback_service(get_service(ServeDir::new(STATIC_DIR)).layer(SetResponseHeaderLayer::overriding(
+            CACHE_CONTROL,
+            |res: &Response| {
+                res.status().is_success().then_some(
+                    HeaderValue::from_static("public, max-age=31536000, immutable")
+                )
+            }
+        )))
         .layer(CorsLayer::permissive()).with_state(state);
 
     let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();

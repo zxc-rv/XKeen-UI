@@ -207,6 +207,17 @@ function useShowToast(): ShowToastFn {
   )
 }
 
+export function showToast(message: string | { title: string; body: string; persistent?: boolean }, type: 'success' | 'error' = 'success') {
+  const dispatch = useStore.getState().dispatch
+  const id = Math.random().toString(36).slice(2)
+  const toast: ToastMessage =
+    typeof message === 'string'
+      ? { id, title: type === 'error' ? 'Ошибка' : 'Успех', body: message, type }
+      : { id, title: message.title, body: message.body, type, ...(message.persistent ? { persistent: true } : {}) }
+  dispatch({ type: 'ADD_TOAST', toast })
+  if (!toast.persistent) setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id }), 5000)
+}
+
 export function useAppContext(): { state: CoreState; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
 export function useAppContext(options: { includeConfigs: true }): {
   state: CoreStateWithConfigs
