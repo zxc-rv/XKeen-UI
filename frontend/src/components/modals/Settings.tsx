@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -322,12 +322,14 @@ export function SettingsModal() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {Array.from({ length: 27 }, (_, i) => i - 12).map((offset) => (
-                          <SelectItem key={offset} value={String(offset)} className="text-sm">
-                            UTC{offset >= 0 ? '+' : ''}
-                            {offset}
-                          </SelectItem>
-                        ))}
+                        <SelectGroup>
+                          {Array.from({ length: 27 }, (_, i) => i - 12).map((offset) => (
+                            <SelectItem key={offset} value={String(offset)} className="text-sm">
+                              UTC{offset >= 0 ? '+' : ''}
+                              {offset}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                   </Field>

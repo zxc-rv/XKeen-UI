@@ -10,7 +10,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -409,9 +409,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="direct">DIRECT</SelectItem>
-                  <SelectItem value="rule">RULE</SelectItem>
-                  <SelectItem value="global">GLOBAL</SelectItem>
+                  <SelectGroup>
+                    <SelectItem value="direct">DIRECT</SelectItem>
+                    <SelectItem value="rule">RULE</SelectItem>
+                    <SelectItem value="global">GLOBAL</SelectItem>
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
@@ -571,7 +573,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                           <IconDotsFilled />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="max-w-[calc(100vw-1rem)] min-w-57">
+                      <DropdownMenuContent align="end" className="min-w-57">
                         <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                         <DropdownMenuItem onClick={onOpenImport}>
                           <IconLink /> Добавить Прокси
@@ -597,7 +599,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                             <DropdownMenuSubTrigger>
                               <IconExternalLinkFilled /> Полезные ссылки
                             </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="max-w-[calc(100vw-1rem)] min-w-55">
+                            <DropdownMenuSubContent className="min-w-55">
                               {usefulLinks.map((link) => (
                                 <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
                                   <IconExternalLinkFilled /> {link.title}

@@ -99,8 +99,8 @@ export function StatusBar({
                 {isRunning && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Button variant="outline" size="icon-sm" onClick={restartService} disabled={isPending}>
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh />}
+                      <Button variant="outline" size="icon" onClick={restartService} disabled={isPending}>
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh className="size-4" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Перезапустить</TooltipContent>
@@ -111,12 +111,12 @@ export function StatusBar({
                     <TooltipTrigger asChild>
                       <Button
                         variant="outline"
-                        size="icon-sm"
+                        size="icon"
                         className="text-green-500 hover:border-green-500/50 hover:text-green-400"
                         onClick={startService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4.5" /> : <IconPlayerPlayFilled className="size-4.5" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Запустить</TooltipContent>
@@ -127,12 +127,12 @@ export function StatusBar({
                     <TooltipTrigger asChild>
                       <Button
                         variant="outline"
-                        size="icon-sm"
+                        size="icon"
                         className="text-destructive hover:text-destructive"
                         onClick={stopService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerStopFilled />}
+                        {isPending ? <Spinner className="text-muted-foreground" /> : <IconPlayerStopFilled className="size-4.5" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Остановить</TooltipContent>

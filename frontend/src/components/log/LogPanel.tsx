@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconTrash, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -317,12 +317,15 @@ export function LogPanel() {
                 <SelectTrigger popper className="md:w-33">
                   <SelectValue />
                 </SelectTrigger>
+
                 <SelectContent position="popper">
-                  {LOG_FILES.map((f) => (
-                    <SelectItem key={f} value={f} className="text-sm">
-                      {f}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    {LOG_FILES.map((f) => (
+                      <SelectItem key={f} value={f} className="text-sm">
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
               <div className="ml-auto flex items-center gap-1.5 sm:ml-0">

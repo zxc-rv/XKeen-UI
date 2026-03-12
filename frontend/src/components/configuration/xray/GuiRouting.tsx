@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { IconCheck, IconGripVertical, IconPencil, IconPlus, IconX } from '@tabler/icons-react'
 import { forwardRef, memo, useCallback, useEffect, useRef, useState } from 'react'
@@ -528,12 +528,15 @@ const RuleCard = memo(
                 >
                   <SelectValue placeholder={fieldName} />
                 </SelectTrigger>
+
                 <SelectContent position="popper" align="start">
-                  {otherFields.map((f) => (
-                    <SelectItem key={f} value={f} className="cursor-pointer text-[13px]">
-                      {f}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    {otherFields.map((f) => (
+                      <SelectItem key={f} value={f} className="cursor-pointer text-[13px]">
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
 
@@ -621,11 +624,13 @@ const RuleCard = memo(
               </span>
             </SelectTrigger>
             <SelectContent position="popper">
-              {availableToAdd.map((f) => (
-                <SelectItem key={f} value={f} className="cursor-pointer text-sm">
-                  {f}
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                {availableToAdd.map((f) => (
+                  <SelectItem key={f} value={f} className="cursor-pointer text-sm">
+                    {f}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             </SelectContent>
           </Select>
         )}
@@ -640,12 +645,14 @@ const RuleCard = memo(
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" className="border-blue-500/40">
-              <SelectItem value="outboundTag" className="text-[13px] font-medium">
-                outboundTag
-              </SelectItem>
-              <SelectItem value="balancerTag" className="text-[13px] font-medium">
-                balancerTag
-              </SelectItem>
+              <SelectGroup>
+                <SelectItem value="outboundTag" className="text-[13px] font-medium">
+                  outboundTag
+                </SelectItem>
+                <SelectItem value="balancerTag" className="text-[13px] font-medium">
+                  balancerTag
+                </SelectItem>
+              </SelectGroup>
             </SelectContent>
           </Select>
 
@@ -657,17 +664,19 @@ const RuleCard = memo(
               <SelectValue placeholder="Выберите outbound..." />
             </SelectTrigger>
             <SelectContent position="popper" className="border-blue-500/40">
-              {(isBalancer ? available.balancers : available.outbounds).length === 0 ? (
-                <div className="text-muted-foreground px-2 py-1.5 text-xs">
-                  {isBalancer ? 'Балансиры не найдены' : 'Аутбаунды не найдены'}
-                </div>
-              ) : (
-                (isBalancer ? available.balancers : available.outbounds).map((tag) => (
-                  <SelectItem key={tag} value={tag} className="text-[13px]">
-                    {tag}
-                  </SelectItem>
-                ))
-              )}
+              <SelectGroup>
+                {(isBalancer ? available.balancers : available.outbounds).length === 0 ? (
+                  <div className="text-muted-foreground px-2 py-1.5 text-xs">
+                    {isBalancer ? 'Балансиры не найдены' : 'Аутбаунды не найдены'}
+                  </div>
+                ) : (
+                  (isBalancer ? available.balancers : available.outbounds).map((tag) => (
+                    <SelectItem key={tag} value={tag} className="text-[13px]">
+                      {tag}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectGroup>
             </SelectContent>
           </Select>
         </div>
