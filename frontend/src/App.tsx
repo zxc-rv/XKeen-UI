@@ -127,8 +127,8 @@ function AppContent() {
   }, [dispatch])
 
   const loadConfigs = useCallback(
-    async (core?: string, skipProxies = false): Promise<Config[]> => {
-      dispatch({ type: 'SET_CONFIGS_LOADING', loading: true })
+    async (core?: string, skipProxies = false, silent = false): Promise<Config[]> => {
+      if (!silent) dispatch({ type: 'SET_CONFIGS_LOADING', loading: true })
       try {
         const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs')
         if (result.success && result.configs) {
@@ -145,11 +145,11 @@ function AppContent() {
           }
           return configs
         } else {
-          dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
+          if (!silent) dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
           showToast('Не удалось загрузить конфигурации', 'error')
         }
       } catch (e: any) {
-        dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
+        if (!silent) dispatch({ type: 'SET_CONFIGS_LOADING', loading: false })
         showToast(`${e.message}`, 'error')
       }
       return []
@@ -378,6 +378,7 @@ function AppContent() {
             onOpenImport={() => openModal('showImportModal')}
             onOpenTemplate={() => openModal('showTemplateModal')}
             onOpenGeoScan={() => openModal('showGeoScanModal')}
+            onRefreshConfigs={() => loadConfigs(undefined, false, true)}
           />
           <LogPanel />
         </div>
