@@ -6,6 +6,8 @@ use crate::logger::log;
 
 #[derive(Serialize)] struct ConfigItem { file: String, content: String }
 #[derive(Deserialize)] pub struct ConfigReq { file: String, content: String }
+#[derive(Deserialize)] pub struct DeleteReq { file: String }
+#[derive(Deserialize)] pub struct RenameReq { file: String, new_file: String }
 
 async fn collect_configs(paths: &[String], is_mihomo: bool) -> Vec<ConfigItem> {
     let mut results = Vec::new();
@@ -54,7 +56,7 @@ pub async fn get_configs(State(state): State<AppState>, Query(parameters): Query
 
     let core_paths = {
         let settings = state.settings.read().unwrap();
-        let default_path = if is_mihomo { "/opt/etc/mihomo/config.yaml".to_string() } else { XRAY_CONF.to_string() };
+        let default_path = if is_mihomo { MIHOMO_CONF.to_string() } else { XRAY_CONF.to_string() };
         let mut paths = vec![default_path];
         let extra = if is_mihomo { settings.append_config_paths.mihomo.clone() } else { settings.append_config_paths.xray.clone() };
         paths.extend(extra);
@@ -84,43 +86,88 @@ pub async fn get_configs(State(state): State<AppState>, Query(parameters): Query
     Json(serde_json::json!({ "success": true, "configs": core_configs }))
 }
 
-pub async fn put_configs(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {
-    let is_lst = req.file.ends_with(".lst");
-    let content = if is_lst { req.content.replace("\r\n", "\n") } else { req.content };
-
-    if req.file.contains("..") {
-        return Json(ApiResponse::<()> { success: false, error: Some("Invalid path".into()), data: None });
+fn get_allowed_prefixes(state: &AppState, is_lst: bool) -> Vec<String> {
+    if is_lst {
+        return vec![XKEEN_CONF.to_string()];
     }
+    let settings = state.settings.read().unwrap();
+    let core = state.core.read().unwrap();
+    let default_path = if core.name == "mihomo" { MIHOMO_CONF.to_string() } else { XRAY_CONF.to_string() };
+    let extra = if core.name == "mihomo" { settings.append_config_paths.mihomo.clone() } else { settings.append_config_paths.xray.clone() };
+    let mut paths = vec![default_path];
+    paths.extend(extra);
+    paths
+}
 
-    let allowed_prefixes: Vec<String> = if is_lst {
-        vec![XKEEN_CONF.to_string()]
-    } else {
-        let settings = state.settings.read().unwrap();
-        let core = state.core.read().unwrap();
-        let default_path = if core.name == "mihomo" { "/opt/etc/mihomo/config.yaml".to_string() } else { XRAY_CONF.to_string() };
-        let extra = if core.name == "mihomo" { settings.append_config_paths.mihomo.clone() } else { settings.append_config_paths.xray.clone() };
-        let mut paths = vec![default_path];
-        paths.extend(extra);
-        paths
-    };
-
-    let is_allowed = allowed_prefixes.iter().any(|prefix| {
+fn is_path_allowed(file: &str, prefixes: &[String]) -> bool {
+    prefixes.iter().any(|prefix| {
         let prefix_path = Path::new(prefix.as_str());
-        let file_path = Path::new(&req.file);
-        if prefix_path.is_dir() {
-            file_path.starts_with(prefix_path)
-        } else {
-            &req.file == prefix
-        }
-    });
+        let file_path = Path::new(file);
+        if prefix_path.is_dir() { file_path.starts_with(prefix_path) } else { file == prefix }
+    })
+}
 
-    if !is_allowed {
-        return Json(ApiResponse::<()> { success: false, error: Some("Path not allowed".into()), data: None });
+fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
+    if file.contains("..") {
+        return Err("Invalid path");
     }
+    let is_lst = file.ends_with(".lst");
+    let prefixes = get_allowed_prefixes(state, is_lst);
+    if !is_path_allowed(file, &prefixes) {
+        return Err("Path not allowed");
+    }
+    Ok(is_lst)
+}
 
+pub async fn put_config(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {
+    let is_lst = match check_access(&req.file, &state) {
+        Ok(val) => val,
+        Err(e) => return Json(ApiResponse::<()> { success: false, error: Some(e.into()), data: None }),
+    };
+    let content = if is_lst { req.content.replace("\r\n", "\n") } else { req.content };
     if fs::write(&req.file, content).is_err() {
         return Json(ApiResponse::<()> { success: false, error: Some("Write error".into()), data: None });
     }
+    Json(ApiResponse::<()> { success: true, error: None, data: None })
+}
 
+pub async fn post_config(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {
+    let is_lst = match check_access(&req.file, &state) {
+        Ok(val) => val,
+        Err(e) => return Json(ApiResponse::<()> { success: false, error: Some(e.into()), data: None }),
+    };
+    if Path::new(&req.file).exists() {
+        return Json(ApiResponse::<()> { success: false, error: Some("File already exists".into()), data: None });
+    }
+    let content = if is_lst { req.content.replace("\r\n", "\n") } else { req.content };
+    if fs::write(&req.file, content).is_err() {
+        return Json(ApiResponse::<()> { success: false, error: Some("Write error".into()), data: None });
+    }
+    Json(ApiResponse::<()> { success: true, error: None, data: None })
+}
+
+pub async fn delete_config(State(state): State<AppState>, Json(req): Json<DeleteReq>) -> impl IntoResponse {
+    if let Err(e) = check_access(&req.file, &state) {
+        return Json(ApiResponse::<()> { success: false, error: Some(e.into()), data: None });
+    }
+    if fs::remove_file(&req.file).is_err() {
+        return Json(ApiResponse::<()> { success: false, error: Some("Delete error".into()), data: None });
+    }
+    Json(ApiResponse::<()> { success: true, error: None, data: None })
+}
+
+pub async fn patch_config(State(state): State<AppState>, Json(req): Json<RenameReq>) -> impl IntoResponse {
+    if let Err(e) = check_access(&req.file, &state) {
+        return Json(ApiResponse::<()> { success: false, error: Some(e.into()), data: None });
+    }
+    if let Err(e) = check_access(&req.new_file, &state) {
+        return Json(ApiResponse::<()> { success: false, error: Some(e.into()), data: None });
+    }
+    if Path::new(&req.new_file).exists() {
+        return Json(ApiResponse::<()> { success: false, error: Some("File already exists".into()), data: None });
+    }
+    if fs::rename(&req.file, &req.new_file).is_err() {
+        return Json(ApiResponse::<()> { success: false, error: Some("Rename error".into()), data: None });
+    }
     Json(ApiResponse::<()> { success: true, error: None, data: None })
 }

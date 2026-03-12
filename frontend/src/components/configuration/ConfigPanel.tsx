@@ -20,10 +20,13 @@ import {
   IconDeviceFloppy,
   IconDotsFilled,
   IconExternalLinkFilled,
+  IconFilePlus,
   IconFileText,
   IconLink,
+  IconPencil,
   IconRefresh,
   IconSearch,
+  IconTrash,
   IconX,
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
@@ -34,6 +37,9 @@ import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from
 import type { Config } from '../../lib/types'
 import { cn, stripJsonComments } from '../../lib/utils'
 import { ButtonGroup } from '../ui/button-group'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
+import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
 import { Spinner } from '../ui/spinner'
 import type { CodeMirrorRef } from './CodeMirror'
 
@@ -49,11 +55,184 @@ interface Props {
   onOpenImport: () => void
   onOpenTemplate: () => void
   onOpenGeoScan: () => void
+  onRefreshConfigs: () => Promise<unknown>
   editorRef: React.RefObject<CodeMirrorRef | null>
   configActionsRef: React.RefObject<{ switchTab: (index: number) => void; getActiveIndex: () => number }>
 }
 
-export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, editorRef, configActionsRef }: Props) {
+interface ConfigTabProps {
+  config: Config
+  currentCore: string
+  showToast: (msg: string, type?: 'success' | 'error') => void
+  onRefreshConfigs: () => Promise<unknown>
+  withContextMenu?: boolean
+}
+
+type DialogState =
+  | { type: 'create'; dir: string; isLst: boolean; anchorFile: string }
+  | { type: 'rename'; file: string }
+  | { type: 'delete'; file: string }
+  | null
+
+function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withContextMenu = false }: ConfigTabProps) {
+  const [dialogData, setDialogData] = useState<DialogState>(null)
+  const [popoverOpen, setPopoverOpen] = useState(false)
+
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [inputValue, setInputValue] = useState('')
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+
+  const openDialog = (value: NonNullable<DialogState>) => {
+    setDialogData(value)
+    setPopoverOpen(true)
+  }
+
+  const closeDialog = () => setPopoverOpen(false)
+
+  const fileExt = useMemo(() => {
+    if (!dialogData || dialogData.type === 'delete') return ''
+    if (dialogData.type === 'rename') return dialogData.file.match(/(\.[^.]+)$/)?.[1] ?? ''
+    return dialogData.isLst ? '.lst' : currentCore === 'mihomo' ? '.yaml' : '.json'
+  }, [dialogData, currentCore])
+
+  async function commitDialog() {
+    if (!dialogData) return
+    const val = inputValue.trim()
+    const ext = fileExt
+
+    let req: { method: 'POST' | 'PATCH' | 'DELETE'; body: Record<string, any>; msg: string }
+
+    if (dialogData.type === 'create') {
+      if (!val) return
+      req = { method: 'POST', body: { file: `${dialogData.dir}/${val}${ext}`, content: '' }, msg: `Файл "${val}${ext}" создан` }
+    } else if (dialogData.type === 'rename') {
+      if (!val) return
+      const dir = dialogData.file.substring(0, dialogData.file.lastIndexOf('/'))
+      req = { method: 'PATCH', body: { file: dialogData.file, new_file: `${dir}/${val}${ext}` }, msg: `Файл переименован в "${val}${ext}"` }
+    } else {
+      req = { method: 'DELETE', body: { file: dialogData.file }, msg: `Файл "${dialogData.file.split('/').pop()}" удалён` }
+    }
+
+    const result = await apiCall<{ success: boolean; error?: string }>(req.method, 'configs', req.body)
+
+    if (result.success) {
+      showToast(req.msg)
+      await onRefreshConfigs()
+      closeDialog()
+    } else {
+      showToast(`Ошибка: ${result.error}`, 'error')
+    }
+  }
+
+  const isProtected = config.file.endsWith('/config.yaml') || config.file === 'config.yaml'
+
+  const trigger = (
+    <TabsTrigger value={config.file} className="data-[state=active]:bg-input-background! relative">
+      {config.file
+        .split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '')}
+      {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
+    </TabsTrigger>
+  )
+
+  if (!withContextMenu) return trigger
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      <ContextMenu>
+        <ContextMenuTrigger className="contents">
+          <PopoverAnchor asChild>{trigger}</PopoverAnchor>
+        </ContextMenuTrigger>
+        <ContextMenuContent side="right">
+          <ContextMenuItem
+            onSelect={() => {
+              const dir = config.file.substring(0, config.file.lastIndexOf('/'))
+              setInputValue('')
+              openDialog({ type: 'create', dir, isLst: config.file.endsWith('.lst'), anchorFile: config.file })
+            }}
+          >
+            <IconFilePlus /> Создать файл
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={isProtected}
+            onSelect={() => {
+              const name =
+                config.file
+                  .split('/')
+                  .pop()
+                  ?.replace(/\.[^.]+$/, '') ?? ''
+              setInputValue(name)
+              openDialog({ type: 'rename', file: config.file })
+            }}
+          >
+            <IconPencil /> Переименовать
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem disabled={isProtected} variant="destructive" onSelect={() => openDialog({ type: 'delete', file: config.file })}>
+            <IconTrash /> Удалить
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <PopoverContent
+        align="start"
+        className="w-auto min-w-64"
+        avoidCollisions={!isMobile}
+        onOpenAutoFocus={(e) => {
+          if (dialogData?.type !== 'delete') {
+            e.preventDefault()
+            // Старый добрый таймаут надежнее, если ref еще не примонтировался
+            setTimeout(() => inputRef.current?.focus(), 10)
+          }
+        }}
+        onFocusOutside={(e) => e.preventDefault()}
+      >
+        {dialogData?.type === 'delete' ? (
+          <>
+            <p className="text-sm font-medium">Удалить «{config.file.split('/').pop()}»?</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button size="sm" variant="outline" onClick={closeDialog}>
+                Отмена
+              </Button>
+              <Button size="sm" variant="destructive" onClick={commitDialog}>
+                Удалить
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-medium">{dialogData?.type === 'create' ? 'Создать файл' : 'Переименовать файл'}</p>
+            <InputGroup>
+              <InputGroupInput
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && commitDialog()}
+                placeholder="Имя файла"
+              />
+              {fileExt && (
+                <InputGroupAddon align="inline-end">
+                  <InputGroupText>{fileExt}</InputGroupText>
+                </InputGroupAddon>
+              )}
+            </InputGroup>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={closeDialog}>
+                Отмена
+              </Button>
+              <Button size="sm" onClick={commitDialog}>
+                {dialogData?.type === 'create' ? 'Создать' : 'Переименовать'}
+              </Button>
+            </div>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRefreshConfigs, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret } = state
   const guiRouting = useSettings((s) => s.guiRouting)
@@ -132,10 +311,13 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
     prevConfigFilenamesKeyRef.current = configFilenamesKey
     if (isFirstLoad) return
 
+    const currentFile = activeConfigFile
+    if (currentConfigs.some((c) => c.file === currentFile)) return
+
     const yamlIndex = currentConfigs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
     const next = yamlIndex >= 0 ? yamlIndex : 0
     setActiveConfigFile(currentConfigs[next]?.file ?? '')
-  }, [configFilenamesKey])
+  }, [configFilenamesKey, activeConfigFile])
 
   useEffect(() => {
     if (currentCore !== 'mihomo' || !clashApiPort) return
@@ -440,26 +622,27 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                   {coreConfigs.length > 0 && (
                     <TabsList className="shrink-0">
                       {coreConfigs.map((config) => (
-                        <TabsTrigger key={config.file} value={config.file} className="data-[state=active]:bg-input-background! relative">
-                          {config.file
-                            .split('/')
-                            .pop()
-                            ?.replace(/\.[^.]+$/, '')}
-                          {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
-                        </TabsTrigger>
+                        <ConfigTab
+                          key={config.file}
+                          config={config}
+                          currentCore={currentCore}
+                          showToast={showToast}
+                          onRefreshConfigs={onRefreshConfigs}
+                          withContextMenu
+                        />
                       ))}
                     </TabsList>
                   )}
                   {xkeenConfigs.length > 0 && (
                     <TabsList className="shrink-0">
                       {xkeenConfigs.map((config) => (
-                        <TabsTrigger key={config.file} value={config.file} className="data-[state=active]:bg-input-background! relative">
-                          {config.file
-                            .split('/')
-                            .pop()
-                            ?.replace(/\.[^.]+$/, '')}
-                          {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
-                        </TabsTrigger>
+                        <ConfigTab
+                          key={config.file}
+                          config={config}
+                          currentCore={currentCore}
+                          showToast={showToast}
+                          onRefreshConfigs={onRefreshConfigs}
+                        />
                       ))}
                     </TabsList>
                   )}
@@ -542,7 +725,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
               {isConfigsLoading ? (
                 <div className="flex gap-1.5">
                   {[120, 116, 133].map((w) => (
-                    <Skeleton key={w} className="h-9 rounded-md" style={{ width: w }} />
+                    <Skeleton key={w} className="h-9 rounded-lg" style={{ width: w }} />
                   ))}
                 </div>
               ) : (
@@ -574,7 +757,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, edito
                     </Tooltip>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="icon">
+                        <Button variant="outline" size="icon" className="rounded-lg">
                           <IconDotsFilled />
                         </Button>
                       </DropdownMenuTrigger>

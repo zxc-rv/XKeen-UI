@@ -91,8 +91,8 @@ export function StatusBar({
           <div className="flex items-center gap-1.5">
             {isConfigsLoading ? (
               <>
-                <Skeleton className="h-8 w-8 rounded-md" />
-                <Skeleton className="h-8 w-8 rounded-md" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
               </>
             ) : (
               <>
@@ -100,7 +100,7 @@ export function StatusBar({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="outline" size="icon" onClick={restartService} disabled={isPending}>
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh className="size-4" />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh className="size-4.5" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Перезапустить</TooltipContent>
@@ -116,7 +116,7 @@ export function StatusBar({
                         onClick={startService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="text-muted-foreground size-4.5" /> : <IconPlayerPlayFilled className="size-4.5" />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled className="size-4.5" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Запустить</TooltipContent>
@@ -151,7 +151,7 @@ export function StatusBar({
 
         <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
           {isConfigsLoading || !version ? (
-            <Skeleton className="h-9 w-35.75 rounded-md" />
+            <Skeleton className="h-8 w-35.75 rounded-lg" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -167,7 +167,7 @@ export function StatusBar({
             </Tooltip>
           )}
           {isConfigsLoading || !version ? (
-            <Skeleton className="h-9 w-18.75 rounded-md" />
+            <Skeleton className="h-8 w-18.75 rounded-lg" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -188,7 +188,7 @@ export function StatusBar({
             </Tooltip>
           )}
           {isConfigsLoading || !version ? (
-            <Skeleton className="size-9 rounded-md" />
+            <Skeleton className="size-8 rounded-lg" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>

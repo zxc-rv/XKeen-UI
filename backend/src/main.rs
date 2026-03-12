@@ -48,7 +48,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/api/control", get(controller::get_control).post(controller::post_control))
-        .route("/api/configs", get(configs::get_configs).put(configs::put_configs))
+        .route("/api/configs", get(configs::get_configs).put(configs::put_config).post(configs::post_config).delete(configs::delete_config).patch(configs::patch_config))
         .route("/api/settings", get(settings::get_settings).patch(settings::patch_settings))
         .route("/api/version", get(version::version_handler))
         .route("/api/update", get(updater::get_releases).post(updater::post_update))
