@@ -361,7 +361,7 @@ const ConnectionDialog = memo(function ConnectionDialog({
       <DialogContent className="flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden">
         <DialogHeader className="shrink-0">{conn && <ConnectionDialogTitle conn={conn} />}</DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
           {conn && (
             <>
               <ConnectionDialogMeta conn={conn} />
@@ -613,8 +613,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
     <TooltipProvider delayDuration={300}>
       <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
         <ConnectionsHeader filter={filter} onFilterChange={setFilter} onClearFilter={clearFilter} onCloseAll={closeAll} />
-
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto [scrollbar-width:thin]">
           <Table>
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
             <ConnectionsBody
@@ -627,7 +626,6 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
           </Table>
         </div>
       </div>
-
       <ConnectionDialog connId={selectedId} onClose={handleCloseDialog} onCloseConnection={handleCloseDialogConnection} />
     </TooltipProvider>
   )

@@ -444,7 +444,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="absolute inset-4 flex flex-col gap-4 overflow-y-auto">
+      <div className="absolute inset-4 flex flex-col gap-4 overflow-y-auto [scrollbar-width:thin]">
         {selectorNames.map((name) => (
           <SelectorRow key={name} selectorName={name} onTestAll={testAll} onSelect={selectProxy} onTestSingle={testSingle} />
         ))}
