@@ -224,7 +224,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                       {release.body && (
                         <AccordionContent className="px-3 pt-0 pb-3">
                           <div className="border-ring/20 border-t pt-2.5">
-                            <div className="max-h-48 w-full overflow-x-hidden overflow-y-auto">
+                            <div className="max-h-48 w-full overflow-x-hidden overflow-y-auto [scrollbar-width:thin]">
                               <div className={cn(mdClass, 'min-w-0')}>
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: () => null }}>
                                   {release.body}
