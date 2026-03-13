@@ -79,11 +79,13 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   const [popoverOpen, setPopoverOpen] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const pendingInputFocusRef = useRef(false)
   const [inputValue, setInputValue] = useState('')
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
 
   const openDialog = (value: NonNullable<DialogState>) => {
+    pendingInputFocusRef.current = value.type !== 'delete'
     setDialogData(value)
     setPopoverOpen(true)
   }
@@ -145,7 +147,16 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
         <ContextMenuTrigger className="contents">
           <PopoverAnchor asChild>{trigger}</PopoverAnchor>
         </ContextMenuTrigger>
-        <ContextMenuContent side="right">
+        <ContextMenuContent
+          side="right"
+          onCloseAutoFocus={(e) => {
+            if (pendingInputFocusRef.current) {
+              e.preventDefault()
+              pendingInputFocusRef.current = false
+              requestAnimationFrame(() => inputRef.current?.focus())
+            }
+          }}
+        >
           <ContextMenuItem
             onSelect={() => {
               const dir = config.file.substring(0, config.file.lastIndexOf('/'))
@@ -180,10 +191,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
         className="w-auto min-w-64"
         avoidCollisions={!isMobile}
         onOpenAutoFocus={(e) => {
-          if (dialogData?.type !== 'delete') {
-            e.preventDefault()
-            setTimeout(() => inputRef.current?.focus(), 10)
-          }
+          e.preventDefault()
         }}
         onFocusOutside={(e) => e.preventDefault()}
       >
