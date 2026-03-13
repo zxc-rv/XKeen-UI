@@ -125,9 +125,9 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             if req.core != "xray" { _ = fs::write(ERROR_LOG, b"").await; }
 
             if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
-                _ = Command::new(&new_init_file).arg("start").stdout(f.try_clone().unwrap()).stderr(f).status().await;
+                _ = Command::new(&new_init_file).args(["start", "on"]).stdout(f.try_clone().unwrap()).stderr(f).status().await;
             } else {
-                _ = Command::new(&new_init_file).arg("start").status().await;
+                _ = Command::new(&new_init_file).args(["start", "on"]).status().await;
             }
         },
         "softRestart" => soft_restart(&req.core).await,
@@ -153,10 +153,11 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 return Json(ApiResponse { success: false, error: Some("Не найден init файл XKeen".into()), data: None });
             };
             *state.init_file.write().unwrap() = Some(init_file.clone());
+            let args: &[&str] = if a == "start" { &["start", "on"] } else { &[arg] };
             if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
-                _ = Command::new(&init_file).arg(arg).stdout(f.try_clone().unwrap()).stderr(f).status().await;
+                _ = Command::new(&init_file).args(args).stdout(f.try_clone().unwrap()).stderr(f).status().await;
             } else {
-                _ = Command::new(&init_file).arg(arg).status().await;
+                _ = Command::new(&init_file).args(args).status().await;
             }
         },
         _ => return Json(ApiResponse { success: false, error: Some("Bad action".into()), data: None }),
