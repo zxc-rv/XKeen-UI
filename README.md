@@ -1,5 +1,5 @@
 # ✨ XKeen UI
-Легковесная панель управления сервисом **XKeen** 🚀
+Blazingly fast и memory-efficient панель управления сервисом **XKeen** 🚀
   
 ![preview](https://github.com/zxc-rv/XKeen-UI/blob/main/preview.gif)
 
