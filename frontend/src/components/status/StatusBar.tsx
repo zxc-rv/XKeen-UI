@@ -91,8 +91,8 @@ export function StatusBar({
           <div className="flex items-center gap-1.5">
             {isConfigsLoading ? (
               <>
-                <Skeleton className="h-8 w-8 rounded-lg" />
-                <Skeleton className="h-8 w-8 rounded-lg" />
+                <Skeleton className="size-9 rounded-lg" />
+                <Skeleton className="size-9 rounded-lg" />
               </>
             ) : (
               <>
@@ -151,7 +151,7 @@ export function StatusBar({
 
         <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
           {isConfigsLoading || !version ? (
-            <Skeleton className="h-8 w-35.75 rounded-lg" />
+            <Skeleton className="h-9 w-35.75" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -167,7 +167,7 @@ export function StatusBar({
             </Tooltip>
           )}
           {isConfigsLoading || !version ? (
-            <Skeleton className="h-8 w-18.75 rounded-lg" />
+            <Skeleton className="h-9 w-18.75" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -188,7 +188,7 @@ export function StatusBar({
             </Tooltip>
           )}
           {isConfigsLoading || !version ? (
-            <Skeleton className="size-8 rounded-lg" />
+            <Skeleton className="size-9" />
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>

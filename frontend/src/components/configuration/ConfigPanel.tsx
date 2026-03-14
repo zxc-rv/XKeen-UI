@@ -36,7 +36,6 @@ import { LazyBoundary, lazyLoad } from '../../lib/loader'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
 import { cn, stripJsonComments } from '../../lib/utils'
-import { ButtonGroup } from '../ui/button-group'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
@@ -129,7 +128,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
 
   const isProtected = config.file.endsWith('/config.yaml') || config.file === 'config.yaml'
 
-  const trigger = (
+  const tabsTrigger = (
     <TabsTrigger value={config.file} className="data-[state=active]:bg-input-background! relative">
       {config.file
         .split('/')
@@ -139,13 +138,28 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
     </TabsTrigger>
   )
 
-  if (!withContextMenu) return trigger
+  if (!withContextMenu)
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">{tabsTrigger}</span>
+        </TooltipTrigger>
+        <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
+      </Tooltip>
+    )
 
   return (
     <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
       <ContextMenu>
         <ContextMenuTrigger className="contents">
-          <PopoverAnchor asChild>{trigger}</PopoverAnchor>
+          <Tooltip>
+            <PopoverAnchor asChild>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">{tabsTrigger}</span>
+              </TooltipTrigger>
+            </PopoverAnchor>
+            <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
+          </Tooltip>
         </ContextMenuTrigger>
         <ContextMenuContent
           side="right"
@@ -731,8 +745,8 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
             <div className="flex flex-wrap items-center gap-1.5">
               {isConfigsLoading ? (
                 <div className="flex gap-1.5">
-                  {[120, 116, 133].map((w) => (
-                    <Skeleton key={w} className="h-9 rounded-lg" style={{ width: w }} />
+                  {[120, 117, 96, 100].map((w) => (
+                    <Skeleton key={w} className="h-9" style={{ width: w }} />
                   ))}
                 </div>
               ) : (
@@ -753,59 +767,57 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                   <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
                     <IconDeviceFloppy data-icon="inline-start" /> Сохранить
                   </Button>
-                  <ButtonGroup>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
-                          <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Форматировать файл</TooltipContent>
-                    </Tooltip>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="icon" className="rounded-lg">
-                          <IconDotsFilled />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-57">
-                        <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={onOpenImport}>
-                          <IconLink /> Добавить Прокси
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onOpenTemplate}>
-                          <IconFileText /> Шаблоны Конфигураций
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onOpenGeoScan}>
-                          <IconSearch /> Скан Геофайлов
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {isMobile ? (
-                          <>
-                            <DropdownMenuLabel>Полезные ссылки</DropdownMenuLabel>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
+                        <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Форматировать файл</TooltipContent>
+                  </Tooltip>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline">
+                        <IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-57">
+                      <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={onOpenImport}>
+                        <IconLink /> Добавить Прокси
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={onOpenTemplate}>
+                        <IconFileText /> Шаблоны Конфигураций
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={onOpenGeoScan}>
+                        <IconSearch /> Скан Геофайлов
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {isMobile ? (
+                        <>
+                          <DropdownMenuLabel>Полезные ссылки</DropdownMenuLabel>
+                          {usefulLinks.map((link) => (
+                            <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
+                              <IconExternalLinkFilled /> {link.title}
+                            </DropdownMenuItem>
+                          ))}
+                        </>
+                      ) : (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <IconExternalLinkFilled /> Полезные ссылки
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="min-w-55">
                             {usefulLinks.map((link) => (
                               <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
                                 <IconExternalLinkFilled /> {link.title}
                               </DropdownMenuItem>
                             ))}
-                          </>
-                        ) : (
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                              <IconExternalLinkFilled /> Полезные ссылки
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="min-w-55">
-                              {usefulLinks.map((link) => (
-                                <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
-                                  <IconExternalLinkFilled /> {link.title}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </ButtonGroup>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               )}
             </div>
