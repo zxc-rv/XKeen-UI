@@ -784,13 +784,13 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                     <DropdownMenuContent align="end" className="min-w-57">
                       <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                       <DropdownMenuItem onClick={onOpenImport}>
-                        <IconLink /> Добавить Прокси
+                        <IconLink /> Добавить прокси
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={onOpenTemplate}>
-                        <IconFileText /> Шаблоны Конфигураций
+                        <IconFileText /> Шаблоны конфигураций
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={onOpenGeoScan}>
-                        <IconSearch /> Скан Геофайлов
+                        <IconSearch /> Скан геофайлов
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {isMobile ? (
