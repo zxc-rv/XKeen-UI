@@ -16,17 +16,17 @@ function highlightYaml(code: string): string {
     .map((line) => {
       if (/^\s*#/.test(line)) return `<span style="color:#565f89">${line}</span>`
 
+      const kvMatch = line.match(/^(\s*)(-\s)?([a-zA-Z_][\w.-]*)(\s*:)(.*)?$/)
+      if (kvMatch) {
+        const [, indent, dash = '', key, colon, rest = ''] = kvMatch
+        const marker = dash ? `<span style="color:#89ddff">${dash}</span>` : ''
+        return `${indent}${marker}<span style="color:#7aa2f7">${key}</span>${colon}${highlightYamlValue(rest)}`
+      }
+
       const listMatch = line.match(/^(\s*-\s)(.*)$/)
       if (listMatch) {
         const [, marker, rest] = listMatch
         return `<span style="color:#89ddff">${marker}</span>${highlightYamlValue(rest)}`
-      }
-
-      const kvMatch = line.match(/^(\s*)([a-zA-Z_][\w.-]*)(\s*:)(.*)?$/)
-      if (kvMatch) {
-        const [, indent, key, colon, rest] = kvMatch
-        const value = rest ?? ''
-        return `${indent}<span style="color:#7aa2f7">${key}</span>${colon}${highlightYamlValue(value)}`
       }
 
       return line

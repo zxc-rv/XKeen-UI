@@ -539,9 +539,16 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         if (!view) return
         const safeLine = clamp(line, 1, view.state.doc.lines)
         const lineOffset = view.state.doc.line(safeLine).from
+
+        view.scrollDOM.style.scrollBehavior = 'smooth'
+
         view.dispatch({
           effects: EditorView.scrollIntoView(lineOffset, { y: 'center' }),
         })
+
+        setTimeout(() => {
+          if (view.scrollDOM) view.scrollDOM.style.scrollBehavior = 'auto'
+        }, 500)
       },
     }),
     [format, runValidation]

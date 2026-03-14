@@ -111,7 +111,6 @@ function AppContent() {
     getActiveIndex: () => 0,
   })
 
-  // Сначала объявляем то, что мемоизировано и будет использоваться везде
   const checkStatus = useCallback(async () => {
     const data = await apiCall<any>('GET', 'control')
     if (!data.success) return null
@@ -316,9 +315,9 @@ function AppContent() {
       setTimeout(() => {
         const editorWrapper = editorRef.current
         if (!editorWrapper) return
-        const current = editorWrapper.getValue()
+        let current = editorWrapper.getValue()
         const lineAtOffset = (text: string, offset: number) => text.slice(0, Math.min(offset, text.length)).split('\n').length
-        const scrollToLine = (line: number) => setTimeout(() => editorWrapper.revealLine(Math.max(1, line)), 100)
+        const scrollToLine = (line: number) => setTimeout(() => editorWrapper.revealLine(Math.max(1, line)), 0)
         const insertAtOffset = (offset: number, text: string, scrollLine?: number) => {
           editorWrapper.replaceRange(offset, offset, text)
           scrollToLine(scrollLine ?? editorWrapper.offsetToLineColumn(offset).lineNumber)
@@ -326,19 +325,48 @@ function AppContent() {
 
         if (core === 'mihomo') {
           const marker = type === 'proxy' ? 'proxies:' : 'proxy-providers:'
-          const markerIdx = current.indexOf(marker)
-          if (markerIdx === -1) {
-            insertAtOffset(current.length, `\n${marker}\n${generated}`, lineAtOffset(current, current.length) + 2)
+          const markerRegex = new RegExp(`^${marker}(.*)$`, 'm')
+          const markerMatch = current.match(markerRegex)
+
+          if (!markerMatch) {
+            const eofStr = current.endsWith('\n') ? '' : '\n'
+            const insertPos = current.length
+            const targetLine = lineAtOffset(current, insertPos) + (eofStr ? 2 : 1)
+            insertAtOffset(insertPos, `${eofStr}${marker}\n${generated}\n`, targetLine)
             return
           }
-          const markerLineEnd = current.indexOf('\n', markerIdx) + 1
+
+          const markerIdx = markerMatch.index!
+          let markerLineEnd = current.indexOf('\n', markerIdx)
+          if (markerLineEnd === -1) markerLineEnd = current.length
+          else markerLineEnd += 1
+
+          const lineContent = markerMatch[1].trim()
+          if (lineContent === '[]' || lineContent === 'null') {
+            const pre = current.slice(0, markerIdx)
+            const post = current.slice(markerLineEnd)
+            current = pre + marker + '\n' + post
+            editorWrapper.replaceAll(current)
+            markerLineEnd = markerIdx + marker.length + 1
+          }
+
           if (position === 'start') {
-            insertAtOffset(markerLineEnd, generated, lineAtOffset(current, markerLineEnd))
+            const line = lineAtOffset(current, markerLineEnd)
+            insertAtOffset(markerLineEnd, generated + '\n', line)
           } else {
             const afterMarker = markerLineEnd
-            const nextKeyMatch = current.slice(afterMarker).search(/^[a-zA-Z]/m)
+            const nextKeyMatch = current.slice(afterMarker).search(/^[a-zA-Z0-9_-]+:/m)
             const insertOffset = nextKeyMatch === -1 ? current.length : afterMarker + nextKeyMatch
-            insertAtOffset(insertOffset, generated + '\n', lineAtOffset(current, insertOffset) - 1)
+            let textToInsert = generated + '\n'
+
+            let targetLine = lineAtOffset(current, insertOffset)
+
+            if (nextKeyMatch === -1 && !current.endsWith('\n')) {
+              textToInsert = '\n' + textToInsert
+              targetLine += 1
+            }
+
+            insertAtOffset(insertOffset, textToInsert, targetLine)
           }
         } else {
           try {
