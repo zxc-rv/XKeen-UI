@@ -66,17 +66,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
+          version: latest
+      - uses: actions/setup-node@v6
+        with:
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+          node-version: latest
 
       - name: Build frontend
         working-directory: frontend
         run: |
-          bun install
-          bun run build
+          pnpm install
+          pnpm run build
 
       - name: Pack static files
         run: tar -czf xkeen-ui-static.tar.gz -C frontend/dist .
