@@ -318,11 +318,11 @@ export function getConnections(): Connection[] {
   return useStore.getState().connections
 }
 
-export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?: string | null) {
+export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?: string | null, serviceStatus?: string) {
   const dispatch = useStore((s) => s.dispatch)
 
   useEffect(() => {
-    if (!clashApiPort) return
+    if (!clashApiPort || serviceStatus !== 'running') return
 
     const wsUrl = clashWsUrl(clashApiPort, 'connections', clashApiSecret)
 
@@ -436,7 +436,7 @@ export function syncClashApiPort(): void {
   const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
   const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
   dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
-  if (port && currentCore === 'mihomo') fetchClashProxies(port, secret)
+  if (port && currentCore === 'mihomo' && useStore.getState().serviceStatus === 'running') fetchClashProxies(port, secret)
 }
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────

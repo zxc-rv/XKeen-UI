@@ -142,7 +142,7 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={500}>
       <Dialog open={modals.showImportModal} onOpenChange={(open) => !open && close()}>
         <DialogContent className="flex max-h-[90dvh] w-auto! max-w-[min(90vw,900px)]! min-w-[min(90vw,480px)]! flex-col overflow-hidden">
           {/* Шапка модалки*/}

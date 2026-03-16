@@ -610,7 +610,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
   )
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={500}>
       <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
         <ConnectionsHeader filter={filter} onFilterChange={setFilter} onClearFilter={clearFilter} onCloseAll={closeAll} />
         <div className="flex-1 overflow-auto [scrollbar-width:thin]">

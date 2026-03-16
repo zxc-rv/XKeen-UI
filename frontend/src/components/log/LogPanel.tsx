@@ -260,7 +260,7 @@ export function LogPanel() {
   }, [scrollToBottom])
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={500}>
       <div className="relative h-70 w-full pb-3 md:shrink-0">
         <div
           ref={backdropRef}

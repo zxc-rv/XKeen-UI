@@ -8,6 +8,64 @@ use crate::logger::log;
 
 #[derive(Deserialize)] pub struct ControlReq { action: String, #[serde(default)] core: String }
 
+pub fn find_init_file(log_enabled: bool) -> Option<String> {
+    let (mut path, mut source) = (None, "fallback");
+
+    if let Ok(content) = std::fs::read_to_string("/opt/sbin/.xkeen/01_info/01_info_variable.sh") {
+        let (mut dir, mut file) = (None, None);
+        for line in content.lines() {
+            let clean = line.split('#').next().unwrap_or("").trim();
+            if let Some(v) = clean.strip_prefix("initd_dir=") {
+                dir = Some(v.trim_matches(&['"', '\''][..]));
+            } else if let Some(v) = clean.strip_prefix("initd_file=") {
+                file = Some(v.trim_matches(&['"', '\''][..]));
+            }
+        }
+        if let (Some(d), Some(f)) = (dir, file) {
+            path = Some(f.replace("$initd_dir", d));
+            source = "var";
+        }
+    }
+
+    let final_path = path.or_else(|| {
+        [S99XKEEN, S24XRAY].into_iter().find(|p| Path::new(p).exists()).map(String::from)
+    });
+
+    if log_enabled {
+        if let Some(p) = &final_path {
+            println!("{} [INFO] Defined initd_file ({}): {}", crate::logger::ts(), source, p);
+        }
+    }
+
+    final_path
+}
+
+async fn resolve_init_file(state: &AppState) -> Result<String, String> {
+    if let Some(path) = state.init_file.read().unwrap().clone() {
+        if Path::new(&path).exists() { return Ok(path); }
+    }
+    let new_path = tokio::task::spawn_blocking(|| find_init_file(false)).await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Не найден init файл XKeen".to_string())?;
+    println!("{} [INFO] Updated initd_file: {}", crate::logger::ts(), new_path);
+    *state.init_file.write().unwrap() = Some(new_path.clone());
+    Ok(new_path)
+}
+
+async fn run_init_command(state: &AppState, args: &[&str]) -> Result<(), String> {
+    let path = resolve_init_file(state).await?;
+    let result = if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
+        Command::new(&path).args(args).stdout(f.try_clone().unwrap()).stderr(f).status().await
+    } else {
+        Command::new(&path).args(args).status().await
+    };
+    if let Err(e) = result {
+        *state.init_file.write().unwrap() = None;
+        return Err(format!("{}: {}", path, e));
+    }
+    Ok(())
+}
+
 fn get_core_info(name: &str) -> CoreInfo {
     match name {
         "mihomo" => CoreInfo { name: "mihomo".into(), conf_dir: MIHOMO_CONF.into(), is_json: false },
@@ -100,19 +158,16 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             let old = state.core.read().unwrap().name.clone();
             if old == req.core { return Json(ApiResponse { success: true, error: None, data: None }); }
 
-            let Some(init_file) = [S99XKEEN, S24XRAY].iter().find(|p| Path::new(p).exists()).map(|s| s.to_string()) else {
-                return Json(ApiResponse { success: false, error: Some("Не найден init файл XKeen".into()), data: None });
+            let init_file = match resolve_init_file(&state).await {
+                Ok(p) => p,
+                Err(e) => return Json(ApiResponse { success: false, error: Some(e), data: None }),
             };
-            *state.init_file.write().unwrap() = Some(init_file.clone());
             _ = Command::new(&init_file).arg("stop").status().await;
 
-            let new_init_file = init_file;
-
-            if let Ok(content) = fs::read_to_string(&new_init_file).await {
+            if let Ok(content) = fs::read_to_string(&init_file).await {
                 let new_content = content.replace(&format!("name_client=\"{}\"", old), &format!("name_client=\"{}\"", req.core));
-                _ = fs::write(&new_init_file, new_content).await;
-                let permissions = Permissions::from_mode(0o755);
-                _ = set_permissions(&new_init_file, permissions).await;
+                _ = fs::write(&init_file, new_content).await;
+                _ = set_permissions(&init_file, Permissions::from_mode(0o755)).await;
             }
 
             *state.core.write().unwrap() = get_core_info(&req.core);
@@ -124,19 +179,13 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
 
             if req.core != "xray" { _ = fs::write(ERROR_LOG, b"").await; }
 
-            if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
-                _ = Command::new(&new_init_file).args(["start", "on"]).stdout(f.try_clone().unwrap()).stderr(f).status().await;
-            } else {
-                _ = Command::new(&new_init_file).args(["start", "on"]).status().await;
+            if let Err(e) = run_init_command(&state, &["start", "on"]).await {
+                return Json(ApiResponse { success: false, error: Some(e), data: None });
             }
         },
         "softRestart" => soft_restart(&req.core).await,
         a if ["start", "stop", "hardRestart"].contains(&a) => {
-            let arg = match a {
-                "start" => "start",
-                "stop" => "stop",
-                _ => "restart",
-            };
+            let arg = match a { "start" => "start", "stop" => "stop", _ => "restart" };
 
             let cur_name = state.core.read().unwrap().name.clone();
             if a == "start" || a == "hardRestart" {
@@ -149,15 +198,9 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 _ = fs::write(ERROR_LOG, b"").await;
             }
 
-            let Some(init_file) = [S99XKEEN, S24XRAY].iter().find(|p| Path::new(p).exists()).map(|s| s.to_string()) else {
-                return Json(ApiResponse { success: false, error: Some("Не найден init файл XKeen".into()), data: None });
-            };
-            *state.init_file.write().unwrap() = Some(init_file.clone());
             let args: &[&str] = if a == "start" { &["start", "on"] } else { &[arg] };
-            if let Ok(f) = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG) {
-                _ = Command::new(&init_file).args(args).stdout(f.try_clone().unwrap()).stderr(f).status().await;
-            } else {
-                _ = Command::new(&init_file).args(args).status().await;
+            if let Err(e) = run_init_command(&state, args).await {
+                return Json(ApiResponse { success: false, error: Some(e), data: None });
             }
         },
         _ => return Json(ApiResponse { success: false, error: Some("Bad action".into()), data: None }),

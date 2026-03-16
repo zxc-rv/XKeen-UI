@@ -259,10 +259,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   const guiRouting = useSettings((s) => s.guiRouting)
   const guiLog = useSettings((s) => s.guiLog)
 
-  useConnectionsSync(currentCore === 'mihomo' ? clashApiPort : null, clashApiSecret)
-
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending'
+  const activeClashApiPort = isRunning ? clashApiPort : null
+
+  useConnectionsSync(currentCore === 'mihomo' ? activeClashApiPort : null, clashApiSecret, serviceStatus)
 
   useEffect(() => {
     if (!isRunning) setActivePanel('config')
@@ -341,33 +342,35 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   }, [configFilenamesKey, activeConfigFile])
 
   useEffect(() => {
-    if (currentCore !== 'mihomo' || !clashApiPort) return
-    clashFetch<{ mode?: ClashMode }>(clashApiPort, 'configs', { secret: clashApiSecret })
+    if (currentCore !== 'mihomo' || !activeClashApiPort) return
+    clashFetch<{ mode?: ClashMode }>(activeClashApiPort, 'configs', { secret: clashApiSecret })
       .then((data) => {
         if (data.mode) setMode(data.mode)
       })
       .catch(() => {})
-  }, [currentCore, clashApiPort, clashApiSecret])
+  }, [currentCore, activeClashApiPort, clashApiSecret])
 
   const changeMode = useCallback(
     async (newMode: ClashMode) => {
-      if (newMode === mode || !clashApiPort) return
+      if (newMode === mode || !activeClashApiPort) return
       setMode(newMode)
-      await clashFetch(clashApiPort, 'configs', { method: 'PATCH', secret: clashApiSecret, body: { mode: newMode } })
-      await clashFetch(clashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret })
+      await clashFetch(activeClashApiPort, 'configs', { method: 'PATCH', secret: clashApiSecret, body: { mode: newMode } })
+      await clashFetch(activeClashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret })
     },
-    [clashApiPort, clashApiSecret, mode]
+    [activeClashApiPort, clashApiSecret, mode]
   )
 
   async function updateAllProviders(type: 'rules' | 'proxies', setLoading: (v: boolean) => void) {
-    if (!clashApiPort) return
+    if (!activeClashApiPort) return
     setLoading(true)
     try {
-      const data = await clashFetch<{ providers?: Record<string, unknown> }>(clashApiPort, `providers/${type}`, { secret: clashApiSecret })
+      const data = await clashFetch<{ providers?: Record<string, unknown> }>(activeClashApiPort, `providers/${type}`, {
+        secret: clashApiSecret,
+      })
       const names = Object.keys(data.providers ?? {})
       await Promise.all(
         names.map((name) =>
-          clashFetch(clashApiPort, `providers/${type}/${encodeURIComponent(name)}`, { method: 'PUT', secret: clashApiSecret })
+          clashFetch(activeClashApiPort, `providers/${type}/${encodeURIComponent(name)}`, { method: 'PUT', secret: clashApiSecret })
         )
       )
       showToast(`Наборы ${type === 'rules' ? 'правил' : 'прокси'} обновлены`)
@@ -530,10 +533,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
 
   const isAnyGui = isRoutingGui || isLogGui
 
-  const coreConfigs = configs.filter((c) => !c.file.endsWith('.lst'))
-  const xkeenConfigs = configs.filter((c) => c.file.endsWith('.lst'))
+  const coreConfigs = configs.filter((c) => !c.file.startsWith('/opt/etc/xkeen'))
+  const xkeenConfigs = configs.filter((c) => c.file.startsWith('/opt/etc/xkeen'))
 
-  const isMihomo = currentCore === 'mihomo' && !!clashApiPort
+  const isMihomo = currentCore === 'mihomo' && !!activeClashApiPort
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const usefulLinks = [
     { title: 'Инструкция XKeen', url: 'https://github.com/Corvus-Malus/XKeen/' },
@@ -543,7 +546,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   ]
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={500}>
       <div className="border-border bg-card flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
         <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
           <div className="flex shrink-0 items-center gap-2">
@@ -686,14 +689,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
               {mountedPanels.has('selectors') && (
                 <div className={cn(activePanel !== 'selectors' && 'hidden')}>
                   <LazyBoundary>
-                    <SelectorsPanel clashApiPort={clashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
+                    <SelectorsPanel clashApiPort={activeClashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
                   </LazyBoundary>
                 </div>
               )}
               {mountedPanels.has('connections') && (
                 <div className={cn(activePanel !== 'connections' && 'hidden')}>
                   <LazyBoundary>
-                    <ConnectionsPanel clashApiPort={clashApiPort!} clashApiSecret={clashApiSecret ?? null} />
+                    <ConnectionsPanel clashApiPort={activeClashApiPort!} clashApiSecret={clashApiSecret ?? null} />
                   </LazyBoundary>
                 </div>
               )}

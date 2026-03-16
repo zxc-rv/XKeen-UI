@@ -139,7 +139,7 @@ function AppContent() {
           dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
           const appState = getAppState()
           const activeCores = core ?? appState.currentCore
-          if (port && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus !== 'pending') {
+          if (port && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus === 'running') {
             fetchClashProxies(port, secret)
           }
           return configs

@@ -69,7 +69,7 @@ pub async fn get_configs(State(state): State<AppState>, Query(parameters): Query
     if let Ok(mut entries) = tokio::fs::read_dir(XKEEN_CONF).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "lst") {
+            if path.extension().map_or(false, |e| e == "lst" || e == "json") {
                 if let Ok(content) = tokio::fs::read_to_string(&path).await {
                     lst_configs.push(ConfigItem {
                         file: path.to_string_lossy().into(),
@@ -111,12 +111,12 @@ fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
     if file.contains("..") {
         return Err("Invalid path");
     }
-    let is_lst = file.ends_with(".lst");
-    let prefixes = get_allowed_prefixes(state, is_lst);
+    let is_xkeen = file.ends_with(".lst") || (file.ends_with(".json") && file.starts_with(XKEEN_CONF));
+    let prefixes = get_allowed_prefixes(state, is_xkeen);
     if !is_path_allowed(file, &prefixes) {
         return Err("Path not allowed");
     }
-    Ok(is_lst)
+    Ok(file.ends_with(".lst"))
 }
 
 pub async fn put_config(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {

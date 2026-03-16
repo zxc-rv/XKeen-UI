@@ -81,7 +81,7 @@ export function StatusBar({
       : {}
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider delayDuration={500}>
       <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
         <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
           <div className={badgeClasses} style={badgeBg}>

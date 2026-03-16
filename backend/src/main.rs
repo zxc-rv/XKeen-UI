@@ -1,5 +1,5 @@
 mod types; mod settings; mod logger; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo;
-use std::{env, path::Path, sync::{Arc, RwLock}, net::SocketAddr, process::exit};
+use std::{env, sync::{Arc, RwLock}, net::SocketAddr, process::exit, path::Path};
 use axum::{Router, response::Response, routing::{get, get_service}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
@@ -21,9 +21,14 @@ async fn main() {
     }
     println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, get_arch());
 
-    let init_file: Option<String> = if Path::new(S99XKEEN).exists() { Some(S99XKEEN.to_string()) }
-        else if Path::new(S24XRAY).exists() { Some(S24XRAY.to_string()) }
-        else { log("WARN", format!("Не найден файл инициализации ({} или {})", S99XKEEN, S24XRAY)); None };
+    if let Some(p) = Path::new(ERROR_LOG).parent() { let _ = std::fs::create_dir_all(p); }
+    let _ = std::fs::OpenOptions::new().create(true).append(true).open(ERROR_LOG);
+
+    let init_file: Option<String> = tokio::task::spawn_blocking(|| controller::find_init_file(true)).await.unwrap()
+        .or_else(|| {
+            log("ERROR", format!("Не удалось найти файл инициализации XKeen"));
+            None
+        });
     let geo_cache = Arc::new(RwLock::new(std::collections::HashMap::new()));
     let gc_clone = geo_cache.clone();
     tokio::task::spawn_blocking(move || {
