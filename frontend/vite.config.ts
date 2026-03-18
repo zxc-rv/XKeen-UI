@@ -11,18 +11,20 @@ export default defineConfig(() => {
     },
     server: {
       proxy: {
-        '/api': `http://192.168.1.1:1000`,
+        '/api': {
+          target: `http://192.168.1.1:1000`,
+          changeOrigin: true,
+          ws: true,
+        },
         '/ws': { target: `ws://192.168.1.1:1000`, ws: true },
         '/clash': {
-          target: `http://192.168.1.1:9090`,
+          target: `http://192.168.1.1:1000`,
           changeOrigin: true,
-          rewrite: (requestPath) => requestPath.replace(/^\/clash/, ''),
         },
         '/clash-ws': {
-          target: `ws://192.168.1.1:9090`,
+          target: `ws://192.168.1.1:1000`,
           ws: true,
           changeOrigin: true,
-          rewrite: (requestPath) => requestPath.replace(/^\/clash-ws/, ''),
         },
       },
     },

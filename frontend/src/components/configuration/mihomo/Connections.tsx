@@ -9,11 +9,12 @@ import {
   IconArrowUp,
   IconCircleArrowRightFilled,
   IconFilter,
+  IconLoader2,
   IconTrash,
   IconWifi,
   IconX,
 } from '@tabler/icons-react'
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
@@ -56,6 +57,7 @@ type SortDirection = 'asc' | 'desc'
 interface Props {
   clashApiPort: string
   clashApiSecret: string | null
+  clashApiUnix?: string | null
 }
 
 // ─── Local store ───────────────────────────────────────────────────────────────
@@ -69,6 +71,24 @@ const useConnectionsStore = create<{ map: Map<string, Connection> }>(() => ({
 subscribeConnections((connections) => {
   useConnectionsStore.setState({ map: toMap(connections) })
 })
+
+const asnCache = new Map<string, string | null>()
+
+function formatAsn(data: any): string | null {
+  const asnObj = data?.asn && typeof data.asn === 'object' ? data.asn : null
+  let asn = typeof asnObj?.asn === 'string' ? asnObj.asn.trim() : null
+  let name = typeof asnObj?.name === 'string' ? asnObj.name.trim() : null
+  if (!asn || !name) {
+    const org = typeof data?.org === 'string' ? data.org.trim() : ''
+    const match = org.match(/^AS(\d+)\s*(.*)?$/i)
+    if (match) {
+      if (!asn) asn = `AS${match[1]}`
+      if (!name) name = match[2]?.trim() || null
+    }
+  }
+  if (!asn) return null
+  return name ? `${asn} (${name})` : asn
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,7 +128,7 @@ function pluralize(n: number, one: string, few: string, many: string): string {
 
 function timeAgo(isoString: string): string {
   const diffSec = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000)
-  if (diffSec < 5) return 'неск. сек назад'
+  if (diffSec < 5) return 'только что'
   if (diffSec < 60) return `${diffSec} ${pluralize(diffSec, 'сек', 'сек', 'сек')} назад`
   const diffMin = Math.floor(diffSec / 60)
   if (diffMin < 60) return `${diffMin} ${pluralize(diffMin, 'мин', 'мин', 'мин')} назад`
@@ -123,12 +143,12 @@ function SortIcon({ column, sortColumn, sortDirection }: { column: SortColumn; s
   return sortDirection === 'asc' ? <IconArrowUp size={13} className="text-primary" /> : <IconArrowDown size={13} className="text-primary" />
 }
 
-function MetaRow({ label, value }: { label: string; value: string | number | null | undefined }) {
-  if (!value && value !== 0) return null
+function MetaRow({ label, value, force }: { label: string; value: ReactNode; force?: boolean }) {
+  if (!force && (value === null || value === undefined || value === '')) return null
   return (
     <div className="border-border flex gap-2 border-b py-1.5 last:border-0">
       <span className="text-muted-foreground w-40 shrink-0 text-xs">{label}</span>
-      <span className="text-xs break-all">{String(value)}</span>
+      <span className="text-xs break-all">{value}</span>
     </div>
   )
 }
@@ -140,7 +160,7 @@ function ProxyIcon({ name, className }: { name: string; className?: string }) {
     <img
       src={icon}
       alt=""
-      className={className ?? 'mr-1 size-5 shrink-0 object-contain'}
+      className={className ?? 'mr-1 size-4.5 shrink-0 object-contain'}
       onError={(e) => {
         ;(e.target as HTMLImageElement).style.display = 'none'
       }}
@@ -175,7 +195,7 @@ function TrafficCell({ connId }: { connId: string }) {
   const upload = useConnectionsStore((s) => s.map.get(connId)?.upload ?? 0)
   const download = useConnectionsStore((s) => s.map.get(connId)?.download ?? 0)
   return (
-    <span className="flex flex-col gap-0.5 tabular-nums">
+    <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
       <span>↑ {formatBytes(upload)}</span>
       <span>↓ {formatBytes(download)}</span>
     </span>
@@ -204,6 +224,7 @@ const ConnectionRow = memo(function ConnectionRow({
 
   const conn = useConnectionsStore.getState().map.get(connId)!
   const host = conn.metadata.host || conn.metadata.destinationIP
+  const source = `${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`
   const reversedChains = [...conn.chains].reverse()
   const first = reversedChains[0]
   const last = reversedChains.at(-1)
@@ -245,15 +266,14 @@ const ConnectionRow = memo(function ConnectionRow({
           <TooltipContent side="top" className="text-[13px]">{`${host}:${conn.metadata.destinationPort}`}</TooltipContent>
         </Tooltip>
       </TableCell>
-      <TableCell className="text-muted-foreground text-[13px]">
+      <TableCell className="text-muted-foreground max-w-47.5 text-[13px]">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span>
-              {conn.metadata.sourceIP}
-              <span className="opacity-60">:{conn.metadata.sourcePort}</span>
-            </span>
+            <span className="block min-w-0 truncate">{source}</span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-[13px]">{`${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`}</TooltipContent>
+          <TooltipContent side="top" className="text-[13px]">
+            {source}
+          </TooltipContent>
         </Tooltip>
       </TableCell>
       <TableCell className="text-muted-foreground text-[13px]">
@@ -280,6 +300,45 @@ const ConnectionRow = memo(function ConnectionRow({
 
 const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn: Connection }) {
   const reversedChains = [...conn.chains].reverse()
+  const asnIp = conn.metadata.destinationIP?.trim() ?? ''
+  const [asnText, setAsnText] = useState<string | null>(() => (asnIp ? (asnCache.get(asnIp) ?? null) : null))
+  const [asnLoading, setAsnLoading] = useState(() => !!asnIp && !asnCache.has(asnIp))
+
+  useEffect(() => {
+    if (!asnIp || asnCache.has(asnIp)) return
+
+    let alive = true
+    const timeoutId = setTimeout(() => {
+      if (!alive) return
+      alive = false
+      setAsnLoading(false)
+      setAsnText(null)
+    }, 3000)
+
+    fetch(`https://ipinfo.io/${encodeURIComponent(asnIp)}/json`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => {
+        if (!alive) return
+        const text = formatAsn(data)
+        asnCache.set(asnIp, text)
+        setAsnText(text)
+      })
+      .catch(() => {
+        if (!alive) return
+        asnCache.set(asnIp, null)
+        setAsnText(null)
+      })
+      .finally(() => {
+        if (!alive) return
+        setAsnLoading(false)
+        clearTimeout(timeoutId)
+      })
+
+    return () => {
+      alive = false
+      clearTimeout(timeoutId)
+    }
+  }, [asnIp])
 
   return (
     <>
@@ -308,9 +367,9 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn
       <div className="border-border rounded-lg border px-3">
         <MetaRow label="Протокол" value={conn.metadata.network?.toUpperCase()} />
         <MetaRow label="Тип" value={conn.metadata.type} />
-        <MetaRow label="Хост" value={conn.metadata.host} />
-        <MetaRow label="Источник" value={`${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`} />
-        <MetaRow label="Порт назначения" value={conn.metadata.destinationPort} />
+        <MetaRow label="IP источника" value={`${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`} />
+        <MetaRow label="IP назначения" value={`${conn.metadata.destinationIP}:${conn.metadata.destinationPort}`} />
+        <MetaRow label="Хост назначения" value={conn.metadata.host} />
         <MetaRow label="Удалённый хост" value={conn.metadata.remoteDestination} />
         <MetaRow label="Sniff Host" value={conn.metadata.sniffHost} />
         <MetaRow label="DNS режим" value={conn.metadata.dnsMode} />
@@ -319,6 +378,21 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn
         <MetaRow label="Процесс" value={conn.metadata.process || conn.metadata.processPath} />
         <MetaRow label="UID" value={conn.metadata.uid || undefined} />
         <MetaRow label="Начало" value={new Date(conn.start).toLocaleString()} />
+        {asnIp && (
+          <MetaRow
+            label="ASN"
+            value={
+              asnLoading ? (
+                <span className="text-muted-foreground inline-flex items-center gap-2">
+                  <IconLoader2 size={14} className="animate-spin" />
+                </span>
+              ) : (
+                (asnText ?? '—')
+              )
+            }
+            force
+          />
+        )}
       </div>
     </>
   )
@@ -449,7 +523,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 const columns: { key: SortColumn; label: string; className: string }[] = [
   { key: 'chains', label: 'Цепочка', className: 'w-[35%] pl-3' },
   { key: 'host', label: 'Хост', className: 'w-[35%]' },
-  { key: 'source', label: 'Источник', className: 'w-[10%]' },
+  { key: 'source', label: 'Источник', className: 'w-[10%] max-w-[190px]' },
   { key: 'upload', label: 'Трафик', className: 'w-[10%]' },
   { key: 'start', label: 'Время', className: 'w-[10%]' },
 ]
@@ -554,7 +628,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
 
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
-export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
+export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }: Props) {
   const [filter, setFilter] = useState('')
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
@@ -580,19 +654,19 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
   }, [])
 
   const closeAll = useCallback(async () => {
-    await clashFetch(clashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret })
+    await clashFetch(clashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
     setSelectedId(null)
-  }, [clashApiPort, clashApiSecret])
+  }, [clashApiPort, clashApiSecret, clashApiUnix])
 
   const clearFilter = useCallback(() => setFilter(''), [])
 
   const handleCloseConnection = useCallback(
     async (id: string, e?: React.MouseEvent) => {
       if (e) e.stopPropagation()
-      await clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret })
+      await clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
       setSelectedId((prev) => (prev === id ? null : prev))
     },
-    [clashApiPort, clashApiSecret]
+    [clashApiPort, clashApiSecret, clashApiUnix]
   )
 
   const handleSelectConnection = useCallback((conn: Connection) => {
@@ -610,7 +684,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret }: Props) {
   )
 
   return (
-    <TooltipProvider delayDuration={500}>
+    <TooltipProvider delayDuration={700} skipDelayDuration={0}>
       <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
         <ConnectionsHeader filter={filter} onFilterChange={setFilter} onClearFilter={clearFilter} onCloseAll={closeAll} />
         <div className="flex-1 overflow-auto [scrollbar-width:thin]">

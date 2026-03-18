@@ -9,15 +9,17 @@ interface AuroraTextProps {
 
 export const AuroraText = memo(
   ({ children, className = '', colors = ['#FF0080', '#7928CA', '#0070F3', '#38bdf8'], speed = 1 }: AuroraTextProps) => {
+    const text = typeof children === 'string' || typeof children === 'number' ? String(children) : ''
     const gradientStyle = {
       backgroundImage: `linear-gradient(135deg, ${colors.join(', ')}, ${colors[0]})`,
       WebkitBackgroundClip: 'text',
       WebkitTextFillColor: 'transparent',
-      animationDuration: `${10 / speed}s`,
+      animationDuration: `${12 / speed}s`,
+      animationTimingFunction: 'steps(240)',
     }
 
     return (
-      <span className={`relative inline-block ${className}`}>
+      <span className={`relative inline-block ${className}`} data-text={text}>
         <span className="sr-only">{children}</span>
         <span
           className="animate-aurora relative bg-size-[200%_auto] bg-clip-text text-transparent"

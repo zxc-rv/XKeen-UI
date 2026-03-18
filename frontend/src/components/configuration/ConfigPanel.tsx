@@ -31,7 +31,7 @@ import {
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
+import { apiCall, clashFetch, getFileLanguage, setClashWarmup } from '../../lib/api'
 import { LazyBoundary, lazyLoad } from '../../lib/loader'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
@@ -255,15 +255,16 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
 
 export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRefreshConfigs, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
-  const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret } = state
+  const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
   const guiLog = useSettings((s) => s.guiLog)
 
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending'
   const activeClashApiPort = isRunning ? clashApiPort : null
+  const activeClashApiUnix = isRunning ? clashApiUnix : null
 
-  useConnectionsSync(currentCore === 'mihomo' ? activeClashApiPort : null, clashApiSecret, serviceStatus)
+  useConnectionsSync(currentCore === 'mihomo' ? activeClashApiPort : null, clashApiSecret, serviceStatus, activeClashApiUnix)
 
   useEffect(() => {
     if (!isRunning) setActivePanel('config')
@@ -342,35 +343,53 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   }, [configFilenamesKey, activeConfigFile])
 
   useEffect(() => {
-    if (currentCore !== 'mihomo' || !activeClashApiPort) return
-    clashFetch<{ mode?: ClashMode }>(activeClashApiPort, 'configs', { secret: clashApiSecret })
-      .then((data) => {
-        if (data.mode) setMode(data.mode)
-      })
-      .catch(() => {})
-  }, [currentCore, activeClashApiPort, clashApiSecret])
+    if (currentCore !== 'mihomo' || (!activeClashApiPort && !activeClashApiUnix)) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      if (cancelled) return
+      clashFetch<{ mode?: ClashMode }>(activeClashApiPort ?? '', 'configs', { secret: clashApiSecret, unix: activeClashApiUnix })
+        .then((data) => {
+          if (data.mode) setMode(data.mode)
+        })
+        .catch(() => {})
+    }, 100)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [currentCore, activeClashApiPort, clashApiSecret, activeClashApiUnix])
 
   const changeMode = useCallback(
     async (newMode: ClashMode) => {
-      if (newMode === mode || !activeClashApiPort) return
+      if (newMode === mode || (!activeClashApiPort && !activeClashApiUnix)) return
       setMode(newMode)
-      await clashFetch(activeClashApiPort, 'configs', { method: 'PATCH', secret: clashApiSecret, body: { mode: newMode } })
-      await clashFetch(activeClashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret })
+      await clashFetch(activeClashApiPort ?? '', 'configs', {
+        method: 'PATCH',
+        secret: clashApiSecret,
+        unix: activeClashApiUnix,
+        body: { mode: newMode },
+      })
+      await clashFetch(activeClashApiPort ?? '', 'connections', { method: 'DELETE', secret: clashApiSecret, unix: activeClashApiUnix })
     },
-    [activeClashApiPort, clashApiSecret, mode]
+    [activeClashApiPort, clashApiSecret, activeClashApiUnix, mode]
   )
 
   async function updateAllProviders(type: 'rules' | 'proxies', setLoading: (v: boolean) => void) {
-    if (!activeClashApiPort) return
+    if (!activeClashApiPort && !activeClashApiUnix) return
     setLoading(true)
     try {
-      const data = await clashFetch<{ providers?: Record<string, unknown> }>(activeClashApiPort, `providers/${type}`, {
+      const data = await clashFetch<{ providers?: Record<string, unknown> }>(activeClashApiPort ?? '', `providers/${type}`, {
         secret: clashApiSecret,
+        unix: activeClashApiUnix,
       })
       const names = Object.keys(data.providers ?? {})
       await Promise.all(
         names.map((name) =>
-          clashFetch(activeClashApiPort, `providers/${type}/${encodeURIComponent(name)}`, { method: 'PUT', secret: clashApiSecret })
+          clashFetch(activeClashApiPort ?? '', `providers/${type}/${encodeURIComponent(name)}`, {
+            method: 'PUT',
+            secret: clashApiSecret,
+            unix: activeClashApiUnix,
+          })
         )
       )
       showToast(`Наборы ${type === 'rules' ? 'правил' : 'прокси'} обновлены`)
@@ -499,7 +518,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     })
     showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
-    if (r?.success) syncClashApiPort()
+    if (r?.success) {
+      setClashWarmup(1000)
+      syncClashApiPort(1000)
+    }
   }
 
   function isGuiActive(cfg: Config) {
@@ -536,7 +558,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   const coreConfigs = configs.filter((c) => !c.file.startsWith('/opt/etc/xkeen'))
   const xkeenConfigs = configs.filter((c) => c.file.startsWith('/opt/etc/xkeen'))
 
-  const isMihomo = currentCore === 'mihomo' && !!activeClashApiPort
+  const isMihomo = currentCore === 'mihomo' && (!!activeClashApiPort || !!activeClashApiUnix)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const usefulLinks = [
     { title: 'Инструкция XKeen', url: 'https://github.com/Corvus-Malus/XKeen/' },
@@ -568,7 +590,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                     Селекторы
                   </TabsTrigger>
                   <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
-                    Соединения
+                    Подключения
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -689,14 +711,23 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
               {mountedPanels.has('selectors') && (
                 <div className={cn(activePanel !== 'selectors' && 'hidden')}>
                   <LazyBoundary>
-                    <SelectorsPanel clashApiPort={activeClashApiPort!} mode={mode} clashApiSecret={clashApiSecret ?? null} />
+                    <SelectorsPanel
+                      clashApiPort={(activeClashApiPort ?? '') as string}
+                      mode={mode}
+                      clashApiSecret={clashApiSecret ?? null}
+                      clashApiUnix={activeClashApiUnix ?? null}
+                    />
                   </LazyBoundary>
                 </div>
               )}
               {mountedPanels.has('connections') && (
                 <div className={cn(activePanel !== 'connections' && 'hidden')}>
                   <LazyBoundary>
-                    <ConnectionsPanel clashApiPort={activeClashApiPort!} clashApiSecret={clashApiSecret ?? null} />
+                    <ConnectionsPanel
+                      clashApiPort={(activeClashApiPort ?? '') as string}
+                      clashApiSecret={clashApiSecret ?? null}
+                      clashApiUnix={activeClashApiUnix ?? null}
+                    />
                   </LazyBoundary>
                 </div>
               )}

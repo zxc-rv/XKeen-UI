@@ -37,6 +37,7 @@ interface Props {
   clashApiPort: string
   mode: ClashMode
   clashApiSecret: string | null
+  clashApiUnix?: string | null
 }
 
 const NO_DELAY_TYPES = new Set(['reject', 'dns', 'pass', 'relay'])
@@ -304,7 +305,7 @@ const SelectorRow = memo(function SelectorRow({
 })
 
 /* ====================== ОСНОВНОЙ КОМПОНЕНТ ====================== */
-export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
+export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUnix }: Props) {
   const loading = useProxiesStore((s) => s.loading)
   const error = useProxiesStore((s) => s.error)
 
@@ -330,7 +331,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
         const data = await clashFetch<{ delay?: number }>(
           clashApiPort,
           `proxies/${encodeURIComponent(proxyName)}/delay?url=https://www.gstatic.com/generate_204&timeout=5000`,
-          { secret: clashApiSecret }
+          { secret: clashApiSecret, unix: clashApiUnix ?? null }
         )
         delay = data.delay ?? null
       } catch {
@@ -344,7 +345,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
       })
       useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
     },
-    [clashApiPort, clashApiSecret]
+    [clashApiPort, clashApiSecret, clashApiUnix]
   )
 
   const selectProxy = useCallback(
@@ -357,21 +358,24 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
           await clashFetch(clashApiPort, `proxies/${encodeURIComponent(selectorName)}`, {
             method: 'PUT',
             secret: clashApiSecret,
+            unix: clashApiUnix ?? null,
             body: { name: proxyName },
           })
-          await fetchClashProxies(clashApiPort, clashApiSecret, true)
+          await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
           const affected = getConnections()
             .filter((conn) => conn.chains?.includes(selectorName))
             .map((conn) => conn.id)
           await Promise.all(
-            affected.map((id) => clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret }))
+            affected.map((id) =>
+              clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
+            )
           )
         } catch {
           /* */
         }
       })()
     },
-    [clashApiPort, clashApiSecret]
+    [clashApiPort, clashApiSecret, clashApiUnix]
   )
 
   const testAll = useCallback(
@@ -385,7 +389,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
         const delays = await clashFetch<Record<string, number>>(
           clashApiPort,
           `group/${encodeURIComponent(selectorName)}/delay?url=https://www.gstatic.com/generate_204&timeout=5000`,
-          { secret: clashApiSecret }
+          { secret: clashApiSecret, unix: clashApiUnix ?? null }
         )
 
         useProxiesStore.setState((state) => {
@@ -407,9 +411,9 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
       }
 
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
-      await fetchClashProxies(clashApiPort, clashApiSecret, true)
+      await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
     },
-    [clashApiPort, clashApiSecret]
+    [clashApiPort, clashApiSecret, clashApiUnix]
   )
 
   if (loading) {
@@ -433,7 +437,11 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
             </EmptyTitle>
           </EmptyHeader>
           <EmptyContent>
-            <Button variant="outline" size="sm" onClick={() => fetchClashProxies(clashApiPort, clashApiSecret)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchClashProxies(clashApiPort, clashApiSecret, false, clashApiUnix ?? null)}
+            >
               Повторить
             </Button>
           </EmptyContent>
@@ -443,7 +451,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret }: Props) {
   }
 
   return (
-    <TooltipProvider delayDuration={500}>
+    <TooltipProvider delayDuration={700}>
       <div className="absolute inset-4 flex flex-col gap-4 overflow-y-auto [scrollbar-width:thin]">
         {selectorNames.map((name) => (
           <SelectorRow key={name} selectorName={name} onTestAll={testAll} onSelect={selectProxy} onTestSingle={testSingle} />

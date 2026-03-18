@@ -32,6 +32,7 @@ const initialState: AppState = {
   isOutdatedUI: false,
   clashApiPort: null,
   clashApiSecret: null,
+  clashApiUnix: null,
   connections: [],
   wsConnected: false,
   showDirtyModal: false,
@@ -96,7 +97,11 @@ const useStore = create<StoreState>((set) => ({
         case 'SET_VERSION':
           return { version: action.version, isOutdatedUI: action.isOutdatedUI }
         case 'SET_DASHBOARD_PORT':
-          return { clashApiPort: action.port, ...(action.secret !== undefined ? { clashApiSecret: action.secret } : {}) }
+          return {
+            clashApiPort: action.port,
+            ...(action.secret !== undefined ? { clashApiSecret: action.secret } : {}),
+            ...(action.unix !== undefined ? { clashApiUnix: action.unix } : {}),
+          }
         case 'SET_CONNECTIONS':
           return {
             connections: action.connections,
@@ -172,6 +177,7 @@ const selectCoreState = (s: StoreState): CoreState => ({
   isOutdatedUI: s.isOutdatedUI,
   clashApiPort: s.clashApiPort,
   clashApiSecret: s.clashApiSecret,
+  clashApiUnix: s.clashApiUnix,
 })
 
 const selectCoreStateWithSettings = (s: StoreState): CoreStateWithSettings => ({
@@ -319,13 +325,18 @@ export function getConnections(): Connection[] {
   return useStore.getState().connections
 }
 
-export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?: string | null, serviceStatus?: string) {
+export function useConnectionsSync(
+  clashApiPort: string | null,
+  clashApiSecret?: string | null,
+  serviceStatus?: string,
+  clashApiUnix?: string | null
+) {
   const dispatch = useStore((s) => s.dispatch)
 
   useEffect(() => {
-    if (!clashApiPort || serviceStatus !== 'running') return
+    if ((!clashApiPort && !clashApiUnix) || serviceStatus !== 'running') return
 
-    const wsUrl = clashWsUrl(clashApiPort, 'connections', clashApiSecret)
+    const wsUrl = clashWsUrl(clashApiPort ?? '', 'connections', clashApiSecret, clashApiUnix)
 
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -382,7 +393,7 @@ export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?:
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
 
-    setTimeout(connect, 0)
+    setTimeout(connect, 100)
 
     let touchHandler: (() => void) | null = null
     if (isIOSSafari) {
@@ -399,7 +410,7 @@ export function useConnectionsSync(clashApiPort: string | null, clashApiSecret?:
       document.removeEventListener('visibilitychange', onVisibilityChange)
       if (touchHandler) document.removeEventListener('touchstart', touchHandler)
     }
-  }, [clashApiPort, clashApiSecret, dispatch])
+  }, [clashApiPort, clashApiSecret, clashApiUnix, dispatch, serviceStatus])
 }
 
 // ─── Shared proxies store ───────────────────────────────────────────────────────
@@ -420,24 +431,93 @@ export const useProxiesStore = create<ProxiesStore>(() => ({
   error: false,
 }))
 
-export async function fetchClashProxies(port: string, secret?: string | null, silent = false): Promise<void> {
+// ─── Кеш иконок ────────────────────────────────────────────────────────
+
+const iconCache = new Map<string, string>()
+const fetchingIcons = new Set<string>()
+
+async function preloadIcons(urls: string[]) {
+  let updated = false
+  await Promise.allSettled(
+    urls.map(async (url) => {
+      if (fetchingIcons.has(url) || iconCache.has(url)) return
+      fetchingIcons.add(url)
+      try {
+        const res = await fetch(url)
+        if (res.ok) {
+          const blob = await res.blob()
+          iconCache.set(url, URL.createObjectURL(blob))
+          updated = true
+        }
+      } catch {
+        /* */
+      } finally {
+        fetchingIcons.delete(url)
+      }
+    })
+  )
+
+  if (updated) {
+    useProxiesStore.setState((state) => {
+      const nextProxies = { ...state.proxies }
+      let hasChanges = false
+      for (const key in nextProxies) {
+        const p = nextProxies[key] as any
+        if (p.icon && iconCache.has(p.icon)) {
+          nextProxies[key] = { ...p, icon: iconCache.get(p.icon) }
+          hasChanges = true
+        }
+      }
+      return hasChanges ? { proxies: nextProxies } : state
+    })
+  }
+}
+
+export async function fetchClashProxies(port: string, secret?: string | null, silent = false, unix?: string | null): Promise<void> {
   if (!silent) useProxiesStore.setState({ loading: true, error: false })
   try {
-    const data = await clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret })
-    if (data.proxies) useProxiesStore.setState({ proxies: data.proxies, ...(!silent && { loading: false }) })
-    else if (!silent) useProxiesStore.setState({ loading: false, error: true })
+    const data = await clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix })
+    if (data.proxies) {
+      const processed = { ...data.proxies }
+      const urlsToFetch = new Set<string>()
+
+      for (const key in processed) {
+        const p = processed[key] as any
+        if (p.icon) {
+          if (iconCache.has(p.icon)) {
+            p.icon = iconCache.get(p.icon)
+          } else if (typeof p.icon === 'string' && !p.icon.startsWith('blob:')) {
+            urlsToFetch.add(p.icon)
+          }
+        }
+      }
+
+      useProxiesStore.setState({ proxies: processed, ...(!silent && { loading: false }) })
+
+      if (urlsToFetch.size > 0) {
+        preloadIcons(Array.from(urlsToFetch))
+      }
+    } else if (!silent) {
+      useProxiesStore.setState({ loading: false, error: true })
+    }
   } catch {
     if (!silent) useProxiesStore.setState({ loading: false, error: true })
   }
 }
 
-export function syncClashApiPort(): void {
+export function syncClashApiPort(delayMs = 0): void {
   const { configs, currentCore, dispatch } = useStore.getState()
   const yamlConfig = configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-  const { port, secret } = yamlConfig ? parseClashApiCredentials(yamlConfig.content) : { port: null, secret: null }
+  const { port, secret, unix } = yamlConfig ? parseClashApiCredentials(yamlConfig.content) : { port: null, secret: null, unix: null }
 
-  dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
-  if (port && currentCore === 'mihomo' && useStore.getState().serviceStatus === 'running') fetchClashProxies(port, secret)
+  dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
+  if ((port || unix) && currentCore === 'mihomo' && useStore.getState().serviceStatus === 'running') {
+    if (delayMs > 0) {
+      setTimeout(() => fetchClashProxies(port ?? '', secret, true, unix), delayMs)
+    } else {
+      fetchClashProxies(port ?? '', secret, true, unix)
+    }
+  }
 }
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────

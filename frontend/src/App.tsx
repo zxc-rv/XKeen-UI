@@ -134,12 +134,12 @@ function AppContent() {
           const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
           dispatch({ type: 'SET_CONFIGS', configs })
           const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-          const { port, secret } = yamlConfig ? parseClashApiCredentials(yamlConfig.content) : { port: null, secret: null }
-          dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
+          const { port, secret, unix } = yamlConfig ? parseClashApiCredentials(yamlConfig.content) : { port: null, secret: null, unix: null }
+          dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
           const appState = getAppState()
           const activeCores = core ?? appState.currentCore
-          if (port && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus === 'running') {
-            fetchClashProxies(port, secret)
+          if ((port || unix) && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus === 'running') {
+            fetchClashProxies(port ?? '', secret, false, unix)
           }
           return configs
         } else {

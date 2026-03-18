@@ -1,6 +1,6 @@
-mod types; mod settings; mod logger; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo;
+mod types; mod settings; mod logger; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo; mod clash;
 use std::{env, sync::{Arc, RwLock}, net::SocketAddr, process::exit, path::Path};
-use axum::{Router, response::Response, routing::{get, get_service}};
+use axum::{Router, response::Response, routing::{get, get_service, any}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
@@ -60,6 +60,8 @@ async fn main() {
         .route("/api/geo", get(geo::get_geo))
         .route("/api/geo/site", get(geo::get_geosite))
         .route("/api/geo/ip", get(geo::get_geoip))
+        .route("/clash/{*path}", any(clash::proxy_http))
+        .route("/clash-ws/{*path}", get(clash::proxy_ws))
         .route("/ws", get(websocket::ws_handler))
         .route("/", get_service(ServeFile::new(format!("{}/index.html", STATIC_DIR))).layer(no_cache))
         .fallback_service(get_service(ServeDir::new(STATIC_DIR)).layer(SetResponseHeaderLayer::overriding(
