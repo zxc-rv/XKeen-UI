@@ -6,3 +6,10 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const stripJsonComments = (s: string) => s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '')
+
+export function parseClashApiCredentials(yamlContent: string): { port: string | null; secret: string | null } {
+  const port = yamlContent.match(/^external-controller:\s*['"']?[\w.-]+:(\d+)/m)?.[1] ?? null
+  const secretMatch = yamlContent.match(/^secret:\s*(?:(["'])(.*?)\1|([^#\n]+?))(?:\s+#.*)?$/m)
+  const secret = secretMatch ? (secretMatch[2] ?? secretMatch[3])?.trim() || null : null
+  return { port, secret }
+}

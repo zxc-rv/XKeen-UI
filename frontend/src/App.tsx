@@ -8,7 +8,7 @@ import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad } from './lib/loader'
 import { AppProvider, fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext } from './lib/store'
 import type { Config } from './lib/types'
-import { stripJsonComments } from './lib/utils'
+import { parseClashApiCredentials, stripJsonComments } from './lib/utils'
 
 const CommentsWarningModal = lazyLoad(() => import('./components/modals/CommentsWarning'), 'CommentsWarningModal')
 const CoreManageModal = lazyLoad(() => import('./components/modals/CoreManagement'), 'CoreManageModal')
@@ -134,8 +134,7 @@ function AppContent() {
           const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
           dispatch({ type: 'SET_CONFIGS', configs })
           const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-          const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
-          const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
+          const { port, secret } = yamlConfig ? parseClashApiCredentials(yamlConfig.content) : { port: null, secret: null }
           dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
           const appState = getAppState()
           const activeCores = core ?? appState.currentCore

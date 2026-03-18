@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
 import type { AppAction, AppSettings, AppState, Connection, ToastMessage } from './types'
+import { parseClashApiCredentials } from './utils'
 import { clashWsUrl } from './websocket'
 
 // ─── Zustand store ─────────────────────────────────────────────────────────────
@@ -433,8 +434,8 @@ export async function fetchClashProxies(port: string, secret?: string | null, si
 export function syncClashApiPort(): void {
   const { configs, currentCore, dispatch } = useStore.getState()
   const yamlConfig = configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-  const port = yamlConfig?.content.match(/^external-controller:\s*[\w.-]+:(\d+)/m)?.[1] ?? null
-  const secret = yamlConfig?.content.match(/^secret:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? null
+  const { port, secret } = yamlConfig ? parseClashApiCredentials(yamlConfig.content) : { port: null, secret: null }
+
   dispatch({ type: 'SET_DASHBOARD_PORT', port, secret } as any)
   if (port && currentCore === 'mihomo' && useStore.getState().serviceStatus === 'running') fetchClashProxies(port, secret)
 }
