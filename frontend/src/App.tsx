@@ -6,7 +6,7 @@ import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad } from './lib/loader'
-import { AppProvider, fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext } from './lib/store'
+import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext } from './lib/store'
 import type { Config } from './lib/types'
 import { parseClashApiCredentials, stripJsonComments } from './lib/utils'
 
@@ -134,7 +134,9 @@ function AppContent() {
           const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
           dispatch({ type: 'SET_CONFIGS', configs })
           const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-          const { port, secret, unix } = yamlConfig ? parseClashApiCredentials(yamlConfig.content) : { port: null, secret: null, unix: null }
+          const { port, secret, unix } = yamlConfig
+            ? parseClashApiCredentials(yamlConfig.content)
+            : { port: null, secret: null, unix: null }
           dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
           const appState = getAppState()
           const activeCores = core ?? appState.currentCore
@@ -424,9 +426,5 @@ function AppContent() {
 }
 
 export default function App() {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
-  )
+  return <AppContent />
 }

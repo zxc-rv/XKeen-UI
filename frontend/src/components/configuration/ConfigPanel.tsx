@@ -31,7 +31,7 @@ import {
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { apiCall, clashFetch, getFileLanguage, setClashWarmup } from '../../lib/api'
+import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad } from '../../lib/loader'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
@@ -352,7 +352,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
           if (data.mode) setMode(data.mode)
         })
         .catch(() => {})
-    }, 100)
+    }, 200)
     return () => {
       cancelled = true
       clearTimeout(timer)
@@ -519,8 +519,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
     if (r?.success) {
-      setClashWarmup(1000)
-      syncClashApiPort(1000)
+      syncClashApiPort(200)
     }
   }
 

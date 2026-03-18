@@ -1,4 +1,4 @@
-import { createElement, Fragment, useCallback, useEffect, type ReactNode } from 'react'
+import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
@@ -75,21 +75,16 @@ const useStore = create<StoreState>((set) => ({
           configs[action.index] = {
             ...prevConfig,
             isDirty: action.isDirty,
-            ...(action.content !== undefined ? { content: action.content } : {}),
+            ...(action.content !== undefined && { content: action.content }),
           }
           return { configs }
         }
         case 'SAVE_CONFIG': {
           const prevConfig = state.configs[action.index]
-          if (!prevConfig) return {}
-          if (prevConfig.content === action.content && prevConfig.savedContent === action.content && !prevConfig.isDirty) return {}
+          if (!prevConfig || (prevConfig.content === action.content && prevConfig.savedContent === action.content && !prevConfig.isDirty))
+            return {}
           const configs = [...state.configs]
-          configs[action.index] = {
-            ...prevConfig,
-            content: action.content,
-            savedContent: action.content,
-            isDirty: false,
-          }
+          configs[action.index] = { ...prevConfig, content: action.content, savedContent: action.content, isDirty: false }
           return { configs }
         }
         case 'SET_SETTINGS':
@@ -99,14 +94,11 @@ const useStore = create<StoreState>((set) => ({
         case 'SET_DASHBOARD_PORT':
           return {
             clashApiPort: action.port,
-            ...(action.secret !== undefined ? { clashApiSecret: action.secret } : {}),
-            ...(action.unix !== undefined ? { clashApiUnix: action.unix } : {}),
+            ...(action.secret !== undefined && { clashApiSecret: action.secret }),
+            ...(action.unix !== undefined && { clashApiUnix: action.unix }),
           }
         case 'SET_CONNECTIONS':
-          return {
-            connections: action.connections,
-            ...(action.wsConnected !== undefined ? { wsConnected: action.wsConnected } : {}),
-          }
+          return { connections: action.connections, ...(action.wsConnected !== undefined && { wsConnected: action.wsConnected }) }
         case 'SET_WS_CONNECTED':
           return { wsConnected: action.connected }
         case 'SHOW_MODAL':
@@ -180,39 +172,15 @@ const selectCoreState = (s: StoreState): CoreState => ({
   clashApiUnix: s.clashApiUnix,
 })
 
-const selectCoreStateWithSettings = (s: StoreState): CoreStateWithSettings => ({
-  ...selectCoreState(s),
-  settings: s.settings,
-})
-
-const selectCoreStateWithConfigs = (s: StoreState): CoreStateWithConfigs => ({
-  ...selectCoreState(s),
-  configs: s.configs,
-})
-
+const selectCoreStateWithSettings = (s: StoreState): CoreStateWithSettings => ({ ...selectCoreState(s), settings: s.settings })
+const selectCoreStateWithConfigs = (s: StoreState): CoreStateWithConfigs => ({ ...selectCoreState(s), configs: s.configs })
 const selectCoreStateWithConfigsAndSettings = (s: StoreState): CoreStateWithConfigsAndSettings => ({
   ...selectCoreState(s),
   configs: s.configs,
   settings: s.settings,
 })
 
-// ─── Hooks ─────────────────────────────────────────────────────────────────────
-
-function useShowToast(): ShowToastFn {
-  const dispatch = useStore((s) => s.dispatch)
-  return useCallback<ShowToastFn>(
-    (message, type = 'success') => {
-      const id = Math.random().toString(36).slice(2)
-      const toast: ToastMessage =
-        typeof message === 'string'
-          ? { id, title: type === 'error' ? 'Ошибка' : 'Успех', body: message, type }
-          : { id, title: message.title, body: message.body, type, ...(message.persistent ? { persistent: true } : {}) }
-      dispatch({ type: 'ADD_TOAST', toast })
-      if (!toast.persistent) setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id }), 5000)
-    },
-    [dispatch]
-  )
-}
+// ─── Hooks & Utilities ─────────────────────────────────────────────────────────
 
 export function showToast(message: string | { title: string; body: string; persistent?: boolean }, type: 'success' | 'error' = 'success') {
   const dispatch = useStore.getState().dispatch
@@ -220,7 +188,8 @@ export function showToast(message: string | { title: string; body: string; persi
   const toast: ToastMessage =
     typeof message === 'string'
       ? { id, title: type === 'error' ? 'Ошибка' : 'Успех', body: message, type }
-      : { id, title: message.title, body: message.body, type, ...(message.persistent ? { persistent: true } : {}) }
+      : { id, title: message.title, body: message.body, type, ...(message.persistent && { persistent: true }) }
+
   dispatch({ type: 'ADD_TOAST', toast })
   if (!toast.persistent) setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id }), 5000)
 }
@@ -249,30 +218,19 @@ export function useAppContext(options?: { includeSettings?: boolean; includeConf
     : options?.includeSettings
       ? selectCoreStateWithSettings
       : selectCoreState
-  const state = useStore(useShallow(selector))
-  const dispatch = useStore((s) => s.dispatch)
-  const showToast = useShowToast()
-  return { state, dispatch, showToast }
+
+  return { state: useStore(useShallow(selector)), dispatch: useStore((s) => s.dispatch), showToast }
 }
 
 export function useAppActions() {
-  const dispatch = useStore((s) => s.dispatch)
-  const showToast = useShowToast()
-  return { dispatch, showToast }
+  return { dispatch: useStore((s) => s.dispatch), showToast }
 }
 
 export function useCoreRuntimeState() {
-  return useStore(
-    useShallow((s) => ({
-      serviceStatus: s.serviceStatus,
-      currentCore: s.currentCore,
-    }))
-  )
+  return useStore(useShallow((s) => ({ serviceStatus: s.serviceStatus, currentCore: s.currentCore })))
 }
 
-export function getAppState() {
-  return useStore.getState()
-}
+export const getAppState = () => useStore.getState()
 
 export function useModalContext() {
   const modals = useStore(
@@ -291,14 +249,7 @@ export function useModalContext() {
       })
     )
   )
-  const dispatch = useStore((s) => s.dispatch)
-  return { modals, dispatch }
-}
-
-export function useToastContext() {
-  const toasts = useStore((s) => s.toasts)
-  const showToast = useShowToast()
-  return { toasts, showToast }
+  return { modals, dispatch: useStore((s) => s.dispatch) }
 }
 
 export function useSettings<T>(selector: (settings: AppSettings) => T): T {
@@ -307,9 +258,9 @@ export function useSettings<T>(selector: (settings: AppSettings) => T): T {
 
 // ─── Connections hook — WS sync ────────────────────────────────────────────────
 
-export function useWsConnected() {
-  return useStore((s) => s.wsConnected)
-}
+export const useToasts = () => useStore((s) => s.toasts)
+export const useWsConnected = () => useStore((s) => s.wsConnected)
+export const getConnections = (): Connection[] => useStore.getState().connections
 
 export function subscribeConnections(callback: (connections: Connection[]) => void): () => void {
   let prev = useStore.getState().connections
@@ -319,10 +270,6 @@ export function subscribeConnections(callback: (connections: Connection[]) => vo
       callback(s.connections)
     }
   })
-}
-
-export function getConnections(): Connection[] {
-  return useStore.getState().connections
 }
 
 export function useConnectionsSync(
@@ -337,13 +284,12 @@ export function useConnectionsSync(
     if ((!clashApiPort && !clashApiUnix) || serviceStatus !== 'running') return
 
     const wsUrl = clashWsUrl(clashApiPort ?? '', 'connections', clashApiSecret, clashApiUnix)
-
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let isActive = true
     let retryCount = 0
 
-    function cleanup() {
+    const cleanup = () => {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (ws) {
         ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null
@@ -352,7 +298,7 @@ export function useConnectionsSync(
       }
     }
 
-    function connect() {
+    const connect = () => {
       if (!isActive || document.visibilityState !== 'visible') return
       cleanup()
       ws = new WebSocket(wsUrl)
@@ -361,17 +307,15 @@ export function useConnectionsSync(
         dispatch({ type: 'SET_WS_CONNECTED', connected: true })
         retryCount = 0
       }
-
+      ws.onerror = () => ws?.close()
       ws.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data)
           if (Array.isArray(data.connections)) dispatch({ type: 'SET_CONNECTIONS', connections: data.connections })
         } catch {
-          /* */
+          /* ignore */
         }
       }
-
-      ws.onerror = () => ws?.close()
 
       ws.onclose = () => {
         dispatch({ type: 'SET_WS_CONNECTED', connected: false })
@@ -384,16 +328,15 @@ export function useConnectionsSync(
 
     const isIOSSafari =
       /iP(ad|od|hone)/i.test(navigator.userAgent) && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent)
-
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && (!ws || ws.readyState !== WebSocket.OPEN)) {
         retryCount = 0
         connect()
       }
     }
-    document.addEventListener('visibilitychange', onVisibilityChange)
 
-    setTimeout(connect, 100)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    setTimeout(connect, 200)
 
     let touchHandler: (() => void) | null = null
     if (isIOSSafari) {
@@ -445,12 +388,11 @@ async function preloadIcons(urls: string[]) {
       try {
         const res = await fetch(url)
         if (res.ok) {
-          const blob = await res.blob()
-          iconCache.set(url, URL.createObjectURL(blob))
+          iconCache.set(url, URL.createObjectURL(await res.blob()))
           updated = true
         }
       } catch {
-        /* */
+        /* ignore */
       } finally {
         fetchingIcons.delete(url)
       }
@@ -478,25 +420,18 @@ export async function fetchClashProxies(port: string, secret?: string | null, si
   try {
     const data = await clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix })
     if (data.proxies) {
-      const processed = { ...data.proxies }
       const urlsToFetch = new Set<string>()
 
-      for (const key in processed) {
-        const p = processed[key] as any
+      for (const key in data.proxies) {
+        const p = data.proxies[key] as any
         if (p.icon) {
-          if (iconCache.has(p.icon)) {
-            p.icon = iconCache.get(p.icon)
-          } else if (typeof p.icon === 'string' && !p.icon.startsWith('blob:')) {
-            urlsToFetch.add(p.icon)
-          }
+          if (iconCache.has(p.icon)) p.icon = iconCache.get(p.icon)
+          else if (typeof p.icon === 'string' && !p.icon.startsWith('blob:')) urlsToFetch.add(p.icon)
         }
       }
 
-      useProxiesStore.setState({ proxies: processed, ...(!silent && { loading: false }) })
-
-      if (urlsToFetch.size > 0) {
-        preloadIcons(Array.from(urlsToFetch))
-      }
+      useProxiesStore.setState({ proxies: data.proxies, ...(!silent && { loading: false }) })
+      if (urlsToFetch.size > 0) preloadIcons(Array.from(urlsToFetch))
     } else if (!silent) {
       useProxiesStore.setState({ loading: false, error: true })
     }
@@ -512,11 +447,9 @@ export function syncClashApiPort(delayMs = 0): void {
 
   dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
   if ((port || unix) && currentCore === 'mihomo' && useStore.getState().serviceStatus === 'running') {
-    if (delayMs > 0) {
-      setTimeout(() => fetchClashProxies(port ?? '', secret, true, unix), delayMs)
-    } else {
-      fetchClashProxies(port ?? '', secret, true, unix)
-    }
+    const fetchFn = () => fetchClashProxies(port ?? '', secret, true, unix)
+    if (delayMs > 0) setTimeout(fetchFn, delayMs)
+    else fetchFn()
   }
 }
 
@@ -524,9 +457,3 @@ export function syncClashApiPort(delayMs = 0): void {
 
 export const useNowStore = create<{ tick: number }>(() => ({ tick: 0 }))
 setInterval(() => useNowStore.setState((s) => ({ tick: s.tick + 1 })), 1000)
-
-// ─── Provider (no-op wrapper for API compatibility) ────────────────────────────
-
-export function AppProvider({ children }: { children: ReactNode }) {
-  return createElement(Fragment, null, children)
-}

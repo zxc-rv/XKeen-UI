@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { IconBox, IconCpu, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect } from 'react'
-import { apiCall, capitalize, setClashWarmup } from '../../lib/api'
+import { apiCall, capitalize } from '../../lib/api'
 import { syncClashApiPort, useAppContext } from '../../lib/store'
 import { cn } from '../../lib/utils'
 
@@ -48,8 +48,7 @@ export function StatusBar({
     showToast(result.success ? 'XKeen запущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
     if (result.success) {
-      setClashWarmup(1000)
-      syncClashApiPort(1000)
+      syncClashApiPort()
     }
     onRefreshStatus()
   }
@@ -67,8 +66,7 @@ export function StatusBar({
     showToast(result.success ? 'XKeen перезапущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
     if (result.success) {
-      setClashWarmup(1000)
-      syncClashApiPort(1000)
+      syncClashApiPort()
     }
     onRefreshStatus()
   }

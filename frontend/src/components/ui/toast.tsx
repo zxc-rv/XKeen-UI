@@ -1,11 +1,11 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { IconAlertCircle, IconCircleCheck, IconX } from '@tabler/icons-react'
 import { AnimatePresence, LazyMotion, domMax, m } from 'framer-motion'
-import { useAppContext, useToastContext } from '../../lib/store'
+import { useAppActions, useToasts } from '../../lib/store'
 import type { ToastMessage } from '../../lib/types'
 
 function AlertItem({ alert }: { alert: ToastMessage }) {
-  const { dispatch } = useAppContext()
+  const { dispatch } = useAppActions()
   const isError = alert.type === 'error'
 
   return (
@@ -36,7 +36,7 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
 }
 
 export function Toast() {
-  const { toasts } = useToastContext()
+  const toasts = useToasts()
 
   return (
     <LazyMotion features={domMax}>
