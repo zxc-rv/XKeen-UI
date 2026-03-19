@@ -4,6 +4,7 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+argon2 = { version = "0.5", features = ["std"] }
 axum = { version = "0.8", features = ["ws"] }
 chrono = "0.4"
 flate2 = "1.1"
@@ -24,6 +25,7 @@ tokio = { version = "1",  features = ["rt-multi-thread", "macros", "fs", "proces
 tokio-tungstenite = "0.26"
 tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
 urlencoding = "2.1"
+uuid = { version = "1", features = ["v4"] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [profile.release]

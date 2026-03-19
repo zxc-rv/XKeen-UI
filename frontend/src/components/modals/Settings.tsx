@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
+import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
@@ -188,6 +189,69 @@ const ProxySettingsField = memo(function ProxySettingsField({
   )
 })
 
+function AuthSettingsField({
+  authEnabled,
+  onToggle,
+  showToast,
+}: {
+  authEnabled: boolean
+  onToggle: (value: boolean) => Promise<void>
+  showToast: (msg: string, type?: 'success' | 'error') => void
+}) {
+  const [resetOpen, setResetOpen] = useState(false)
+
+  const resetPassword = useCallback(async () => {
+    const res = await fetch('/api/auth/reset', { method: 'POST' })
+    const data = await res.json()
+    if (data.success) window.location.reload()
+    else showToast(data.error ?? 'Ошибка', 'error')
+  }, [showToast])
+
+  return (
+    <FieldGroup className="gap-0!">
+      <Field orientation="horizontal" className="px-0 py-3">
+        <FieldContent>
+          <FieldLabel>Авторизация</FieldLabel>
+          <FieldDescription className="text-[13px]">Защита панели с помощью пароля при входе</FieldDescription>
+        </FieldContent>
+        <Switch checked={authEnabled} onCheckedChange={onToggle} aria-label="Авторизация" />
+      </Field>
+
+      {authEnabled && (
+        <>
+          <Separator className="my-0" />
+          <Field orientation="horizontal" className="px-0 py-3">
+            <FieldContent>
+              <FieldLabel>Сбросить пароль</FieldLabel>
+              <FieldDescription className="text-[13px]">Сбросить старый пароль и установить новый</FieldDescription>
+            </FieldContent>
+            <Popover open={resetOpen} onOpenChange={setResetOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  Сбросить
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <PopoverHeader>
+                  <PopoverTitle>Вас перекинет на страницу установки пароля. Продолжить?</PopoverTitle>
+                </PopoverHeader>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setResetOpen(false)}>
+                    Нет
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => void resetPassword()}>
+                    Да
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </Field>
+        </>
+      )}
+    </FieldGroup>
+  )
+}
+
 export function SettingsModal() {
   const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
   const { modals } = useModalContext()
@@ -200,7 +264,7 @@ export function SettingsModal() {
       const [section, key] = path.split('.')
       try {
         const body: Record<string, unknown> = {}
-        if (['gui', 'updater', 'log'].includes(section)) body[section] = key ? { [key]: value } : value
+        if (['gui', 'updater', 'log', 'auth'].includes(section)) body[section] = key ? { [key]: value } : value
         const result = await apiCall<any>('PATCH', 'settings', body)
         if (!result.success) {
           showToast('Ошибка: ' + result.error, 'error')
@@ -209,7 +273,6 @@ export function SettingsModal() {
         return true
       } catch (e: any) {
         showToast(e.message, 'error')
-        console.error('Save setting failed:', e)
         return false
       }
     },
@@ -220,6 +283,14 @@ export function SettingsModal() {
     async (item: ToggleSetting, value: boolean) => {
       const ok = await saveSetting(item.path, value)
       if (ok) dispatch({ type: 'SET_SETTINGS', settings: { [item.key]: value } as Partial<AppSettings> })
+    },
+    [dispatch, saveSetting]
+  )
+
+  const toggleAuth = useCallback(
+    async (value: boolean) => {
+      const ok = await saveSetting('auth.enabled', value)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { authEnabled: value } })
     },
     [dispatch, saveSetting]
   )
@@ -271,15 +342,45 @@ export function SettingsModal() {
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="gui" className="flex flex-1 flex-col overflow-hidden">
+        <Tabs defaultValue="general" className="flex flex-1 flex-col overflow-hidden">
           <TabsList variant="line" className="border-border shrink-0 justify-start gap-3 rounded-none border-b px-0">
+            <TabsTrigger value="general">Общие</TabsTrigger>
             <TabsTrigger value="gui">Режим GUI</TabsTrigger>
             <TabsTrigger value="updates">Обновления</TabsTrigger>
-            <TabsTrigger value="logs">Журнал</TabsTrigger>
           </TabsList>
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="pr-2">
+              <TabsContent value="general">
+                <FieldGroup className="gap-0!">
+                  <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Авторизация</p>
+                  <AuthSettingsField authEnabled={settings.authEnabled} onToggle={toggleAuth} showToast={showToast} />
+                  <Separator className="my-2" />
+                  <p className="text-muted-foreground pt-1 pb-1 text-xs font-medium tracking-wider uppercase">Журнал</p>
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="timezone">Часовой пояс</FieldLabel>
+                      <FieldDescription className="text-[13px]">Сдвиг времени для записей в журнале</FieldDescription>
+                    </FieldContent>
+                    <Select value={String(settings.timezone)} onValueChange={setTimezone}>
+                      <SelectTrigger id="timezone" className="w-30 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {Array.from({ length: 27 }, (_, i) => i - 12).map((offset) => (
+                            <SelectItem key={offset} value={String(offset)} className="text-sm">
+                              UTC{offset >= 0 ? '+' : ''}
+                              {offset}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </FieldGroup>
+              </TabsContent>
+
               <TabsContent value="gui">
                 <Alert className="my-2 border-amber-500/20 bg-[#2a1f0d] p-2.75 text-amber-400">
                   <IconAlertCircle className="size-4.5 text-amber-400" />
@@ -307,32 +408,6 @@ export function SettingsModal() {
                     </Fragment>
                   ))}
                   <ProxySettingsField githubProxies={settings.githubProxies} onAddProxy={addProxy} onRemoveProxy={removeProxy} />
-                </FieldGroup>
-              </TabsContent>
-
-              <TabsContent value="logs">
-                <FieldGroup className="gap-0!">
-                  <Field orientation="horizontal" className="px-0 py-3">
-                    <FieldContent>
-                      <FieldLabel htmlFor="timezone">Часовой пояс</FieldLabel>
-                      <FieldDescription className="text-[13px]">Сдвиг времени для записей в журнале</FieldDescription>
-                    </FieldContent>
-                    <Select value={String(settings.timezone)} onValueChange={setTimezone}>
-                      <SelectTrigger id="timezone" className="w-30 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {Array.from({ length: 27 }, (_, i) => i - 12).map((offset) => (
-                            <SelectItem key={offset} value={String(offset)} className="text-sm">
-                              UTC{offset >= 0 ? '+' : ''}
-                              {offset}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </Field>
                 </FieldGroup>
               </TabsContent>
             </div>

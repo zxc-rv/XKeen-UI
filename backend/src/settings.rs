@@ -4,7 +4,7 @@ use std::fs;
 
 pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
-    Json(serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log }))
+    Json(serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log, "auth": { "enabled": s.auth.enabled } }))
 }
 
 pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<serde_json::Value>) -> impl IntoResponse {

@@ -86,6 +86,14 @@ impl Default for LogSettings {
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
+pub struct AuthSettings {
+    pub enabled: bool,
+    pub password_hash: Option<String>,
+    pub session_ids: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct AppendConfigPaths {
     pub xray: Vec<String>,
     pub mihomo: Vec<String>,
@@ -97,6 +105,7 @@ pub struct AppSettings {
     pub updater: UpdaterSettings,
     pub log: LogSettings,
     pub append_config_paths: AppendConfigPaths,
+    pub auth: AuthSettings,
 }
 
 impl<'de> Deserialize<'de> for AppSettings {
@@ -112,12 +121,14 @@ impl<'de> Deserialize<'de> for AppSettings {
             log: LogSettings,
             #[serde(default)]
             append_config_paths: AppendConfigPaths,
+            #[serde(default)]
+            auth: AuthSettings,
             #[serde(rename = "timezoneOffset")]
             legacy_tz: Option<i32>,
         }
         let mut raw = RawConfig::deserialize(deserializer)?;
         if let Some(tz) = raw.legacy_tz { raw.log.timezone = tz; }
-        Ok(Self { gui: raw.gui, updater: raw.updater, log: raw.log, append_config_paths: raw.append_config_paths })
+        Ok(Self { gui: raw.gui, updater: raw.updater, log: raw.log, append_config_paths: raw.append_config_paths, auth: raw.auth })
     }
 }
 

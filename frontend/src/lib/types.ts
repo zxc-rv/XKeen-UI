@@ -14,6 +14,7 @@ export interface AppSettings {
   backupCore: boolean
   githubProxies: string[]
   timezone: number
+  authEnabled: boolean
 }
 
 export type ServiceStatus = 'loading' | 'running' | 'stopped' | 'pending'

@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { LoginForm } from './components/auth/Login'
 import type { CodeMirrorRef } from './components/configuration/CodeMirror'
 import { ConfigPanel } from './components/configuration/ConfigPanel'
 import { LogPanel } from './components/log/LogPanel'
@@ -172,6 +173,7 @@ function AppContent() {
             backupCore: data.updater.backup_core,
             githubProxies: data.updater.github_proxy || [],
             timezone: data.log.timezone,
+            authEnabled: !!data.auth?.enabled,
           },
         })
     }
@@ -385,6 +387,10 @@ function AppContent() {
     [showToast]
   )
 
+  const logout = useCallback(async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.reload()
+  }, [])
   const onInstalled = useCallback(() => void checkStatus(), [checkStatus])
   const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
 
@@ -400,6 +406,7 @@ function AppContent() {
               dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
               openModal('showUpdateModal')
             }}
+            onLogout={logout}
           />
           <ConfigPanel
             editorRef={editorRef}
@@ -425,6 +432,29 @@ function AppContent() {
   )
 }
 
+type AuthState = 'loading' | 'login' | 'setup' | 'authenticated'
+
 export default function App() {
+  const [authState, setAuthState] = useState<AuthState>('loading')
+
+  useEffect(() => {
+    fetch('/api/auth/login')
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.enabled || data.authenticated) setAuthState('authenticated')
+        else if (!data.has_password) setAuthState('setup')
+        else setAuthState('login')
+      })
+      .catch(() => setAuthState('login'))
+  }, [])
+
+  if (authState === 'loading') return null
+  if (authState === 'login' || authState === 'setup')
+    return (
+      <>
+        <LoginForm mode={authState} onAuth={() => setAuthState('authenticated')} />
+        <Toast />
+      </>
+    )
   return <AppContent />
 }

@@ -17,6 +17,7 @@ const initialSettings: AppSettings = {
   backupCore: true,
   githubProxies: [],
   timezone: 0,
+  authEnabled: false,
 }
 
 const initialState: AppState = {

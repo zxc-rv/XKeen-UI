@@ -1,6 +1,6 @@
-mod types; mod settings; mod logger; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo; mod clash;
+mod types; mod settings; mod logger; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo; mod clash; mod auth;
 use std::{env, sync::{Arc, RwLock}, net::SocketAddr, process::exit, path::Path};
-use axum::{Router, response::Response, routing::{get, get_service, any, post}};
+use axum::{Router, middleware, response::Response, routing::{get, get_service, any, post}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
@@ -16,6 +16,17 @@ async fn main() {
             "-p" => if let Some(p) = args.next() { port = p },
             "-d" => debug = true,
             "-v" | "-V" => { println!("XKeen UI {} ({}/{})", VERSION, std::env::consts::OS, get_arch()); exit(0); }
+            "--reset-password" => {
+                let content = std::fs::read_to_string(APP_CONFIG).unwrap_or_default();
+                let mut json: serde_json::Value = serde_json::from_str(&content).unwrap_or(serde_json::json!({}));
+                if let Some(auth) = json["auth"].as_object_mut() {
+                    auth.remove("password_hash");
+                    auth.remove("session_ids");
+                }
+                std::fs::write(APP_CONFIG, serde_json::to_string_pretty(&json).unwrap()).unwrap();
+                println!("Пароль сброшен, установить новый можно при открытии панели");
+                exit(0);
+            }
             _ => {}
         }
     }
@@ -51,7 +62,7 @@ async fn main() {
 
     let no_cache = SetResponseHeaderLayer::overriding(CACHE_CONTROL, HeaderValue::from_static("no-store"));
 
-    let app = Router::new()
+    let protected = Router::new()
         .route("/api/control", get(controller::get_control).post(controller::post_control))
         .route("/api/configs", get(configs::get_configs).put(configs::put_config).post(configs::post_config).delete(configs::delete_config).patch(configs::patch_config))
         .route("/api/settings", get(settings::get_settings).patch(settings::patch_settings))
@@ -60,9 +71,26 @@ async fn main() {
         .route("/api/geo", get(geo::get_geo))
         .route("/api/geo/site", get(geo::get_geosite))
         .route("/api/geo/ip", get(geo::get_geoip))
+        .route("/api/auth/logout", post(auth::post_logout))
+        .route("/api/auth/reset", post(auth::post_auth_reset))
         .route("/clash/{*path}", any(clash::proxy_http))
         .route("/clash-ws/{*path}", get(clash::proxy_ws))
         .route("/ws", get(websocket::ws_handler))
+        .route_layer(middleware::from_fn({
+            let state = state.clone();
+            move |req: axum::extract::Request, next: middleware::Next| {
+                let state = state.clone();
+                async move { auth::auth_middleware(state, req, next).await }
+            }
+        }));
+
+    let public_api = Router::new()
+        .route("/api/auth/setup", post(auth::post_setup))
+        .route("/api/auth/login", get(auth::get_login_info).post(auth::post_login));
+
+    let app = Router::new()
+        .merge(protected)
+        .merge(public_api)
         .route("/", get_service(ServeFile::new(format!("{}/index.html", STATIC_DIR))).layer(no_cache))
         .fallback_service(get_service(ServeDir::new(STATIC_DIR)).layer(SetResponseHeaderLayer::overriding(
             CACHE_CONTROL,
@@ -76,7 +104,7 @@ async fn main() {
 
     let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
     println!("{} [INFO] Listening on http://{}", ts(), addr);
-    axum::serve(tokio::net::TcpListener::bind(&addr).await.unwrap(), app).await.unwrap();
+    axum::serve(tokio::net::TcpListener::bind(&addr).await.unwrap(), app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
 }
 
 fn get_arch() -> &'static str {

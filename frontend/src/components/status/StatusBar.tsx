@@ -4,7 +4,7 @@ import { ShineBorder } from '@/components/ui/shine-border'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconBox, IconCpu, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
+import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect } from 'react'
 import { apiCall, capitalize } from '../../lib/api'
 import { syncClashApiPort, useAppContext } from '../../lib/store'
@@ -15,14 +15,17 @@ export function StatusBar({
   onOpenSettings,
   onRefreshStatus,
   onOpenUpdate,
+  onLogout,
 }: {
   onOpenCoreManage: () => void
   onOpenSettings: () => void
   onRefreshStatus: () => void
   onOpenUpdate: (core: string) => void
+  onLogout: () => void
 }) {
-  const { state, dispatch, showToast } = useAppContext()
-  const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI } = state
+  const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
+  const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI, settings } = state
+  const authEnabled = settings.authEnabled
 
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending' || serviceStatus === 'loading'
@@ -203,6 +206,19 @@ export function StatusBar({
               <TooltipContent>Настройки</TooltipContent>
             </Tooltip>
           )}
+          {authEnabled &&
+            (isConfigsLoading || !version ? (
+              <Skeleton className="size-9" />
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" onClick={onLogout}>
+                    <IconLogout className="size-4.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Выйти</TooltipContent>
+              </Tooltip>
+            ))}
         </div>
       </div>
     </TooltipProvider>
