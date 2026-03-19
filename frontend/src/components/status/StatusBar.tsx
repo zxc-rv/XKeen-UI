@@ -104,7 +104,7 @@ export function StatusBar({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="outline" size="icon" onClick={restartService} disabled={isPending}>
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh className="size-4.5" />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Перезапустить</TooltipContent>
@@ -120,7 +120,7 @@ export function StatusBar({
                         onClick={startService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled className="size-4.5" />}
+                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Запустить</TooltipContent>
@@ -136,7 +136,7 @@ export function StatusBar({
                         onClick={stopService}
                         disabled={isPending}
                       >
-                        {isPending ? <Spinner className="text-muted-foreground" /> : <IconPlayerStopFilled className="size-4.5" />}
+                        {isPending ? <Spinner className="text-muted-foreground" /> : <IconPlayerStopFilled />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>Остановить</TooltipContent>
