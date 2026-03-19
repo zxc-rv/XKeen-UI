@@ -3,6 +3,22 @@ use std::time::{Duration, Instant};
 use tokio::process::Command;
 use crate::{types::{VERSION, AppState}, updater};
 
+pub async fn get_local_core_version(core: &str) -> Option<String> {
+    let arg = if core == "mihomo" { "-v" } else { "version" };
+    let out = Command::new(format!("/opt/sbin/{}", core)).arg(arg).output().await.ok()?;
+
+    let s = String::from_utf8_lossy(&out.stdout);
+    let p: Vec<&str> = s.split_whitespace().collect();
+
+    let ver = match core {
+        "xray" => p.get(1).copied(),
+        "mihomo" => p.get(if p.first() == Some(&"mihomo") { 1 } else { 2 }).copied(),
+        _ => None
+    }?;
+
+    Some(if ver.starts_with('v') || ver.starts_with("alpha") { ver.to_string() } else { format!("v{}", ver) })
+}
+
 pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse {
     let check = |outdated, last: &std::sync::RwLock<Option<Instant>>| outdated && {
         let mut l = last.write().unwrap();
@@ -12,20 +28,8 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
     let (ui, core) = (*state.update_checker.ui_outdated.read().unwrap(), *state.update_checker.core_outdated.read().unwrap());
 
     let (xray_version, mihomo_version) = tokio::join!(
-        async {
-            Command::new("xray").arg("version").output().await.ok().and_then(|o| {
-                let s = String::from_utf8_lossy(&o.stdout);
-                let parts: Vec<&str> = s.split_whitespace().collect();
-                (parts.len() > 1).then(|| if parts[1].starts_with('v') { parts[1].to_string() } else { format!("v{}", parts[1]) })
-            })
-        },
-        async {
-            Command::new("mihomo").arg("-v").output().await.ok().and_then(|o| {
-                let s = String::from_utf8_lossy(&o.stdout);
-                let parts: Vec<&str> = s.split_whitespace().collect();
-                (parts.len() > 2).then(|| parts[2].to_string())
-            })
-        }
+        get_local_core_version("xray"),
+        get_local_core_version("mihomo")
     );
 
     let mut core_versions = serde_json::Map::new();
@@ -42,16 +46,22 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 
 pub fn start_update_checker(state: AppState) {
     tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(3600));
         loop {
-            let (check_ui, check_core) = {
+            interval.tick().await;
+
+            let (check_ui, check_core, proxies) = {
                 let s = state.settings.read().unwrap();
                 let need = |on, last: &std::sync::RwLock<Option<Instant>>, sec| on && last.read().unwrap().map_or(true, |t| t.elapsed().as_secs() > sec);
-                (need(s.updater.auto_check_ui, &state.update_checker.last_ui_check, 14400),
-                 need(s.updater.auto_check_core, &state.update_checker.last_core_check, 43200))
+                (
+                    need(s.updater.auto_check_ui, &state.update_checker.last_ui_check, 14400),
+                    need(s.updater.auto_check_core, &state.update_checker.last_core_check, 43200),
+                    s.updater.github_proxy.clone(),
+                )
             };
 
             if check_ui {
-                if let Some(latest) = updater::fetch_latest_version(&state.http_client, "self").await {
+                if let Some(latest) = updater::fetch_latest_version(&state.http_client, "self", &proxies).await {
                     *state.update_checker.ui_outdated.write().unwrap() = compare_versions(&latest, VERSION.trim_start_matches('v'));
                 }
                 *state.update_checker.last_ui_check.write().unwrap() = Some(Instant::now());
@@ -59,17 +69,9 @@ pub fn start_update_checker(state: AppState) {
 
             if check_core {
                 let core = state.core.read().unwrap().name.clone();
-                if let Some(latest) = updater::fetch_latest_version(&state.http_client, &core).await {
-                    let arg = if core == "mihomo" { "-v" } else { "version" };
-                    if let Ok(out) = tokio::process::Command::new(format!("/opt/sbin/{}", core)).arg(arg).output().await {
-                        let s = String::from_utf8_lossy(&out.stdout);
-                        let p: Vec<&str> = s.split_whitespace().collect();
-                        let cur = match core.as_str() {
-                            "xray" => p.get(1),
-                            "mihomo" => p.get(if p.first() == Some(&"mihomo") { 1 } else { 2 }),
-                            _ => None
-                        }.unwrap_or(&"").trim_start_matches('v');
-
+                if let Some(latest) = updater::fetch_latest_version(&state.http_client, &core, &proxies).await {
+                    if let Some(cur) = get_local_core_version(&core).await {
+                        let cur = cur.trim_start_matches('v');
                         if !cur.is_empty() {
                             *state.update_checker.core_outdated.write().unwrap() = compare_versions(&latest, cur);
                         }
@@ -77,12 +79,20 @@ pub fn start_update_checker(state: AppState) {
                 }
                 *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
             }
-            tokio::time::sleep(Duration::from_secs(3600)).await;
         }
     });
 }
 
 fn compare_versions(latest: &str, current: &str) -> bool {
-    let parse = |v: &str| v.split('.').flat_map(str::parse::<u32>).collect::<Vec<_>>();
+    if current.to_lowercase().contains("alpha") {
+        return false;
+    }
+
+    let parse = |v: &str| {
+        v.split('-').next().unwrap_or(v)
+            .split('.')
+            .filter_map(|s| s.parse::<u32>().ok())
+            .collect::<Vec<_>>()
+    };
     parse(latest) > parse(current)
 }

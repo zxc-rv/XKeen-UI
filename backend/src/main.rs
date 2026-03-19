@@ -1,6 +1,6 @@
 mod types; mod settings; mod logger; mod controller; mod configs; mod version; mod websocket; mod updater; mod geo; mod clash;
 use std::{env, sync::{Arc, RwLock}, net::SocketAddr, process::exit, path::Path};
-use axum::{Router, response::Response, routing::{get, get_service, any}};
+use axum::{Router, response::Response, routing::{get, get_service, any, post}};
 use axum::http::{header::CACHE_CONTROL, HeaderValue};
 use tower_http::{cors::CorsLayer, services::{ServeDir, ServeFile}, set_header::SetResponseHeaderLayer};
 use crate::types::*;
@@ -40,7 +40,7 @@ async fn main() {
         core: Arc::new(RwLock::new(detect_core(init_file.as_deref()))),
         settings: Arc::new(RwLock::new(load_settings())),
         init_file: Arc::new(RwLock::new(init_file)),
-        http_client: reqwest::Client::builder().user_agent("XKeen-UI").timeout(std::time::Duration::from_secs(120)).build().unwrap(),
+        http_client: reqwest::Client::builder().user_agent("XKeen-UI").connect_timeout(std::time::Duration::from_secs(5)).timeout(std::time::Duration::from_secs(120)).build().unwrap(),
         update_checker: UpdateChecker::default(),
         geo_cache,
         log_tx: log_tx_arc,
@@ -56,7 +56,7 @@ async fn main() {
         .route("/api/configs", get(configs::get_configs).put(configs::put_config).post(configs::post_config).delete(configs::delete_config).patch(configs::patch_config))
         .route("/api/settings", get(settings::get_settings).patch(settings::patch_settings))
         .route("/api/version", get(version::version_handler))
-        .route("/api/update", get(updater::get_releases).post(updater::post_update))
+        .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))
         .route("/api/geo/site", get(geo::get_geosite))
         .route("/api/geo/ip", get(geo::get_geoip))

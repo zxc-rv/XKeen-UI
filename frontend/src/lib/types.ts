@@ -24,6 +24,7 @@ export interface Release {
   published_at: string
   is_prerelease: boolean
   body: string
+  assets: string[]
 }
 
 export interface ToastMessage {

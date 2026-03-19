@@ -1,7 +1,7 @@
-use axum::{extract::{Query, State}, response::{IntoResponse, Json}, http::{header, HeaderMap}};
+use axum::{extract::State, response::{IntoResponse, Json}, http::{header, HeaderMap}};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{path::{Path, PathBuf}, os::unix::fs::PermissionsExt, fs::File, io::{Cursor, Read, Seek, Write}};
+use std::{path::{Path, PathBuf}, os::unix::fs::PermissionsExt, fs::File, io::{Cursor, Read, Seek, Write}, time::Duration};
 use tokio::{process::Command, io::AsyncWriteExt, fs};
 use futures_util::StreamExt;
 use std::process::Stdio;
@@ -10,25 +10,11 @@ use crate::logger::log;
 
 const GITHUB_API: &str = "https://api.github.com/repos";
 const GITHUB_RELEASE: &str = "https://github.com";
-const JSDELIVR_API: &str = "https://data.jsdelivr.com/v1/package/gh";
-
-#[derive(Deserialize)] pub struct ReleaseQuery { core: String }
 
 #[derive(Deserialize)] struct GhRelease {
     tag_name: String,
-    #[serde(default)] name: String,
-    #[serde(default)] published_at: String,
     #[serde(default)] prerelease: bool,
-    #[serde(default)] assets: Vec<GhAsset>,
-    #[serde(default)] body: Option<String>
 }
-
-#[derive(Deserialize, Default)] struct GhAsset {
-    #[serde(default)] name: String,
-    #[serde(default)] browser_download_url: String
-}
-
-#[derive(Deserialize)] struct JsdResponse { versions: Vec<String> }
 
 enum DownloadResult { RAM(Vec<u8>), Disk(PathBuf) }
 
@@ -40,11 +26,36 @@ fn get_repo(core: &str) -> Option<&'static str> {
       _ => None }
 }
 
-pub async fn fetch_latest_version(client: &reqwest::Client, core: &str) -> Option<String> {
+pub async fn fetch_latest_version(client: &reqwest::Client, core: &str, proxies: &[String]) -> Option<String> {
     let repo = get_repo(core)?;
-    let res = client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await.ok()?;
-    let rels = res.json::<Vec<GhRelease>>().await.ok()?;
-    rels.into_iter().find(|r| !r.prerelease).map(|r| r.tag_name.trim_start_matches('v').to_string())
+    let url = format!("{}/{}/releases?per_page=10", GITHUB_API, repo);
+    let list = std::iter::once(url.clone()).chain(
+        proxies.iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .map(|p| format!("{}/{}", p.trim_end_matches('/'), url))
+    );
+
+    for u in list {
+        let res = match client
+            .get(&u)
+            .header("Accept", "application/vnd.github+json")
+            .timeout(Duration::from_secs(15))
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => r,
+            _ => continue,
+        };
+        if res.headers().get("content-type").map_or(false, |v| v.to_str().unwrap_or("").contains("text/html")) {
+            continue;
+        }
+        let rels = match res.json::<Vec<GhRelease>>().await { Ok(v) => v, Err(_) => continue };
+        if let Some(r) = rels.into_iter().find(|r| !r.prerelease) {
+            return Some(r.tag_name.trim_start_matches('v').to_string());
+        }
+    }
+    None
 }
 
 fn response(success: bool, error: Option<String>) -> (HeaderMap, Json<Value>) {
@@ -95,32 +106,6 @@ async fn download(client: &reqwest::Client, url: &str, proxies: &[String], tmp_p
     }
     log("ERROR", "Не удалось выполнить обновление".into());
     Err("Не удалось выполнить обновление".into())
-}
-
-pub async fn get_releases(State(state): State<AppState>, Query(q): Query<ReleaseQuery>) -> impl IntoResponse {
-    let Some(repo) = get_repo(&q.core) else { return response(false, Some("Неизвестное ядро".into())); };
-
-    if let Ok(res) = state.http_client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await {
-        if let Ok(rels) = res.json::<Vec<GhRelease>>().await {
-            return (HeaderMap::new(), Json(json!({ "success": true, "source": "github", "releases": rels.into_iter().map(|r| ReleaseInfo {
-                version: r.tag_name.trim_start_matches('v').into(),
-                name: r.name,
-                published_at: r.published_at.split('T').next().unwrap_or("").into(),
-                is_prerelease: r.prerelease,
-                body: r.body.unwrap_or_default()
-            }).collect::<Vec<_>>() })));
-        }
-    }
-
-    if let Ok(res) = state.http_client.get(format!("{}/{}", JSDELIVR_API, repo)).send().await {
-        if let Ok(jsd) = res.json::<JsdResponse>().await {
-            return (HeaderMap::new(), Json(json!({ "success": true, "source": "jsdelivr", "releases": jsd.versions.into_iter().take(10).map(|v| ReleaseInfo {
-                version: v.clone(), name: format!("Release {}", v), published_at: String::new(), is_prerelease: false, body: String::new()
-            }).collect::<Vec<_>>() })));
-        }
-    }
-
-    response(false, Some("Не удалось получить список релизов".into()))
 }
 
 async fn install_jq() -> Result<(), String> {
@@ -264,15 +249,13 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
               _ => return response(false, Some("Архитектура не поддерживается".into()))
             };
             if ver == "Prerelease-Alpha" {
-                let mut found = None;
-                if let Ok(res) = state.http_client.get(format!("{}/{}/releases?per_page=10", GITHUB_API, repo)).send().await {
-                    if let Ok(rels) = res.json::<Vec<GhRelease>>().await {
-                        found = rels.into_iter().find(|r| r.tag_name == ver).and_then(|r| r.assets.into_iter().find(|a| a.name.contains(&format!("mihomo-linux-{}", m)) && a.name.ends_with(".gz")));
-                    }
-                }
+                let arch_suffix = format!("mihomo-linux-{}", m);
+                let found = req.assets.into_iter()
+                    .find(|a| a.contains(&arch_suffix) && a.ends_with(".gz"));
+
                 match found {
-                  Some(a) => (a.name, a.browser_download_url),
-                  None => return response(false, Some("Релиз или ассет не найден".into()))
+                  Some(name) => (name.clone(), format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, name)),
+                  None => return response(false, Some("Ассет не найден — обновите страницу и повторите".into()))
                 }
             } else {
               let n = format!("mihomo-linux-{}-{}.gz", m, ver);

@@ -143,13 +143,5 @@ pub struct UpdateReq {
     pub core: String,
     pub version: String,
     pub backup_core: bool,
-}
-
-#[derive(Serialize)]
-pub struct ReleaseInfo {
-    pub version: String,
-    pub name: String,
-    pub published_at: String,
-    pub is_prerelease: bool,
-    pub body: String,
+    #[serde(default)] pub assets: Vec<String>,
 }

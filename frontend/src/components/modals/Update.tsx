@@ -10,10 +10,19 @@ import { IconDownload, IconPlaylistX, IconRefresh } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { capitalize } from '../../lib/api'
+import { apiCall, capitalize } from '../../lib/api'
 import { useAppContext, useModalContext, useSettings } from '../../lib/store'
 import type { Release } from '../../lib/types'
 import { cn } from '../../lib/utils'
+
+const GITHUB_API = 'https://api.github.com/repos'
+const JSDELIVR_API = 'https://data.jsdelivr.com/v1/package/gh'
+const FETCH_TIMEOUT_MS = 5000
+const CORE_REPOS = {
+  xray: 'XTLS/Xray-core',
+  mihomo: 'MetaCubeX/mihomo',
+  self: 'zxc-rv/XKeen-UI',
+} as const
 
 const mdClass = `
   text-xs text-muted-foreground leading-relaxed
@@ -32,10 +41,17 @@ const mdClass = `
   [&_blockquote]:border-l-2 [&_blockquote]:border-ring/40 [&_blockquote]:pl-3 [&_blockquote]:italic
 `.trim()
 
+const fetchWithTimeout = (url: string, init?: RequestInit) => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer))
+}
+
 export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
   const { dispatch, showToast } = useAppContext()
   const { modals } = useModalContext()
   const backupCore = useSettings((s) => s.backupCore)
+  const githubProxies = useSettings((s) => s.githubProxies)
   const { updateModalCore } = modals
   const [releases, setReleases] = useState<Release[]>([])
   const [selectedVersion, setSelectedVersion] = useState('')
@@ -59,15 +75,72 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
     setReleases([])
     setSource('')
     try {
-      const res = await fetch(`/api/update?core=${updateModalCore}`)
-      const data = await res.json()
-      if (data.success && data.releases?.length) {
-        setReleases(data.releases)
-        setSelectedVersion(data.releases[0].version)
-        setOpenVersion(data.releases[0].version)
-        setSource(data.source ?? '')
+      const repo = CORE_REPOS[updateModalCore as keyof typeof CORE_REPOS]
+      if (!repo) throw new Error('UNKNOWN_CORE')
+
+      const ghUrl = `${GITHUB_API}/${repo}/releases?per_page=10`
+      const ghUrls = [ghUrl, ...githubProxies.map((p) => `${p.replace(/\/+$/, '')}/${ghUrl}`)]
+
+      for (const url of ghUrls) {
+        let res: Response
+        try {
+          res = await fetchWithTimeout(url, { headers: { Accept: 'application/vnd.github+json' } })
+        } catch {
+          continue
+        }
+        if (!res.ok) continue
+        const rels = (await res.json()) as Array<{
+          tag_name?: string
+          name?: string
+          published_at?: string
+          prerelease?: boolean
+          body?: string | null
+          assets?: Array<{ name: string; browser_download_url: string }>
+        }>
+        const parsed = (rels ?? [])
+          .map((r) => ({
+            version: (r.tag_name ?? '').replace(/^v/i, ''),
+            name: r.name ?? '',
+            published_at: (r.published_at ?? '').split('T')[0] ?? '',
+            is_prerelease: !!r.prerelease,
+            body: r.body ?? '',
+            assets: (r.assets ?? []).map((a) => a.name),
+          }))
+          .filter((r) => r.version)
+
+        if (parsed.length) {
+          setReleases(parsed)
+          setSelectedVersion(parsed[0].version)
+          setOpenVersion(parsed[0].version)
+          setSource('github')
+          setLoading(false)
+          return
+        }
       }
-      if (!data.success || !data.releases?.length) throw new Error()
+
+      const jsdRes = await fetchWithTimeout(`${JSDELIVR_API}/${repo}`).catch(() => null)
+      if (jsdRes?.ok) {
+        const jsd = (await jsdRes.json()) as { versions?: string[] }
+        const versions = (jsd.versions ?? []).slice(0, 10)
+        if (versions.length) {
+          const parsed = versions.map((v) => ({
+            version: v,
+            name: `Release ${v}`,
+            published_at: '',
+            is_prerelease: false,
+            body: '',
+            assets: [],
+          }))
+          setReleases(parsed)
+          setSelectedVersion(parsed[0].version)
+          setOpenVersion(parsed[0].version)
+          setSource('jsdelivr')
+          setLoading(false)
+          return
+        }
+      }
+
+      throw new Error('NO_RELEASES')
     } catch {
       showToast('Не удалось получить список релизов', 'error')
     }
@@ -84,6 +157,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
       pendingText: 'Обновление...',
     })
     try {
+      const selectedRelease = releases.find((r) => r.version === selectedVersion)
       const res = await fetch('/api/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -91,6 +165,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
           core: updateModalCore,
           version: selectedVersion,
           backup_core: backupCore,
+          ...(selectedVersion === 'Prerelease-Alpha' && { assets: selectedRelease?.assets ?? [] }),
         }),
       })
       const data = await res.json()
@@ -107,8 +182,16 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
     } catch {
       showToast('Ошибка установки', 'error')
     } finally {
-      setInstalling(false)
-      dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+      if (updateModalCore !== 'self') {
+        setInstalling(false)
+        apiCall<any>('GET', 'control')
+          .then((data) => {
+            if (data.success) {
+              dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
+            }
+          })
+          .catch(() => dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' }))
+      }
     }
   }
 
