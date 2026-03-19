@@ -198,7 +198,12 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 _ = fs::write(ERROR_LOG, b"").await;
             }
 
-            let args: &[&str] = if a == "start" { &["start", "on"] } else { &[arg] };
+            let args: &[&str] = match a {
+                "start" => &["start", "on"],
+                "hardRestart" => &["restart", "on"],
+                _ => &[arg],
+            };
+
             if let Err(e) = run_init_command(&state, args).await {
                 return Json(ApiResponse { success: false, error: Some(e), data: None });
             }
