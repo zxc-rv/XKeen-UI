@@ -17,12 +17,14 @@ jobs:
           - target: aarch64-unknown-linux-musl
             name: arm64-v8a
             toolchain: stable
-          - target: mips-unknown-linux-musl
+          - target: mips-unknown-linux-gnu
             name: mips32
             toolchain: nightly
-          - target: mipsel-unknown-linux-musl
+            rustflags: "-C target-feature=+crt-static"
+          - target: mipsel-unknown-linux-gnu
             name: mips32le
             toolchain: nightly
+            rustflags: "-C target-feature=+crt-static"
     steps:
       - uses: actions/checkout@v6
       - name: Set version
@@ -30,33 +32,41 @@ jobs:
           sed -i 's/^version = .*/version = "${{ inputs.version }}"/' backend/Cargo.toml
           sed -i 's/version = "v/version = "/' backend/Cargo.toml
           cat backend/Cargo.toml
+
       - name: Install Rust
-        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal
+        run: rustup toolchain install ${{ matrix.toolchain }} --profile minimal -c rust-src
+
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: backend
           key: ${{ matrix.target }}
+
       - name: Install cross
         run: type cross || cargo install cross --git https://github.com/cross-rs/cross
+
       - name: Setup Cross.toml
         working-directory: backend
         run: |
-          cat <<EOF > Cross.toml
-          [target.mips-unknown-linux-musl]
-          image = "rustembedded/cross:mips-unknown-linux-musl"
-          build-std = ["core", "alloc", "std", "panic_abort"]
-          [target.mipsel-unknown-linux-musl]
-          image = "rustembedded/cross:mipsel-unknown-linux-musl"
-          build-std = ["core", "alloc", "std", "panic_abort"]
+          cat <<'EOF' > Cross.toml
+          [target.mips-unknown-linux-gnu]
+          build-std = ["std", "panic_abort", "proc_macro"]
+
+          [target.mipsel-unknown-linux-gnu]
+          build-std = ["std", "panic_abort", "proc_macro"]
           EOF
+
       - name: Check metadata
         working-directory: backend
         run: cargo metadata --format-version 1
+
       - name: Build binary
         working-directory: backend
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: |
           cross +${{ matrix.toolchain }} build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/xkeen-ui ../xkeen-ui-${{ matrix.name }}
+
       - uses: actions/upload-artifact@v7
         with:
           name: xkeen-ui-${{ matrix.name }}
