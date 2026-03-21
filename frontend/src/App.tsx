@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { LoginForm } from './components/auth/Login'
 import type { CodeMirrorRef } from './components/configuration/CodeMirror'
@@ -104,7 +105,7 @@ const ModalManager = memo(function ModalManager({
   )
 })
 
-function AppContent() {
+function AppContent({ onLogout }: { onLogout: () => void }) {
   const { dispatch, showToast } = useAppActions()
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
@@ -387,10 +388,7 @@ function AppContent() {
     [showToast]
   )
 
-  const logout = useCallback(async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.reload()
-  }, [])
+  const logout = onLogout
   const onInstalled = useCallback(() => void checkStatus(), [checkStatus])
   const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
 
@@ -448,13 +446,25 @@ export default function App() {
       .catch(() => setAuthState('login'))
   }, [])
 
+  const handleLogout = useCallback(async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    setAuthState('login')
+  }, [])
+
   if (authState === 'loading') return null
-  if (authState === 'login' || authState === 'setup')
-    return (
-      <>
-        <LoginForm mode={authState} onAuth={() => setAuthState('authenticated')} />
-        <Toast />
-      </>
-    )
-  return <AppContent />
+
+  return (
+    <AnimatePresence mode="wait">
+      {authState === 'login' || authState === 'setup' ? (
+        <motion.div key="login" initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+          <LoginForm mode={authState} onAuth={() => setAuthState('authenticated')} />
+          <Toast />
+        </motion.div>
+      ) : (
+        <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+          <AppContent onLogout={handleLogout} />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
 }
