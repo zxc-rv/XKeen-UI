@@ -604,8 +604,7 @@
       })
 
       function generate() {
-        let uri = uriInput.value.trim()
-        uri = uri.split("#")[0] + "#vless-reality"
+        const uri = uriInput.value.trim()
         if (!uri) return
 
         const output = document.getElementById("output")
@@ -618,6 +617,7 @@
             .map((l) => l.trim())
             .filter(Boolean)
           const results = lines.map((line) => {
+            if (!line.toLowerCase().startsWith("http")) line = line.split("#")[0] + "#vless-reality"
             const res = generateConfigForCore(line, currentCore, "")
             return currentCore === "xray" ? JSON.parse(res.content) : res.content
           })
