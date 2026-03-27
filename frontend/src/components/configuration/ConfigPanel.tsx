@@ -513,7 +513,12 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Перезапуск...' })
     const lang = getFileLanguage(cfg.file)
     const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', {
-      action: (lang === 'json' || lang === 'yaml') && !hasCriticalChanges(cfg.savedContent, content, lang) ? 'softRestart' : 'hardRestart',
+      action:
+        !xkeenConfigs.some((c) => c.file === cfg.file) &&
+        (lang === 'json' || lang === 'yaml') &&
+        !hasCriticalChanges(cfg.savedContent, content, lang)
+          ? 'softRestart'
+          : 'hardRestart',
       core: currentCore,
     })
     showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
@@ -589,7 +594,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                     Селекторы
                   </TabsTrigger>
                   <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
-                    Подключения
+                    Соединения
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
