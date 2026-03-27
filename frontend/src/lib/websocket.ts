@@ -34,7 +34,7 @@ export function useWebSocket(onMessage: WsMessageHandler) {
     }
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current)
 
-    const ws = new WebSocket(`/ws?file=${currentFileRef.current}`)
+    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?file=${currentFileRef.current}`)
     wsRef.current = ws
 
     ws.onopen = () => {
