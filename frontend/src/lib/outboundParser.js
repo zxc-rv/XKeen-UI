@@ -303,7 +303,18 @@ function convertToMihomoYaml(proxyConfig) {
       path: streamSettings.httpupgradeSettings?.path,
       headers: streamSettings.httpupgradeSettings?.host ? { Host: streamSettings.httpupgradeSettings.host } : undefined,
     }
-
+  else if (streamSettings.network === 'xhttp') {
+    const xhttp = streamSettings.xhttpSettings || {}
+    const extra = xhttp.extra || {}
+    common['xhttp-opts'] = {
+      path: xhttp.path,
+      mode: xhttp.mode,
+      headers: extra.Headers,
+      'x-padding-bytes': extra.xPaddingBytes,
+      xmux: extra.xmux,
+      'download-settings': extra.downloadSettings,
+    }
+  }
   return `  - ${toYaml(common).trim().replace(/\n/g, '\n    ')}`
 }
 
@@ -338,7 +349,6 @@ function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
     }
   }
 
-  if (core === 'mihomo' && uri.includes('type=xhttp')) throw new Error('XHTTP в Mihomo не поддерживается')
   if (core !== 'mihomo' && uri.startsWith('http')) throw new Error('Подписки в Xray не поддерживаются')
   if (core !== 'mihomo' && (uri.startsWith('hysteria2') || uri.startsWith('hy2'))) throw new Error('Hysteria2 в Xray не поддерживается')
 
