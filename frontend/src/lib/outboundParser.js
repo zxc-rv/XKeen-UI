@@ -311,7 +311,7 @@ function convertToMihomoYaml(proxyConfig) {
       mode: xhttp.mode,
       headers: extra.Headers,
       'x-padding-bytes': extra.xPaddingBytes,
-      xmux: extra.xmux,
+      // xmux: extra.xmux,
       'download-settings': extra.downloadSettings,
     }
   }
