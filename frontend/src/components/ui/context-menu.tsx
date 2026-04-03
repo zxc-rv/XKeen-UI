@@ -63,7 +63,7 @@ function ContextMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "group/context-menu-item focus:bg-accent data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive relative flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.25 text-sm outline-hidden select-none not-data-[variant=destructive]:focus:font-semibold not-data-[variant=destructive]:focus:text-[#60a5fa] not-data-[variant=destructive]:focus:**:text-[#60a5fa] data-disabled:pointer-events-none data-disabled:opacity-50 data-inset:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "group/context-menu-item focus:bg-accent data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive relative flex items-center gap-2 rounded-sm px-2 py-1.25 text-sm outline-hidden select-none not-data-[variant=destructive]:focus:font-semibold not-data-[variant=destructive]:focus:text-[#60a5fa] not-data-[variant=destructive]:focus:**:text-[#60a5fa] data-disabled:pointer-events-none data-disabled:opacity-50 data-inset:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

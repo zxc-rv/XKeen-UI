@@ -16,6 +16,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   IconCheck,
+  IconChevronDown,
+  IconChevronUp,
   IconCode,
   IconDeviceFloppy,
   IconDotsFilled,
@@ -49,6 +51,8 @@ const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPa
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
 type ClashMode = 'rule' | 'global' | 'direct'
+
+const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
 
 interface Props {
   onOpenImport: () => void
@@ -283,6 +287,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   const [activePanel, setActivePanel] = useState<'config' | 'selectors' | 'connections'>('config')
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['config']))
   const [mode, setMode] = useState<ClashMode>('rule')
+  const [allSelectorsCollapsed, setAllSelectorsCollapsed] = useState(false)
   const [updatingRuleProviders, setUpdatingRuleProviders] = useState(false)
   const [updatingProxyProviders, setUpdatingProxyProviders] = useState(false)
 
@@ -575,29 +580,31 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     <TooltipProvider delayDuration={500}>
       <div className="border-border bg-card flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
         <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
             {isMihomo ? (
-              <Tabs
-                value={activePanel}
-                onValueChange={(value) => {
-                  const panel = value as 'config' | 'selectors' | 'connections'
-                  setActivePanel(panel)
-                  setMountedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
-                }}
-                className="flex-row!"
-              >
-                <TabsList variant="line" className="mb-2 gap-3 p-0 md:mb-0">
-                  <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
-                    Конфигурация
-                  </TabsTrigger>
-                  <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
-                    Селекторы
-                  </TabsTrigger>
-                  <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
-                    Соединения
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <div className="min-w-0 overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <Tabs
+                  value={activePanel}
+                  onValueChange={(value) => {
+                    const panel = value as 'config' | 'selectors' | 'connections'
+                    setActivePanel(panel)
+                    setMountedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
+                  }}
+                  className="w-max flex-row!"
+                >
+                  <TabsList variant="line" className="mb-2 w-max shrink-0 gap-3 p-0 whitespace-nowrap md:mb-0">
+                    <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
+                      Конфигурация
+                    </TabsTrigger>
+                    <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
+                      Селекторы
+                    </TabsTrigger>
+                    <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
+                      Соединения
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             ) : (
               <h2 className="shrink-0 text-lg font-semibold select-none">Конфигурация</h2>
             )}
@@ -649,6 +656,21 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
+                    onClick={() =>
+                      window.dispatchEvent(new CustomEvent(TOGGLE_ALL_SELECTORS_EVENT, { detail: { collapsed: !allSelectorsCollapsed } }))
+                    }
+                  >
+                    {allSelectorsCollapsed ? <IconChevronDown /> : <IconChevronUp />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{allSelectorsCollapsed ? 'Развернуть все' : 'Свернуть все'}</TooltipContent>
+              </Tooltip>
             </div>
           )}
 
@@ -720,6 +742,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                       mode={mode}
                       clashApiSecret={clashApiSecret ?? null}
                       clashApiUnix={activeClashApiUnix ?? null}
+                      onCollapsedStateChange={setAllSelectorsCollapsed}
                     />
                   </LazyBoundary>
                 </div>

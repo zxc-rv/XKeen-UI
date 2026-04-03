@@ -83,6 +83,22 @@ impl Default for LogSettings {
     fn default() -> Self { Self { timezone: 3 } }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ClashApiSettings {
+    pub ping_url: String,
+    pub ping_timeout: u32,
+}
+
+impl Default for ClashApiSettings {
+    fn default() -> Self {
+        Self {
+            ping_url: "https://www.gstatic.com/generate_204".into(),
+            ping_timeout: 5000,
+        }
+    }
+}
+
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -104,6 +120,7 @@ pub struct AppSettings {
     pub gui: GuiSettings,
     pub updater: UpdaterSettings,
     pub log: LogSettings,
+    pub clash_api: ClashApiSettings,
     pub append_config_paths: AppendConfigPaths,
     pub auth: AuthSettings,
 }
@@ -120,6 +137,8 @@ impl<'de> Deserialize<'de> for AppSettings {
             #[serde(default)]
             log: LogSettings,
             #[serde(default)]
+            clash_api: ClashApiSettings,
+            #[serde(default)]
             append_config_paths: AppendConfigPaths,
             #[serde(default)]
             auth: AuthSettings,
@@ -128,7 +147,14 @@ impl<'de> Deserialize<'de> for AppSettings {
         }
         let mut raw = RawConfig::deserialize(deserializer)?;
         if let Some(tz) = raw.legacy_tz { raw.log.timezone = tz; }
-        Ok(Self { gui: raw.gui, updater: raw.updater, log: raw.log, append_config_paths: raw.append_config_paths, auth: raw.auth })
+        Ok(Self {
+            gui: raw.gui,
+            updater: raw.updater,
+            log: raw.log,
+            clash_api: raw.clash_api,
+            append_config_paths: raw.append_config_paths,
+            auth: raw.auth,
+        })
     }
 }
 

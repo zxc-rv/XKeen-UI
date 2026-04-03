@@ -95,7 +95,7 @@ function formatAsn(data: any): string | null {
 function getConnectionSortValue(conn: Connection, column: SortColumn): string {
   switch (column) {
     case 'host':
-      return conn.metadata.host || conn.metadata.destinationIP
+      return getConnectionHost(conn)
     case 'chains':
       return conn.chains[0] ?? ''
     case 'source':
@@ -109,6 +109,19 @@ function getConnectionSortValue(conn: Connection, column: SortColumn): string {
     default:
       return ''
   }
+}
+
+function getConnectionHost(conn: Connection): string {
+  return conn.metadata.host || conn.metadata.destinationIP
+}
+
+function getConnectionHostLabel(conn: Connection): string {
+  const host = getConnectionHost(conn)
+  return conn.metadata.destinationPort ? `${host}:${conn.metadata.destinationPort}` : host
+}
+
+function getConnectionSourceLabel(conn: Connection): string {
+  return `${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`
 }
 
 function formatBytes(bytes: number) {
@@ -160,7 +173,7 @@ function ProxyIcon({ name, className }: { name: string; className?: string }) {
     <img
       src={icon}
       alt=""
-      className={className ?? 'mr-1 size-4.5 shrink-0 object-contain'}
+      className={className ?? 'size-4.5 shrink-0 object-contain'}
       onError={(e) => {
         ;(e.target as HTMLImageElement).style.display = 'none'
       }}
@@ -208,46 +221,62 @@ const ConnectionRow = memo(function ConnectionRow({
   connId,
   onSelect,
   onClose,
+  onApplyFilter,
 }: {
   connId: string
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
+  onApplyFilter: (value: string) => void
 }) {
   const displayKey = useConnectionsStore((s) => {
     const c = s.map.get(connId)
     if (!c) return null
-    const host = c.metadata.host || c.metadata.destinationIP
+    const host = getConnectionHost(c)
     return `${c.chains.join('|')}|${host}|${c.metadata.destinationPort}|${c.metadata.sourceIP}|${c.metadata.sourcePort}|${c.start}`
   })
 
   if (!displayKey) return null
 
   const conn = useConnectionsStore.getState().map.get(connId)!
-  const host = conn.metadata.host || conn.metadata.destinationIP
-  const source = `${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`
+  const host = getConnectionHost(conn)
+  const hostLabel = getConnectionHostLabel(conn)
+  const source = getConnectionSourceLabel(conn)
   const reversedChains = [...conn.chains].reverse()
   const first = reversedChains[0]
   const last = reversedChains.at(-1)
+  const applyChainFilter = (value: string | undefined, e: React.MouseEvent | React.KeyboardEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (value) onApplyFilter(value)
+  }
 
   return (
     <TableRow className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => onSelect(conn)}>
-      <TableCell className="max-w-40 pl-3 text-[13px]">
+      <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
               {first && (
-                <div className="flex min-w-0 shrink items-center gap-1 truncate">
-                  <ProxyIcon name={first} />
-                  <span className="truncate">{first}</span>
-                </div>
+                <button
+                  type="button"
+                  className="flex shrink-0 items-center gap-1 text-left hover:opacity-80"
+                  onClick={(e) => applyChainFilter(first, e)}
+                >
+                  <ProxyIcon name={first} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                  <span className="block whitespace-nowrap">{first}</span>
+                </button>
               )}
               {reversedChains.length > 1 && (
                 <>
                   <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
-                  <div className="flex min-w-0 shrink items-center gap-1 truncate">
-                    <ProxyIcon name={last!} />
-                    <span className="truncate">{last}</span>
-                  </div>
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-left hover:opacity-80"
+                    onClick={(e) => applyChainFilter(last, e)}
+                  >
+                    <ProxyIcon name={last!} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                    <span className="block truncate">{last}</span>
+                  </button>
                 </>
               )}
             </div>
@@ -255,23 +284,41 @@ const ConnectionRow = memo(function ConnectionRow({
           <ChainTooltip chains={reversedChains} />
         </Tooltip>
       </TableCell>
-      <TableCell className="max-w-48 text-[13px]">
+      <TableCell className="max-w-72 text-[13px] md:max-w-48">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex min-w-0 items-center overflow-hidden">
+            <button
+              type="button"
+              className="flex w-fit max-w-full items-center overflow-hidden text-left hover:opacity-80"
+              onClick={(e) => {
+                e.stopPropagation()
+                onApplyFilter(hostLabel)
+              }}
+            >
               <span className="truncate">{host}</span>
               {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
-            </span>
+            </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-[13px]">{`${host}:${conn.metadata.destinationPort}`}</TooltipContent>
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
+            {hostLabel}
+          </TooltipContent>
         </Tooltip>
       </TableCell>
-      <TableCell className="text-muted-foreground max-w-47.5 text-[13px]">
+      <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="block min-w-0 truncate">{source}</span>
+            <button
+              type="button"
+              className="block w-fit max-w-full truncate text-left hover:opacity-80"
+              onClick={(e) => {
+                e.stopPropagation()
+                onApplyFilter(source)
+              }}
+            >
+              {source}
+            </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-[13px]">
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={source}>
             {source}
           </TooltipContent>
         </Tooltip>
@@ -521,9 +568,9 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 // ─── Table head ────────────────────────────────────────────────────────────────
 
 const columns: { key: SortColumn; label: string; className: string }[] = [
-  { key: 'chains', label: 'Цепочка', className: 'w-[35%] pl-3' },
-  { key: 'host', label: 'Хост', className: 'w-[35%]' },
-  { key: 'source', label: 'Источник', className: 'w-[10%] max-w-[190px]' },
+  { key: 'chains', label: 'Цепочка', className: 'w-[50%] pl-3 md:w-[35%]' },
+  { key: 'host', label: 'Хост', className: 'w-[26%] md:w-[35%]' },
+  { key: 'source', label: 'Источник', className: 'w-[14%] max-w-[220px] md:w-[10%] md:max-w-[190px]' },
   { key: 'upload', label: 'Трафик', className: 'w-[10%]' },
   { key: 'start', label: 'Время', className: 'w-[10%]' },
 ]
@@ -572,31 +619,38 @@ const ConnectionsBody = memo(function ConnectionsBody({
   sortDirection,
   onSelect,
   onClose,
+  onApplyFilter,
 }: {
   filter: string
   sortColumn: SortColumn
   sortDirection: SortDirection
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
+  onApplyFilter: (value: string) => void
 }) {
   const connected = useWsConnected()
 
   const filteredIds = useConnectionsStore(
     useShallow((s) => {
       const connections = Array.from(s.map.values())
-      const query = filter.toLowerCase().trim()
+      const query = filter.trim()
       let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
 
       if (query) {
-        result = result.filter(
-          (conn) =>
-            conn.chains.some((c) => c.toLowerCase().includes(query)) ||
-            conn.metadata.host.toLowerCase().includes(query) ||
+        result = result.filter((conn) => {
+          const hostLabel = getConnectionHostLabel(conn)
+          const sourceLabel = getConnectionSourceLabel(conn)
+          return (
+            conn.chains.some((c) => c.includes(query)) ||
+            hostLabel.includes(query) ||
+            conn.metadata.host.includes(query) ||
             conn.metadata.destinationIP.includes(query) ||
+            sourceLabel.includes(query) ||
             conn.metadata.sourceIP.includes(query) ||
-            conn.rule.toLowerCase().includes(query) ||
-            conn.rulePayload.toLowerCase().includes(query)
-        )
+            conn.rule.includes(query) ||
+            conn.rulePayload.includes(query)
+          )
+        })
       }
 
       if (sortColumn) {
@@ -620,7 +674,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
           </TableCell>
         </TableRow>
       ) : (
-        filteredIds.map((id) => <ConnectionRow key={id} connId={id} onSelect={onSelect} onClose={onClose} />)
+        filteredIds.map((id) => <ConnectionRow key={id} connId={id} onSelect={onSelect} onClose={onClose} onApplyFilter={onApplyFilter} />)
       )}
     </TableBody>
   )
@@ -659,6 +713,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   }, [clashApiPort, clashApiSecret, clashApiUnix])
 
   const clearFilter = useCallback(() => setFilter(''), [])
+  const handleApplyFilter = useCallback((value: string) => setFilter(value), [])
 
   const handleCloseConnection = useCallback(
     async (id: string, e?: React.MouseEvent) => {
@@ -688,7 +743,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
       <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
         <ConnectionsHeader filter={filter} onFilterChange={setFilter} onClearFilter={clearFilter} onCloseAll={closeAll} />
         <div className="flex-1 overflow-auto [scrollbar-width:thin]">
-          <Table>
+          <Table className="min-w-240 md:min-w-190">
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
             <ConnectionsBody
               filter={filter}
@@ -696,6 +751,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
               sortDirection={sortDirection}
               onSelect={handleSelectConnection}
               onClose={handleCloseConnection}
+              onApplyFilter={handleApplyFilter}
             />
           </Table>
         </div>

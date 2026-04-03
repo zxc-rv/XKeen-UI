@@ -7,6 +7,32 @@ export function cn(...inputs: ClassValue[]) {
 
 export const stripJsonComments = (s: string) => s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '')
 
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    /* */
+  }
+
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.cssText = 'position:fixed;opacity:0;pointer-events:none;z-index:-1;'
+    document.body.appendChild(textarea)
+    textarea.focus()
+    textarea.select()
+    textarea.setSelectionRange(0, text.length)
+    const copied = document.execCommand('copy')
+    textarea.remove()
+    return copied
+  } catch {
+    return false
+  }
+}
+
 export function parseClashApiCredentials(yamlContent: string): { port: string | null; secret: string | null; unix: string | null } {
   const unixMatch = yamlContent.match(/^external-controller-unix:\s*(?:(["'])(.*?)\1|([^#\n]+?))(?:\s+#.*)?$/m)
   const unixPath = unixMatch ? (unixMatch[2] ?? unixMatch[3])?.trim() || null : null

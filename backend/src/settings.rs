@@ -4,7 +4,7 @@ use std::fs;
 
 pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
-    Json(serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log, "auth": { "enabled": s.auth.enabled } }))
+    Json(serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log, "clash_api": s.clash_api, "auth": { "enabled": s.auth.enabled } }))
 }
 
 pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<serde_json::Value>) -> impl IntoResponse {
@@ -33,6 +33,13 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
 
     if settings.log.timezone < -12 || settings.log.timezone > 14 {
         return Json(serde_json::json!({"success": false, "error": "Неверный часовой пояс"}));
+    }
+    settings.clash_api.ping_url = settings.clash_api.ping_url.trim().to_string();
+    if settings.clash_api.ping_url.is_empty() {
+        return Json(serde_json::json!({"success": false, "error": "URL пинг-теста не может быть пустым"}));
+    }
+    if settings.clash_api.ping_timeout == 0 {
+        return Json(serde_json::json!({"success": false, "error": "Таймаут пинг-теста должен быть больше 0"}));
     }
     settings.normalize_proxies();
 

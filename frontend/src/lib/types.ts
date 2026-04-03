@@ -1,3 +1,6 @@
+export const DEFAULT_PING_TEST_URL = 'https://www.gstatic.com/generate_204'
+export const DEFAULT_PING_TEST_TIMEOUT = 5000
+
 export interface Config {
   file: string
   content: string
@@ -13,6 +16,8 @@ export interface AppSettings {
   autoCheckCore: boolean
   backupCore: boolean
   githubProxies: string[]
+  pingTestUrl: string
+  pingTestTimeout: number
   timezone: number
   authEnabled: boolean
 }

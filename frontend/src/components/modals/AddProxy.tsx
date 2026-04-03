@@ -2,6 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { copyText } from '@/lib/utils'
 import { IconCheck, IconCopy, IconLink, IconPlus, IconX } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useAppContext, useModalContext } from '../../lib/store'
@@ -111,28 +112,15 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
     }
   }
 
-  function copy(e: React.MouseEvent<HTMLButtonElement>) {
+  async function copy() {
     if (!result) return
-    try {
-      if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(result.content)
-      } else {
-        const textarea = document.createElement('textarea')
-        textarea.value = result.content
-        textarea.style.cssText = 'position:absolute;opacity:0;pointer-events:none;z-index:-1;'
-        const target = e.currentTarget || document.body
-        target.appendChild(textarea)
-        textarea.focus()
-        textarea.select()
-        textarea.setSelectionRange(0, 99999)
-        document.execCommand('copy')
-        target.removeChild(textarea)
-      }
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
+    const copiedOk = await copyText(result.content)
+    if (!copiedOk) {
       showToast('Ошибка копирования', 'error')
+      return
     }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   function addToConfig(position: 'start' | 'end') {

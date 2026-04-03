@@ -1,7 +1,9 @@
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import * as React from 'react'
 
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { cn, copyText } from '@/lib/utils'
+import { IconCheck, IconCopy } from '@tabler/icons-react'
 
 function TooltipProvider({ delayDuration = 0, ...props }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return <TooltipPrimitive.Provider data-slot="tooltip-provider" delayDuration={delayDuration} {...props} />
@@ -15,7 +17,20 @@ function TooltipTrigger({ ...props }: React.ComponentProps<typeof TooltipPrimiti
   return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
 }
 
-function TooltipContent({ className, sideOffset = 0, children, ...props }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
+type TooltipContentProps = React.ComponentProps<typeof TooltipPrimitive.Content> & {
+  copyTextValue?: string
+}
+
+function TooltipContent({ className, sideOffset = 0, children, copyTextValue, ...props }: TooltipContentProps) {
+  const [copied, setCopied] = React.useState(false)
+
+  async function handleCopy(e: React.MouseEvent<HTMLButtonElement>) {
+    e.stopPropagation()
+    if (!copyTextValue || !(await copyText(copyTextValue))) return
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -27,7 +42,22 @@ function TooltipContent({ className, sideOffset = 0, children, ...props }: React
         )}
         {...props}
       >
-        {children}
+        {copyTextValue ? (
+          <div className="flex items-center gap-2">
+            <div className="min-w-0">{children}</div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="text-background/70 hover:bg-background/10 hover:text-background size-6 shrink-0"
+              onClick={handleCopy}
+            >
+              {copied ? <IconCheck size={13} className="text-green-400" /> : <IconCopy size={13} />}
+            </Button>
+          </div>
+        ) : (
+          children
+        )}
         <TooltipPrimitive.Arrow className="bg-foreground fill-foreground z-50 size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-xs" />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>

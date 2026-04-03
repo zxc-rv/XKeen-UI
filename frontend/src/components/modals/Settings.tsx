@@ -189,6 +189,88 @@ const ProxySettingsField = memo(function ProxySettingsField({
   )
 })
 
+const PingTestSettingsField = memo(function PingTestSettingsField({
+  pingUrl,
+  pingTimeout,
+  onSave,
+  showToast,
+}: {
+  pingUrl: string
+  pingTimeout: number
+  onSave: (url: string, timeout: number) => Promise<boolean>
+  showToast: (msg: string, type?: 'success' | 'error') => void
+}) {
+  const [url, setUrl] = useState(pingUrl)
+  const [timeout, setTimeout] = useState(String(pingTimeout))
+
+  const trimmedUrl = url.trim()
+  const parsedTimeout = Number(timeout)
+  const isTimeoutValid = Number.isInteger(parsedTimeout) && parsedTimeout > 0
+  const isDirty = trimmedUrl !== pingUrl || parsedTimeout !== pingTimeout
+
+  const save = useCallback(async () => {
+    if (!trimmedUrl) return showToast('URL пинг-теста пустой', 'error')
+    if (!isTimeoutValid) return showToast('Таймаут должен быть целым числом больше 0', 'error')
+    const ok = await onSave(trimmedUrl, parsedTimeout)
+    if (ok) {
+      setUrl(trimmedUrl)
+      setTimeout(String(parsedTimeout))
+    }
+  }, [isTimeoutValid, onSave, parsedTimeout, showToast, trimmedUrl])
+
+  return (
+    <FieldGroup className="gap-0!">
+      <Field className="px-0 py-3">
+        <FieldContent>
+          <FieldLabel htmlFor="ping-test-url">URL пинга</FieldLabel>
+          <FieldDescription className="text-[13px]">Адрес для проверки задержки через Clash API</FieldDescription>
+        </FieldContent>
+        <InputGroup>
+          <InputGroupInput
+            id="ping-test-url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void save()}
+            placeholder="https://www.gstatic.com/generate_204"
+          />
+        </InputGroup>
+      </Field>
+
+      <Separator className="my-0" />
+
+      <Field className="px-0 py-3">
+        <FieldContent>
+          <FieldLabel htmlFor="ping-test-timeout">Таймаут</FieldLabel>
+          <FieldDescription className="text-[13px]">В миллисекундах, используется для delay-теста прокси</FieldDescription>
+        </FieldContent>
+        <InputGroup className="max-w-40">
+          <InputGroupInput
+            id="ping-test-timeout"
+            type="number"
+            min={1}
+            step={100}
+            inputMode="numeric"
+            className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            value={timeout}
+            onChange={(e) => setTimeout(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void save()}
+            placeholder="5000"
+          />
+          <InputGroupAddon align="inline-end" className="text-muted-foreground px-2 text-xs">
+            мс
+          </InputGroupAddon>
+        </InputGroup>
+      </Field>
+
+      <div className="flex justify-end pt-2">
+        <Button size="sm" variant="outline" onClick={() => void save()} disabled={!isDirty || !trimmedUrl || !isTimeoutValid}>
+          Сохранить
+        </Button>
+      </div>
+    </FieldGroup>
+  )
+})
+
 function AuthSettingsField({
   authEnabled,
   onToggle,
@@ -264,7 +346,7 @@ export function SettingsModal() {
       const [section, key] = path.split('.')
       try {
         const body: Record<string, unknown> = {}
-        if (['gui', 'updater', 'log', 'auth'].includes(section)) body[section] = key ? { [key]: value } : value
+        if (['gui', 'updater', 'log', 'auth', 'clash_api'].includes(section)) body[section] = key ? { [key]: value } : value
         const result = await apiCall<any>('PATCH', 'settings', body)
         if (!result.success) {
           showToast('Ошибка: ' + result.error, 'error')
@@ -333,6 +415,15 @@ export function SettingsModal() {
     [dispatch, saveSetting]
   )
 
+  const savePingTestSettings = useCallback(
+    async (url: string, timeout: number) => {
+      const ok = await saveSetting('clash_api', { ping_url: url, ping_timeout: timeout })
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { pingTestUrl: url, pingTestTimeout: timeout } })
+      return ok
+    },
+    [dispatch, saveSetting]
+  )
+
   return (
     <Dialog open={modals.showSettingsModal} onOpenChange={(open) => !open && close()}>
       <DialogContent className="flex h-[79dvh]! max-w-xl! flex-col overflow-hidden md:h-142!">
@@ -343,11 +434,14 @@ export function SettingsModal() {
         </DialogHeader>
 
         <Tabs defaultValue="general" className="flex flex-1 flex-col overflow-hidden">
-          <TabsList variant="line" className="border-border shrink-0 justify-start gap-3 rounded-none border-b px-0">
-            <TabsTrigger value="general">Общие</TabsTrigger>
-            <TabsTrigger value="gui">Режим GUI</TabsTrigger>
-            <TabsTrigger value="updates">Обновления</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <TabsList variant="line" className="border-border w-max shrink-0 justify-start gap-3 rounded-none border-b px-0 whitespace-nowrap">
+              <TabsTrigger value="general">Общие</TabsTrigger>
+              <TabsTrigger value="gui">Режим GUI</TabsTrigger>
+              <TabsTrigger value="clash-api">Clash API</TabsTrigger>
+              <TabsTrigger value="updates">Обновления</TabsTrigger>
+            </TabsList>
+          </div>
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="pr-2">
@@ -397,6 +491,17 @@ export function SettingsModal() {
                     </Fragment>
                   ))}
                 </FieldGroup>
+              </TabsContent>
+
+              <TabsContent value="clash-api">
+                <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Пинг тест</p>
+                <PingTestSettingsField
+                  key={`${settings.pingTestUrl}\x00${settings.pingTestTimeout}`}
+                  pingUrl={settings.pingTestUrl}
+                  pingTimeout={settings.pingTestTimeout}
+                  onSave={savePingTestSettings}
+                  showToast={showToast}
+                />
               </TabsContent>
 
               <TabsContent value="updates">

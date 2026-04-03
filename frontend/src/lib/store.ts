@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
-import type { AppAction, AppSettings, AppState, Connection, ToastMessage } from './types'
+import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type AppAction, type AppSettings, type AppState, type Connection, type ToastMessage } from './types'
 import { parseClashApiCredentials } from './utils'
 import { clashWsUrl } from './websocket'
 
@@ -16,6 +16,8 @@ const initialSettings: AppSettings = {
   autoCheckCore: true,
   backupCore: true,
   githubProxies: [],
+  pingTestUrl: DEFAULT_PING_TEST_URL,
+  pingTestTimeout: DEFAULT_PING_TEST_TIMEOUT,
   timezone: 0,
   authEnabled: false,
 }

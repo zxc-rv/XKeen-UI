@@ -14,9 +14,9 @@ export async function apiCall<T = unknown>(method: string, endpoint: string, bod
 export async function clashFetch<T = unknown>(
   port: string,
   path: string,
-  options?: { method?: string; secret?: string | null; body?: unknown; unix?: string | null }
+  options?: { method?: string; secret?: string | null; body?: unknown; unix?: string | null; retry?: boolean }
 ): Promise<T> {
-  const { method = 'GET', secret, body, unix } = options ?? {}
+  const { method = 'GET', secret, body, unix, retry = true } = options ?? {}
   const normalizedPath = path.replace(/^\/+/, '')
 
   const headers: Record<string, string> = {}
@@ -31,22 +31,29 @@ export async function clashFetch<T = unknown>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   }
 
-  // Долбим ретраи если пришла 502/503/504 или отвалилась сеть
-  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
-    try {
-      const res = await fetch(`/clash/${normalizedPath}`, reqOptions)
+  const maxAttempts = retry ? RETRY_DELAYS.length : 0
 
-      if (!res.ok && RETRY_STATUSES.has(res.status) && attempt < RETRY_DELAYS.length) {
+  // Долбим ретраи если пришла 502/503/504 или отвалилась сеть
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    let res: Response
+    try {
+      res = await fetch(`/clash/${normalizedPath}`, reqOptions)
+    } catch (error) {
+      if (attempt === maxAttempts) throw error
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]))
+      continue
+    }
+
+    if (!res.ok) {
+      if (retry && RETRY_STATUSES.has(res.status) && attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]))
         continue
       }
-
-      if (res.status === 204 || res.headers.get('content-length') === '0') return {} as T
-      return (await res.json()) as T
-    } catch (error) {
-      if (attempt === RETRY_DELAYS.length) throw error
-      await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]))
+      throw new Error(`Clash request failed: ${res.status} ${res.statusText}`)
     }
+
+    if (res.status === 204 || res.headers.get('content-length') === '0') return {} as T
+    return (await res.json()) as T
   }
   throw new Error('Max retries exceeded')
 }

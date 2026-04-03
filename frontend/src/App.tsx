@@ -9,7 +9,7 @@ import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad } from './lib/loader'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext } from './lib/store'
-import type { Config } from './lib/types'
+import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config } from './lib/types'
 import { parseClashApiCredentials, stripJsonComments } from './lib/utils'
 
 const CommentsWarningModal = lazyLoad(() => import('./components/modals/CommentsWarning'), 'CommentsWarningModal')
@@ -173,6 +173,8 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             autoCheckCore: data.updater.auto_check_core ?? true,
             backupCore: data.updater.backup_core,
             githubProxies: data.updater.github_proxy || [],
+            pingTestUrl: data.clash_api?.ping_url ?? DEFAULT_PING_TEST_URL,
+            pingTestTimeout: data.clash_api?.ping_timeout ?? DEFAULT_PING_TEST_TIMEOUT,
             timezone: data.log.timezone,
             authEnabled: !!data.auth?.enabled,
           },
