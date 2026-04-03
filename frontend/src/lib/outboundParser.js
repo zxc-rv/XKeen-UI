@@ -311,7 +311,15 @@ function convertToMihomoYaml(proxyConfig) {
       mode: xhttp.mode,
       headers: extra.Headers,
       'x-padding-bytes': extra.xPaddingBytes,
-      // xmux: extra.xmux,
+      'reuse-settings': extra.xmux
+        ? {
+            'max-connections': extra.xmux.maxConnections,
+            'max-concurrency': extra.xmux.maxConcurrency,
+            'c-max-reuse-times': extra.xmux.cMaxReuseTimes,
+            'h-max-request-times': extra.xmux.hMaxRequestTimes,
+            'h-max-reusable-secs': extra.xmux.hMaxReusableSecs,
+          }
+        : undefined,
       'download-settings': extra.downloadSettings,
     }
   }
