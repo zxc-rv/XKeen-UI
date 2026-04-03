@@ -16,6 +16,8 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   IconCheck,
+  IconChevronDown,
+  IconChevronUp,
   IconCode,
   IconDeviceFloppy,
   IconDotsFilled,
@@ -49,6 +51,8 @@ const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPa
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
 type ClashMode = 'rule' | 'global' | 'direct'
+
+const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
 
 interface Props {
   onOpenImport: () => void
@@ -283,6 +287,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   const [activePanel, setActivePanel] = useState<'config' | 'selectors' | 'connections'>('config')
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['config']))
   const [mode, setMode] = useState<ClashMode>('rule')
+  const [allSelectorsCollapsed, setAllSelectorsCollapsed] = useState(false)
   const [updatingRuleProviders, setUpdatingRuleProviders] = useState(false)
   const [updatingProxyProviders, setUpdatingProxyProviders] = useState(false)
 
@@ -649,6 +654,21 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
+                    onClick={() =>
+                      window.dispatchEvent(new CustomEvent(TOGGLE_ALL_SELECTORS_EVENT, { detail: { collapsed: !allSelectorsCollapsed } }))
+                    }
+                  >
+                    {allSelectorsCollapsed ? <IconChevronDown /> : <IconChevronUp />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{allSelectorsCollapsed ? 'Развернуть все' : 'Свернуть все'}</TooltipContent>
+              </Tooltip>
             </div>
           )}
 
@@ -720,6 +740,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                       mode={mode}
                       clashApiSecret={clashApiSecret ?? null}
                       clashApiUnix={activeClashApiUnix ?? null}
+                      onCollapsedStateChange={setAllSelectorsCollapsed}
                     />
                   </LazyBoundary>
                 </div>
