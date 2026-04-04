@@ -306,21 +306,49 @@ function convertToMihomoYaml(proxyConfig) {
   else if (streamSettings.network === 'xhttp') {
     const xhttp = streamSettings.xhttpSettings || {}
     const extra = xhttp.extra || {}
+    const mapXmux = (xmux) =>
+      xmux
+        ? {
+            'max-connections': xmux.maxConnections,
+            'max-concurrency': xmux.maxConcurrency,
+            'c-max-reuse-times': xmux.cMaxReuseTimes,
+            'h-max-request-times': xmux.hMaxRequestTimes,
+            'h-max-reusable-secs': xmux.hMaxReusableSecs,
+          }
+        : undefined
+
     common['xhttp-opts'] = {
       path: xhttp.path,
+      host: xhttp.host,
       mode: xhttp.mode,
-      headers: extra.Headers,
+      headers: extra.headers,
+      'no-grpc-header': extra.noGRPCHeader || undefined,
       'x-padding-bytes': extra.xPaddingBytes,
-      'reuse-settings': extra.xmux
-        ? {
-            'max-connections': extra.xmux.maxConnections,
-            'max-concurrency': extra.xmux.maxConcurrency,
-            'c-max-reuse-times': extra.xmux.cMaxReuseTimes,
-            'h-max-request-times': extra.xmux.hMaxRequestTimes,
-            'h-max-reusable-secs': extra.xmux.hMaxReusableSecs,
-          }
+      'reuse-settings': mapXmux(extra.xmux),
+      'download-settings': extra.downloadSettings
+        ? (() => {
+            const ds = extra.downloadSettings
+            const tls = ds.tlsSettings || {}
+            const xs = ds.xhttpSettings || {}
+            return {
+              // xhttp part
+              path: xs.path,
+              host: xs.host,
+              headers: xs.headers,
+              'no-grpc-header': xs.noGRPCHeader || undefined,
+              'x-padding-bytes': xs.xPaddingBytes,
+              'reuse-settings': mapXmux(xs.xmux),
+              // proxy part
+              server: ds.address,
+              port: ds.port,
+              tls: ds.security === 'tls' || undefined,
+              alpn: tls.alpn,
+              'skip-cert-verify': tls.allowInsecure || undefined,
+              servername: tls.serverName,
+              'client-fingerprint': tls.fingerprint,
+            }
+          })()
         : undefined,
-      'download-settings': extra.downloadSettings,
     }
   }
   return `  - ${toYaml(common).trim().replace(/\n/g, '\n    ')}`
