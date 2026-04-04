@@ -392,7 +392,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
       <ComboboxInput
         fullWidth
         className={cn(
-          'w-full *:data-[slot=input-group-control]:bg-transparent! *:data-[slot=input-group-control]:hover:bg-transparent! *:data-[slot=input-group-control]:focus:bg-transparent *:data-[slot=input-group-control]:focus-visible:bg-transparent!',
+          'w-full *:data-[slot=input-group-control]:bg-transparent! *:data-[slot=input-group-control]:hover:bg-transparent! *:data-[slot=input-group-control]:focus:bg-transparent! *:data-[slot=input-group-control]:focus-visible:bg-transparent!',
           isFixed && 'border-purple-400! hover:border-purple-400!'
         )}
         openBorderColor={isFixed ? '#c084fc' : undefined}
