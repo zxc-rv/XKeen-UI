@@ -124,6 +124,10 @@ function getConnectionSourceLabel(conn: Connection): string {
   return `${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`
 }
 
+function getConnectionSourceHost(conn: Connection): string {
+  return conn.metadata.sourceIP
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
@@ -241,6 +245,7 @@ const ConnectionRow = memo(function ConnectionRow({
   const host = getConnectionHost(conn)
   const hostLabel = getConnectionHostLabel(conn)
   const source = getConnectionSourceLabel(conn)
+  const sourceHost = getConnectionSourceHost(conn)
   const reversedChains = [...conn.chains].reverse()
   const first = reversedChains[0]
   const last = reversedChains.at(-1)
@@ -292,7 +297,7 @@ const ConnectionRow = memo(function ConnectionRow({
               className="flex w-fit max-w-full items-center overflow-hidden text-left hover:opacity-80"
               onClick={(e) => {
                 e.stopPropagation()
-                onApplyFilter(hostLabel)
+                onApplyFilter(host)
               }}
             >
               <span className="truncate">{host}</span>
@@ -312,7 +317,7 @@ const ConnectionRow = memo(function ConnectionRow({
               className="block w-fit max-w-full truncate text-left hover:opacity-80"
               onClick={(e) => {
                 e.stopPropagation()
-                onApplyFilter(source)
+                onApplyFilter(sourceHost)
               }}
             >
               {source}
