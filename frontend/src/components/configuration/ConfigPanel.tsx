@@ -133,7 +133,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   const isProtected = config.file.endsWith('/config.yaml') || config.file === 'config.yaml'
 
   const tabsTrigger = (
-    <TabsTrigger value={config.file} className="data-[state=active]:bg-input-background! relative">
+    <TabsTrigger value={config.file} className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!">
       {config.file
         .split('/')
         .pop()

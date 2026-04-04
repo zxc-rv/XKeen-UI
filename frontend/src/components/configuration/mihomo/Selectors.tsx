@@ -252,7 +252,7 @@ const ProxyCard = memo(function ProxyCard({
                 ) : hasHistory ? (
                   delay || <GraveIcon size={14} />
                 ) : (
-                  <IconBoltFilled size={13} className="text-white" />
+                  <IconBoltFilled size={13} className="text-foreground" />
                 )}
               </span>
             </TooltipTrigger>
@@ -339,7 +339,7 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
           type="button"
           className={cn(
             'ml-auto flex h-5 min-w-8 shrink-0 cursor-pointer items-center justify-center bg-transparent px-1.5 text-xs font-medium tabular-nums outline-hidden',
-            showDelay ? delayColorImportant(delay) : 'text-white! hover:text-white!'
+            showDelay ? delayColorImportant(delay) : 'text-foreground!'
           )}
           style={showDelay ? undefined : { color: '#fff' }}
           onMouseDown={(e) => {

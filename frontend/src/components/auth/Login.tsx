@@ -46,7 +46,7 @@ export function LoginForm({ mode, onAuth }: LoginFormProps) {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center">
+    <div className="bg-muted dark:bg-background flex min-h-dvh items-center justify-center">
       <div className="mx-auto w-full max-w-xs space-y-6">
         <div className="space-y-2 text-center">
           <img src={faviconUrl} alt="XKeen UI" className="mx-auto h-12 w-12" />

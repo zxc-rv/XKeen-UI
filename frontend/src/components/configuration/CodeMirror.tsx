@@ -23,7 +23,7 @@ import { indentationMarkers } from '@replit/codemirror-indentation-markers'
 import { basicSetup } from 'codemirror'
 import * as jsyaml from 'js-yaml'
 import { parse as parseJsonc, printParseErrorCode, type ParseError } from 'jsonc-parser'
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { getFileLanguage } from '../../lib/api'
 
 type EditorLanguage = 'json' | 'yaml' | 'text'
@@ -84,9 +84,9 @@ const BOOL_RE = /^(true|false|True|False|TRUE|FALSE)$/
 const NULL_RE = /^(null|Null|NULL|~)$/
 const NUMBER_RE = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$|^0x[0-9a-fA-F]+$|^0o[0-7]+$|^0b[01]+$/
 
-const boolDecoration = Decoration.mark({ attributes: { style: 'color: #bb9af7' } })
-const nullDecoration = Decoration.mark({ attributes: { style: 'color: #bb9af7' } })
-const numberDecoration = Decoration.mark({ attributes: { style: 'color: #ff9e64' } })
+const boolDecoration = Decoration.mark({ attributes: { style: 'color: var(--cm-bool)' } })
+const nullDecoration = Decoration.mark({ attributes: { style: 'color: var(--cm-bool)' } })
+const numberDecoration = Decoration.mark({ attributes: { style: 'color: var(--cm-number)' } })
 
 function buildYamlDecorations(view: EditorView): DecorationSet {
   const tree = ensureSyntaxTree(view.state, view.state.doc.length, 1000) ?? syntaxTree(view.state)
@@ -94,13 +94,13 @@ function buildYamlDecorations(view: EditorView): DecorationSet {
   tree.iterate({
     enter(node) {
       if (node.name === 'QuotedLiteral') {
-        builder.add(node.from, node.to, Decoration.mark({ attributes: { style: 'color: #9ece6a' } }))
+        builder.add(node.from, node.to, Decoration.mark({ attributes: { style: 'color: var(--cm-string)' } }))
       } else if (node.name === 'Literal') {
         const text = view.state.doc.sliceString(node.from, node.to)
         if (BOOL_RE.test(text)) builder.add(node.from, node.to, boolDecoration)
         else if (NULL_RE.test(text)) builder.add(node.from, node.to, nullDecoration)
         else if (NUMBER_RE.test(text)) builder.add(node.from, node.to, numberDecoration)
-        else builder.add(node.from, node.to, Decoration.mark({ attributes: { style: 'color: #9ece6a' } }))
+        else builder.add(node.from, node.to, Decoration.mark({ attributes: { style: 'color: var(--cm-string)' } }))
       }
     },
   })
@@ -127,7 +127,7 @@ const yamlFlatIndent = indentService.of((context, pos) => {
 
 const jsoncLang = jsonLanguage.configure({ dialect: 'jsonc' })
 
-const commentDecoration = Decoration.mark({ attributes: { style: 'color: #565f89; font-style: italic' } })
+const commentDecoration = Decoration.mark({ attributes: { style: 'color: var(--cm-comment); font-style: italic' } })
 
 function buildJsoncCommentDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
@@ -241,26 +241,45 @@ function validateByLanguage(content: string, language: EditorLanguage): Validati
   return { diagnostics: [], isValid: true }
 }
 
-const tokyoNightHighlight = HighlightStyle.define([
-  { tag: tags.propertyName, color: '#7aa2f7' },
-  { tag: [tags.string, tags.special(tags.string)], color: '#9ece6a' },
-  { tag: tags.number, color: '#ff9e64' },
-  { tag: [tags.bool, tags.null, tags.atom], color: '#bb9af7' },
-  { tag: tags.keyword, color: '#bb9af7' },
-  { tag: tags.comment, color: '#565f89', fontStyle: 'italic' },
-  { tag: tags.labelName, color: '#7aa2f7' },
-  { tag: tags.typeName, color: '#7aa2f7' },
-  { tag: tags.punctuation, color: '#89ddff' },
-  { tag: tags.operator, color: '#89ddff' },
+const editorHighlight = HighlightStyle.define([
+  { tag: tags.propertyName, color: 'var(--cm-property)' },
+  { tag: [tags.string, tags.special(tags.string)], color: 'var(--cm-string)' },
+  { tag: tags.number, color: 'var(--cm-number)' },
+  { tag: [tags.bool, tags.null, tags.atom], color: 'var(--cm-bool)' },
+  { tag: tags.keyword, color: 'var(--cm-bool)' },
+  { tag: tags.comment, color: 'var(--cm-comment)', fontStyle: 'italic' },
+  { tag: tags.labelName, color: 'var(--cm-property)' },
+  { tag: tags.typeName, color: 'var(--cm-property)' },
+  { tag: tags.punctuation, color: 'var(--cm-punctuation)' },
+  { tag: tags.operator, color: 'var(--cm-punctuation)' },
 ])
 
-const editorTheme = (isMobile: boolean) =>
+const editorTheme = (isMobile: boolean, isDarkTheme: boolean) =>
   EditorView.theme(
     {
       '&': {
         height: '100%',
-        backgroundColor: '#080e1d',
-        color: '#c0caf5',
+        '--cm-bg': isDarkTheme ? '#080e1d' : '#ffffff',
+        '--cm-panel-bg': isDarkTheme ? '#0f172a' : '#f8fafc',
+        '--cm-fg': isDarkTheme ? '#c0caf5' : '#0f172a',
+        '--cm-caret': isDarkTheme ? '#c0caf5' : '#0f172a',
+        '--cm-selection': isDarkTheme ? '#2d4f8e' : '#dbeafe',
+        '--cm-selection-match': isDarkTheme ? '#1e3a5f' : '#bfdbfe',
+        '--cm-gutter': isDarkTheme ? '#3b4261' : '#94a3b8',
+        '--cm-gutter-active': isDarkTheme ? '#a9b1d6' : '#475569',
+        '--cm-fold': isDarkTheme ? '#565f89' : '#64748b',
+        '--cm-fold-placeholder-bg': isDarkTheme ? '#283457' : '#eff6ff',
+        '--cm-fold-placeholder-border': isDarkTheme ? '#7aa2f7' : '#93c5fd',
+        '--cm-fold-placeholder-text': isDarkTheme ? '#7aa2f7' : '#2563eb',
+        '--cm-border': isDarkTheme ? '#334155' : '#cbd5e1',
+        '--cm-property': isDarkTheme ? '#7aa2f7' : '#2563eb',
+        '--cm-string': isDarkTheme ? '#9ece6a' : '#15803d',
+        '--cm-number': isDarkTheme ? '#ff9e64' : '#ea580c',
+        '--cm-bool': isDarkTheme ? '#bb9af7' : '#7c3aed',
+        '--cm-comment': isDarkTheme ? '#565f89' : '#64748b',
+        '--cm-punctuation': isDarkTheme ? '#89ddff' : '#0f766e',
+        backgroundColor: 'var(--cm-bg)',
+        color: 'var(--cm-fg)',
         fontSize: isMobile ? '13px' : '14px',
       },
       '.cm-focused': { outline: 'none' },
@@ -268,42 +287,54 @@ const editorTheme = (isMobile: boolean) =>
         fontFamily: 'var(--font-mono)',
         lineHeight: '1.5',
         scrollbarWidth: 'thin',
+        backgroundColor: 'var(--cm-bg)',
       },
       '.cm-content': {
-        caretColor: '#c0caf5',
+        caretColor: 'var(--cm-caret)',
         padding: '8px 0 16px 0',
       },
       '.cm-line': { padding: '0 4px' },
-      '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#c0caf5' },
-      '.cm-selectionBackground': { backgroundColor: '#2d4f8e !important' },
-      '&.cm-focused .cm-selectionBackground': { backgroundColor: '#2d4f8e !important' },
-      '.cm-selectionMatch': { backgroundColor: '#1e3a5f' },
+      '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--cm-caret)' },
+      '.cm-selectionBackground': { backgroundColor: 'var(--cm-selection) !important' },
+      '&.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--cm-selection) !important' },
+      '.cm-selectionMatch, .cm-searchMatch': { backgroundColor: 'var(--cm-selection-match)' },
       '.cm-activeLine': { backgroundColor: 'transparent' },
-      '.cm-activeLineGutter': { backgroundColor: 'transparent', color: '#a9b1d6' },
+      '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--cm-gutter-active)' },
       '.cm-lineNumbers': { minWidth: '3ch !important' },
       '.cm-lineNumbers .cm-gutterElement': { minWidth: '3ch !important', textAlign: 'right' },
       '.cm-gutters': {
         display: isMobile ? 'none' : 'flex',
-        backgroundColor: '#080e1d',
-        color: '#3b4261',
+        backgroundColor: 'var(--cm-bg)',
+        color: 'var(--cm-gutter)',
         border: 'none',
       },
-      '.cm-foldGutter': { width: '14px', cursor: 'pointer', color: '#565f89' },
-      '.cm-foldGutter .cm-gutterElement:hover': { color: '#a9b1d6' },
-      '.cm-foldPlaceholder': { backgroundColor: '#283457', borderColor: '#7aa2f7', color: '#7aa2f7' },
+      '.cm-foldGutter': { width: '14px', cursor: 'pointer', color: 'var(--cm-fold)' },
+      '.cm-foldGutter .cm-gutterElement:hover': { color: 'var(--cm-gutter-active)' },
+      '.cm-foldPlaceholder': {
+        backgroundColor: 'var(--cm-fold-placeholder-bg)',
+        borderColor: 'var(--cm-fold-placeholder-border)',
+        color: 'var(--cm-fold-placeholder-text)',
+      },
       '.cm-diagnosticText': { fontFamily: 'var(--font-mono)' },
       '.cm-panels': {
-        backgroundColor: '#080e1d',
-        color: '#c0caf5',
+        backgroundColor: 'var(--cm-panel-bg)',
+        color: 'var(--cm-fg)',
       },
+      '.cm-tooltip': { backgroundColor: 'var(--cm-panel-bg)', color: 'var(--cm-fg)', border: '1px solid var(--cm-border)' },
+      '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--cm-selection)' },
     },
-    { dark: true }
+    { dark: isDarkTheme }
   )
 
 export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentChange, onValidationChange, onReady, onSave }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const languageCompartmentRef = useRef(new Compartment())
+  const themeCompartmentRef = useRef(new Compartment())
+  const [isDarkTheme, setIsDarkTheme] = useState(() => document.documentElement.classList.contains('dark'))
+  const initialIsDarkThemeRef = useRef(isDarkTheme)
+  const currentThemeRef = useRef(isDarkTheme)
+  const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768)
 
   const onContentChangeRef = useRef(onContentChange)
   const onValidationChangeRef = useRef(onValidationChange)
@@ -322,6 +353,89 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     onReadyRef.current = onReady
     onSaveRef.current = onSave
   })
+
+  useEffect(() => {
+    const root = document.documentElement
+    const syncTheme = () => setIsDarkTheme(root.classList.contains('dark'))
+    syncTheme()
+
+    const observer = new MutationObserver(syncTheme)
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  const createExtensions = useCallback(
+    (darkTheme: boolean): Extension[] => [
+      basicSetup,
+      autocompletion({ override: [completeAnyWord] }),
+      Prec.highest(
+        lineNumbers({
+          formatNumber: (n) => String(n).padStart(3, '\u00a0'),
+          domEventHandlers: {
+            mousedown(view, line, event) {
+              const mouse = event as MouseEvent
+              const lineEnd = line.to === view.state.doc.length ? line.to : line.to + 1
+              view.dispatch({
+                selection: mouse.shiftKey
+                  ? { anchor: view.state.selection.main.anchor, head: lineEnd }
+                  : { anchor: line.from, head: lineEnd },
+                userEvent: 'select',
+              })
+              return true
+            },
+          },
+        })
+      ),
+      EditorState.allowMultipleSelections.of(true),
+      keymap.of([
+        {
+          key: 'Mod-s',
+          run: () => {
+            onSaveRef.current?.()
+            return true
+          },
+        },
+        {
+          key: 'Shift-Alt-f',
+          run: () => {
+            void formatRef.current()
+            return true
+          },
+        },
+        {
+          key: 'Mod-F2',
+          run: (view) => {
+            const sel = view.state.selection.main
+            if (sel.empty) {
+              const word = view.state.wordAt(sel.head)
+              if (word) view.dispatch({ selection: { anchor: word.from, head: word.to } })
+            }
+            return selectSelectionMatches(view)
+          },
+        },
+        indentWithTab,
+        ...foldKeymapCmd,
+      ]),
+      Prec.highest(syntaxHighlighting(editorHighlight)),
+      languageCompartmentRef.current.of(getLanguageExtension(languageRef.current)),
+      indentationMarkers({ thickness: 2, colors: { activeDark: '#57a8d4', activeLight: '#3b82f6' } }),
+      themeCompartmentRef.current.of(editorTheme(isMobileRef.current, darkTheme)),
+      EditorView.contentAttributes.of({
+        spellcheck: 'false',
+        autocapitalize: 'off',
+        autocomplete: 'off',
+        autocorrect: 'off',
+      }),
+      EditorView.updateListener.of((update) => {
+        if (!update.docChanged || suppressRef.current) return
+        const content = update.state.doc.toString()
+        const isDirty = content !== savedContentRef.current
+        onContentChangeRef.current(content, isDirty)
+        runValidationRef.current(update.view, filenameRef.current)
+      }),
+    ],
+    []
+  )
 
   const emitValidation = useCallback((isValid: boolean, error?: string) => {
     const normalizedError = error || undefined
@@ -426,7 +540,9 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
             selection: { main: 0, ranges: [{ anchor: 0, head: 0 }] },
             ...(savedHistory ? { history: savedHistory } : {}),
           }
-          view.setState(EditorState.fromJSON(json, { extensions: extensionsRef.current }, fields))
+          const extensions = createExtensions(currentThemeRef.current)
+          extensionsRef.current = extensions
+          view.setState(EditorState.fromJSON(json, { extensions }, fields))
         } else {
           view.dispatch({
             changes: { from: 0, to: view.state.doc.length, insert: value },
@@ -442,6 +558,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         const nextLanguage = normalizeLanguage(language)
         languageRef.current = nextLanguage
         const view = viewRef.current
+        extensionsRef.current = createExtensions(currentThemeRef.current)
         if (!view) return
         view.dispatch({
           effects: languageCompartmentRef.current.reconfigure(getLanguageExtension(nextLanguage)),
@@ -551,82 +668,12 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         }, 500)
       },
     }),
-    [format, runValidation]
+    [createExtensions, format, runValidation]
   )
 
   useEffect(() => {
     if (!containerRef.current) return
-
-    const isMobile = window.innerWidth < 768
-    const extensions: Extension[] = [
-      basicSetup,
-      autocompletion({ override: [completeAnyWord] }),
-      Prec.highest(
-        lineNumbers({
-          formatNumber: (n) => String(n).padStart(3, '\u00a0'),
-          domEventHandlers: {
-            mousedown(view, line, event) {
-              const mouse = event as MouseEvent
-              const lineEnd = line.to === view.state.doc.length ? line.to : line.to + 1
-              view.dispatch({
-                selection: mouse.shiftKey
-                  ? { anchor: view.state.selection.main.anchor, head: lineEnd }
-                  : { anchor: line.from, head: lineEnd },
-                userEvent: 'select',
-              })
-              return true
-            },
-          },
-        })
-      ),
-      EditorState.allowMultipleSelections.of(true),
-      keymap.of([
-        {
-          key: 'Mod-s',
-          run: () => {
-            onSaveRef.current?.()
-            return true
-          },
-        },
-        {
-          key: 'Shift-Alt-f',
-          run: () => {
-            void formatRef.current()
-            return true
-          },
-        },
-        {
-          key: 'Mod-F2',
-          run: (view) => {
-            const sel = view.state.selection.main
-            if (sel.empty) {
-              const word = view.state.wordAt(sel.head)
-              if (word) view.dispatch({ selection: { anchor: word.from, head: word.to } })
-            }
-            return selectSelectionMatches(view)
-          },
-        },
-        indentWithTab,
-        ...foldKeymapCmd,
-      ]),
-      Prec.highest(syntaxHighlighting(tokyoNightHighlight)),
-      languageCompartmentRef.current.of(getLanguageExtension(languageRef.current)),
-      indentationMarkers({ thickness: 2, colors: { activeDark: '#57a8d4' } }),
-      editorTheme(isMobile),
-      EditorView.contentAttributes.of({
-        spellcheck: 'false',
-        autocapitalize: 'off',
-        autocomplete: 'off',
-        autocorrect: 'off',
-      }),
-      EditorView.updateListener.of((update) => {
-        if (!update.docChanged || suppressRef.current) return
-        const content = update.state.doc.toString()
-        const isDirty = content !== savedContentRef.current
-        onContentChangeRef.current(content, isDirty)
-        runValidationRef.current(update.view, filenameRef.current)
-      }),
-    ]
+    const extensions = createExtensions(initialIsDarkThemeRef.current)
     extensionsRef.current = extensions
     const view = new EditorView({
       state: EditorState.create({ doc: '', extensions }),
@@ -642,7 +689,17 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
       view.destroy()
       viewRef.current = null
     }
-  }, [])
+  }, [createExtensions])
+
+  useEffect(() => {
+    currentThemeRef.current = isDarkTheme
+    extensionsRef.current = createExtensions(isDarkTheme)
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({
+      effects: themeCompartmentRef.current.reconfigure(editorTheme(isMobileRef.current, isDarkTheme)),
+    })
+  }, [createExtensions, isDarkTheme])
 
   return (
     <div className="border-border bg-input-background absolute inset-4 overflow-hidden rounded-xl border">

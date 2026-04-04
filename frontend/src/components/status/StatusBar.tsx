@@ -82,9 +82,9 @@ export function StatusBar({
   const shineColors = isRunning ? ['#195040', '#34d399', '#195040'] : isPending ? ['#4a3615', '#fbbf24', '#4a3615'] : null
 
   const badgeBg = isRunning
-    ? { background: '#19292c', color: '#10b981', border: 'none' }
+    ? { background: 'var(--status-running-bg)', color: 'var(--status-running-color)', border: '1px solid var(--status-running-border)' }
     : isPending
-      ? { background: '#2a1f0d', color: '#f59e0b', border: 'none' }
+      ? { background: 'var(--status-pending-bg)', color: 'var(--status-pending-color)', border: '1px solid var(--status-pending-border)' }
       : {}
 
   return (

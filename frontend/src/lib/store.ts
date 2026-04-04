@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
+import { getStoredTheme } from './theme'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type AppAction, type AppSettings, type AppState, type Connection, type ToastMessage } from './types'
 import { parseClashApiCredentials } from './utils'
 import { clashWsUrl } from './websocket'
@@ -9,6 +10,7 @@ import { clashWsUrl } from './websocket'
 // ─── Zustand store ─────────────────────────────────────────────────────────────
 
 const initialSettings: AppSettings = {
+  theme: getStoredTheme(),
   autoApply: false,
   guiRouting: false,
   guiLog: false,

@@ -8,8 +8,9 @@ import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad } from './lib/loader'
-import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext } from './lib/store'
-import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config } from './lib/types'
+import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
+import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
+import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config, type ThemeMode } from './lib/types'
 import { parseClashApiCredentials, stripJsonComments } from './lib/utils'
 
 const CommentsWarningModal = lazyLoad(() => import('./components/modals/CommentsWarning'), 'CommentsWarningModal')
@@ -19,6 +20,19 @@ const ImportModal = lazyLoad(() => import('./components/modals/AddProxy'), 'Impo
 const TemplateModal = lazyLoad(() => import('./components/modals/Templates'), 'TemplateModal')
 const SettingsModal = lazyLoad(() => import('./components/modals/Settings'), 'SettingsModal')
 const GeoScanModal = lazyLoad(() => import('./components/modals/GeoScan'), 'GeoScanModal')
+
+function useThemeMode(theme: ThemeMode) {
+  useEffect(() => {
+    applyTheme(theme)
+    if (theme !== 'auto') return
+
+    const media = window.matchMedia(THEME_MEDIA_QUERY)
+    const syncTheme = () => applyTheme('auto')
+
+    media.addEventListener('change', syncTheme)
+    return () => media.removeEventListener('change', syncTheme)
+  }, [theme])
+}
 
 function useLazyMount(open: boolean, delay = 200) {
   const [mounted, setMounted] = useState(open)
@@ -395,7 +409,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
 
   return (
-    <div className="bg-background flex min-h-dvh flex-col">
+    <div className="bg-muted dark:bg-background flex min-h-dvh flex-col">
       <main className="flex flex-1 flex-col">
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-3">
           <StatusBar
@@ -436,6 +450,9 @@ type AuthState = 'loading' | 'login' | 'setup' | 'authenticated'
 
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>('loading')
+  const theme = useSettings((s) => s.theme)
+
+  useThemeMode(theme)
 
   useEffect(() => {
     fetch('/api/auth/login')

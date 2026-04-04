@@ -139,13 +139,13 @@ export function GeoScanModal() {
           <TabsList className="border-border h-full! w-full! overflow-hidden rounded-lg border bg-transparent p-0">
             <TabsTrigger
               value="domain"
-              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
+              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! data-active:text-white! dark:data-active:text-foreground! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
             >
               <IconWorld size={16} /> GeoSite
             </TabsTrigger>
             <TabsTrigger
               value="ip"
-              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
+              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! data-active:text-white! dark:data-active:text-foreground! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
             >
               <IconServer size={16} /> GeoIP
             </TabsTrigger>

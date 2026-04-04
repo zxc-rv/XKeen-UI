@@ -13,7 +13,7 @@ import { IconAlertCircle, IconSettings, IconX } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
-import type { AppSettings } from '../../lib/types'
+import type { AppSettings, ThemeMode } from '../../lib/types'
 
 type BooleanSettingKey = {
   [K in keyof AppSettings]: AppSettings[K] extends boolean ? K : never
@@ -75,6 +75,12 @@ const updateSettings: ToggleSetting[] = [
     title: 'Бэкап ядра',
     description: 'Сохранять резервную копию ядра при обновлении',
   },
+]
+
+const themeOptions: { value: ThemeMode; label: string }[] = [
+  { value: 'light', label: 'Светлая' },
+  { value: 'dark', label: 'Темная' },
+  { value: 'auto', label: 'Авто' },
 ]
 
 const SwitchSettingField = memo(function SwitchSettingField({
@@ -369,6 +375,13 @@ export function SettingsModal() {
     [dispatch, saveSetting]
   )
 
+  const setTheme = useCallback(
+    (value: string) => {
+      dispatch({ type: 'SET_SETTINGS', settings: { theme: value as ThemeMode } })
+    },
+    [dispatch]
+  )
+
   const toggleAuth = useCallback(
     async (value: boolean) => {
       const ok = await saveSetting('auth.enabled', value)
@@ -435,7 +448,10 @@ export function SettingsModal() {
 
         <Tabs defaultValue="general" className="flex flex-1 flex-col overflow-hidden">
           <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <TabsList variant="line" className="border-border w-max shrink-0 justify-start gap-3 rounded-none border-b px-0 whitespace-nowrap">
+            <TabsList
+              variant="line"
+              className="border-border w-max shrink-0 justify-start gap-3 rounded-none border-b px-0 whitespace-nowrap"
+            >
               <TabsTrigger value="general">Общие</TabsTrigger>
               <TabsTrigger value="gui">Режим GUI</TabsTrigger>
               <TabsTrigger value="clash-api">Clash API</TabsTrigger>
@@ -447,6 +463,28 @@ export function SettingsModal() {
             <div className="pr-2">
               <TabsContent value="general">
                 <FieldGroup className="gap-0!">
+                  <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Оформление</p>
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="theme">Тема приложения</FieldLabel>
+                      <FieldDescription className="text-[13px]">Ручной режим или синхронизация с системой</FieldDescription>
+                    </FieldContent>
+                    <Select value={settings.theme} onValueChange={setTheme}>
+                      <SelectTrigger id="theme" className="w-34 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {themeOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value} className="text-sm">
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Separator className="my-2" />
                   <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Авторизация</p>
                   <AuthSettingsField authEnabled={settings.authEnabled} onToggle={toggleAuth} showToast={showToast} />
                   <Separator className="my-2" />
@@ -476,9 +514,9 @@ export function SettingsModal() {
               </TabsContent>
 
               <TabsContent value="gui">
-                <Alert className="my-2 border-amber-500/20 bg-[#2a1f0d] p-2.75 text-amber-400">
-                  <IconAlertCircle className="size-4.5 text-amber-400" />
-                  <AlertDescription className="text-xs leading-4.25 tracking-wide text-amber-400">
+                <Alert className="my-2 border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
+                  <IconAlertCircle className="size-4.5" />
+                  <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
                     Функция экспериментальная. Перед включением сделайте бэкап конфигураций. Несовместимо с комментариями.
                   </AlertDescription>
                 </Alert>

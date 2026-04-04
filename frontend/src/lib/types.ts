@@ -1,6 +1,8 @@
 export const DEFAULT_PING_TEST_URL = 'https://www.gstatic.com/generate_204'
 export const DEFAULT_PING_TEST_TIMEOUT = 5000
 
+export type ThemeMode = 'light' | 'dark' | 'auto'
+
 export interface Config {
   file: string
   content: string
@@ -9,6 +11,7 @@ export interface Config {
 }
 
 export interface AppSettings {
+  theme: ThemeMode
   autoApply: boolean
   guiRouting: boolean
   guiLog: boolean
