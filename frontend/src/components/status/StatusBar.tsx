@@ -151,9 +151,16 @@ export function StatusBar({
         </div>
 
         <div className="order-1 flex items-center justify-center md:absolute md:left-1/2 md:order-2 md:-translate-x-1/2">
-          <AuroraText className="animate-dark-glow text-[28px] font-semibold" colors={['#00D3F2', '#2B7FFF', '#155DFC']}>
-            XKeen UI
-          </AuroraText>
+          <a
+            href="https://github.com/zxc-rv/XKeen-UI"
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md transition-opacity hover:opacity-85"
+          >
+            <AuroraText className="animate-dark-glow text-[28px] font-semibold" colors={['#00D3F2', '#2B7FFF', '#155DFC']}>
+              XKeen UI
+            </AuroraText>
+          </a>
         </div>
 
         <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
