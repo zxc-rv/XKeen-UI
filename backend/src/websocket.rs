@@ -1,8 +1,22 @@
-use axum::{extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State}, response::IntoResponse};
+use crate::{
+    logger::{process_log_line, ts},
+    types::*,
+};
+use axum::{
+    extract::{
+        State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
+    response::IntoResponse,
+};
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use notify::{RecursiveMode, Watcher};
-use std::{fs::File, io::{BufRead, BufReader, Seek, SeekFrom}, path::Path, sync::atomic::{AtomicU32, Ordering}};
-use crate::{types::*, logger::{process_log_line, ts}};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Seek, SeekFrom},
+    path::Path,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 static WS_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -10,8 +24,17 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
-fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> (String, Vec<String>, u64) {
-    let mut f = match File::open(&p) { Ok(f) => f, _ => return ("clear".into(), vec![], 0) };
+fn read_log_file(
+    p: String,
+    offset: u64,
+    query: String,
+    full: bool,
+    tz: i32,
+) -> (String, Vec<String>, u64) {
+    let mut f = match File::open(&p) {
+        Ok(f) => f,
+        _ => return ("clear".into(), vec![], 0),
+    };
     let len = f.metadata().map(|m| m.len()).unwrap_or(0);
     let mut current_pos = offset;
 
@@ -32,7 +55,11 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
     let mut lines = Vec::new();
     let mut total_bytes = 0usize;
     let mut bytes_read = current_pos;
-    let keywords: Vec<String> = query.split('|').filter(|s| !s.is_empty()).map(|s| s.to_string()).collect();
+    let keywords: Vec<String> = query
+        .split('|')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
     let reader = BufReader::new(f);
 
     for line in reader.lines().map_while(Result::ok) {
@@ -40,11 +67,16 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
         bytes_read += line_len as u64;
 
         let normalized = if !query.is_empty() {
-            line.replace("[Debug]", "[DEBUG]").replace("level=debug", "level=DEBUG")
-                .replace("[Info]", "[INFO]").replace("level=info", "level=INFO")
-                .replace("[Warning]", "[WARN]").replace("level=warning", "level=WARN")
-                .replace("[Error]", "[ERROR]").replace("level=error", "level=ERROR")
-                .replace("[Fatal]", "[FATAL]").replace("level=fatal", "level=FATAL")
+            line.replace("[Debug]", "[DEBUG]")
+                .replace("level=debug", "level=DEBUG")
+                .replace("[Info]", "[INFO]")
+                .replace("level=info", "level=INFO")
+                .replace("[Warning]", "[WARN]")
+                .replace("level=warning", "level=WARN")
+                .replace("[Error]", "[ERROR]")
+                .replace("level=error", "level=ERROR")
+                .replace("[Fatal]", "[FATAL]")
+                .replace("level=fatal", "level=FATAL")
         } else {
             line.clone()
         };
@@ -54,22 +86,40 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
             if !proc.is_empty() {
                 if full && !query.is_empty() {
                     total_bytes += line_len;
-                    if total_bytes >= 128000 { break; }
+                    if total_bytes >= 128000 {
+                        break;
+                    }
                 }
                 lines.push(proc);
             }
         }
     }
-    (if full { "initial".into() } else { "append".into() }, lines, bytes_read)
+    (
+        if full {
+            "initial".into()
+        } else {
+            "append".into()
+        },
+        lines,
+        bytes_read,
+    )
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
     let debug = state.debug;
     let count = WS_COUNTER.fetch_add(1, Ordering::SeqCst);
-    if debug { println!("{} {}", ts(), format!("[INFO] WS-{} Connected (Total: {})", count, count + 1)); }
+    if debug {
+        println!(
+            "{} {}",
+            ts(),
+            format!("[INFO] WS-{} Connected (Total: {})", count, count + 1)
+        );
+    }
 
     if count == 0 {
-        if debug { println!("{} [INFO] 🚀 Starting log watcher...", ts()); }
+        if debug {
+            println!("{} [INFO] 🚀 Starting log watcher...", ts());
+        }
         let tx = state.log_tx.clone();
         let handle = tokio::spawn(async move {
             let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -81,10 +131,13 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         }
                     }
                 }
-            }).unwrap();
+            })
+            .unwrap();
 
-            let _ = watcher.watch(Path::new(ERROR_LOG), RecursiveMode::NonRecursive);
-            let _ = watcher.watch(Path::new(ACCESS_LOG), RecursiveMode::NonRecursive);
+            let error_log = error_log_path();
+            let access_log = access_log_path();
+            let _ = watcher.watch(Path::new(&error_log), RecursiveMode::NonRecursive);
+            let _ = watcher.watch(Path::new(&access_log), RecursiveMode::NonRecursive);
 
             while let Some(path) = mpsc_rx.recv().await {
                 let _ = tx.send(path);
@@ -96,18 +149,29 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let (mut tx, mut rx) = socket.split();
     let mut log_rx = state.log_tx.subscribe();
-    let mut path = ERROR_LOG.to_string();
+    let mut path = error_log_path();
     let mut query = String::new();
     let tz = state.settings.read().unwrap().log.timezone;
 
     let p_clone = path.clone();
     let q_clone = query.clone();
-    let (t, l, mut offset) = tokio::task::spawn_blocking(move ||
-            read_log_file(p_clone, 0, q_clone, true, tz)
-        ).await.unwrap();
+    let (t, l, mut offset) =
+        tokio::task::spawn_blocking(move || read_log_file(p_clone, 0, q_clone, true, tz))
+            .await
+            .unwrap();
 
-    let init_msg = if l.is_empty() { serde_json::json!({"type": "clear"}) } else { serde_json::json!({"type": t, "lines": l}) };
-    if tx.send(Message::Text(init_msg.to_string().into())).await.is_err() { return; }
+    let init_msg = if l.is_empty() {
+        serde_json::json!({"type": "clear"})
+    } else {
+        serde_json::json!({"type": t, "lines": l})
+    };
+    if tx
+        .send(Message::Text(init_msg.to_string().into()))
+        .await
+        .is_err()
+    {
+        return;
+    }
 
     loop {
         tokio::select! {
@@ -118,7 +182,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         let tz = state.settings.read().unwrap().log.timezone;
                         match v["type"].as_str() {
                             Some("switchFile") => {
-                                path = if v["file"] == "access.log" { ACCESS_LOG.into() } else { ERROR_LOG.into() };
+                                path = if v["file"] == "access.log" { access_log_path() } else { error_log_path() };
 
                                 let p = path.clone();
                                 let q = query.clone();
@@ -177,10 +241,18 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
 
     let count_after = WS_COUNTER.fetch_sub(1, Ordering::SeqCst);
-    if debug { println!("{} {}", ts(), format!("[INFO] WS Disconnected. Remaining: {}", count_after - 1)); }
+    if debug {
+        println!(
+            "{} {}",
+            ts(),
+            format!("[INFO] WS Disconnected. Remaining: {}", count_after - 1)
+        );
+    }
 
     if count_after == 1 {
-        if debug { println!("{} [INFO] 💤 Stopping log watcher...", ts()); }
+        if debug {
+            println!("{} [INFO] 💤 Stopping log watcher...", ts());
+        }
         if let Some(abort_handle) = state.log_watcher.lock().await.take() {
             abort_handle.abort();
         }

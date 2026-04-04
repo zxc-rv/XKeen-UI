@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
-use std::{sync::{Arc, RwLock}, time::Instant};
-use tokio::{sync::{broadcast, Mutex}, task::AbortHandle};
+use std::{
+    sync::{Arc, LazyLock, RwLock},
+    time::Instant,
+};
+use tokio::{
+    sync::{Mutex, broadcast},
+    task::AbortHandle,
+};
 
 pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 pub const APP_CONFIG: &str = "/opt/share/www/XKeen-UI/config.json";
@@ -8,14 +14,86 @@ pub const XRAY_CONF: &str = "/opt/etc/xray/configs";
 pub const XRAY_ASSET: &str = "/opt/etc/xray/dat";
 pub const MIHOMO_CONF: &str = "/opt/etc/mihomo";
 pub const XKEEN_CONF: &str = "/opt/etc/xkeen";
-pub const ERROR_LOG: &str = "/opt/var/log/xray/error.log";
-pub const ACCESS_LOG: &str = "/opt/var/log/xray/access.log";
+pub const DEFAULT_ERROR_LOG: &str = "/opt/var/log/xray/error.log";
+pub const DEFAULT_ACCESS_LOG: &str = "/opt/var/log/xray/access.log";
 pub const S99XKEEN: &str = "/opt/etc/init.d/S99xkeen";
 pub const S99XKEEN_UI: &str = "/opt/etc/init.d/S99xkeen-ui";
 pub const STATIC_DIR: &str = "/opt/share/www/XKeen-UI";
 pub const S24XRAY: &str = "/opt/etc/init.d/S24xray";
 
 pub type GeoCache = std::collections::HashMap<String, (std::time::SystemTime, bool, bool)>;
+
+#[derive(Clone)]
+pub struct XrayLogPaths {
+    pub error: String,
+    pub access: String,
+}
+
+impl Default for XrayLogPaths {
+    fn default() -> Self {
+        Self {
+            error: DEFAULT_ERROR_LOG.into(),
+            access: DEFAULT_ACCESS_LOG.into(),
+        }
+    }
+}
+
+static XRAY_LOG_PATHS: LazyLock<RwLock<XrayLogPaths>> =
+    LazyLock::new(|| RwLock::new(XrayLogPaths::default()));
+
+fn normalize_xray_log_path(path: Option<&str>, fallback: &str) -> String {
+    path.map(str::trim)
+        .filter(|p| !p.is_empty() && !p.eq_ignore_ascii_case("none"))
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn resolve_xray_log_paths() -> XrayLogPaths {
+    let mut paths = XrayLogPaths::default();
+    let Ok(entries) = std::fs::read_dir(XRAY_CONF) else {
+        return paths;
+    };
+    let mut json_files: Vec<_> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        })
+        .collect();
+    json_files.sort();
+
+    for path in json_files {
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {
+            continue;
+        };
+        let log = json.get("log").and_then(|v| v.as_object());
+        if let Some(access) = log.and_then(|v| v.get("access")).and_then(|v| v.as_str()) {
+            paths.access = normalize_xray_log_path(Some(access), DEFAULT_ACCESS_LOG);
+        }
+        if let Some(error) = log.and_then(|v| v.get("error")).and_then(|v| v.as_str()) {
+            paths.error = normalize_xray_log_path(Some(error), DEFAULT_ERROR_LOG);
+        }
+    }
+
+    paths
+}
+
+pub fn refresh_xray_log_paths() {
+    *XRAY_LOG_PATHS.write().unwrap() = resolve_xray_log_paths();
+}
+
+pub fn error_log_path() -> String {
+    XRAY_LOG_PATHS.read().unwrap().error.clone()
+}
+
+pub fn access_log_path() -> String {
+    XRAY_LOG_PATHS.read().unwrap().access.clone()
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -77,10 +155,14 @@ impl Default for UpdaterSettings {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct LogSettings { pub timezone: i32 }
+pub struct LogSettings {
+    pub timezone: i32,
+}
 
 impl Default for LogSettings {
-    fn default() -> Self { Self { timezone: 3 } }
+    fn default() -> Self {
+        Self { timezone: 3 }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -98,7 +180,6 @@ impl Default for ClashApiSettings {
         }
     }
 }
-
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -127,7 +208,9 @@ pub struct AppSettings {
 
 impl<'de> Deserialize<'de> for AppSettings {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
+    where
+        D: serde::Deserializer<'de>,
+    {
         #[derive(Deserialize)]
         struct RawConfig {
             #[serde(default)]
@@ -146,7 +229,9 @@ impl<'de> Deserialize<'de> for AppSettings {
             legacy_tz: Option<i32>,
         }
         let mut raw = RawConfig::deserialize(deserializer)?;
-        if let Some(tz) = raw.legacy_tz { raw.log.timezone = tz; }
+        if let Some(tz) = raw.legacy_tz {
+            raw.log.timezone = tz;
+        }
         Ok(Self {
             gui: raw.gui,
             updater: raw.updater,
@@ -160,9 +245,18 @@ impl<'de> Deserialize<'de> for AppSettings {
 
 impl AppSettings {
     pub fn normalize_proxies(&mut self) {
-        self.updater.github_proxy = self.updater.github_proxy.iter().map(|p| {
-            if p.starts_with("http") { p.to_string() } else { format!("https://{}", p.trim_start_matches("://")) }
-        }).collect();
+        self.updater.github_proxy = self
+            .updater
+            .github_proxy
+            .iter()
+            .map(|p| {
+                if p.starts_with("http") {
+                    p.to_string()
+                } else {
+                    format!("https://{}", p.trim_start_matches("://"))
+                }
+            })
+            .collect();
     }
 }
 
@@ -180,5 +274,6 @@ pub struct UpdateReq {
     pub core: String,
     pub version: String,
     pub backup_core: bool,
-    #[serde(default)] pub assets: Vec<String>,
+    #[serde(default)]
+    pub assets: Vec<String>,
 }

@@ -1,23 +1,32 @@
 use axum::{
-    body::{to_bytes, Body},
+    body::{Body, to_bytes},
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::{Path, Query, State},
     http::{HeaderMap, HeaderName, Request, StatusCode},
     response::{IntoResponse, Response},
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
 };
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use serde::Deserialize;
-use tokio_tungstenite::{connect_async, client_async, tungstenite::{Message as TMessage, Error as TError}};
-use tokio::net::UnixStream;
 use std::path::Path as FsPath;
 use std::pin::Pin;
+use tokio::net::UnixStream;
+use tokio_tungstenite::{
+    client_async, connect_async,
+    tungstenite::{Error as TError, Message as TMessage},
+};
 
 use crate::types::{ApiResponse, AppState, MIHOMO_CONF};
 
 #[derive(Clone)]
 enum ClashTarget {
-    Tcp { host: String, port: String, secret: Option<String> },
-    Unix { path: String },
+    Tcp {
+        host: String,
+        port: String,
+        secret: Option<String>,
+    },
+    Unix {
+        path: String,
+    },
 }
 
 #[derive(Deserialize)]
@@ -38,10 +47,11 @@ pub async fn proxy_http(
     let secret_override = header_value(&parts.headers, "x-clash-secret");
     let unix_override = header_value(&parts.headers, "x-clash-unix");
 
-    let target = match resolve_clash_target(&state, port_override, secret_override, unix_override).await {
-        Ok(t) => t,
-        Err(e) => return make_bad_gateway(e),
-    };
+    let target =
+        match resolve_clash_target(&state, port_override, secret_override, unix_override).await {
+            Ok(t) => t,
+            Err(e) => return make_bad_gateway(e),
+        };
 
     let body_bytes = match to_bytes(body, usize::MAX).await {
         Ok(b) => b,
@@ -80,7 +90,11 @@ pub async fn proxy_ws(
         Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
-                axum::Json(ApiResponse::<()> { success: false, error: Some(e), data: None }),
+                axum::Json(ApiResponse::<()> {
+                    success: false,
+                    error: Some(e),
+                    data: None,
+                }),
             )
                 .into_response();
         }
@@ -93,7 +107,11 @@ pub async fn proxy_ws(
     })
 }
 
-async fn proxy_ws_inner(client_ws: WebSocket, path: String, target: ClashTarget) -> Result<(), String> {
+async fn proxy_ws_inner(
+    client_ws: WebSocket,
+    path: String,
+    target: ClashTarget,
+) -> Result<(), String> {
     type UpstreamSink = Pin<Box<dyn Sink<TMessage, Error = TError> + Send>>;
     type UpstreamStream = Pin<Box<dyn Stream<Item = Result<TMessage, TError>> + Send>>;
 
@@ -109,7 +127,9 @@ async fn proxy_ws_inner(client_ws: WebSocket, path: String, target: ClashTarget)
         }
         ClashTarget::Unix { path: socket_path } => {
             let url = build_url("ws", "localhost", "80", &path, None);
-            let stream = UnixStream::connect(socket_path).await.map_err(|e| e.to_string())?;
+            let stream = UnixStream::connect(socket_path)
+                .await
+                .map_err(|e| e.to_string())?;
             let (ws, _) = client_async(url, stream).await.map_err(|e| e.to_string())?;
             let (tx, rx) = ws.split();
             (Box::pin(tx), Box::pin(rx))
@@ -125,9 +145,14 @@ async fn proxy_ws_inner(client_ws: WebSocket, path: String, target: ClashTarget)
                 Message::Binary(b) => TMessage::Binary(b),
                 Message::Ping(p) => TMessage::Ping(p),
                 Message::Pong(p) => TMessage::Pong(p),
-                Message::Close(_) => { let _ = upstream_tx.send(TMessage::Close(None)).await; break; }
+                Message::Close(_) => {
+                    let _ = upstream_tx.send(TMessage::Close(None)).await;
+                    break;
+                }
             };
-            if upstream_tx.send(t_msg).await.is_err() { break; }
+            if upstream_tx.send(t_msg).await.is_err() {
+                break;
+            }
         }
     };
 
@@ -138,10 +163,15 @@ async fn proxy_ws_inner(client_ws: WebSocket, path: String, target: ClashTarget)
                 TMessage::Binary(b) => Message::Binary(b),
                 TMessage::Ping(p) => Message::Ping(p),
                 TMessage::Pong(p) => Message::Pong(p),
-                TMessage::Close(_) => { let _ = client_tx.send(Message::Close(None)).await; break; }
+                TMessage::Close(_) => {
+                    let _ = client_tx.send(Message::Close(None)).await;
+                    break;
+                }
                 _ => continue,
             };
-            if client_tx.send(a_msg).await.is_err() { break; }
+            if client_tx.send(a_msg).await.is_err() {
+                break;
+            }
         }
     };
 
@@ -195,8 +225,13 @@ fn header_value(headers: &HeaderMap, name: &str) -> Option<String> {
 fn make_bad_gateway(err: String) -> Response {
     (
         StatusCode::BAD_GATEWAY,
-        axum::Json(ApiResponse::<()> { success: false, error: Some(err), data: None }),
-    ).into_response()
+        axum::Json(ApiResponse::<()> {
+            success: false,
+            error: Some(err),
+            data: None,
+        }),
+    )
+        .into_response()
 }
 
 async fn do_proxy_http(
@@ -236,7 +271,9 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
             response = response.header(name, value);
         }
     }
-    response.body(Body::from(bytes)).unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+    response
+        .body(Body::from(bytes))
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
 async fn resolve_clash_target(
@@ -307,7 +344,9 @@ fn parse_yaml_value(content: &str, key: &str) -> Option<String> {
         let clean = line.split('#').next().unwrap_or("").trim_start();
         if let Some(rest) = clean.strip_prefix(key) {
             let value = rest.trim().trim_matches(&['"', '\''][..]).trim();
-            if value.is_empty() { return None; }
+            if value.is_empty() {
+                return None;
+            }
             return Some(value.to_string());
         }
     }
@@ -316,7 +355,9 @@ fn parse_yaml_value(content: &str, key: &str) -> Option<String> {
 
 fn parse_host_port(raw: &str) -> Option<(String, String)> {
     let value = raw.trim().trim_matches(&['"', '\''][..]).trim();
-    if value.is_empty() { return None; }
+    if value.is_empty() {
+        return None;
+    }
 
     if value.starts_with('[') {
         if let Some(end) = value.find(']') {
@@ -330,7 +371,11 @@ fn parse_host_port(raw: &str) -> Option<(String, String)> {
 
     if let Some((host, port)) = value.rsplit_once(':') {
         if port.chars().all(|c| c.is_ascii_digit()) {
-            let host = if host.is_empty() { "127.0.0.1".to_string() } else { host.to_string() };
+            let host = if host.is_empty() {
+                "127.0.0.1".to_string()
+            } else {
+                host.to_string()
+            };
             return Some((normalize_host(host), port.to_string()));
         }
     }
@@ -359,13 +404,24 @@ fn resolve_unix_path(raw: String) -> String {
 }
 
 fn sanitize_unix_name(raw: String) -> Option<String> {
-    let name = FsPath::new(raw.trim()).file_name()?.to_string_lossy().to_string();
-    if name.is_empty() { return None; }
+    let name = FsPath::new(raw.trim())
+        .file_name()?
+        .to_string_lossy()
+        .to_string();
+    if name.is_empty() {
+        return None;
+    }
     Some(format!("{}/{}", MIHOMO_CONF, name))
 }
 
 fn build_url(scheme: &str, host: &str, port: &str, path: &str, query: Option<&str>) -> String {
-    let mut url = format!("{}://{}:{}/{}", scheme, host, port, path.trim_start_matches('/'));
+    let mut url = format!(
+        "{}://{}:{}/{}",
+        scheme,
+        host,
+        port,
+        path.trim_start_matches('/')
+    );
     if let Some(q) = query {
         url.push('?');
         url.push_str(q);

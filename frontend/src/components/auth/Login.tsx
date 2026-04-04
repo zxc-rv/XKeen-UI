@@ -2,7 +2,7 @@ import faviconUrl from '@/assets/favicon.png'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
 import { showToast } from '@/lib/store'
 import { IconArrowRight, IconEye, IconEyeOff, IconLock } from '@tabler/icons-react'
@@ -46,12 +46,14 @@ export function LoginForm({ mode, onAuth }: LoginFormProps) {
   }
 
   return (
-    <div className="bg-muted dark:bg-background flex min-h-dvh items-center justify-center">
-      <div className="mx-auto w-full max-w-xs space-y-6">
-        <div className="space-y-2 text-center">
-          <img src={faviconUrl} alt="XKeen UI" className="mx-auto h-12 w-12" />
-          <h1 className="text-3xl font-semibold">XKeen UI</h1>
-          <p className="text-muted-foreground text-sm text-pretty">
+    <div className="bg-muted dark:bg-background flex min-h-dvh items-center justify-center p-4">
+      <div className="bg-card ring-foreground/10 mx-auto w-full max-w-md space-y-6 rounded-2xl border p-6 shadow-lg">
+        <div className="space-y-2 text-left">
+          <div className="flex items-center gap-3">
+            <img src={faviconUrl} alt="XKeen UI" className="size-9" />
+            <h1 className="text-3xl font-semibold">XKeen UI</h1>
+          </div>
+          <p className="text-muted-foreground pt-1 text-sm text-pretty">
             {mode === 'setup' ? 'Установите пароль для доступа к панели' : 'Введите пароль для входа'}
           </p>
         </div>
@@ -60,10 +62,14 @@ export function LoginForm({ mode, onAuth }: LoginFormProps) {
           <FieldGroup>
             <Field data-invalid={invalid || undefined}>
               <FieldLabel htmlFor="password">Пароль</FieldLabel>
-              <div className="relative">
-                <Input
+              <InputGroup>
+                <InputGroupAddon className="pl-2.5">
+                  <InputGroupText className="text-muted-foreground/80">
+                    <IconLock size={16} aria-hidden="true" />
+                  </InputGroupText>
+                </InputGroupAddon>
+                <InputGroupInput
                   id="password"
-                  className="ps-9 pe-9"
                   placeholder="Введите пароль..."
                   type={visible ? 'text' : 'password'}
                   value={password}
@@ -75,19 +81,20 @@ export function LoginForm({ mode, onAuth }: LoginFormProps) {
                   autoFocus
                   required
                 />
-                <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 inset-s-0 flex items-center justify-center ps-3">
-                  <IconLock size={16} aria-hidden="true" />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setVisible((v) => !v)}
-                  aria-label={visible ? 'Скрыть пароль' : 'Показать пароль'}
-                  aria-pressed={visible}
-                  className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 inset-e-0 flex h-full w-9 items-center justify-center rounded-e-md transition-colors outline-none focus:z-10 focus-visible:ring-[3px]"
-                >
-                  {visible ? <IconEyeOff size={16} aria-hidden="true" /> : <IconEye size={16} aria-hidden="true" />}
-                </button>
-              </div>
+                <InputGroupAddon align="inline-end" className="pr-2.5">
+                  <InputGroupButton
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    onClick={() => setVisible((v) => !v)}
+                    aria-label={visible ? 'Скрыть пароль' : 'Показать пароль'}
+                    aria-pressed={visible}
+                    className="text-muted-foreground/80 hover:text-foreground"
+                  >
+                    {visible ? <IconEyeOff size={16} aria-hidden="true" /> : <IconEye size={16} aria-hidden="true" />}
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
             </Field>
           </FieldGroup>
 
