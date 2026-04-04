@@ -523,8 +523,14 @@ const ConnectionsStatus = memo(function ConnectionsStatus() {
 const CloseAllBtn = memo(function CloseAllBtn({ onCloseAll }: { onCloseAll: () => void }) {
   const totalCount = useConnectionsStore((s) => s.map.size)
   return (
-    <Button variant="destructive" className="text-[13px] max-md:size-9 max-md:px-0" onClick={onCloseAll} disabled={totalCount === 0}>
-      <IconTrash data-icon="inline-start" />
+    <Button
+      variant="destructive"
+      className="text-[13px] max-md:size-9 max-md:px-0 max-md:pr-0! max-md:pl-0!"
+      onClick={onCloseAll}
+      disabled={totalCount === 0}
+    >
+      <IconTrash className="md:hidden" />
+      <IconTrash data-icon="inline-start" className="hidden md:block" />
       <span className="hidden md:inline">Закрыть все</span>
     </Button>
   )
