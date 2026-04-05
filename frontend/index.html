@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <script>
       (() => {
-        const theme = localStorage.getItem('xkeen-ui-theme')
-        const resolvedTheme = theme === 'light' || theme === 'dark' || theme === 'auto' ? theme : 'dark'
+        const theme = localStorage.getItem('theme')
+        const resolvedTheme = theme === 'light' || theme === 'dark' || theme === 'auto' ? theme : 'auto'
         const isDark = resolvedTheme === 'dark' || (resolvedTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
         document.documentElement.classList.toggle('dark', isDark)
       })()

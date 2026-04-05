@@ -78,9 +78,9 @@ const updateSettings: ToggleSetting[] = [
 ]
 
 const themeOptions: { value: ThemeMode; label: string }[] = [
+  { value: 'auto', label: 'Авто' },
   { value: 'light', label: 'Светлая' },
   { value: 'dark', label: 'Темная' },
-  { value: 'auto', label: 'Авто' },
 ]
 
 const SwitchSettingField = memo(function SwitchSettingField({
