@@ -582,7 +582,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
         <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
           <div className="flex min-w-0 shrink-0 items-center gap-2">
             {isMihomo ? (
-              <div className="min-w-0 overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="min-w-0 overflow-x-auto [scrollbar-width:none] md:overflow-x-visible [&::-webkit-scrollbar]:hidden">
                 <Tabs
                   value={activePanel}
                   onValueChange={(value) => {
