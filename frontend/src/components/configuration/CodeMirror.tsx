@@ -632,12 +632,22 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         const view = viewRef.current
         if (!view) return
         const max = view.state.doc.length
-        view.dispatch({
-          changes: {
-            from: clamp(from, 0, max),
-            to: clamp(to, 0, max),
-            insert: text,
-          },
+        const safeFrom = clamp(from, 0, max)
+        const safeTo = clamp(to, 0, max)
+        view.dispatch({ changes: { from: safeFrom, to: safeTo, insert: text } })
+        requestAnimationFrame(() => {
+          const targetTop = Math.max(0, view.lineBlockAt(safeFrom).top - 20)
+          const startTop = view.scrollDOM.scrollTop
+          const distance = targetTop - startTop
+          if (Math.abs(distance) < 1) return
+          const duration = 50
+          const startTime = performance.now()
+          const step = (now: number) => {
+            const progress = Math.min((now - startTime) / duration, 1)
+            view.scrollDOM.scrollTop = startTop + distance * (1 - Math.pow(1 - progress, 3))
+            if (progress < 1) requestAnimationFrame(step)
+          }
+          requestAnimationFrame(step)
         })
       },
       getLineCount: () => viewRef.current?.state.doc.lines ?? 1,
