@@ -21,7 +21,8 @@ export async function copyText(text: string): Promise<boolean> {
     const textarea = document.createElement('textarea')
     textarea.value = text
     textarea.style.cssText = 'position:fixed;opacity:0;pointer-events:none;z-index:-1;'
-    document.body.appendChild(textarea)
+    const container = document.querySelector('[role="dialog"]') ?? document.body
+    container.appendChild(textarea)
     textarea.focus()
     textarea.select()
     textarea.setSelectionRange(0, text.length)
