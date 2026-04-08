@@ -20,11 +20,14 @@ jobs:
           - target: mips-unknown-linux-gnu
             name: mips32
             toolchain: nightly
-            rustflags: "-C target-feature=+crt-static"
+            rustflags: "-C target-feature=+crt-static,+soft-float"
           - target: mipsel-unknown-linux-gnu
             name: mips32le
             toolchain: nightly
-            rustflags: "-C target-feature=+crt-static"
+            rustflags: "-C target-feature=+crt-static,+soft-float"
+          - target: mipsel-unknown-linux-musl
+            name: mips32le-softfloat
+            toolchain: nightly
     steps:
       - uses: actions/checkout@v6
       - name: Set version
@@ -52,6 +55,10 @@ jobs:
           build-std = ["std", "panic_abort", "proc_macro"]
 
           [target.mipsel-unknown-linux-gnu]
+          build-std = ["std", "panic_abort", "proc_macro"]
+
+          [target.mipsel-unknown-linux-musl]
+          image = "ghcr.io/cross-rs/mipsel-unknown-linux-musl:edge"
           build-std = ["std", "panic_abort", "proc_macro"]
           EOF
 
