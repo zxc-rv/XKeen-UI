@@ -2,16 +2,18 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
+  IconActivity,
   IconArrowDown,
   IconArrowsSort,
   IconArrowUp,
   IconCircleArrowRightFilled,
   IconFilter,
   IconLoader2,
+  IconPlugX,
   IconTrash,
-  IconWifi,
   IconX,
 } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useState, type ReactNode } from 'react'
@@ -19,7 +21,6 @@ import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
 import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useWsConnected } from '../../../lib/store'
-
 interface ConnectionMetadata {
   network: string
   type: string
@@ -64,12 +65,22 @@ interface Props {
 
 const toMap = (connections: Connection[]) => new Map(connections.map((c) => [c.id, c]))
 
-const useConnectionsStore = create<{ map: Map<string, Connection> }>(() => ({
+const useConnectionsStore = create<{ map: Map<string, Connection>; closedMap: Map<string, Connection> }>(() => ({
   map: toMap(getConnections()),
+  closedMap: new Map(),
 }))
 
 subscribeConnections((connections) => {
-  useConnectionsStore.setState({ map: toMap(connections) })
+  const newMap = toMap(connections)
+  const { map: prevMap, closedMap: prevClosed } = useConnectionsStore.getState()
+  let nextClosed = prevClosed
+  for (const [id, conn] of prevMap) {
+    if (!newMap.has(id) && !prevClosed.has(id)) {
+      if (nextClosed === prevClosed) nextClosed = new Map(prevClosed)
+      nextClosed.set(id, conn)
+    }
+  }
+  useConnectionsStore.setState({ map: newMap, closedMap: nextClosed })
 })
 
 const asnCache = new Map<string, string | null>()
@@ -338,17 +349,94 @@ const ConnectionRow = memo(function ConnectionRow({
         <Button
           variant="ghost"
           size="icon"
-          className="text-muted-foreground h-6 w-6 hover:text-red-400"
+          className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
           onClick={(e) => onClose(conn.id, e)}
         >
-          <IconX size={13} />
+          <IconX className="size-3.5" />
         </Button>
       </TableCell>
     </TableRow>
   )
 })
 
-// ─── Dialog ────────────────────────────────────────────────────────────────────
+// ─── Closed Row ────────────────────────────────────────────────────────────────
+
+const ClosedConnectionRow = memo(function ClosedConnectionRow({
+  conn,
+  onSelect,
+}: {
+  conn: Connection
+  onSelect: (conn: Connection) => void
+}) {
+  const reversedChains = [...conn.chains].reverse()
+  const first = reversedChains[0]
+  const last = reversedChains.at(-1)
+  const host = getConnectionHost(conn)
+  const hostLabel = getConnectionHostLabel(conn)
+  const source = getConnectionSourceLabel(conn)
+
+  return (
+    <TableRow className="hover:bg-muted/50 h-9.75 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
+      <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
+              {first && (
+                <span className="flex shrink-0 items-center gap-1">
+                  <ProxyIcon name={first} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                  <span className="block whitespace-nowrap">{first}</span>
+                </span>
+              )}
+              {reversedChains.length > 1 && (
+                <>
+                  <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
+                  <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+                    <ProxyIcon name={last!} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                    <span className="block truncate">{last}</span>
+                  </span>
+                </>
+              )}
+            </div>
+          </TooltipTrigger>
+          <ChainTooltip chains={reversedChains} />
+        </Tooltip>
+      </TableCell>
+      <TableCell className="max-w-72 text-[13px] md:max-w-48">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="flex w-fit max-w-full items-center overflow-hidden">
+              <span className="truncate">{host}</span>
+              {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
+            {hostLabel}
+          </TooltipContent>
+        </Tooltip>
+      </TableCell>
+      <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="block w-fit max-w-full truncate">{source}</span>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={source}>
+            {source}
+          </TooltipContent>
+        </Tooltip>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-[13px]">
+        <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
+          <span>↑ {formatBytes(conn.upload)}</span>
+          <span>↓ {formatBytes(conn.download)}</span>
+        </span>
+      </TableCell>
+      <TableCell className="text-muted-foreground text-[13px] tabular-nums">
+        <TimeAgoCell isoString={conn.start} />
+      </TableCell>
+      <TableCell />
+    </TableRow>
+  )
+})
 
 const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn: Connection }) {
   const reversedChains = [...conn.chains].reverse()
@@ -477,9 +565,10 @@ const ConnectionDialog = memo(function ConnectionDialog({
   onCloseConnection: (id: string) => Promise<void>
 }) {
   const liveConn = useConnectionsStore((s) => (connId ? (s.map.get(connId) ?? null) : null))
+  const frozenConn = useConnectionsStore((s) => (connId ? (s.closedMap.get(connId) ?? null) : null))
   const [snapshot, setSnapshot] = useState<Connection | null>(null)
   if (liveConn !== null && liveConn !== snapshot) setSnapshot(liveConn)
-  const conn = liveConn ?? snapshot
+  const conn = liveConn ?? snapshot ?? frozenConn
   const isClosed = !!connId && !liveConn
 
   return (
@@ -514,14 +603,32 @@ const ConnectionDialog = memo(function ConnectionDialog({
 
 // ─── Header Subcomponents ─────────────────────────────────────────────────────
 
-const ConnectionsStatus = memo(function ConnectionsStatus() {
-  const connected = useWsConnected()
-  const totalCount = useConnectionsStore((s) => s.map.size)
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
+
+const ConnectionsTabs = memo(function ConnectionsTabs({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: 'active' | 'closed'
+  onTabChange: (tab: 'active' | 'closed') => void
+}) {
+  const activeCount = useConnectionsStore((s) => s.map.size)
+  const closedCount = useConnectionsStore((s) => s.closedMap.size)
+  const triggerStyles = 'data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!'
+
   return (
-    <div className="text-muted-foreground flex shrink-0 items-center gap-2 text-sm">
-      {connected ? <IconWifi size={24} className="text-green-400" /> : <IconWifi size={24} className="text-red-400" />}
-      <span className="tabular-nums">{totalCount}</span>
-    </div>
+    <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as 'active' | 'closed')}>
+      <TabsList>
+        <TabsTrigger value="active" className={triggerStyles}>
+          <IconActivity />
+          <span className="text-xs tabular-nums">{activeCount}</span>
+        </TabsTrigger>
+        <TabsTrigger value="closed" className={triggerStyles}>
+          <IconPlugX />
+          <span className="text-xs tabular-nums">{closedCount}</span>
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
   )
 })
 
@@ -545,18 +652,22 @@ const CloseAllBtn = memo(function CloseAllBtn({ onCloseAll }: { onCloseAll: () =
 
 const ConnectionsHeader = memo(function ConnectionsHeader({
   filter,
+  activeTab,
+  onTabChange,
   onFilterChange,
   onClearFilter,
   onCloseAll,
 }: {
   filter: string
+  activeTab: 'active' | 'closed'
+  onTabChange: (tab: 'active' | 'closed') => void
   onFilterChange: (v: string) => void
   onClearFilter: () => void
   onCloseAll: () => void
 }) {
   return (
     <div className="border-border flex shrink-0 items-center gap-2 border-b p-3">
-      <ConnectionsStatus />
+      <ConnectionsTabs activeTab={activeTab} onTabChange={onTabChange} />
 
       <InputGroup>
         <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
@@ -572,7 +683,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
         </InputGroupAddon>
       </InputGroup>
 
-      <CloseAllBtn onCloseAll={onCloseAll} />
+      {activeTab === 'active' && <CloseAllBtn onCloseAll={onCloseAll} />}
     </div>
   )
 })
@@ -692,6 +803,64 @@ const ConnectionsBody = memo(function ConnectionsBody({
   )
 })
 
+const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
+  filter,
+  sortColumn,
+  sortDirection,
+  onSelect,
+}: {
+  filter: string
+  sortColumn: SortColumn
+  sortDirection: SortDirection
+  onSelect: (conn: Connection) => void
+}) {
+  const filteredConns = useConnectionsStore(
+    useShallow((s) => {
+      const connections = Array.from(s.closedMap.values())
+      const query = filter.trim()
+      let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
+      if (query) {
+        result = result.filter((conn) => {
+          const hostLabel = getConnectionHostLabel(conn)
+          const sourceLabel = getConnectionSourceLabel(conn)
+          return (
+            conn.chains.some((c) => c.includes(query)) ||
+            hostLabel.includes(query) ||
+            conn.metadata.host.includes(query) ||
+            conn.metadata.destinationIP.includes(query) ||
+            sourceLabel.includes(query) ||
+            conn.metadata.sourceIP.includes(query) ||
+            conn.rule.includes(query) ||
+            conn.rulePayload.includes(query)
+          )
+        })
+      }
+      if (sortColumn) {
+        result = [...result].sort((a, b) => {
+          const valueA = getConnectionSortValue(a, sortColumn)
+          const valueB = getConnectionSortValue(b, sortColumn)
+          return sortDirection === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA)
+        })
+      }
+      return result
+    })
+  )
+
+  return (
+    <TableBody>
+      {filteredConns.length === 0 ? (
+        <TableRow>
+          <TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
+            {filter ? 'Нет совпадений' : 'Нет закрытых соединений'}
+          </TableCell>
+        </TableRow>
+      ) : (
+        filteredConns.map((conn) => <ClosedConnectionRow key={conn.id} conn={conn} onSelect={onSelect} />)
+      )}
+    </TableBody>
+  )
+})
+
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
 export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }: Props) {
@@ -699,6 +868,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active')
 
   const toggleSort = useCallback((column: SortColumn) => {
     setSortColumn((prev) => {
@@ -753,18 +923,34 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   return (
     <TooltipProvider delayDuration={700} skipDelayDuration={0}>
       <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
-        <ConnectionsHeader filter={filter} onFilterChange={setFilter} onClearFilter={clearFilter} onCloseAll={closeAll} />
+        <ConnectionsHeader
+          filter={filter}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onFilterChange={setFilter}
+          onClearFilter={clearFilter}
+          onCloseAll={closeAll}
+        />
         <div className="flex-1 overflow-auto [scrollbar-width:thin]">
           <Table className="min-w-240 md:min-w-190">
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
-            <ConnectionsBody
-              filter={filter}
-              sortColumn={sortColumn}
-              sortDirection={sortDirection}
-              onSelect={handleSelectConnection}
-              onClose={handleCloseConnection}
-              onApplyFilter={handleApplyFilter}
-            />
+            {activeTab === 'active' ? (
+              <ConnectionsBody
+                filter={filter}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSelect={handleSelectConnection}
+                onClose={handleCloseConnection}
+                onApplyFilter={handleApplyFilter}
+              />
+            ) : (
+              <ClosedConnectionsBody
+                filter={filter}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
+                onSelect={handleSelectConnection}
+              />
+            )}
           </Table>
         </div>
       </div>
