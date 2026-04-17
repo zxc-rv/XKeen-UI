@@ -35,7 +35,7 @@ import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad } from '../../lib/loader'
-import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
+import { fetchClashProxies, syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
 import { cn, stripJsonComments } from '../../lib/utils'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
@@ -397,6 +397,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
           })
         )
       )
+      if (type === 'proxies') {
+        await fetchClashProxies(activeClashApiPort ?? '', clashApiSecret, true, activeClashApiUnix ?? null)
+      }
       showToast(`Наборы ${type === 'rules' ? 'правил' : 'прокси'} обновлены`)
     } catch {
       showToast('Ошибка обновления', 'error')
