@@ -173,6 +173,43 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     [dispatch, showToast]
   )
 
+  const checkVersion = useCallback(
+    async (showUpdateToast = false) => {
+      try {
+        const data = await apiCall<any>('GET', 'version')
+        if (!data.success || !data.appVersion) return
+
+        dispatch({
+          type: 'SET_VERSION',
+          version: data.appVersion.replace(/^v/i, ''),
+          isOutdatedUI: !!data.outdated?.app,
+        })
+
+        if (data.coreVersions) {
+          const appState = getAppState()
+          dispatch({
+            type: 'SET_CORE_INFO',
+            currentCore: appState.currentCore,
+            coreVersions: { ...appState.coreVersions, ...data.coreVersions },
+            availableCores: appState.availableCores,
+          })
+        }
+
+        if (!showUpdateToast) return
+        if (data.show_toast?.app) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true })
+        if (data.show_toast?.core)
+          showToast({
+            title: 'Доступно обновление',
+            body: `Доступна новая версия ${capitalize(getAppState().currentCore)}`,
+            persistent: true,
+          })
+      } catch {
+        /* ignore */
+      }
+    },
+    [dispatch, showToast]
+  )
+
   useEffect(() => {
     const loadSettings = async () => {
       const data = await apiCall<any>('GET', 'settings')
@@ -195,50 +232,19 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
         })
     }
 
-    const checkVersion = async () => {
-      try {
-        const data = await apiCall<any>('GET', 'version')
-        if (data.success && data.appVersion) {
-          dispatch({
-            type: 'SET_VERSION',
-            version: data.appVersion.replace(/^v/i, ''),
-            isOutdatedUI: !!data.outdated?.app,
-          })
-          if (data.coreVersions) {
-            const appState = getAppState()
-            dispatch({
-              type: 'SET_CORE_INFO',
-              currentCore: appState.currentCore,
-              coreVersions: { ...appState.coreVersions, ...data.coreVersions },
-              availableCores: appState.availableCores,
-            })
-          }
-          if (data.show_toast?.app) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true })
-          if (data.show_toast?.core)
-            showToast({
-              title: 'Доступно обновление',
-              body: `Доступна новая версия ${capitalize(getAppState().currentCore)}`,
-              persistent: true,
-            })
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-
     const init = async () => {
       try {
         await loadSettings()
         const currentCore = await checkStatus()
         if (currentCore) loadConfigs(currentCore)
-        checkVersion()
+        checkVersion(true)
       } catch {
         showToast('Ошибка инициализации', 'error')
       }
     }
 
     init()
-  }, [checkStatus, loadConfigs, dispatch, showToast])
+  }, [checkStatus, loadConfigs, dispatch, showToast, checkVersion])
 
   const switchCore = useCallback(
     async (core: string) => {
@@ -405,7 +411,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   )
 
   const logout = onLogout
-  const onInstalled = useCallback(() => void checkStatus(), [checkStatus])
+  const onInstalled = useCallback(() => void checkVersion(), [checkVersion])
   const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
 
   return (
