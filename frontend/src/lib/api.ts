@@ -1,6 +1,18 @@
 const RETRY_DELAYS = [500, 1000, 2000, 4000, 8000]
 const RETRY_STATUSES = new Set([502, 503, 504])
 
+function extractClashErrorMessage(bodyText: string): string {
+  const trimmed = bodyText.trim()
+  if (!trimmed) return ''
+  try {
+    const parsed = JSON.parse(trimmed) as { message?: unknown; error?: unknown }
+    const message = typeof parsed.message === 'string' ? parsed.message.trim() : typeof parsed.error === 'string' ? parsed.error.trim() : ''
+    return message || trimmed
+  } catch {
+    return trimmed
+  }
+}
+
 export async function apiCall<T = unknown>(method: string, endpoint: string, body?: unknown): Promise<T> {
   const isGet = method === 'GET'
   const res = await fetch(`/api/${endpoint}`, {
@@ -17,6 +29,7 @@ export async function clashFetch<T = unknown>(
   options?: { method?: string; secret?: string | null; body?: unknown; unix?: string | null; retry?: boolean }
 ): Promise<T> {
   const { method = 'GET', secret, body, unix, retry = true } = options ?? {}
+  const canRetry = retry && method === 'GET'
   const normalizedPath = path.replace(/^\/+/, '')
 
   const headers: Record<string, string> = {}
@@ -31,9 +44,9 @@ export async function clashFetch<T = unknown>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   }
 
-  const maxAttempts = retry ? RETRY_DELAYS.length : 0
+  const maxAttempts = canRetry ? RETRY_DELAYS.length : 0
 
-  // Долбим ретраи если пришла 502/503/504 или отвалилась сеть
+  // Ретраим только GET-запросы если пришла 502/503/504 или отвалилась сеть
   for (let attempt = 0; attempt <= maxAttempts; attempt++) {
     let res: Response
     try {
@@ -45,11 +58,18 @@ export async function clashFetch<T = unknown>(
     }
 
     if (!res.ok) {
-      if (retry && RETRY_STATUSES.has(res.status) && attempt < maxAttempts) {
+      if (canRetry && RETRY_STATUSES.has(res.status) && attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]))
         continue
       }
-      throw new Error(`Clash request failed: ${res.status} ${res.statusText}`)
+      const bodyText = await res.text().catch(() => '')
+      const details = extractClashErrorMessage(bodyText)
+      const messageLooksLikeStatus = /^\d{3}\s+/u.test(details)
+      throw new Error(
+        messageLooksLikeStatus
+          ? `Clash request failed: ${details}`
+          : `Clash request failed: ${res.status} ${res.statusText}${details ? ` - ${details}` : ''}`
+      )
     }
 
     if (res.status === 204 || res.headers.get('content-length') === '0') return {} as T

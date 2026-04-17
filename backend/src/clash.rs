@@ -262,7 +262,7 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
     let headers = upstream.headers().clone();
     let bytes = match upstream.bytes().await {
         Ok(b) => b,
-        Err(e) => return make_bad_gateway(e.to_string()),
+        Err(_) => axum::body::Bytes::new(),
     };
 
     let mut response = Response::builder().status(status);

@@ -7,9 +7,9 @@ import { LogPanel } from './components/log/LogPanel'
 import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
-import { LazyBoundary, lazyLoad } from './lib/loader'
-import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
+import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
+import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config, type ThemeMode } from './lib/types'
 import { parseClashApiCredentials, stripJsonComments } from './lib/utils'
 
@@ -32,17 +32,6 @@ function useThemeMode(theme: ThemeMode) {
     media.addEventListener('change', syncTheme)
     return () => media.removeEventListener('change', syncTheme)
   }, [theme])
-}
-
-function useLazyMount(open: boolean, delay = 200) {
-  const [mounted, setMounted] = useState(open)
-  if (open && !mounted) setMounted(true)
-  useEffect(() => {
-    if (open) return
-    const timer = setTimeout(() => setMounted(false), delay)
-    return () => clearTimeout(timer)
-  }, [open, delay])
-  return mounted
 }
 
 interface ModalManagerProps {

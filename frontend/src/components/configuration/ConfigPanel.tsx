@@ -25,6 +25,7 @@ import {
   IconFilePlus,
   IconFileText,
   IconLink,
+  IconListDetails,
   IconPencil,
   IconRefresh,
   IconSearch,
@@ -34,8 +35,8 @@ import {
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
-import { LazyBoundary, lazyLoad } from '../../lib/loader'
-import { fetchClashProxies, syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
+import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
+import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
 import { cn, stripJsonComments } from '../../lib/utils'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
@@ -47,10 +48,12 @@ import type { CodeMirrorRef } from './CodeMirror'
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
 const GuiLog = lazyLoad(() => import('./xray/GuiLog'), 'GuiLog')
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
+const ProvidersModal = lazyLoad(() => import('../modals/Providers'), 'ProvidersModal')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
 type ClashMode = 'rule' | 'global' | 'direct'
+type ProvidersModalKind = 'rules' | 'proxies'
 
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
 
@@ -270,10 +273,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
 
   useConnectionsSync(currentCore === 'mihomo' ? activeClashApiPort : null, clashApiSecret, serviceStatus, activeClashApiUnix)
 
-  useEffect(() => {
-    if (!isRunning) setActivePanel('config')
-  }, [isRunning])
-
   const [activeConfigFile, setActiveConfigFile] = useState<string>(() => localStorage.getItem('lastSelectedTab') ?? '')
   const activeConfigIndex = useMemo(() => {
     if (!configs.length) return 0
@@ -288,8 +287,10 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['config']))
   const [mode, setMode] = useState<ClashMode>('rule')
   const [allSelectorsCollapsed, setAllSelectorsCollapsed] = useState(false)
-  const [updatingRuleProviders, setUpdatingRuleProviders] = useState(false)
-  const [updatingProxyProviders, setUpdatingProxyProviders] = useState(false)
+  const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
+  const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
+  const mountProvidersModal = useLazyMount(isProvidersModalOpen)
+  const currentPanel = isRunning ? activePanel : 'config'
 
   const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
@@ -330,22 +331,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   }, [saveViewState])
 
   const configFilenamesKey = configs.map((c) => c.file).join(',')
-  const prevConfigFilenamesKeyRef = useRef('')
-
-  useEffect(() => {
-    const currentConfigs = configsRef.current
-    if (currentConfigs.length === 0) return
-    const isFirstLoad = prevConfigFilenamesKeyRef.current === ''
-    prevConfigFilenamesKeyRef.current = configFilenamesKey
-    if (isFirstLoad) return
-
-    const currentFile = activeConfigFile
-    if (currentConfigs.some((c) => c.file === currentFile)) return
-
-    const yamlIndex = currentConfigs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
-    const next = yamlIndex >= 0 ? yamlIndex : 0
-    setActiveConfigFile(currentConfigs[next]?.file ?? '')
-  }, [configFilenamesKey, activeConfigFile])
 
   useEffect(() => {
     if (currentCore !== 'mihomo' || (!activeClashApiPort && !activeClashApiUnix)) return
@@ -378,35 +363,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     },
     [activeClashApiPort, clashApiSecret, activeClashApiUnix, mode]
   )
-
-  async function updateAllProviders(type: 'rules' | 'proxies', setLoading: (v: boolean) => void) {
-    if (!activeClashApiPort && !activeClashApiUnix) return
-    setLoading(true)
-    try {
-      const data = await clashFetch<{ providers?: Record<string, unknown> }>(activeClashApiPort ?? '', `providers/${type}`, {
-        secret: clashApiSecret,
-        unix: activeClashApiUnix,
-      })
-      const names = Object.keys(data.providers ?? {})
-      await Promise.all(
-        names.map((name) =>
-          clashFetch(activeClashApiPort ?? '', `providers/${type}/${encodeURIComponent(name)}`, {
-            method: 'PUT',
-            secret: clashApiSecret,
-            unix: activeClashApiUnix,
-          })
-        )
-      )
-      if (type === 'proxies') {
-        await fetchClashProxies(activeClashApiPort ?? '', clashApiSecret, true, activeClashApiUnix ?? null)
-      }
-      showToast(`Наборы ${type === 'rules' ? 'правил' : 'прокси'} обновлены`)
-    } catch {
-      showToast('Ошибка обновления', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const activeConfig = configs[activeConfigIndex]
   const fileLanguage = activeConfig ? getFileLanguage(activeConfig.file) : null
@@ -468,17 +424,29 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     setValidationState((prev) => (prev?.isValid === isValid && prev?.error === error ? prev : { isValid, error }))
   }, [])
 
-  function switchTab(index: number) {
-    if (index === activeConfigIndex) return
-    const currentCfg = configsRef.current[activeIndexRef.current]
-    if (currentCfg) saveViewState(currentCfg.file, currentCfg.isDirty)
+  const openProvidersModal = useCallback((kind: ProvidersModalKind) => {
+    setProvidersModalKind(kind)
+    setIsProvidersModalOpen(true)
+  }, [])
 
-    const file = configs[index]?.file ?? ''
-    setActiveConfigFile(file)
-    localStorage.setItem('lastSelectedTab', file)
-  }
+  const handleProvidersModalOpenChange = useCallback((open: boolean) => setIsProvidersModalOpen(open), [])
 
-  configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
+  const switchTab = useCallback(
+    (index: number) => {
+      if (index === activeIndexRef.current) return
+      const currentCfg = configsRef.current[activeIndexRef.current]
+      if (currentCfg) saveViewState(currentCfg.file, currentCfg.isDirty)
+
+      const file = configsRef.current[index]?.file ?? ''
+      setActiveConfigFile(file)
+      localStorage.setItem('lastSelectedTab', file)
+    },
+    [saveViewState]
+  )
+
+  useEffect(() => {
+    configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
+  }, [configActionsRef, switchTab])
 
   async function saveCurrentConfig(force = false) {
     const cfg = configsRef.current[activeIndexRef.current]
@@ -581,313 +549,309 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="border-border bg-card flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
-        <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
-          <div className="flex min-w-0 shrink-0 items-center gap-2">
-            {isMihomo ? (
-              <div className="min-w-0 overflow-x-auto [scrollbar-width:none] md:overflow-x-visible [&::-webkit-scrollbar]:hidden">
-                <Tabs
-                  value={activePanel}
-                  onValueChange={(value) => {
-                    const panel = value as 'config' | 'selectors' | 'connections'
-                    setActivePanel(panel)
-                    setMountedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
-                  }}
-                  className="w-max flex-row!"
-                >
-                  <TabsList variant="line" className="mb-2 w-max shrink-0 gap-3 p-0 whitespace-nowrap md:mb-0">
-                    <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
-                      Конфигурация
-                    </TabsTrigger>
-                    <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
-                      Селекторы
-                    </TabsTrigger>
-                    <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
-                      Соединения
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-            ) : (
-              <h2 className="shrink-0 text-lg font-semibold select-none">Конфигурация</h2>
-            )}
-          </div>
-
-          {isMihomo && activePanel === 'connections' && (
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                variant="outline"
-                className="text-[13px]"
-                disabled={updatingRuleProviders}
-                onClick={() => updateAllProviders('rules', setUpdatingRuleProviders)}
-              >
-                {updatingRuleProviders ? (
-                  <IconRefresh data-icon="inline-start" className="direction-[reverse] animate-spin" />
-                ) : (
-                  <IconRefresh data-icon="inline-start" />
-                )}
-                Наборы правил
-              </Button>
-              <Button
-                variant="outline"
-                className="text-[13px]"
-                disabled={updatingProxyProviders}
-                onClick={() => updateAllProviders('proxies', setUpdatingProxyProviders)}
-              >
-                {updatingProxyProviders ? (
-                  <IconRefresh data-icon="inline-start" className="direction-[reverse] animate-spin" />
-                ) : (
-                  <IconRefresh data-icon="inline-start" />
-                )}
-                Наборы прокси
-              </Button>
-            </div>
-          )}
-
-          {isMihomo && activePanel === 'selectors' && (
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">Режим маршрутизации</span>
-              <Select value={mode} onValueChange={(value) => changeMode(value as ClashMode)}>
-                <SelectTrigger className="w-30">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="direct">DIRECT</SelectItem>
-                    <SelectItem value="rule">RULE</SelectItem>
-                    <SelectItem value="global">GLOBAL</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
-                    onClick={() =>
-                      window.dispatchEvent(new CustomEvent(TOGGLE_ALL_SELECTORS_EVENT, { detail: { collapsed: !allSelectorsCollapsed } }))
-                    }
+      <>
+        <div className="border-border bg-card flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
+          <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
+            <div className="flex min-w-0 shrink-0 items-center gap-2">
+              {isMihomo ? (
+                <div className="min-w-0 overflow-x-auto [scrollbar-width:none] md:overflow-x-visible [&::-webkit-scrollbar]:hidden">
+                  <Tabs
+                    value={currentPanel}
+                    onValueChange={(value) => {
+                      const panel = value as 'config' | 'selectors' | 'connections'
+                      setActivePanel(panel)
+                      setMountedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
+                    }}
+                    className="w-max flex-row!"
                   >
-                    {allSelectorsCollapsed ? <IconChevronDown /> : <IconChevronUp />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{allSelectorsCollapsed ? 'Развернуть все' : 'Свернуть все'}</TooltipContent>
-              </Tooltip>
-            </div>
-          )}
-
-          {(!isMihomo || activePanel === 'config') && (
-            <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] md:ml-auto [&::-webkit-scrollbar]:hidden">
-              {isConfigsLoading ? (
-                <div className="flex gap-2">
-                  {[525, 310].map((w) => (
-                    <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
-                  ))}
+                    <TabsList variant="line" className="mb-2 w-max shrink-0 gap-3 p-0 whitespace-nowrap md:mb-0">
+                      <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
+                        Конфигурация
+                      </TabsTrigger>
+                      <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
+                        Селекторы
+                      </TabsTrigger>
+                      <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
+                        Соединения
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </div>
               ) : (
-                <Tabs
-                  value={activeConfig?.file || ''}
-                  onValueChange={(value) => {
-                    const index = configs.findIndex((c) => c.file === value)
-                    if (index >= 0) switchTab(index)
-                  }}
-                  className="flex-row!"
-                >
-                  {coreConfigs.length > 0 && (
-                    <TabsList className="shrink-0">
-                      {coreConfigs.map((config) => (
-                        <ConfigTab
-                          key={config.file}
-                          config={config}
-                          currentCore={currentCore}
-                          showToast={showToast}
-                          onRefreshConfigs={onRefreshConfigs}
-                          withContextMenu
-                        />
-                      ))}
-                    </TabsList>
-                  )}
-                  {xkeenConfigs.length > 0 && (
-                    <TabsList className="shrink-0">
-                      {xkeenConfigs.map((config) => (
-                        <ConfigTab
-                          key={config.file}
-                          config={config}
-                          currentCore={currentCore}
-                          showToast={showToast}
-                          onRefreshConfigs={onRefreshConfigs}
-                        />
-                      ))}
-                    </TabsList>
-                  )}
-                </Tabs>
+                <h2 className="shrink-0 text-lg font-semibold select-none">Конфигурация</h2>
               )}
             </div>
-          )}
-        </div>
 
-        <div className="relative min-h-175! md:min-h-0 md:flex-1">
-          {isEditorMounted && activeConfig && isRoutingGui && (
-            <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
-          )}
-          {isEditorMounted && activeConfig && isLogGui && (
-            <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
-          )}
-
-          {isMihomo && (
-            <>
-              {mountedPanels.has('selectors') && (
-                <div className={cn(activePanel !== 'selectors' && 'hidden')}>
-                  <LazyBoundary>
-                    <SelectorsPanel
-                      clashApiPort={(activeClashApiPort ?? '') as string}
-                      mode={mode}
-                      clashApiSecret={clashApiSecret ?? null}
-                      clashApiUnix={activeClashApiUnix ?? null}
-                      onCollapsedStateChange={setAllSelectorsCollapsed}
-                    />
-                  </LazyBoundary>
-                </div>
-              )}
-              {mountedPanels.has('connections') && (
-                <div className={cn(activePanel !== 'connections' && 'hidden')}>
-                  <LazyBoundary>
-                    <ConnectionsPanel
-                      clashApiPort={(activeClashApiPort ?? '') as string}
-                      clashApiSecret={clashApiSecret ?? null}
-                      clashApiUnix={activeClashApiUnix ?? null}
-                    />
-                  </LazyBoundary>
-                </div>
-              )}
-            </>
-          )}
-
-          <div
-            className={cn(
-              'absolute inset-0',
-              isAnyGui && 'pointer-events-none invisible opacity-0',
-              isMihomo && activePanel !== 'config' && 'hidden'
+            {isMihomo && currentPanel === 'connections' && (
+              <div className="ml-auto flex items-center gap-2">
+                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('rules')}>
+                  <IconListDetails data-icon="inline-start" />
+                  Провайдеры правил
+                </Button>
+                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('proxies')}>
+                  <IconListDetails data-icon="inline-start" />
+                  Провайдеры прокси
+                </Button>
+              </div>
             )}
-          >
-            <CodeMirrorEditorLazy
-              ref={editorRef}
-              onContentChange={handleContentChange}
-              onValidationChange={handleValidationChange}
-              onReady={handleEditorReady}
-              onSave={() => saveCurrentConfig()}
-            />
-            {(!isEditorMounted || isConfigsLoading) && (
-              <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
-                <Spinner className="mr-2 size-5" />
-                {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}
+
+            {isMihomo && currentPanel === 'selectors' && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-muted-foreground text-xs">Режим маршрутизации</span>
+                <Select value={mode} onValueChange={(value) => changeMode(value as ClashMode)}>
+                  <SelectTrigger className="w-30">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="direct">DIRECT</SelectItem>
+                      <SelectItem value="rule">RULE</SelectItem>
+                      <SelectItem value="global">GLOBAL</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
+                      onClick={() =>
+                        window.dispatchEvent(new CustomEvent(TOGGLE_ALL_SELECTORS_EVENT, { detail: { collapsed: !allSelectorsCollapsed } }))
+                      }
+                    >
+                      {allSelectorsCollapsed ? <IconChevronDown /> : <IconChevronUp />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{allSelectorsCollapsed ? 'Развернуть все' : 'Свернуть все'}</TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+
+            {(!isMihomo || currentPanel === 'config') && (
+              <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] md:ml-auto [&::-webkit-scrollbar]:hidden">
+                {isConfigsLoading ? (
+                  <div className="flex gap-2">
+                    {[525, 310].map((w) => (
+                      <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
+                    ))}
+                  </div>
+                ) : (
+                  <Tabs
+                    value={activeConfig?.file || ''}
+                    onValueChange={(value) => {
+                      const index = configs.findIndex((c) => c.file === value)
+                      if (index >= 0) switchTab(index)
+                    }}
+                    className="flex-row!"
+                  >
+                    {coreConfigs.length > 0 && (
+                      <TabsList className="shrink-0">
+                        {coreConfigs.map((config) => (
+                          <ConfigTab
+                            key={config.file}
+                            config={config}
+                            currentCore={currentCore}
+                            showToast={showToast}
+                            onRefreshConfigs={onRefreshConfigs}
+                            withContextMenu
+                          />
+                        ))}
+                      </TabsList>
+                    )}
+                    {xkeenConfigs.length > 0 && (
+                      <TabsList className="shrink-0">
+                        {xkeenConfigs.map((config) => (
+                          <ConfigTab
+                            key={config.file}
+                            config={config}
+                            currentCore={currentCore}
+                            showToast={showToast}
+                            onRefreshConfigs={onRefreshConfigs}
+                          />
+                        ))}
+                      </TabsList>
+                    )}
+                  </Tabs>
+                )}
               </div>
             )}
           </div>
-        </div>
 
-        {(!isMihomo || activePanel === 'config') && (
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-3 pb-3 sm:px-4 sm:pb-4">
-            <div className="min-w-0 text-xs">
-              {isConfigsLoading ? (
-                <Skeleton className="h-4 w-30" />
-              ) : validationState && activeConfig && isJsonOrYaml ? (
-                <span
-                  className={cn(
-                    'flex items-center gap-1.5 text-[13px] tracking-wide',
-                    validationState.isValid ? 'text-green-400/90' : 'text-red-500'
-                  )}
-                >
-                  {validationState.isValid ? <IconCheck size={15} /> : <IconX size={15} />}
-                  {validationState.isValid
-                    ? `${fileLanguage?.toUpperCase()} валиден`
-                    : `Ошибка: ${validationState.error || 'Файл невалиден'}`}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {isConfigsLoading ? (
-                <div className="flex gap-1.5">
-                  {[120, 117, 96, 100].map((w) => (
-                    <Skeleton key={w} className="h-9" style={{ width: w }} />
-                  ))}
+          <div className="relative min-h-175! md:min-h-0 md:flex-1">
+            {isEditorMounted && activeConfig && isRoutingGui && (
+              <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            )}
+            {isEditorMounted && activeConfig && isLogGui && (
+              <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            )}
+
+            {isMihomo && (
+              <>
+                {mountedPanels.has('selectors') && (
+                  <div className={cn(currentPanel !== 'selectors' && 'hidden')}>
+                    <LazyBoundary>
+                      <SelectorsPanel
+                        clashApiPort={(activeClashApiPort ?? '') as string}
+                        mode={mode}
+                        clashApiSecret={clashApiSecret ?? null}
+                        clashApiUnix={activeClashApiUnix ?? null}
+                        onCollapsedStateChange={setAllSelectorsCollapsed}
+                      />
+                    </LazyBoundary>
+                  </div>
+                )}
+                {mountedPanels.has('connections') && (
+                  <div className={cn(currentPanel !== 'connections' && 'hidden')}>
+                    <LazyBoundary>
+                      <ConnectionsPanel
+                        clashApiPort={(activeClashApiPort ?? '') as string}
+                        clashApiSecret={clashApiSecret ?? null}
+                        clashApiUnix={activeClashApiUnix ?? null}
+                      />
+                    </LazyBoundary>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div
+              className={cn(
+                'absolute inset-0',
+                isAnyGui && 'pointer-events-none invisible opacity-0',
+                isMihomo && currentPanel !== 'config' && 'hidden'
+              )}
+            >
+              <CodeMirrorEditorLazy
+                ref={editorRef}
+                onContentChange={handleContentChange}
+                onValidationChange={handleValidationChange}
+                onReady={handleEditorReady}
+                onSave={() => saveCurrentConfig()}
+              />
+              {(!isEditorMounted || isConfigsLoading) && (
+                <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
+                  <Spinner className="mr-2 size-5" />
+                  {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}
                 </div>
-              ) : (
-                <>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="default"
-                        disabled={!canApply}
-                        className="bg-green-600 text-white hover:bg-green-700"
-                        onClick={() => saveAndApply()}
-                      >
-                        <IconRefresh data-icon="inline-start" /> Применить
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Сохранить и перезапустить</TooltipContent>
-                  </Tooltip>
-                  <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
-                    <IconDeviceFloppy data-icon="inline-start" /> Сохранить
-                  </Button>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
-                        <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Форматировать файл</TooltipContent>
-                  </Tooltip>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline">
-                        <IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-57">
-                      <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={onOpenImport}>
-                        <IconLink /> Добавить прокси
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onOpenTemplate}>
-                        <IconFileText /> Шаблоны конфигураций
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={onOpenGeoScan}>
-                        <IconSearch /> Скан геофайлов
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      {isMobile ? (
-                        <>
-                          <DropdownMenuLabel>Полезные ссылки</DropdownMenuLabel>
-                          {usefulLinks.map((link) => (
-                            <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
-                              <IconExternalLinkFilled /> {link.title}
-                            </DropdownMenuItem>
-                          ))}
-                        </>
-                      ) : (
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <IconExternalLinkFilled /> Полезные ссылки
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="min-w-55">
+              )}
+            </div>
+          </div>
+
+          {(!isMihomo || currentPanel === 'config') && (
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-3 pb-3 sm:px-4 sm:pb-4">
+              <div className="min-w-0 text-xs">
+                {isConfigsLoading ? (
+                  <Skeleton className="h-4 w-30" />
+                ) : validationState && activeConfig && isJsonOrYaml ? (
+                  <span
+                    className={cn(
+                      'flex items-center gap-1.5 text-[13px] tracking-wide',
+                      validationState.isValid ? 'text-green-400/90' : 'text-red-500'
+                    )}
+                  >
+                    {validationState.isValid ? <IconCheck size={15} /> : <IconX size={15} />}
+                    {validationState.isValid
+                      ? `${fileLanguage?.toUpperCase()} валиден`
+                      : `Ошибка: ${validationState.error || 'Файл невалиден'}`}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {isConfigsLoading ? (
+                  <div className="flex gap-1.5">
+                    {[120, 117, 96, 100].map((w) => (
+                      <Skeleton key={w} className="h-9" style={{ width: w }} />
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="default"
+                          disabled={!canApply}
+                          className="bg-green-600 text-white hover:bg-green-700"
+                          onClick={() => saveAndApply()}
+                        >
+                          <IconRefresh data-icon="inline-start" /> Применить
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Сохранить и перезапустить</TooltipContent>
+                    </Tooltip>
+                    <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
+                      <IconDeviceFloppy data-icon="inline-start" /> Сохранить
+                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
+                          <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Форматировать файл</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline">
+                          <IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-57">
+                        <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={onOpenImport}>
+                          <IconLink /> Добавить прокси
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onOpenTemplate}>
+                          <IconFileText /> Шаблоны конфигураций
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onOpenGeoScan}>
+                          <IconSearch /> Скан геофайлов
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {isMobile ? (
+                          <>
+                            <DropdownMenuLabel>Полезные ссылки</DropdownMenuLabel>
                             {usefulLinks.map((link) => (
                               <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
                                 <IconExternalLinkFilled /> {link.title}
                               </DropdownMenuItem>
                             ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
+                          </>
+                        ) : (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <IconExternalLinkFilled /> Полезные ссылки
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="min-w-55">
+                              {usefulLinks.map((link) => (
+                                <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
+                                  <IconExternalLinkFilled /> {link.title}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+        </div>
+        {providersModalKind && mountProvidersModal && (
+          <LazyBoundary>
+            <ProvidersModal
+              open={isProvidersModalOpen}
+              kind={providersModalKind}
+              clashApiPort={activeClashApiPort ?? ''}
+              clashApiSecret={clashApiSecret ?? null}
+              clashApiUnix={activeClashApiUnix ?? null}
+              onOpenChange={handleProvidersModalOpenChange}
+            />
+          </LazyBoundary>
         )}
-      </div>
+      </>
     </TooltipProvider>
   )
 }
