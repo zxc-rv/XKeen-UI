@@ -5,7 +5,15 @@ import { InputGroupAddon } from '@/components/ui/input-group'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { IconBoltFilled, IconChevronDown, IconChevronUp, IconCircleArrowRightFilled, IconLoader2, IconPlugX } from '@tabler/icons-react'
+import {
+  IconBoltFilled,
+  IconChevronDown,
+  IconChevronUp,
+  IconCircleArrowRightFilled,
+  IconLoader2,
+  IconLock,
+  IconPlugX,
+} from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -44,8 +52,9 @@ interface Props {
   onCollapsedStateChange?: (collapsed: boolean) => void
 }
 
-const NO_DELAY_TYPES = new Set(['reject', 'dns', 'pass', 'relay'])
+const NO_DELAY_TYPES = new Set(['reject', 'reject-drop', 'dns', 'pass', 'relay'])
 const SELECTOR_TYPES = new Set(['Selector', 'Fallback', 'URLTest', 'LoadBalance'])
+const AUTO_POLICY_TYPES = new Set(['Fallback', 'URLTest', 'LoadBalance'])
 const COLLAPSE_SELECTORS_KEY = 'collapseSelectors'
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
 
@@ -280,16 +289,40 @@ const ProxyCard = memo(function ProxyCard({
 })
 
 /* ====================== МЕТА-СТРОКА СЕЛЕКТОРА ====================== */
-const SelectorStatusRow = memo(function SelectorStatusRow({ selectorName, label }: { selectorName: string; label: string }) {
+const SelectorStatusRow = memo(function SelectorStatusRow({
+  selectorName,
+  label,
+  fixedProxyName,
+  onClearFixed,
+}: {
+  selectorName: string
+  label: string
+  fixedProxyName?: string
+  onClearFixed?: () => Promise<void>
+}) {
   const chainStr = useProxiesStore((s) =>
     getChainData(s.proxies as Record<string, ProxyInfo | undefined>, (s.proxies[selectorName] as ProxyInfo | undefined)?.now)
   )
   const chain = useMemo(() => parseChain(chainStr), [chainStr])
+  const [isClearingFixed, setIsClearingFixed] = useState(false)
+
+  async function handleClearFixed(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!onClearFixed || isClearingFixed) return
+    blurActiveElement()
+    setIsClearingFixed(true)
+    try {
+      await onClearFixed()
+    } finally {
+      setIsClearingFixed(false)
+    }
+  }
 
   return (
     <div className="text-muted-foreground flex flex-wrap items-center gap-1 text-[13px]">
       <span className="truncate">{label}</span>
-      {chain.map((item) => (
+      {chain.map((item, i) => (
         <div key={item.name} className="flex min-w-0 items-center gap-1">
           <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
           {item.icon && (
@@ -299,6 +332,22 @@ const SelectorStatusRow = memo(function SelectorStatusRow({ selectorName, label 
               className="size-4 shrink-0 rounded-sm object-contain"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
+          )}
+          {i === 0 && fixedProxyName === item.name && onClearFixed && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="flex size-4 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:text-purple-300 disabled:opacity-50"
+                  onClick={handleClearFixed}
+                  disabled={isClearingFixed}
+                  aria-label="Снять фиксацию выбора"
+                >
+                  {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconLock size={17} />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Снять фиксацию</TooltipContent>
+            </Tooltip>
           )}
           <span className="truncate">{item.name}</span>
         </div>
@@ -430,6 +479,7 @@ const SelectorRow = memo(function SelectorRow({
   onTestAll,
   onSelect,
   onTestSingle,
+  onClearFixed,
   collapsed,
   onToggleCollapse,
 }: {
@@ -437,6 +487,7 @@ const SelectorRow = memo(function SelectorRow({
   onTestAll: (name: string) => void
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
+  onClearFixed: (selectorName: string) => Promise<void>
   collapsed: boolean
   onToggleCollapse: (name: string) => void
 }) {
@@ -497,7 +548,12 @@ const SelectorRow = memo(function SelectorRow({
           </div>
         </div>
 
-        <SelectorStatusRow selectorName={selectorName} label={`${selector.type} (${allProxies.length})`} />
+        <SelectorStatusRow
+          selectorName={selectorName}
+          label={`${selector.type} (${allProxies.length})`}
+          fixedProxyName={AUTO_POLICY_TYPES.has(selector.type) ? selector.fixed : undefined}
+          onClearFixed={AUTO_POLICY_TYPES.has(selector.type) && selector.fixed ? () => onClearFixed(selectorName) : undefined}
+        />
       </div>
 
       <div className="flex flex-col gap-0">
@@ -558,6 +614,55 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
     return `url=${encodeURIComponent(url)}&timeout=${timeout}`
   }, [pingTestTimeout, pingTestUrl])
 
+  const clearFixedSelection = useCallback(
+    async (selectorName: string) => {
+      try {
+        await clashFetch(clashApiPort, `proxies/${encodeURIComponent(selectorName)}`, {
+          method: 'DELETE',
+          secret: clashApiSecret,
+          unix: clashApiUnix ?? null,
+        })
+        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
+      } catch {
+        /* */
+      }
+    },
+    [clashApiPort, clashApiSecret, clashApiUnix]
+  )
+
+  const requestProxyDelay = useCallback(
+    async (proxyName: string) => {
+      try {
+        const data = await clashFetch<{ delay?: number }>(clashApiPort, `proxies/${encodeURIComponent(proxyName)}/delay?${pingTestQuery}`, {
+          secret: clashApiSecret,
+          unix: clashApiUnix ?? null,
+          retry: false,
+        })
+        return data.delay && data.delay > 0 ? data.delay : 0
+      } catch {
+        return 0
+      }
+    },
+    [clashApiPort, clashApiSecret, clashApiUnix, pingTestQuery]
+  )
+
+  const applyDelayResults = useCallback((results: ReadonlyArray<readonly [string, number]>) => {
+    if (!results.length) return
+    const time = new Date().toISOString()
+    useProxiesStore.setState((state) => {
+      const next = { ...state.proxies }
+      let changed = false
+      for (const [name, delay] of results) {
+        const proxy = state.proxies[name] as ProxyInfo | undefined
+        if (!proxy) continue
+        const newHistory = [...proxy.history, { time, delay }].slice(-10)
+        next[name] = { ...proxy, history: newHistory, alive: delay > 0 }
+        changed = true
+      }
+      return changed ? { proxies: next } : {}
+    })
+  }, [])
+
   const selectorNames = useProxiesStore(
     useShallow((s) => {
       const allSelectors = Object.values(s.proxies).filter((p: any) => {
@@ -604,26 +709,15 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
   const testSingle = useCallback(
     async (proxyName: string) => {
       useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: true } }))
-      let delay = 0
       try {
-        const data = await clashFetch<{ delay?: number }>(clashApiPort, `proxies/${encodeURIComponent(proxyName)}/delay?${pingTestQuery}`, {
-          secret: clashApiSecret,
-          unix: clashApiUnix ?? null,
-          retry: false,
-        })
-        delay = data.delay && data.delay > 0 ? data.delay : 0
+        applyDelayResults([[proxyName, await requestProxyDelay(proxyName)]])
       } catch {
         /* */
+      } finally {
+        useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
       }
-      useProxiesStore.setState((state) => {
-        const proxy = state.proxies[proxyName] as ProxyInfo | undefined
-        if (!proxy) return {}
-        const newHistory = [...proxy.history, { time: new Date().toISOString(), delay }].slice(-10)
-        return { proxies: { ...state.proxies, [proxyName]: { ...proxy, history: newHistory, alive: delay > 0 } } }
-      })
-      useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
     },
-    [clashApiPort, clashApiSecret, clashApiUnix, pingTestQuery]
+    [applyDelayResults, requestProxyDelay]
   )
 
   const selectProxy = useCallback(
@@ -664,31 +758,24 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: true } }))
 
       try {
-        const delays = await clashFetch<Record<string, number>>(
-          clashApiPort,
-          `group/${encodeURIComponent(selectorName)}/delay?${pingTestQuery}`,
-          { secret: clashApiSecret, unix: clashApiUnix ?? null, retry: false }
+        const proxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
+        const results = await Promise.all(
+          selector.all
+            .filter((name) => {
+              const type = proxies[name]?.type?.toLowerCase()
+              return !!type && !NO_DELAY_TYPES.has(type)
+            })
+            .map(async (name) => [name, await requestProxyDelay(name)] as const)
         )
-
-        useProxiesStore.setState((state) => {
-          const next = { ...state.proxies }
-          for (const [name, delay] of Object.entries(delays)) {
-            const proxy = state.proxies[name] as ProxyInfo | undefined
-            if (!proxy) continue
-            const effectiveDelay = delay > 0 ? delay : 0
-            const newHistory = [...proxy.history, { time: new Date().toISOString(), delay: effectiveDelay }].slice(-10)
-            next[name] = { ...proxy, history: newHistory, alive: effectiveDelay > 0 }
-          }
-          return { proxies: next }
-        })
+        applyDelayResults(results)
       } catch {
         /* */
+      } finally {
+        useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
       }
-
-      useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
       await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
     },
-    [clashApiPort, clashApiSecret, clashApiUnix, pingTestQuery]
+    [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
   )
 
   const toggleCollapse = useCallback((selectorName: string) => {
@@ -740,6 +827,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
             onTestAll={testAll}
             onSelect={selectProxy}
             onTestSingle={testSingle}
+            onClearFixed={clearFixedSelection}
             collapsed={!!collapsedSelectors[name]}
             onToggleCollapse={toggleCollapse}
           />
