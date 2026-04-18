@@ -139,13 +139,13 @@ export function GeoScanModal() {
           <TabsList className="border-border h-full! w-full! overflow-hidden rounded-lg border bg-transparent p-0">
             <TabsTrigger
               value="domain"
-              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! data-active:text-white! dark:data-active:text-foreground! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
+              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! dark:data-active:text-foreground! h-full flex-1 gap-1.5 rounded-none border-none! py-2 data-active:text-white!"
             >
               <IconWorld size={16} /> GeoSite
             </TabsTrigger>
             <TabsTrigger
               value="ip"
-              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! data-active:text-white! dark:data-active:text-foreground! h-full flex-1 gap-1.5 rounded-none border-none! py-2"
+              className="bg-input-background! data-active:bg-primary! hover:bg-muted! data-active:hover:bg-primary! dark:data-active:text-foreground! h-full flex-1 gap-1.5 rounded-none border-none! py-2 data-active:text-white!"
             >
               <IconServer size={16} /> GeoIP
             </TabsTrigger>
@@ -176,7 +176,7 @@ export function GeoScanModal() {
         </div>
 
         {/* File list — fixed height, scrollable */}
-        <ScrollArea className="border-border bg-input-background relative max-h-62.5 min-h-62.5 overflow-y-auto rounded-lg border">
+        <ScrollArea className="border-border bg-input-background relative max-h-62.5 min-h-62.5 overflow-y-auto rounded-lg border [scrollbar-width:thin]">
           {loading ? (
             <div className="space-y-1 p-1.5">
               {Array.from({ length: 6 }).map((_, i) => (
