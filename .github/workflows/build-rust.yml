@@ -17,17 +17,16 @@ jobs:
           - target: aarch64-unknown-linux-musl
             name: arm64-v8a
             toolchain: stable
-          - target: mips-unknown-linux-gnu
+          - target: mips-unknown-linux-musl
             name: mips32
             toolchain: nightly
-            rustflags: "-C target-feature=+crt-static,+soft-float"
-          - target: mipsel-unknown-linux-gnu
+          - target: mipsel-unknown-linux-musl
             name: mips32le
             toolchain: nightly
-            rustflags: "-C target-feature=+crt-static,+soft-float"
-          - target: mipsel-unknown-linux-musl
-            name: mips32le-softfloat
+          - target: mipsel-unknown-linux-gnu
+            name: mips32le-gnu-static-hf
             toolchain: nightly
+            rustflags: "-C target-feature=+crt-static"
     steps:
       - uses: actions/checkout@v6
       - name: Set version
@@ -51,14 +50,15 @@ jobs:
         working-directory: backend
         run: |
           cat <<'EOF' > Cross.toml
-          [target.mips-unknown-linux-gnu]
-          build-std = ["std", "panic_abort", "proc_macro"]
-
-          [target.mipsel-unknown-linux-gnu]
+          [target.mips-unknown-linux-musl]
+          image = "ghcr.io/cross-rs/mips-unknown-linux-musl:edge"
           build-std = ["std", "panic_abort", "proc_macro"]
 
           [target.mipsel-unknown-linux-musl]
           image = "ghcr.io/cross-rs/mipsel-unknown-linux-musl:edge"
+          build-std = ["std", "panic_abort", "proc_macro"]
+
+          [target.mipsel-unknown-linux-gnu]
           build-std = ["std", "panic_abort", "proc_macro"]
           EOF
 
