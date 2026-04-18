@@ -584,19 +584,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
 
             {isMihomo && currentPanel === 'connections' && (
               <div className="ml-auto flex items-center gap-2">
-                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('rules')}>
-                  <IconListDetails data-icon="inline-start" />
-                  Провайдеры правил
-                </Button>
-                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('proxies')}>
-                  <IconListDetails data-icon="inline-start" />
-                  Провайдеры прокси
-                </Button>
-              </div>
-            )}
-
-            {isMihomo && currentPanel === 'selectors' && (
-              <div className="ml-auto flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">Режим маршрутизации</span>
                 <Select value={mode} onValueChange={(value) => changeMode(value as ClashMode)}>
                   <SelectTrigger className="w-30">
@@ -610,6 +597,19 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                     </SelectGroup>
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {isMihomo && currentPanel === 'selectors' && (
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('rules')}>
+                  <IconListDetails data-icon="inline-start" />
+                  Пров. правил
+                </Button>
+                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('proxies')}>
+                  <IconListDetails data-icon="inline-start" />
+                  Пров. прокси
+                </Button>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
