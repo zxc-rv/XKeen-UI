@@ -314,6 +314,7 @@ function convertToMihomoYaml(proxyConfig) {
             'c-max-reuse-times': xmux.cMaxReuseTimes,
             'h-max-request-times': xmux.hMaxRequestTimes,
             'h-max-reusable-secs': xmux.hMaxReusableSecs,
+            'h-keep-alive-period': xmux.hKeepAlivePeriod,
           }
         : undefined
 
