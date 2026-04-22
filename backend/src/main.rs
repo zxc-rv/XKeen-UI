@@ -45,12 +45,7 @@ async fn main() {
             }
             "-d" => debug = true,
             "-v" | "-V" => {
-                println!(
-                    "XKeen UI {} ({}/{})",
-                    VERSION,
-                    std::env::consts::OS,
-                    get_arch()
-                );
+                println!("XKeen UI {} ({})", VERSION, get_arch());
                 exit(0);
             }
             "--reset-password" => {
@@ -90,12 +85,7 @@ async fn main() {
             _ => {}
         }
     }
-    println!(
-        "XKeen UI {} ({}/{})",
-        VERSION,
-        std::env::consts::OS,
-        get_arch()
-    );
+    println!("XKeen UI {} ({})", VERSION, get_arch());
 
     refresh_xray_log_paths();
     let error_log = error_log_path();
@@ -238,12 +228,14 @@ async fn main() {
     .unwrap();
 }
 
-fn get_arch() -> &'static str {
-    if std::env::consts::ARCH == "mips" && cfg!(target_endian = "little") {
+fn get_arch() -> String {
+    let arch = if std::env::consts::ARCH == "mips" && cfg!(target_endian = "little") {
         "mipsle"
     } else {
         std::env::consts::ARCH
-    }
+    };
+    let libc = if cfg!(target_env = "musl") { "musl" } else { "gnu" };
+    format!("{}/{}", arch, libc)
 }
 
 fn detect_core(init_file: Option<&str>) -> CoreInfo {

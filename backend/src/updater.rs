@@ -340,7 +340,13 @@ pub async fn post_update(
     if req.core == "self" {
         let a = match arch {
             "aarch64" => "arm64-v8a",
-            "mips" if cfg!(target_endian = "little") => "mips32le",
+            "mips" if cfg!(target_endian = "little") => {
+                if Path::new("/lib/ld-musl-mipsel-sf.so.1").exists() {
+                    "mips32le"
+                } else {
+                    "mips32le-gnu"
+                }
+            }
             "mips" => "mips32",
             _ => return response(false, Some("Архитектура не поддерживается".into())),
         };
