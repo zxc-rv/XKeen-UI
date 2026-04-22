@@ -202,7 +202,7 @@ const ProxyCard = memo(function ProxyCard({
     <div
       className={cn(
         'flex flex-col gap-2 rounded-sm border px-3 py-2.5 text-sm transition-all',
-        selectionDisabled ? 'opacity-55' : 'cursor-pointer',
+        selectionDisabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer',
         isFixed
           ? 'border-purple-400 bg-linear-to-b from-purple-500/25 to-purple-500/15'
           : isActive
@@ -446,7 +446,9 @@ const SelectorCombobox = memo(function SelectorCombobox({
   const isFixed = !!value && selector?.fixed === value
   const disabledOptions = useProxiesStore(
     useShallow((s) =>
-      Object.fromEntries(options.map((proxyName) => [proxyName, isSelectionDisabled(autoPolicy, s.proxies[proxyName] as ProxyInfo | undefined)]))
+      Object.fromEntries(
+        options.map((proxyName) => [proxyName, isSelectionDisabled(autoPolicy, s.proxies[proxyName] as ProxyInfo | undefined)])
+      )
     )
   )
   const [open, setOpen] = useState(false)
@@ -491,25 +493,10 @@ const SelectorCombobox = memo(function SelectorCombobox({
               key={proxyName}
               value={proxyName}
               aria-disabled={disabledOptions[proxyName] || undefined}
-              className={cn(disabledOptions[proxyName] && 'cursor-not-allowed text-muted-foreground')}
-              onMouseDown={
-                disabledOptions[proxyName]
-                  ? (e) => {
-                      if ((e.target as HTMLElement).closest('[data-slot="proxy-delay-test"]')) return
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }
-                  : undefined
-              }
-              onClick={
-                disabledOptions[proxyName]
-                  ? (e) => {
-                      if ((e.target as HTMLElement).closest('[data-slot="proxy-delay-test"]')) return
-                      e.preventDefault()
-                      e.stopPropagation()
-                    }
-                  : undefined
-              }
+              className={cn(
+                disabledOptions[proxyName] &&
+                  'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
+              )}
             >
               <CollapsedProxyOption proxyName={proxyName} disabled={!!disabledOptions[proxyName]} onTestSingle={onTestSingle} />
             </ComboboxItem>
@@ -826,9 +813,8 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       } finally {
         useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
       }
-      await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
     },
-    [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
+    [applyDelayResults, requestProxyDelay]
   )
 
   const toggleCollapse = useCallback((selectorName: string) => {
