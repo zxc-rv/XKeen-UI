@@ -6,8 +6,6 @@ on:
         description: "Release version (e.g. v1.0.0)"
         required: true
         type: string
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -118,7 +116,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.version }}
           prerelease: true
