@@ -1,4 +1,5 @@
 mod auth;
+mod backuper;
 mod clash;
 mod configs;
 mod controller;
@@ -171,6 +172,13 @@ async fn main() {
                 .post(configs::post_config)
                 .delete(configs::delete_config)
                 .patch(configs::patch_config),
+        )
+        .route(
+            "/api/backup",
+            get(backuper::get_backups)
+                .put(backuper::put_backup)
+                .post(backuper::post_backup)
+                .delete(backuper::delete_backup),
         )
         .route(
             "/api/settings",

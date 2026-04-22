@@ -86,6 +86,14 @@ function hasDelayHistory(proxy?: ProxyInfo): boolean {
   return !!proxy && !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) && proxy.history.length > 0
 }
 
+function isTimedOutProxy(proxy?: ProxyInfo): boolean {
+  return !!proxy && hasDelayHistory(proxy) && getLastDelay(proxy) === 0
+}
+
+function isSelectionDisabled(autoPolicy: boolean, proxy?: ProxyInfo): boolean {
+  return autoPolicy && isTimedOutProxy(proxy)
+}
+
 function delayColor(delay: number | null): string {
   if (!delay) return 'text-red-400'
   if (delay < 300) return 'text-green-400'
@@ -161,11 +169,13 @@ function blurActiveElement() {
 const ProxyCard = memo(function ProxyCard({
   proxyName,
   selectorName,
+  autoPolicy,
   onSelect,
   onTestSingle,
 }: {
   proxyName: string
   selectorName: string
+  autoPolicy: boolean
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
 }) {
@@ -185,19 +195,23 @@ const ProxyCard = memo(function ProxyCard({
   const delay = getLastDelay(proxy)
   const hasHistory = hasDelayHistory(proxy)
   const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
+  const selectionDisabled = isSelectionDisabled(autoPolicy, proxy)
   const transport = getProxyTransport(proxy)?.toLowerCase() ?? proxy.type.toLowerCase()
 
   return (
     <div
       className={cn(
-        'flex cursor-pointer flex-col gap-2 rounded-sm border px-3 py-2.5 text-sm transition-all',
+        'flex flex-col gap-2 rounded-sm border px-3 py-2.5 text-sm transition-all',
+        selectionDisabled ? 'opacity-55' : 'cursor-pointer',
         isFixed
           ? 'border-purple-400 bg-linear-to-b from-purple-500/25 to-purple-500/15'
           : isActive
             ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
-            : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
+            : selectionDisabled
+              ? 'border-ring/35 bg-[linear-gradient(135deg,rgba(148,163,184,0.08)_0%,transparent_55%)]'
+              : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
       )}
-      onClick={() => onSelect(selectorName, proxyName)}
+      onClick={() => !selectionDisabled && onSelect(selectorName, proxyName)}
     >
       <div className="flex min-w-0 items-center gap-1.5">
         {proxy.icon && (
@@ -358,9 +372,11 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
 
 const CollapsedProxyOption = memo(function CollapsedProxyOption({
   proxyName,
+  disabled,
   onTestSingle,
 }: {
   proxyName: string
+  disabled: boolean
   onTestSingle: (proxyName: string) => Promise<void>
 }) {
   const proxy = useProxiesStore((s) => s.proxies[proxyName] as ProxyInfo | undefined)
@@ -371,7 +387,7 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
   const canTest = !!proxy && !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-2">
+    <div className={cn('flex w-full min-w-0 items-center gap-2', disabled && 'opacity-70')}>
       <div className="flex min-w-0 flex-1 items-center gap-2">
         {proxy?.icon && (
           <img
@@ -386,6 +402,7 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
       {canTest && (
         <button
           type="button"
+          data-slot="proxy-delay-test"
           className={cn(
             'ml-auto flex h-5 min-w-8 shrink-0 cursor-pointer items-center justify-center bg-transparent px-1.5 text-xs font-medium tabular-nums outline-hidden',
             showDelay ? delayColorImportant(delay) : 'text-foreground!'
@@ -411,12 +428,14 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
 const SelectorCombobox = memo(function SelectorCombobox({
   selectorName,
   options,
+  autoPolicy,
   onSelect,
   onTestSingle,
   visible,
 }: {
   selectorName: string
   options: string[]
+  autoPolicy: boolean
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
   visible: boolean
@@ -425,6 +444,11 @@ const SelectorCombobox = memo(function SelectorCombobox({
   const value = selector?.now ?? null
   const selectedProxy = useProxiesStore((s) => (value ? (s.proxies[value] as ProxyInfo | undefined) : undefined))
   const isFixed = !!value && selector?.fixed === value
+  const disabledOptions = useProxiesStore(
+    useShallow((s) =>
+      Object.fromEntries(options.map((proxyName) => [proxyName, isSelectionDisabled(autoPolicy, s.proxies[proxyName] as ProxyInfo | undefined)]))
+    )
+  )
   const [open, setOpen] = useState(false)
 
   return (
@@ -435,7 +459,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
       itemToStringLabel={(item) => item}
       itemToStringValue={(item) => item}
       onOpenChange={setOpen}
-      onValueChange={(proxyName) => proxyName && onSelect(selectorName, proxyName)}
+      onValueChange={(proxyName) => proxyName && !disabledOptions[proxyName] && onSelect(selectorName, proxyName)}
       autoHighlight
     >
       <ComboboxInput
@@ -463,8 +487,31 @@ const SelectorCombobox = memo(function SelectorCombobox({
         <ComboboxEmpty>Ничего не найдено</ComboboxEmpty>
         <ComboboxList>
           {(proxyName: string) => (
-            <ComboboxItem key={proxyName} value={proxyName}>
-              <CollapsedProxyOption proxyName={proxyName} onTestSingle={onTestSingle} />
+            <ComboboxItem
+              key={proxyName}
+              value={proxyName}
+              aria-disabled={disabledOptions[proxyName] || undefined}
+              className={cn(disabledOptions[proxyName] && 'cursor-not-allowed text-muted-foreground')}
+              onMouseDown={
+                disabledOptions[proxyName]
+                  ? (e) => {
+                      if ((e.target as HTMLElement).closest('[data-slot="proxy-delay-test"]')) return
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }
+                  : undefined
+              }
+              onClick={
+                disabledOptions[proxyName]
+                  ? (e) => {
+                      if ((e.target as HTMLElement).closest('[data-slot="proxy-delay-test"]')) return
+                      e.preventDefault()
+                      e.stopPropagation()
+                    }
+                  : undefined
+              }
+            >
+              <CollapsedProxyOption proxyName={proxyName} disabled={!!disabledOptions[proxyName]} onTestSingle={onTestSingle} />
             </ComboboxItem>
           )}
         </ComboboxList>
@@ -501,6 +548,7 @@ const SelectorRow = memo(function SelectorRow({
   if (!selector) return null
 
   const allProxies = selector.all ?? []
+  const autoPolicy = AUTO_POLICY_TYPES.has(selector.type)
   const selectedDelay = selectedProxy ? getLastDelay(selectedProxy) : null
   const showSelectedDelay = !!selectedProxy && selectedDelay !== null && selectedDelay > 0
 
@@ -551,8 +599,8 @@ const SelectorRow = memo(function SelectorRow({
         <SelectorStatusRow
           selectorName={selectorName}
           label={`${selector.type} (${allProxies.length})`}
-          fixedProxyName={AUTO_POLICY_TYPES.has(selector.type) ? selector.fixed : undefined}
-          onClearFixed={AUTO_POLICY_TYPES.has(selector.type) && selector.fixed ? () => onClearFixed(selectorName) : undefined}
+          fixedProxyName={autoPolicy ? selector.fixed : undefined}
+          onClearFixed={autoPolicy && selector.fixed ? () => onClearFixed(selectorName) : undefined}
         />
       </div>
 
@@ -570,6 +618,7 @@ const SelectorRow = memo(function SelectorRow({
                   key={proxyName}
                   proxyName={proxyName}
                   selectorName={selectorName}
+                  autoPolicy={autoPolicy}
                   onSelect={onSelect}
                   onTestSingle={onTestSingle}
                 />
@@ -589,6 +638,7 @@ const SelectorRow = memo(function SelectorRow({
               key={collapsed ? `${selectorName}-collapsed` : `${selectorName}-expanded`}
               selectorName={selectorName}
               options={allProxies}
+              autoPolicy={autoPolicy}
               onSelect={onSelect}
               onTestSingle={onTestSingle}
               visible={collapsed}
@@ -722,6 +772,9 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   const selectProxy = useCallback(
     (selectorName: string, proxyName: string) => {
+      const proxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
+      if (isSelectionDisabled(AUTO_POLICY_TYPES.has(proxies[selectorName]?.type ?? ''), proxies[proxyName])) return
+
       useProxiesStore.setState((state) => ({
         proxies: { ...state.proxies, [selectorName]: { ...state.proxies[selectorName], now: proxyName } },
       }))

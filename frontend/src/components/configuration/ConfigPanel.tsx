@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
+  IconBox,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
@@ -49,6 +50,7 @@ const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
 const GuiLog = lazyLoad(() => import('./xray/GuiLog'), 'GuiLog')
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const ProvidersModal = lazyLoad(() => import('../modals/Providers'), 'ProvidersModal')
+const BackupsModal = lazyLoad(() => import('../modals/Backups'), 'BackupsModal')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
@@ -61,7 +63,7 @@ interface Props {
   onOpenImport: () => void
   onOpenTemplate: () => void
   onOpenGeoScan: () => void
-  onRefreshConfigs: () => Promise<unknown>
+  onRefreshConfigs: () => Promise<Config[]>
   editorRef: React.RefObject<CodeMirrorRef | null>
   configActionsRef: React.RefObject<{ switchTab: (index: number) => void; getActiveIndex: () => number }>
 }
@@ -70,7 +72,7 @@ interface ConfigTabProps {
   config: Config
   currentCore: string
   showToast: (msg: string, type?: 'success' | 'error') => void
-  onRefreshConfigs: () => Promise<unknown>
+  onRefreshConfigs: () => Promise<Config[]>
   withContextMenu?: boolean
 }
 
@@ -290,6 +292,8 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
+  const [isBackupsModalOpen, setIsBackupsModalOpen] = useState(false)
+  const mountBackupsModal = useLazyMount(isBackupsModalOpen)
   const currentPanel = isRunning ? activePanel : 'config'
 
   const configsRef = useRef(configs)
@@ -428,8 +432,29 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     setProvidersModalKind(kind)
     setIsProvidersModalOpen(true)
   }, [])
+  const openBackupsModal = useCallback(() => setIsBackupsModalOpen(true), [])
 
   const handleProvidersModalOpenChange = useCallback((open: boolean) => setIsProvidersModalOpen(open), [])
+  const handleBackupsModalOpenChange = useCallback((open: boolean) => setIsBackupsModalOpen(open), [])
+
+  const refreshConfigsAndEditor = useCallback(async () => {
+    const currentCfg = configsRef.current[activeIndexRef.current]
+    if (currentCfg) saveViewState(currentCfg.file, currentCfg.isDirty)
+
+    const targetFile = currentCfg?.file ?? activeConfigFile
+    const nextConfigs = await onRefreshConfigs()
+    const nextConfig = nextConfigs.find((config) => config.file === targetFile) ?? nextConfigs[0]
+
+    if (nextConfig) {
+      if (nextConfig.file !== activeConfigFile) {
+        setActiveConfigFile(nextConfig.file)
+        localStorage.setItem('lastSelectedTab', nextConfig.file)
+      }
+      loadConfigIntoEditor(nextConfig)
+    }
+
+    return nextConfigs
+  }, [activeConfigFile, loadConfigIntoEditor, onRefreshConfigs, saveViewState])
 
   const switchTab = useCallback(
     (index: number) => {
@@ -653,7 +678,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                             config={config}
                             currentCore={currentCore}
                             showToast={showToast}
-                            onRefreshConfigs={onRefreshConfigs}
+                            onRefreshConfigs={refreshConfigsAndEditor}
                             withContextMenu
                           />
                         ))}
@@ -667,7 +692,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                             config={config}
                             currentCore={currentCore}
                             showToast={showToast}
-                            onRefreshConfigs={onRefreshConfigs}
+                            onRefreshConfigs={refreshConfigsAndEditor}
                           />
                         ))}
                       </TabsList>
@@ -804,6 +829,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                         <DropdownMenuItem onClick={onOpenTemplate}>
                           <IconFileText /> Шаблоны конфигураций
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={openBackupsModal}>
+                          <IconBox /> Бэкапы конфигураций
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={onOpenGeoScan}>
                           <IconSearch /> Скан геофайлов
                         </DropdownMenuItem>
@@ -848,6 +876,15 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
               clashApiSecret={clashApiSecret ?? null}
               clashApiUnix={activeClashApiUnix ?? null}
               onOpenChange={handleProvidersModalOpenChange}
+            />
+          </LazyBoundary>
+        )}
+        {mountBackupsModal && (
+          <LazyBoundary>
+            <BackupsModal
+              open={isBackupsModalOpen}
+              onOpenChange={handleBackupsModalOpenChange}
+              onRefreshConfigs={refreshConfigsAndEditor}
             />
           </LazyBoundary>
         )}
