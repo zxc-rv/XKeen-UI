@@ -24,7 +24,7 @@ jobs:
             name: mips32le
             toolchain: nightly
           - target: mipsel-unknown-linux-gnu
-            name: mips32le-gnu-static-hf
+            name: mips32le-gnu
             toolchain: nightly
             rustflags: "-C target-feature=+crt-static"
     steps:
