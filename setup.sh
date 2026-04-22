@@ -64,6 +64,10 @@ get_arch() {
     local lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
     echo "$lscpu_output" | grep -q "little endian" && ARCH="${ARCH}le"
   fi
+
+  if [[ "$ARCH" == "mips32le" ]]; then
+    [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu"
+  fi
 }
 
 download_files() {
