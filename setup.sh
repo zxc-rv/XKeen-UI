@@ -241,7 +241,7 @@ get_status() {
   local version=$(timeout 1 $XKEENUI_BIN -v 2>/dev/null | awk '{print $3}')
   local status="${RED_BOLD}не запущена"
 
-  version=${version:-"legacy"}
+  version=${version:-"N/A"}
 
   pidof xkeen-ui >/dev/null 2>&1 && status="${GREEN_BOLD}запущена"
   printf "Статус панели: $status ${NC}[$version]"
