@@ -264,7 +264,7 @@ printf "\nДобро пожаловать! Выберите действие:${N
 printf "  1. Установить/переустановить\n"
 printf "  2. Обновить\n"
 printf "  3. Удалить\n"
-printf "  4. Выйти\n\n"
+printf "\n  0. Выйти\n\n"
 
 read -p "${GREEN_BOLD}>: ${NC}" response < /dev/tty
 
@@ -272,6 +272,6 @@ case $response in
   1) install_xkeenui;;
   2) update_xkeenui;;
   3) uninstall_xkeenui;;
-  4) echo; exit;;
+  0) echo; exit;;
   *) printf "${ERROR} Неверный выбор.${NCN}"; exit 1;;
 esac
