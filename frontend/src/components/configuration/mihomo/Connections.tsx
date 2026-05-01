@@ -566,25 +566,32 @@ const ConnectionDialog = memo(function ConnectionDialog({
 }) {
   const liveConn = useConnectionsStore((s) => (connId ? (s.map.get(connId) ?? null) : null))
   const frozenConn = useConnectionsStore((s) => (connId ? (s.closedMap.get(connId) ?? null) : null))
-  const [snapshot, setSnapshot] = useState<Connection | null>(null)
-  if (liveConn !== null && liveConn !== snapshot) setSnapshot(liveConn)
-  const conn = liveConn ?? snapshot ?? frozenConn
+  const [snapshot, setSnapshot] = useState<{ id: string; conn: Connection } | null>(null)
+  const currentConn = liveConn ?? frozenConn
+
+  useEffect(() => {
+    if (connId && currentConn) setSnapshot({ id: connId, conn: currentConn })
+  }, [connId, currentConn])
+
+  const snapshotConn = snapshot?.id === connId ? snapshot.conn : null
+  const conn = currentConn ?? snapshotConn
+  const displayConn = conn ?? snapshot?.conn
   const isClosed = !!connId && !liveConn
 
   return (
     <Dialog open={!!connId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">{conn && <ConnectionDialogTitle conn={conn} />}</DialogHeader>
+        <DialogHeader className="shrink-0">{displayConn && <ConnectionDialogTitle conn={displayConn} />}</DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
-          {conn && (
+          {displayConn && (
             <>
-              <ConnectionDialogMeta conn={conn} />
+              <ConnectionDialogMeta conn={displayConn} />
             </>
           )}
         </div>
 
-        {conn && (
+        {displayConn && (
           <div>
             <Button
               variant="destructive"
