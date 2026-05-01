@@ -275,7 +275,7 @@ const ConnectionRow = memo(function ConnectionRow({
               {first && (
                 <button
                   type="button"
-                  className="flex shrink-0 items-center gap-1 text-left hover:opacity-80"
+                  className="flex shrink-0 cursor-copy items-center gap-1 text-left hover:text-blue-400"
                   onClick={(e) => applyChainFilter(first, e)}
                 >
                   <ProxyIcon name={first} className="mr-0.5 size-4.5 shrink-0 object-contain" />
@@ -287,7 +287,7 @@ const ConnectionRow = memo(function ConnectionRow({
                   <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-left hover:opacity-80"
+                    className="flex min-w-0 flex-1 cursor-copy items-center gap-1 overflow-hidden text-left hover:text-blue-400"
                     onClick={(e) => applyChainFilter(last, e)}
                   >
                     <ProxyIcon name={last!} className="mr-0.5 size-4.5 shrink-0 object-contain" />
@@ -305,7 +305,7 @@ const ConnectionRow = memo(function ConnectionRow({
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="flex w-fit max-w-full items-center overflow-hidden text-left hover:opacity-80"
+              className="flex w-fit max-w-full cursor-copy items-center overflow-hidden text-left hover:text-blue-400"
               onClick={(e) => {
                 e.stopPropagation()
                 onApplyFilter(host)
@@ -325,7 +325,7 @@ const ConnectionRow = memo(function ConnectionRow({
           <TooltipTrigger asChild>
             <button
               type="button"
-              className="block w-fit max-w-full truncate text-left hover:opacity-80"
+              className="block w-fit max-w-full cursor-copy truncate text-left hover:text-blue-400"
               onClick={(e) => {
                 e.stopPropagation()
                 onApplyFilter(sourceHost)
