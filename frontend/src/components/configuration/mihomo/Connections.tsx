@@ -725,7 +725,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 const columns: { key: SortColumn; label: string; className: string }[] = [
   { key: 'chains', label: 'Цепочка', className: 'w-[50%] pl-3 md:w-[35%]' },
   { key: 'host', label: 'Хост', className: 'w-[24%] md:w-[31%]' },
-  { key: 'protocol', label: 'Протокол', className: 'w-[8%]' },
+  { key: 'protocol', label: 'Тип', className: 'w-[4%]' },
   { key: 'source', label: 'Источник', className: 'w-[14%] max-w-[220px] md:w-[10%] md:max-w-[190px]' },
   { key: 'upload', label: 'Трафик', className: 'w-[10%]' },
   { key: 'start', label: 'Время', className: 'w-[10%]' },
