@@ -22,6 +22,7 @@ LIGHTTPD_DIR="/opt/etc/lighttpd"
 LIGHTTPD_CONF="$LIGHTTPD_DIR/conf.d/90-xkeenui.conf"
 
 BETA=false
+LOCAL=false
 [ "$1" = "beta" ] && BETA=true
 
 spinner() {
@@ -95,16 +96,33 @@ download_files() {
   fi
 
   mkdir -p $STATIC_DIR
-  ( set -e; curl -Ls "$download_url/xkeen-ui-static.tar.gz" | tar -xz -C "$STATIC_DIR" ) &
-  if ! spinner $! "Загрузка статики..."; then
-    printf "${RED_BOLD}\n Не удалось загрузить статику.${NCN}"
-    exit 1
+
+  if [ "$LOCAL" = true ] && [ -f "/opt/tmp/xkeen-ui-static.tar.gz" ]; then
+    ( set -e; tar -xz -C "$STATIC_DIR" < "/opt/tmp/xkeen-ui-static.tar.gz" ) &
+    if ! spinner $! "Локальная установка статики..."; then
+      printf "${RED_BOLD}\n Не удалось распаковать статику.${NCN}"
+      exit 1
+    fi
+  else
+    ( set -e; curl -Ls "$download_url/xkeen-ui-static.tar.gz" | tar -xz -C "$STATIC_DIR" ) &
+    if ! spinner $! "Загрузка статики..."; then
+      printf "${RED_BOLD}\n Не удалось загрузить статику.${NCN}"
+      exit 1
+    fi
   fi
 
-  ( set -e; curl -Lsfo $XKEENUI_BIN $download_url/$bin_name && chmod +x $XKEENUI_BIN ) &
-  if ! spinner $! "Загрузка бинарника..."; then
-    printf "${RED_BOLD}\n Не удалось загрузить бинарник.${NCN}"
-    exit 1
+  if [ "$LOCAL" = true ] && [ -f "/opt/tmp/$bin_name" ]; then
+    ( set -e; cp "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
+    if ! spinner $! "Локальная установка бинарника..."; then
+      printf "${RED_BOLD}\n Не удалось скопировать бинарник.${NCN}"
+      exit 1
+    fi
+  else
+    ( set -e; curl -Lsfo $XKEENUI_BIN $download_url/$bin_name && chmod +x $XKEENUI_BIN ) &
+    if ! spinner $! "Загрузка бинарника..."; then
+      printf "${RED_BOLD}\n Не удалось загрузить бинарник.${NCN}"
+      exit 1
+    fi
   fi
 }
 
@@ -116,7 +134,13 @@ install_xkeenui() {
 
   printf "${INFO} Начинаем установку...${NCN}"
 
+  [ -f "/opt/tmp/xkeen-ui-static.tar.gz" ] || [ -f "/opt/tmp/xkeen-ui-$ARCH" ] && LOCAL=true
+
   download_files; create_xkeenui_init
+
+  if [ "$LOCAL" = true ]; then
+    rm -f "/opt/tmp/xkeen-ui-static.tar.gz" "/opt/tmp/xkeen-ui-$ARCH"
+  fi
 
   sync & spinner $! "Запись данных..."
 
