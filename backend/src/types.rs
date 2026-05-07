@@ -170,6 +170,7 @@ impl Default for LogSettings {
 pub struct ClashApiSettings {
     pub ping_url: String,
     pub ping_timeout: u32,
+    pub show_source_name: bool,
 }
 
 impl Default for ClashApiSettings {
@@ -177,6 +178,7 @@ impl Default for ClashApiSettings {
         Self {
             ping_url: "https://www.gstatic.com/generate_204".into(),
             ping_timeout: 5000,
+            show_source_name: true,
         }
     }
 }

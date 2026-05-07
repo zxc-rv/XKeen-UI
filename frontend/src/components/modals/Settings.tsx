@@ -77,6 +77,16 @@ const updateSettings: ToggleSetting[] = [
   },
 ]
 
+const clashApiSettings: ToggleSetting[] = [
+  {
+    id: 'show-source-name',
+    key: 'showSourceName',
+    path: 'clash_api.show_source_name',
+    title: 'Показывать имя источника',
+    description: 'Отображать имя клиента Keenetic вместо IP-адреса',
+  },
+]
+
 const themeOptions: { value: ThemeMode; label: string }[] = [
   { value: 'auto', label: 'Авто' },
   { value: 'light', label: 'Светлая' },
@@ -532,6 +542,13 @@ export function SettingsModal() {
               </TabsContent>
 
               <TabsContent value="clash-api">
+                <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Соединения</p>
+                <FieldGroup className="gap-0!">
+                  {clashApiSettings.map((item) => (
+                    <SwitchSettingField key={item.id} item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
+                  ))}
+                </FieldGroup>
+                <Separator className="my-2" />
                 <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Пинг тест</p>
                 <PingTestSettingsField
                   key={`${settings.pingTestUrl}\x00${settings.pingTestTimeout}`}

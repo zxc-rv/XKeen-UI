@@ -3,6 +3,7 @@ mod backuper;
 mod clash;
 mod configs;
 mod controller;
+mod devices;
 mod geo;
 mod logger;
 mod settings;
@@ -175,6 +176,7 @@ async fn main() {
             get(settings::get_settings).patch(settings::patch_settings),
         )
         .route("/api/version", get(version::version_handler))
+        .route("/api/device-list", get(devices::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))
         .route("/api/geo/site", get(geo::get_geosite))

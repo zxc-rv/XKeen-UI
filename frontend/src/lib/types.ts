@@ -21,6 +21,7 @@ export interface AppSettings {
   githubProxies: string[]
   pingTestUrl: string
   pingTestTimeout: number
+  showSourceName: boolean
   timezone: number
   authEnabled: boolean
 }

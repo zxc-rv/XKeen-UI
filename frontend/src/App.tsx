@@ -215,6 +215,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             githubProxies: data.updater.github_proxy || [],
             pingTestUrl: data.clash_api?.ping_url ?? DEFAULT_PING_TEST_URL,
             pingTestTimeout: data.clash_api?.ping_timeout ?? DEFAULT_PING_TEST_TIMEOUT,
+            showSourceName: data.clash_api?.show_source_name ?? true,
             timezone: data.log.timezone,
             authEnabled: !!data.auth?.enabled,
           },

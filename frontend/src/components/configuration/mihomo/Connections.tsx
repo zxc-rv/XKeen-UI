@@ -16,11 +16,11 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react'
-import { memo, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
-import { clashFetch } from '../../../lib/api'
-import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useWsConnected } from '../../../lib/store'
+import { apiCall, clashFetch } from '../../../lib/api'
+import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useSettings, useWsConnected } from '../../../lib/store'
 interface ConnectionMetadata {
   network: string
   type: string
@@ -61,14 +61,36 @@ interface Props {
   clashApiUnix?: string | null
 }
 
+interface DeviceListHost {
+  ip?: string
+  ip6?: string[]
+  name?: string
+}
+
+interface DeviceListResponse {
+  success?: boolean
+  host?: DeviceListHost[]
+}
+
 // ─── Local store ───────────────────────────────────────────────────────────────
 
 const toMap = (connections: Connection[]) => new Map(connections.map((c) => [c.id, c]))
 
-const useConnectionsStore = create<{ map: Map<string, Connection>; closedMap: Map<string, Connection> }>(() => ({
+const DIALOG_CLOSE_ANIMATION_MS = 220
+
+type ConnectionsState = { map: Map<string, Connection>; closedMap: Map<string, Connection> }
+
+const useConnectionsStore = create<ConnectionsState>(() => ({
   map: toMap(getConnections()),
   closedMap: new Map(),
 }))
+
+const SOURCE_NAME_MISS_RETRY_MS = 3000
+const sourceNameCache = new Map<string, string | null>()
+const sourceNameRetryAt = new Map<string, number>()
+let sourceNameRetryTimer: ReturnType<typeof setTimeout> | null = null
+let sourceNameRequest: Promise<void> | null = null
+const useSourceNameStore = create<{ version: number }>(() => ({ version: 0 }))
 
 subscribeConnections((connections) => {
   const newMap = toMap(connections)
@@ -84,6 +106,138 @@ subscribeConnections((connections) => {
 })
 
 const asnCache = new Map<string, string | null>()
+
+function cleanDeviceIp(ip: unknown): string {
+  return typeof ip === 'string' ? ip.trim() : ''
+}
+
+function isResolvableSourceIP(ip: string): boolean {
+  return !!ip && ip !== '0.0.0.0' && ip !== '::'
+}
+
+function bumpSourceNameVersion() {
+  useSourceNameStore.setState((s) => ({ version: s.version + 1 }))
+}
+
+function cacheSourceName(ip: string, name: string | null, retryAt?: number): boolean {
+  const prevName = sourceNameCache.get(ip)
+  const prevRetryAt = sourceNameRetryAt.get(ip)
+  const hadCache = sourceNameCache.has(ip)
+
+  sourceNameCache.set(ip, name)
+  if (name) sourceNameRetryAt.delete(ip)
+  else if (retryAt) sourceNameRetryAt.set(ip, retryAt)
+  else sourceNameRetryAt.delete(ip)
+
+  return !hadCache || prevName !== name || prevRetryAt !== sourceNameRetryAt.get(ip)
+}
+
+function cacheSourceNameMisses(sourceIps: string[], retryAt: number): boolean {
+  let changed = false
+  for (const ip of sourceIps) {
+    if (isResolvableSourceIP(ip)) changed = cacheSourceName(ip, null, retryAt) || changed
+  }
+  return changed
+}
+
+function scheduleSourceNameRetry() {
+  if (sourceNameRetryTimer) clearTimeout(sourceNameRetryTimer)
+
+  let nextRetryAt = Infinity
+  const now = Date.now()
+  for (const [ip, retryAt] of sourceNameRetryAt) {
+    if (!sourceNameCache.has(ip) || sourceNameCache.get(ip) !== null) {
+      sourceNameRetryAt.delete(ip)
+      continue
+    }
+    nextRetryAt = Math.min(nextRetryAt, retryAt)
+  }
+
+  if (nextRetryAt !== Infinity) {
+    sourceNameRetryTimer = setTimeout(
+      () => {
+        sourceNameRetryTimer = null
+        bumpSourceNameVersion()
+      },
+      Math.max(0, nextRetryAt - now)
+    )
+  }
+}
+
+function shouldRefreshSourceName(ip: string, now = Date.now()): boolean {
+  if (!isResolvableSourceIP(ip)) return false
+  if (!sourceNameCache.has(ip)) return true
+  return sourceNameCache.get(ip) === null && (sourceNameRetryAt.get(ip) ?? 0) <= now
+}
+
+function collectRefreshableSourceIPs(state: ConnectionsState, enabled: boolean): string[] {
+  if (!enabled) return []
+
+  const ips = new Set<string>()
+  const now = Date.now()
+  for (const connections of [state.map, state.closedMap]) {
+    for (const conn of connections.values()) {
+      const ip = conn.metadata.sourceIP
+      if (shouldRefreshSourceName(ip, now)) ips.add(ip)
+    }
+  }
+  return Array.from(ips)
+}
+
+function getCachedSourceName(ip: string): string | null {
+  return sourceNameCache.get(ip) ?? null
+}
+
+function useSourceName(ip: string, enabled: boolean): string | null {
+  useSourceNameStore((s) => (enabled ? s.version : 0))
+  return enabled && isResolvableSourceIP(ip) ? getCachedSourceName(ip) : null
+}
+
+async function refreshSourceNames(sourceIps: string[]) {
+  const missingIps = Array.from(new Set(sourceIps.filter((ip) => shouldRefreshSourceName(ip))))
+  if (missingIps.length === 0) return
+  if (sourceNameRequest) {
+    await sourceNameRequest
+    return refreshSourceNames(sourceIps)
+  }
+
+  sourceNameRequest = (async () => {
+    let changed = false
+    try {
+      const retryAt = Date.now() + SOURCE_NAME_MISS_RETRY_MS
+      const data = await apiCall<DeviceListResponse>('GET', 'device-list')
+      if (!data.success) {
+        changed = cacheSourceNameMisses(missingIps, retryAt)
+        return
+      }
+
+      const missingSet = new Set(missingIps)
+      for (const host of data.host ?? []) {
+        const name = typeof host.name === 'string' ? host.name.trim() : ''
+        const ips = [host.ip, ...(Array.isArray(host.ip6) ? host.ip6 : [])]
+
+        for (const rawIp of ips) {
+          const ip = cleanDeviceIp(rawIp)
+          if (!isResolvableSourceIP(ip)) continue
+          const retryAtForMiss = !name ? (missingSet.has(ip) ? retryAt : sourceNameRetryAt.get(ip)) : undefined
+          changed = cacheSourceName(ip, name || null, retryAtForMiss) || changed
+          missingSet.delete(ip)
+        }
+      }
+
+      changed = cacheSourceNameMisses(Array.from(missingSet), retryAt) || changed
+    } catch {
+      changed = cacheSourceNameMisses(missingIps, Date.now() + SOURCE_NAME_MISS_RETRY_MS) || changed
+    } finally {
+      scheduleSourceNameRetry()
+      if (changed) bumpSourceNameVersion()
+    }
+  })().finally(() => {
+    sourceNameRequest = null
+  })
+
+  await sourceNameRequest
+}
 
 function formatAsn(data: any): string | null {
   const asnObj = data?.asn && typeof data.asn === 'object' ? data.asn : null
@@ -103,7 +257,7 @@ function formatAsn(data: any): string | null {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function getConnectionSortValue(conn: Connection, column: SortColumn): string {
+function getConnectionSortValue(conn: Connection, column: SortColumn, showSourceName = false): string {
   switch (column) {
     case 'host':
       return getConnectionHost(conn)
@@ -112,7 +266,7 @@ function getConnectionSortValue(conn: Connection, column: SortColumn): string {
     case 'chains':
       return conn.chains[0] ?? ''
     case 'source':
-      return conn.metadata.sourceIP
+      return getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
     case 'start':
       return conn.start
     case 'upload':
@@ -137,8 +291,18 @@ function getConnectionProtocol(conn: Connection): string {
   return conn.metadata.network?.toUpperCase() || '—'
 }
 
-function getConnectionSourceLabel(conn: Connection): string {
-  return `${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`
+function getConnectionSourceLabel(conn: Connection, sourceName?: string | null): string {
+  const source = sourceName || conn.metadata.sourceIP
+  return conn.metadata.sourcePort ? `${source}:${conn.metadata.sourcePort}` : source
+}
+
+function getConnectionSourceDisplayLabel(conn: Connection, sourceName?: string | null): string {
+  return sourceName || getConnectionSourceLabel(conn)
+}
+
+function getConnectionSourceCopyValue(conn: Connection, sourceName?: string | null): string {
+  const source = getConnectionSourceLabel(conn)
+  return sourceName ? `${sourceName} (${source})` : source
 }
 
 function getConnectionSourceHost(conn: Connection): string {
@@ -243,12 +407,16 @@ const ConnectionRow = memo(function ConnectionRow({
   onSelect,
   onClose,
   onApplyFilter,
+  showSourceName,
 }: {
   connId: string
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
   onApplyFilter: (value: string) => void
+  showSourceName: boolean
 }) {
+  const sourceIp = useConnectionsStore((s) => s.map.get(connId)?.metadata.sourceIP ?? '')
+  const sourceName = useSourceName(sourceIp, showSourceName)
   const displayKey = useConnectionsStore((s) => {
     const c = s.map.get(connId)
     if (!c) return null
@@ -262,8 +430,10 @@ const ConnectionRow = memo(function ConnectionRow({
   const host = getConnectionHost(conn)
   const hostLabel = getConnectionHostLabel(conn)
   const protocol = getConnectionProtocol(conn)
-  const source = getConnectionSourceLabel(conn)
+  const source = getConnectionSourceDisplayLabel(conn, sourceName)
+  const sourceCopy = getConnectionSourceCopyValue(conn, sourceName)
   const sourceHost = getConnectionSourceHost(conn)
+  const sourceFilter = sourceName || sourceHost
   const reversedChains = [...conn.chains].reverse()
   const first = reversedChains[0]
   const last = reversedChains.at(-1)
@@ -351,14 +521,14 @@ const ConnectionRow = memo(function ConnectionRow({
               className="block w-fit max-w-full cursor-copy truncate text-left hover:text-blue-400"
               onClick={(e) => {
                 e.stopPropagation()
-                onApplyFilter(sourceHost)
+                onApplyFilter(sourceFilter)
               }}
             >
               {source}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-[13px]" copyTextValue={source}>
-            {source}
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={sourceCopy}>
+            {sourceCopy}
           </TooltipContent>
         </Tooltip>
       </TableCell>
@@ -387,17 +557,21 @@ const ConnectionRow = memo(function ConnectionRow({
 const ClosedConnectionRow = memo(function ClosedConnectionRow({
   conn,
   onSelect,
+  showSourceName,
 }: {
   conn: Connection
   onSelect: (conn: Connection) => void
+  showSourceName: boolean
 }) {
+  const sourceName = useSourceName(conn.metadata.sourceIP, showSourceName)
   const reversedChains = [...conn.chains].reverse()
   const first = reversedChains[0]
   const last = reversedChains.at(-1)
   const host = getConnectionHost(conn)
   const hostLabel = getConnectionHostLabel(conn)
   const protocol = getConnectionProtocol(conn)
-  const source = getConnectionSourceLabel(conn)
+  const source = getConnectionSourceDisplayLabel(conn, sourceName)
+  const sourceCopy = getConnectionSourceCopyValue(conn, sourceName)
 
   return (
     <TableRow className="hover:bg-muted/50 h-9.75 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
@@ -444,8 +618,8 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
           <TooltipTrigger asChild>
             <span className="block w-fit max-w-full truncate">{source}</span>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-[13px]" copyTextValue={source}>
-            {source}
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={sourceCopy}>
+            {sourceCopy}
           </TooltipContent>
         </Tooltip>
       </TableCell>
@@ -463,9 +637,10 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
   )
 })
 
-const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn: Connection }) {
+const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn, showSourceName }: { conn: Connection; showSourceName: boolean }) {
   const reversedChains = [...conn.chains].reverse()
   const asnIp = conn.metadata.destinationIP?.trim() ?? ''
+  const sourceName = useSourceName(conn.metadata.sourceIP, showSourceName)
   const [asnText, setAsnText] = useState<string | null>(() => (asnIp ? (asnCache.get(asnIp) ?? null) : null))
   const [asnLoading, setAsnLoading] = useState(() => !!asnIp && !asnCache.has(asnIp))
 
@@ -533,6 +708,7 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn }: { conn
         <MetaRow label="Протокол" value={conn.metadata.network?.toUpperCase()} />
         <MetaRow label="Тип" value={conn.metadata.type} />
         <MetaRow label="IP источника" value={`${conn.metadata.sourceIP}:${conn.metadata.sourcePort}`} />
+        {showSourceName && <MetaRow label="Имя источника" value={sourceName} />}
         <MetaRow label="IP назначения" value={`${conn.metadata.destinationIP}:${conn.metadata.destinationPort}`} />
         <MetaRow label="Хост назначения" value={conn.metadata.host} />
         <MetaRow label="Удалённый хост" value={conn.metadata.remoteDestination} />
@@ -581,42 +757,38 @@ const ConnectionDialogTitle = memo(function ConnectionDialogTitle({ conn }: { co
 })
 
 const ConnectionDialog = memo(function ConnectionDialog({
+  open,
   connId,
   onClose,
   onCloseConnection,
+  showSourceName,
 }: {
+  open: boolean
   connId: string | null
   onClose: () => void
   onCloseConnection: (id: string) => Promise<void>
+  showSourceName: boolean
 }) {
   const liveConn = useConnectionsStore((s) => (connId ? (s.map.get(connId) ?? null) : null))
   const frozenConn = useConnectionsStore((s) => (connId ? (s.closedMap.get(connId) ?? null) : null))
-  const [snapshot, setSnapshot] = useState<{ id: string; conn: Connection } | null>(null)
-  const currentConn = liveConn ?? frozenConn
-
-  useEffect(() => {
-    if (connId && currentConn) setSnapshot({ id: connId, conn: currentConn })
-  }, [connId, currentConn])
-
-  const snapshotConn = snapshot?.id === connId ? snapshot.conn : null
-  const conn = currentConn ?? snapshotConn
-  const displayConn = conn ?? snapshot?.conn
+  const displayConn = liveConn ?? frozenConn
   const isClosed = !!connId && !liveConn
+  const renderedConn = displayConn
 
   return (
-    <Dialog open={!!connId} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open && !!connId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">{displayConn && <ConnectionDialogTitle conn={displayConn} />}</DialogHeader>
+        <DialogHeader className="shrink-0">{renderedConn && <ConnectionDialogTitle conn={renderedConn} />}</DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
-          {displayConn && (
+          {renderedConn && (
             <>
-              <ConnectionDialogMeta conn={displayConn} />
+              <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} />
             </>
           )}
         </div>
 
-        {displayConn && (
+        {renderedConn && (
           <div>
             <Button
               variant="destructive"
@@ -776,6 +948,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onSelect,
   onClose,
   onApplyFilter,
+  showSourceName,
 }: {
   filter: string
   sortColumn: SortColumn
@@ -783,8 +956,10 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
   onApplyFilter: (value: string) => void
+  showSourceName: boolean
 }) {
   const connected = useWsConnected()
+  useSourceNameStore((s) => (showSourceName ? s.version : 0))
 
   const filteredIds = useConnectionsStore(
     useShallow((s) => {
@@ -795,7 +970,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
       if (query) {
         result = result.filter((conn) => {
           const hostLabel = getConnectionHostLabel(conn)
-          const sourceLabel = getConnectionSourceLabel(conn)
+          const sourceLabel = getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
           return (
             conn.chains.some((c) => c.includes(query)) ||
             hostLabel.includes(query) ||
@@ -813,8 +988,8 @@ const ConnectionsBody = memo(function ConnectionsBody({
 
       if (sortColumn) {
         result = [...result].sort((a, b) => {
-          const valueA = getConnectionSortValue(a, sortColumn)
-          const valueB = getConnectionSortValue(b, sortColumn)
+          const valueA = getConnectionSortValue(a, sortColumn, showSourceName)
+          const valueB = getConnectionSortValue(b, sortColumn, showSourceName)
           return sortDirection === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA)
         })
       }
@@ -832,7 +1007,16 @@ const ConnectionsBody = memo(function ConnectionsBody({
           </TableCell>
         </TableRow>
       ) : (
-        filteredIds.map((id) => <ConnectionRow key={id} connId={id} onSelect={onSelect} onClose={onClose} onApplyFilter={onApplyFilter} />)
+        filteredIds.map((id) => (
+          <ConnectionRow
+            key={id}
+            connId={id}
+            onSelect={onSelect}
+            onClose={onClose}
+            onApplyFilter={onApplyFilter}
+            showSourceName={showSourceName}
+          />
+        ))
       )}
     </TableBody>
   )
@@ -843,12 +1027,15 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   sortColumn,
   sortDirection,
   onSelect,
+  showSourceName,
 }: {
   filter: string
   sortColumn: SortColumn
   sortDirection: SortDirection
   onSelect: (conn: Connection) => void
+  showSourceName: boolean
 }) {
+  useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const filteredConns = useConnectionsStore(
     useShallow((s) => {
       const connections = Array.from(s.closedMap.values())
@@ -857,7 +1044,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
       if (query) {
         result = result.filter((conn) => {
           const hostLabel = getConnectionHostLabel(conn)
-          const sourceLabel = getConnectionSourceLabel(conn)
+          const sourceLabel = getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
           return (
             conn.chains.some((c) => c.includes(query)) ||
             hostLabel.includes(query) ||
@@ -874,8 +1061,8 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
       }
       if (sortColumn) {
         result = [...result].sort((a, b) => {
-          const valueA = getConnectionSortValue(a, sortColumn)
-          const valueB = getConnectionSortValue(b, sortColumn)
+          const valueA = getConnectionSortValue(a, sortColumn, showSourceName)
+          const valueB = getConnectionSortValue(b, sortColumn, showSourceName)
           return sortDirection === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA)
         })
       }
@@ -892,7 +1079,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
           </TableCell>
         </TableRow>
       ) : (
-        filteredConns.map((conn) => <ClosedConnectionRow key={conn.id} conn={conn} onSelect={onSelect} />)
+        filteredConns.map((conn) => <ClosedConnectionRow key={conn.id} conn={conn} onSelect={onSelect} showSourceName={showSourceName} />)
       )}
     </TableBody>
   )
@@ -905,7 +1092,34 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active')
+  const dialogCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showSourceName = useSettings((s) => s.showSourceName)
+  const sourceNameRefreshTick = useSourceNameStore((s) => (showSourceName ? s.version : 0))
+  const unresolvedSourceIPs = useConnectionsStore(useShallow((s) => collectRefreshableSourceIPs(s, showSourceName)))
+
+  const clearDialogCloseTimer = useCallback(() => {
+    if (!dialogCloseTimerRef.current) return
+    clearTimeout(dialogCloseTimerRef.current)
+    dialogCloseTimerRef.current = null
+  }, [])
+
+  useEffect(() => clearDialogCloseTimer, [clearDialogCloseTimer])
+
+  const closeDialog = useCallback(() => {
+    setDialogOpen(false)
+    clearDialogCloseTimer()
+    dialogCloseTimerRef.current = setTimeout(() => {
+      dialogCloseTimerRef.current = null
+      setSelectedId(null)
+    }, DIALOG_CLOSE_ANIMATION_MS)
+  }, [clearDialogCloseTimer])
+
+  useEffect(() => {
+    const sourceIps = collectRefreshableSourceIPs(useConnectionsStore.getState(), showSourceName)
+    if (sourceIps.length > 0) void refreshSourceNames(sourceIps)
+  }, [showSourceName, sourceNameRefreshTick, unresolvedSourceIPs])
 
   const toggleSort = useCallback((column: SortColumn) => {
     setSortColumn((prev) => {
@@ -938,23 +1152,28 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
     async (id: string, e?: React.MouseEvent) => {
       if (e) e.stopPropagation()
       await clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
-      setSelectedId((prev) => (prev === id ? null : prev))
+      if (selectedId === id) closeDialog()
     },
-    [clashApiPort, clashApiSecret, clashApiUnix]
+    [clashApiPort, clashApiSecret, clashApiUnix, closeDialog, selectedId]
   )
 
-  const handleSelectConnection = useCallback((conn: Connection) => {
-    setSelectedId(conn.id)
-  }, [])
+  const handleSelectConnection = useCallback(
+    (conn: Connection) => {
+      clearDialogCloseTimer()
+      setSelectedId(conn.id)
+      setDialogOpen(true)
+    },
+    [clearDialogCloseTimer]
+  )
 
-  const handleCloseDialog = useCallback(() => setSelectedId(null), [])
+  const handleCloseDialog = closeDialog
 
   const handleCloseDialogConnection = useCallback(
     async (id: string) => {
       await handleCloseConnection(id)
-      setSelectedId(null)
+      closeDialog()
     },
-    [handleCloseConnection]
+    [closeDialog, handleCloseConnection]
   )
 
   return (
@@ -979,6 +1198,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onSelect={handleSelectConnection}
                 onClose={handleCloseConnection}
                 onApplyFilter={handleApplyFilter}
+                showSourceName={showSourceName}
               />
             ) : (
               <ClosedConnectionsBody
@@ -986,12 +1206,19 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSelect={handleSelectConnection}
+                showSourceName={showSourceName}
               />
             )}
           </Table>
         </div>
       </div>
-      <ConnectionDialog connId={selectedId} onClose={handleCloseDialog} onCloseConnection={handleCloseDialogConnection} />
+      <ConnectionDialog
+        open={dialogOpen}
+        connId={selectedId}
+        onClose={handleCloseDialog}
+        onCloseConnection={handleCloseDialogConnection}
+        showSourceName={showSourceName}
+      />
     </TooltipProvider>
   )
 }
