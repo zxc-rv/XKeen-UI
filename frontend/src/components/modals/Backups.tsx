@@ -13,9 +13,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -73,6 +75,8 @@ const CONTENT_VARIANTS: Record<BackupContent, 'sky' | 'emerald' | 'amber' | 'ros
 }
 
 const CONTENT_ORDER: BackupContent[] = ['xkeen', 'xkeen-ui', 'xray', 'mihomo']
+const MAX_BACKUPS_TO_KEEP = 5
+const KEEP_LATEST_BACKUPS_KEY = 'backups:keepLatest'
 
 export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
   const { showToast } = useAppContext()
@@ -80,31 +84,37 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
   const [backups, setBackups] = useState<BackupItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
+  const [keepLatestBackups, setKeepLatestBackups] = useState(() => localStorage.getItem(KEEP_LATEST_BACKUPS_KEY) === 'true')
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
   const [dialogAction, setDialogAction] = useState<ConfirmAction | null>(null)
+
+  const fetchBackups = useCallback(async () => {
+    const result = await apiCall<BackupsResponse>('GET', 'backup')
+    if (!result.success) throw new Error(result.error ?? 'Не удалось загрузить бэкапы')
+    return Array.isArray(result.backups) ? result.backups : []
+  }, [])
 
   const loadBackups = useCallback(
     async (silent = false) => {
       if (!silent) setIsLoading(true)
       try {
-        const result = await apiCall<BackupsResponse>('GET', 'backup')
-        if (!result.success) {
-          showToast(result.error ?? 'Не удалось загрузить бэкапы', 'error')
-          return
-        }
-        setBackups(Array.isArray(result.backups) ? result.backups : [])
+        setBackups(await fetchBackups())
       } catch (error: any) {
         showToast(error.message ?? 'Не удалось загрузить бэкапы', 'error')
       } finally {
         setIsLoading(false)
       }
     },
-    [showToast]
+    [fetchBackups, showToast]
   )
 
   useEffect(() => {
     if (open) void loadBackups()
   }, [open, loadBackups])
+
+  useEffect(() => {
+    localStorage.setItem(KEEP_LATEST_BACKUPS_KEY, String(keepLatestBackups))
+  }, [keepLatestBackups])
 
   useEffect(() => {
     if (!open) {
@@ -126,14 +136,31 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
         return
       }
       setConfirmAction(null)
-      showToast('Бэкап создан')
-      await loadBackups(true)
+      try {
+        let nextBackups = await fetchBackups()
+        const staleBackups = keepLatestBackups ? getNewestBackups(nextBackups).slice(MAX_BACKUPS_TO_KEEP) : []
+
+        for (const backup of staleBackups) {
+          await deleteBackupRequest(backup.name)
+        }
+
+        if (staleBackups.length > 0) {
+          const staleNames = new Set(staleBackups.map((backup) => backup.name))
+          nextBackups = nextBackups.filter((backup) => !staleNames.has(backup.name))
+        }
+
+        setBackups(nextBackups)
+        showToast(staleBackups.length > 0 ? `Бэкап создан, старые удалены: ${staleBackups.length}` : 'Бэкап создан')
+      } catch (error: any) {
+        showToast(`Бэкап создан, но ${(error.message ?? 'автоочистка не удалась').toLowerCase()}`, 'error')
+        await loadBackups(true)
+      }
     } catch (error: any) {
       showToast(error.message ?? 'Не удалось создать бэкап', 'error')
     } finally {
       setPendingAction(null)
     }
-  }, [loadBackups, showToast])
+  }, [fetchBackups, keepLatestBackups, loadBackups, showToast])
 
   const restoreBackup = useCallback(
     async (name: string, contents?: BackupContent[]) => {
@@ -161,11 +188,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
     async (name: string) => {
       setPendingAction(`delete:${name}`)
       try {
-        const result = await apiCall<BackupActionResponse>('DELETE', 'backup', { name })
-        if (!result.success) {
-          showToast(result.error ?? 'Не удалось удалить бэкап', 'error')
-          return
-        }
+        await deleteBackupRequest(name)
         setConfirmAction(null)
         setBackups((prev) => prev.filter((backup) => backup.name !== name))
         showToast('Бэкап удалён')
@@ -219,10 +242,18 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
                     <EmptyTitle>Бэкапы не найдены</EmptyTitle>
                   </EmptyHeader>
                   <EmptyContent>
-                    <Button variant="outline" onClick={() => void createBackup()} disabled={pendingAction !== null}>
-                      {pendingAction === 'create' ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
-                      Создать бэкап
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <KeepLatestBackupsToggle
+                        id="keep-latest-backups-empty"
+                        checked={keepLatestBackups}
+                        disabled={pendingAction !== null}
+                        onCheckedChange={setKeepLatestBackups}
+                      />
+                      <Button variant="outline" onClick={() => void createBackup()} disabled={pendingAction !== null}>
+                        {pendingAction === 'create' ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
+                        Создать бэкап
+                      </Button>
+                    </div>
                   </EmptyContent>
                 </Empty>
               ) : (
@@ -302,7 +333,13 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
           </ScrollArea>
 
           {backups.length > 0 && (
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <KeepLatestBackupsToggle
+                id="keep-latest-backups"
+                checked={keepLatestBackups}
+                disabled={pendingAction !== null}
+                onCheckedChange={setKeepLatestBackups}
+              />
               <Button onClick={() => void createBackup()} disabled={pendingAction !== null}>
                 {pendingAction === 'create' ? <Spinner data-icon="inline-start" /> : <IconPlus data-icon="inline-start" />}
                 Создать бэкап
@@ -375,6 +412,27 @@ function ContentBadge({ content, files }: { content: BackupContent; files: strin
   )
 }
 
+function KeepLatestBackupsToggle({
+  id,
+  checked,
+  disabled,
+  onCheckedChange,
+}: {
+  id: string
+  checked: boolean
+  disabled: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={(value) => onCheckedChange(value === true)} />
+      <Label htmlFor={id} className="text-muted-foreground cursor-pointer text-xs font-normal">
+        Оставлять {MAX_BACKUPS_TO_KEEP} бэкапов
+      </Label>
+    </div>
+  )
+}
+
 function getRestoreActionKey(name: string, contents?: BackupContent[]) {
   return `restore:${name}:${contents?.join(',') ?? 'all'}`
 }
@@ -385,6 +443,20 @@ function getBackupContents(backup: BackupItem) {
 
 function formatContentList(contents: BackupContent[]) {
   return contents.map((content) => CONTENT_LABELS[content]).join(', ')
+}
+
+async function deleteBackupRequest(name: string) {
+  const result = await apiCall<BackupActionResponse>('DELETE', 'backup', { name })
+  if (!result.success) throw new Error(result.error ?? 'Не удалось удалить бэкап')
+}
+
+function getNewestBackups(backups: BackupItem[]) {
+  return [...backups].sort((a, b) => getBackupSortKey(b).localeCompare(getBackupSortKey(a)))
+}
+
+function getBackupSortKey(backup: BackupItem) {
+  const match = backup.name.match(/^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})(?:_(\d+))?_/)
+  return match ? `${match[1]}_${(Number(match[2]) || 1).toString().padStart(4, '0')}` : backup.name
 }
 
 function formatBytes(bytes: number) {
