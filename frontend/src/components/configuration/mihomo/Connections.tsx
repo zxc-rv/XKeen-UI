@@ -52,7 +52,7 @@ interface Connection {
   rulePayload: string
 }
 
-type SortColumn = 'host' | 'chains' | 'source' | 'start' | 'upload' | 'download' | null
+type SortColumn = 'host' | 'protocol' | 'chains' | 'source' | 'start' | 'upload' | 'download' | null
 type SortDirection = 'asc' | 'desc'
 
 interface Props {
@@ -107,6 +107,8 @@ function getConnectionSortValue(conn: Connection, column: SortColumn): string {
   switch (column) {
     case 'host':
       return getConnectionHost(conn)
+    case 'protocol':
+      return conn.metadata.network
     case 'chains':
       return conn.chains[0] ?? ''
     case 'source':
@@ -129,6 +131,10 @@ function getConnectionHost(conn: Connection): string {
 function getConnectionHostLabel(conn: Connection): string {
   const host = getConnectionHost(conn)
   return conn.metadata.destinationPort ? `${host}:${conn.metadata.destinationPort}` : host
+}
+
+function getConnectionProtocol(conn: Connection): string {
+  return conn.metadata.network?.toUpperCase() || '—'
 }
 
 function getConnectionSourceLabel(conn: Connection): string {
@@ -247,7 +253,7 @@ const ConnectionRow = memo(function ConnectionRow({
     const c = s.map.get(connId)
     if (!c) return null
     const host = getConnectionHost(c)
-    return `${c.chains.join('|')}|${host}|${c.metadata.destinationPort}|${c.metadata.sourceIP}|${c.metadata.sourcePort}|${c.start}`
+    return `${c.chains.join('|')}|${host}|${c.metadata.destinationPort}|${c.metadata.network}|${c.metadata.sourceIP}|${c.metadata.sourcePort}|${c.start}`
   })
 
   if (!displayKey) return null
@@ -255,6 +261,7 @@ const ConnectionRow = memo(function ConnectionRow({
   const conn = useConnectionsStore.getState().map.get(connId)!
   const host = getConnectionHost(conn)
   const hostLabel = getConnectionHostLabel(conn)
+  const protocol = getConnectionProtocol(conn)
   const source = getConnectionSourceLabel(conn)
   const sourceHost = getConnectionSourceHost(conn)
   const reversedChains = [...conn.chains].reverse()
@@ -320,6 +327,22 @@ const ConnectionRow = memo(function ConnectionRow({
           </TooltipContent>
         </Tooltip>
       </TableCell>
+      <TableCell className="text-muted-foreground text-[13px]">
+        {conn.metadata.network ? (
+          <button
+            type="button"
+            className="cursor-copy hover:text-blue-400"
+            onClick={(e) => {
+              e.stopPropagation()
+              onApplyFilter(conn.metadata.network)
+            }}
+          >
+            {protocol}
+          </button>
+        ) : (
+          protocol
+        )}
+      </TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -373,6 +396,7 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
   const last = reversedChains.at(-1)
   const host = getConnectionHost(conn)
   const hostLabel = getConnectionHostLabel(conn)
+  const protocol = getConnectionProtocol(conn)
   const source = getConnectionSourceLabel(conn)
 
   return (
@@ -414,6 +438,7 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
           </TooltipContent>
         </Tooltip>
       </TableCell>
+      <TableCell className="text-muted-foreground text-[13px]">{protocol}</TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -699,7 +724,8 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 
 const columns: { key: SortColumn; label: string; className: string }[] = [
   { key: 'chains', label: 'Цепочка', className: 'w-[50%] pl-3 md:w-[35%]' },
-  { key: 'host', label: 'Хост', className: 'w-[26%] md:w-[35%]' },
+  { key: 'host', label: 'Хост', className: 'w-[24%] md:w-[31%]' },
+  { key: 'protocol', label: 'Протокол', className: 'w-[8%]' },
   { key: 'source', label: 'Источник', className: 'w-[14%] max-w-[220px] md:w-[10%] md:max-w-[190px]' },
   { key: 'upload', label: 'Трафик', className: 'w-[10%]' },
   { key: 'start', label: 'Время', className: 'w-[10%]' },
@@ -775,6 +801,8 @@ const ConnectionsBody = memo(function ConnectionsBody({
             hostLabel.includes(query) ||
             conn.metadata.host.includes(query) ||
             conn.metadata.destinationIP.includes(query) ||
+            conn.metadata.network.includes(query) ||
+            getConnectionProtocol(conn).includes(query) ||
             sourceLabel.includes(query) ||
             conn.metadata.sourceIP.includes(query) ||
             conn.rule.includes(query) ||
@@ -799,7 +827,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
     <TableBody>
       {filteredIds.length === 0 ? (
         <TableRow>
-          <TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
+          <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
             {!connected ? 'Подключение...' : filter ? 'Нет совпадений' : 'Нет активных соединений'}
           </TableCell>
         </TableRow>
@@ -835,6 +863,8 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
             hostLabel.includes(query) ||
             conn.metadata.host.includes(query) ||
             conn.metadata.destinationIP.includes(query) ||
+            conn.metadata.network.includes(query) ||
+            getConnectionProtocol(conn).includes(query) ||
             sourceLabel.includes(query) ||
             conn.metadata.sourceIP.includes(query) ||
             conn.rule.includes(query) ||
@@ -857,7 +887,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
     <TableBody>
       {filteredConns.length === 0 ? (
         <TableRow>
-          <TableCell colSpan={6} className="text-muted-foreground py-8 text-center">
+          <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
             {filter ? 'Нет совпадений' : 'Нет закрытых соединений'}
           </TableCell>
         </TableRow>
