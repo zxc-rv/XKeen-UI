@@ -112,9 +112,9 @@ download_files() {
   fi
 
   if [ "$LOCAL" = true ] && [ -f "/opt/tmp/$bin_name" ]; then
-    ( set -e; cp "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
+    ( set -e; mv "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
     if ! spinner $! "Локальная установка бинарника..."; then
-      printf "${RED_BOLD}\n Не удалось скопировать бинарник.${NCN}"
+      printf "${RED_BOLD}\n Не удалось переместить бинарник.${NCN}"
       exit 1
     fi
   else
@@ -139,7 +139,7 @@ install_xkeenui() {
   download_files; create_xkeenui_init
 
   if [ "$LOCAL" = true ]; then
-    rm -f "/opt/tmp/xkeen-ui-static.tar.gz" "/opt/tmp/xkeen-ui-$ARCH"
+    rm -f "/opt/tmp/xkeen-ui-static.tar.gz"
   fi
 
   sync & spinner $! "Запись данных..."
