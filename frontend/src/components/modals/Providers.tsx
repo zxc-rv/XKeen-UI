@@ -5,11 +5,14 @@ import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/comp
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { IconDatabase, IconRefresh, IconStack2 } from '@tabler/icons-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { clashFetch } from '../../lib/api'
+import { IconDatabase, IconEye, IconRefresh, IconStack2 } from '@tabler/icons-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { apiCall, clashFetch } from '../../lib/api'
 import { fetchClashProxies, useAppActions } from '../../lib/store'
 import { cn } from '../../lib/utils'
+
+const ruleContentCache = new Map<string, string>()
+const DIALOG_CLOSE_ANIMATION_MS = 220
 
 type ProvidersModalKind = 'rules' | 'proxies'
 
@@ -158,9 +161,40 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   const [reloading, setReloading] = useState(false)
   const [updatingAll, setUpdatingAll] = useState(false)
   const [updatingName, setUpdatingName] = useState('')
+  const [viewingName, setViewingName] = useState('')
+  const [viewContent, setViewContent] = useState<{ name: string; content: string } | null>(null)
+  const [viewContentOpen, setViewContentOpen] = useState(false)
+  const viewContentCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [proxyProviders, setProxyProviders] = useState<ProxyProvider[]>([])
   const [ruleProviders, setRuleProviders] = useState<RuleProvider[]>([])
   const title = kind === 'proxies' ? 'Провайдеры прокси' : 'Провайдеры правил'
+
+  const clearViewContentCloseTimer = useCallback(() => {
+    if (!viewContentCloseTimerRef.current) return
+    clearTimeout(viewContentCloseTimerRef.current)
+    viewContentCloseTimerRef.current = null
+  }, [])
+
+  useEffect(() => clearViewContentCloseTimer, [clearViewContentCloseTimer])
+
+  const openViewContent = useCallback(
+    (content: { name: string; content: string }) => {
+      clearViewContentCloseTimer()
+      setViewContent(content)
+      setViewContentOpen(true)
+    },
+    [clearViewContentCloseTimer]
+  )
+
+  const closeViewContent = useCallback(() => {
+    setViewContentOpen(false)
+    clearViewContentCloseTimer()
+    viewContentCloseTimerRef.current = setTimeout(() => {
+      viewContentCloseTimerRef.current = null
+      setViewContent(null)
+    }, DIALOG_CLOSE_ANIMATION_MS)
+  }, [clearViewContentCloseTimer])
+
   const loadProviders = useCallback(
     async (silent = false) => {
       if (!clashApiPort && !clashApiUnix) return
@@ -196,7 +230,10 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   )
 
   useEffect(() => {
-    if (open) void loadProviders()
+    if (!open) return
+
+    const timeoutId = setTimeout(() => void loadProviders(), 0)
+    return () => clearTimeout(timeoutId)
   }, [open, loadProviders])
 
   const rows = useMemo(() => (kind === 'proxies' ? proxyProviders : ruleProviders), [kind, proxyProviders, ruleProviders])
@@ -218,6 +255,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
         await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
       }
       await loadProviders(true)
+      ruleContentCache.delete(name)
       showToast(`Провайдер ${name} обновлён`)
     } catch (e) {
       showToast(`Не удалось обновить ${name}: ${e instanceof Error ? e.message : 'неизвестная ошибка'}`, 'error')
@@ -251,189 +289,251 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,850px)]">
-        <div className="flex max-h-[88dvh] flex-col gap-4 overflow-hidden md:max-h-[55dvh]">
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
-              {kind === 'proxies' ? <IconDatabase size={22} className="text-chart-2" /> : <IconStack2 size={22} className="text-chart-2" />}
-              {title}
-            </DialogTitle>
-          </DialogHeader>
+  async function viewProviderContent(provider: RuleProvider) {
+    if (ruleContentCache.has(provider.name)) {
+      openViewContent({ name: provider.name, content: ruleContentCache.get(provider.name)! })
+      return
+    }
+    setViewingName(provider.name)
+    try {
+      const params = new URLSearchParams({ name: provider.name })
+      if (provider.format) params.set('format', provider.format)
+      if (provider.behavior) params.set('behavior', provider.behavior)
+      if (provider.vehicleType) params.set('vehicleType', provider.vehicleType)
+      const res = await apiCall<{ success: boolean; error?: string; content?: string }>('GET', `rule-provider-content?${params.toString()}`)
+      if (!res.success || res.content === undefined) throw new Error(res.error ?? 'Нет данных')
+      ruleContentCache.set(provider.name, res.content)
+      openViewContent({ name: provider.name, content: res.content })
+    } catch (e) {
+      showToast(`Не удалось загрузить содержимое: ${e instanceof Error ? e.message : 'неизвестная ошибка'}`, 'error')
+    } finally {
+      setViewingName('')
+    }
+  }
 
-          <div className="border-border bg-input-background min-h-0 flex-1 overflow-auto rounded-xl border [scrollbar-width:thin]">
-            {loading ? (
-              <div className="p-4">
-                <LoadingTable kind={kind} />
-              </div>
-            ) : rows.length === 0 ? (
-              <Empty className="min-h-90 border-none">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    {kind === 'proxies' ? <IconDatabase className="size-8" /> : <IconStack2 className="size-8" />}
-                  </EmptyMedia>
-                  <EmptyTitle className="text-[16px] tracking-normal">Ничего не найдено</EmptyTitle>
-                </EmptyHeader>
-                <EmptyContent>
-                  <Button variant="ghost" size="sm" onClick={() => loadProviders()}>
-                    <IconRefresh data-icon="inline-start" className="size-4" />
-                    Повторить
-                  </Button>
-                </EmptyContent>
-              </Empty>
-            ) : kind === 'proxies' ? (
-              <Table className="min-w-25 text-[13px]! [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Название</TableHead>
-                    <TableHead>Тип</TableHead>
-                    <TableHead>Трафик</TableHead>
-                    <TableHead>Истекает</TableHead>
-                    <TableHead>Обновлено</TableHead>
-                    <TableHead className="w-28 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="hover:bg-transparent! hover:text-blue-400"
-                        onClick={updateAllProviders}
-                        disabled={loading || reloading || updatingAll || !httpProviderNames.length}
-                      >
-                        {updatingAll ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
-                      </Button>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {proxyProviders.map((provider) => {
-                    const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
-                    const traffic = getTrafficSummary(provider.subscriptionInfo)
-                    return (
-                      <TableRow key={provider.name}>
-                        <TableCell className="max-w-72">
-                          <div className="flex items-center gap-2">
-                            <div className="truncate font-medium">{provider.name}</div>
-                            <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
-                              {provider.proxies?.length ?? 0}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="ghost"
-                            className={cn(
-                              'rounded-full border-none px-2 text-xs',
-                              isHttp
-                                ? 'bg-green-500/10! text-green-400!'
-                                : normalizeVehicleType(provider.vehicleType) === 'FILE'
-                                  ? 'bg-orange-500/10! text-orange-400!'
-                                  : 'bg-blue-500/10! text-blue-400!'
-                            )}
-                          >
-                            {formatVehicleType(provider.vehicleType)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="min-w-42 font-medium tabular-nums">{traffic.total}</TableCell>
-                        <TableCell className="tabular-nums">{traffic.expire}</TableCell>
-                        <TableCell className="tabular-nums" title={provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}>
-                          {formatRelativeTime(provider.updatedAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {isHttp ? (
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              className="hover:bg-transparent! hover:text-blue-400"
-                              onClick={() => updateProvider(provider.name, provider.vehicleType)}
-                              disabled={!!updatingName}
-                            >
-                              {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
-                            </Button>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            ) : (
-              <Table className="min-w-100 text-[13px] [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">#</TableHead>
-                    <TableHead>Название</TableHead>
-                    <TableHead>Формат</TableHead>
-                    <TableHead>Поведение</TableHead>
-                    <TableHead>Обновлено</TableHead>
-                    <TableHead className="w-28 text-right">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="hover:bg-transparent! hover:text-blue-400"
-                        onClick={updateAllProviders}
-                        disabled={loading || reloading || updatingAll || !httpProviderNames.length}
-                      >
-                        {updatingAll ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
-                      </Button>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {ruleProviders.map((provider, index) => {
-                    const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
-                    const hasFormat = !!provider.format?.trim()
-                    const showUpdatedAt = normalizeVehicleType(provider.vehicleType) !== 'INLINE'
-                    return (
-                      <TableRow key={provider.name}>
-                        <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
-                        <TableCell className="max-w-84">
-                          <div className="flex items-center gap-2">
-                            <div className="truncate font-medium">{provider.name}</div>
-                            <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
-                              {provider.ruleCount ?? 0}
-                            </Badge>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {hasFormat ? (
-                            <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
-                              {FORMAT_LABELS[provider.format ?? ''] ?? provider.format}
-                            </Badge>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="ghost" className="rounded-full border-none bg-emerald-500/10! px-2 text-xs text-emerald-400!">
-                            {provider.behavior ?? ''}
-                          </Badge>
-                        </TableCell>
-                        <TableCell
-                          className="tabular-nums"
-                          title={showUpdatedAt && provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,850px)]">
+          <div className="flex max-h-[88dvh] flex-col gap-4 overflow-hidden md:max-h-[55dvh]">
+            <DialogHeader className="shrink-0">
+              <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
+                {kind === 'proxies' ? (
+                  <IconDatabase size={22} className="text-chart-2" />
+                ) : (
+                  <IconStack2 size={22} className="text-chart-2" />
+                )}
+                {title}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="border-border bg-input-background min-h-0 flex-1 overflow-auto rounded-xl border [scrollbar-width:thin]">
+              {loading ? (
+                <div className="p-4">
+                  <LoadingTable kind={kind} />
+                </div>
+              ) : rows.length === 0 ? (
+                <Empty className="min-h-90 border-none">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      {kind === 'proxies' ? <IconDatabase className="size-8" /> : <IconStack2 className="size-8" />}
+                    </EmptyMedia>
+                    <EmptyTitle className="text-[16px] tracking-normal">Ничего не найдено</EmptyTitle>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button variant="ghost" size="sm" onClick={() => loadProviders()}>
+                      <IconRefresh data-icon="inline-start" className="size-4" />
+                      Повторить
+                    </Button>
+                  </EmptyContent>
+                </Empty>
+              ) : kind === 'proxies' ? (
+                <Table className="min-w-25 text-[13px]! [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Название</TableHead>
+                      <TableHead>Тип</TableHead>
+                      <TableHead>Трафик</TableHead>
+                      <TableHead>Истекает</TableHead>
+                      <TableHead>Обновлено</TableHead>
+                      <TableHead className="w-28 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="hover:bg-transparent! hover:text-blue-400"
+                          onClick={updateAllProviders}
+                          disabled={loading || reloading || updatingAll || !httpProviderNames.length}
                         >
-                          {showUpdatedAt ? formatRelativeTime(provider.updatedAt) : ''}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {isHttp ? (
-                            <Button
+                          {updatingAll ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                        </Button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {proxyProviders.map((provider) => {
+                      const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
+                      const traffic = getTrafficSummary(provider.subscriptionInfo)
+                      return (
+                        <TableRow key={provider.name}>
+                          <TableCell className="max-w-72">
+                            <div className="flex items-center gap-2">
+                              <div className="truncate font-medium">{provider.name}</div>
+                              <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
+                                {provider.proxies?.length ?? 0}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
                               variant="ghost"
-                              size="icon-xs"
-                              className="hover:bg-transparent! hover:text-blue-400"
-                              onClick={() => updateProvider(provider.name, provider.vehicleType)}
-                              disabled={!!updatingName}
+                              className={cn(
+                                'rounded-full border-none px-2 text-xs',
+                                isHttp
+                                  ? 'bg-green-500/10! text-green-400!'
+                                  : normalizeVehicleType(provider.vehicleType) === 'FILE'
+                                    ? 'bg-orange-500/10! text-orange-400!'
+                                    : 'bg-blue-500/10! text-blue-400!'
+                              )}
                             >
-                              {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
-                            </Button>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            )}
+                              {formatVehicleType(provider.vehicleType)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="min-w-42 font-medium tabular-nums">{traffic.total}</TableCell>
+                          <TableCell className="tabular-nums">{traffic.expire}</TableCell>
+                          <TableCell className="tabular-nums" title={provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}>
+                            {formatRelativeTime(provider.updatedAt)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {isHttp ? (
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="hover:bg-transparent! hover:text-blue-400"
+                                onClick={() => updateProvider(provider.name, provider.vehicleType)}
+                                disabled={!!updatingName}
+                              >
+                                {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                              </Button>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              ) : (
+                <Table className="min-w-100 text-[13px] [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">#</TableHead>
+                      <TableHead>Название</TableHead>
+                      <TableHead>Формат</TableHead>
+                      <TableHead>Поведение</TableHead>
+                      <TableHead>Обновлено</TableHead>
+                      <TableHead className="w-28 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="hover:bg-transparent! hover:text-blue-400"
+                          onClick={updateAllProviders}
+                          disabled={loading || reloading || updatingAll || !httpProviderNames.length}
+                        >
+                          {updatingAll ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                        </Button>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ruleProviders.map((provider, index) => {
+                      const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
+                      const hasFormat = !!provider.format?.trim()
+                      const showUpdatedAt = normalizeVehicleType(provider.vehicleType) !== 'INLINE'
+                      return (
+                        <TableRow key={provider.name}>
+                          <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
+                          <TableCell className="max-w-84">
+                            <div className="flex items-center gap-2">
+                              <div className="truncate font-medium">{provider.name}</div>
+                              <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
+                                {provider.ruleCount ?? 0}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {hasFormat ? (
+                              <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
+                                {FORMAT_LABELS[provider.format ?? ''] ?? provider.format}
+                              </Badge>
+                            ) : null}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="ghost" className="rounded-full border-none bg-emerald-500/10! px-2 text-xs text-emerald-400!">
+                              {provider.behavior ?? ''}
+                            </Badge>
+                          </TableCell>
+                          <TableCell
+                            className="tabular-nums"
+                            title={showUpdatedAt && provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}
+                          >
+                            {showUpdatedAt ? formatRelativeTime(provider.updatedAt) : ''}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-0.5">
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                className="hover:bg-transparent! hover:text-blue-400"
+                                onClick={() => viewProviderContent(provider)}
+                                disabled={!!viewingName || !!updatingName}
+                              >
+                                {viewingName === provider.name ? <Spinner className="size-4" /> : <IconEye className="size-4" />}
+                              </Button>
+                              {isHttp ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="hover:bg-transparent! hover:text-blue-400"
+                                  onClick={() => updateProvider(provider.name, provider.vehicleType)}
+                                  disabled={!!updatingName}
+                                >
+                                  {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                                </Button>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={viewContentOpen && !!viewContent}
+        onOpenChange={(open) => {
+          if (!open) closeViewContent()
+        }}
+      >
+        <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,700px)]">
+          <div className="flex max-h-[88dvh] flex-col gap-4 overflow-hidden md:max-h-[55dvh]">
+            <DialogHeader className="shrink-0">
+              <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
+                <IconEye size={20} className="text-chart-2" />
+                {viewContent?.name}
+                <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
+                  {viewContent?.content.split('\n').filter(Boolean).length ?? 0}
+                </Badge>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="border-border bg-input-background min-h-0 flex-1 overflow-auto rounded-xl border [scrollbar-width:thin]">
+              <pre className="p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap">{viewContent?.content}</pre>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

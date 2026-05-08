@@ -6,6 +6,7 @@ mod controller;
 mod devices;
 mod geo;
 mod logger;
+mod rule_content;
 mod settings;
 mod types;
 mod updater;
@@ -176,6 +177,7 @@ async fn main() {
             get(settings::get_settings).patch(settings::patch_settings),
         )
         .route("/api/version", get(version::version_handler))
+        .route("/api/rule-provider-content", get(rule_content::get_rule_provider_content))
         .route("/api/device-list", get(devices::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))

@@ -10,8 +10,9 @@ chrono = "0.4"
 flate2 = "1.1"
 futures-util = "0.3"
 http = "1.4.0"
-ipnet = "2.11"
+ipnet = "2.12"
 memmap2 = "0.9"
+md5 = "0.8"
 nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource"] }
 notify = "8"
 prost = "0.14"
@@ -20,12 +21,13 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 rustix = { version = "1.1", features = ["fs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tar = "0.4.44"
+tar = "0.4.45"
 tokio = { version = "1",  features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "net"] }
-tokio-tungstenite = "0.26"
+tokio-tungstenite = "0.29"
 tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
+yaml-rust2 = { version = "0.11", default-features = false }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [profile.release]
