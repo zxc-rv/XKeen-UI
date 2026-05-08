@@ -140,13 +140,23 @@ function cacheSourceNameMisses(sourceIps: string[], retryAt: number): boolean {
   return changed
 }
 
+function getActiveSourceIPs(): Set<string> {
+  const ips = new Set<string>()
+  for (const conn of useConnectionsStore.getState().map.values()) {
+    const ip = conn.metadata.sourceIP
+    if (isResolvableSourceIP(ip)) ips.add(ip)
+  }
+  return ips
+}
+
 function scheduleSourceNameRetry() {
   if (sourceNameRetryTimer) clearTimeout(sourceNameRetryTimer)
 
+  const activeSourceIPs = getActiveSourceIPs()
   let nextRetryAt = Infinity
   const now = Date.now()
   for (const [ip, retryAt] of sourceNameRetryAt) {
-    if (!sourceNameCache.has(ip) || sourceNameCache.get(ip) !== null) {
+    if (!activeSourceIPs.has(ip) || !sourceNameCache.has(ip) || sourceNameCache.get(ip) !== null) {
       sourceNameRetryAt.delete(ip)
       continue
     }
@@ -175,11 +185,9 @@ function collectRefreshableSourceIPs(state: ConnectionsState, enabled: boolean):
 
   const ips = new Set<string>()
   const now = Date.now()
-  for (const connections of [state.map, state.closedMap]) {
-    for (const conn of connections.values()) {
-      const ip = conn.metadata.sourceIP
-      if (shouldRefreshSourceName(ip, now)) ips.add(ip)
-    }
+  for (const conn of state.map.values()) {
+    const ip = conn.metadata.sourceIP
+    if (shouldRefreshSourceName(ip, now)) ips.add(ip)
   }
   return Array.from(ips)
 }
