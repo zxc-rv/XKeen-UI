@@ -65,6 +65,7 @@ interface DeviceListHost {
   ip?: string
   ip6?: string[]
   name?: string
+  hostname?: string
 }
 
 interface DeviceListResponse {
@@ -221,7 +222,8 @@ async function refreshSourceNames(sourceIps: string[]) {
 
       const missingSet = new Set(missingIps)
       for (const host of data.host ?? []) {
-        const name = typeof host.name === 'string' ? host.name.trim() : ''
+        const name =
+          (typeof host.name === 'string' ? host.name.trim() : '') || (typeof host.hostname === 'string' ? host.hostname.trim() : '')
         const ips = [host.ip, ...(Array.isArray(host.ip6) ? host.ip6 : [])]
 
         for (const rawIp of ips) {
