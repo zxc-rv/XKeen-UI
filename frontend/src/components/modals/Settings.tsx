@@ -83,7 +83,7 @@ const clashApiSettings: ToggleSetting[] = [
     key: 'showSourceName',
     path: 'clash_api.show_source_name',
     title: 'Показывать имя источника',
-    description: 'Отображать имя клиента Keenetic вместо IP-адреса',
+    description: 'Отображать имя клиента Keenetic вместо IP-адреса. Требуется актуальная версия KeeneticOS',
   },
 ]
 

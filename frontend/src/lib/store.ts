@@ -28,7 +28,7 @@ const initialSettings: AppSettings = {
   githubProxies: [],
   pingTestUrl: DEFAULT_PING_TEST_URL,
   pingTestTimeout: DEFAULT_PING_TEST_TIMEOUT,
-  showSourceName: true,
+  showSourceName: false,
   timezone: 0,
   authEnabled: false,
 }

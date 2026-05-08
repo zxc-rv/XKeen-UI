@@ -178,7 +178,7 @@ impl Default for ClashApiSettings {
         Self {
             ping_url: "https://www.gstatic.com/generate_204".into(),
             ping_timeout: 5000,
-            show_source_name: true,
+            show_source_name: false,
         }
     }
 }
