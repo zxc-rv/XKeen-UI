@@ -9,7 +9,8 @@ use tokio::{
 };
 
 pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
-pub const APP_CONFIG: &str = "/opt/share/www/XKeen-UI/config.json";
+pub const APP_CONFIG: &str = "/opt/etc/xkeen/xkeen-ui.json";
+pub const APP_CONFIG_LEGACY: &str = "/opt/share/www/XKeen-UI/config.json";
 pub const XRAY_CONF: &str = "/opt/etc/xray/configs";
 pub const XRAY_ASSET: &str = "/opt/etc/xray/dat";
 pub const MIHOMO_CONF: &str = "/opt/etc/mihomo";

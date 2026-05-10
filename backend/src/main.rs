@@ -242,30 +242,33 @@ fn detect_core(init_file: Option<&str>) -> CoreInfo {
 }
 
 fn load_settings() -> AppSettings {
-    match std::fs::read_to_string(APP_CONFIG) {
+    let (content, path) = match std::fs::read_to_string(APP_CONFIG) {
+        Ok(c) => (c, APP_CONFIG),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            log(
-                "WARN",
-                format!(
-                    "Файл {} не найден, используются значения по умолчанию",
-                    APP_CONFIG
-                ),
-            );
-            AppSettings::default()
+            match std::fs::read_to_string(APP_CONFIG_LEGACY) {
+                Ok(c) => {
+                    match std::fs::rename(APP_CONFIG_LEGACY, APP_CONFIG) {
+                        Ok(_) => log("INFO", format!("Успешная миграция конфига: {} -> {}", APP_CONFIG_LEGACY, APP_CONFIG)),
+                        Err(e) => log("WARN", format!("Не удалось выполнить миграцию конфига: {}", e)),
+                    }
+                    (c, APP_CONFIG_LEGACY)
+                }
+                Err(_) => return AppSettings::default(),
+            }
         }
         Err(e) => {
             log("ERROR", format!("Ошибка чтения {}: {}", APP_CONFIG, e));
+            return AppSettings::default();
+        }
+    };
+    match serde_json::from_str::<AppSettings>(&content) {
+        Err(e) => {
+            log("ERROR", format!("Ошибка чтения {}: {}", path, e));
             AppSettings::default()
         }
-        Ok(content) => match serde_json::from_str::<AppSettings>(&content) {
-            Err(e) => {
-                log("ERROR", format!("Ошибка чтения {}: {}", APP_CONFIG, e));
-                AppSettings::default()
-            }
-            Ok(mut s) => {
-                s.normalize_proxies();
-                s
-            }
-        },
+        Ok(mut s) => {
+            s.normalize_proxies();
+            s
+        }
     }
 }
