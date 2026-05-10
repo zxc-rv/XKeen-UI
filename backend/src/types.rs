@@ -18,7 +18,6 @@ pub const DEFAULT_ERROR_LOG: &str = "/opt/var/log/xray/error.log";
 pub const DEFAULT_ACCESS_LOG: &str = "/opt/var/log/xray/access.log";
 pub const S99XKEEN: &str = "/opt/etc/init.d/S99xkeen";
 pub const S99XKEEN_UI: &str = "/opt/etc/init.d/S99xkeen-ui";
-pub const STATIC_DIR: &str = "/opt/share/www/XKeen-UI";
 pub const S24XRAY: &str = "/opt/etc/init.d/S24xray";
 
 pub type GeoCache = std::collections::HashMap<String, (std::time::SystemTime, bool, bool)>;

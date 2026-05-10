@@ -8,17 +8,16 @@ mod geo;
 mod logger;
 mod rule_content;
 mod settings;
+mod static_embed;
 mod types;
 mod updater;
 mod version;
 mod websocket;
 use crate::logger::{log, ts};
 use crate::types::*;
-use axum::http::{HeaderValue, header::CACHE_CONTROL};
 use axum::{
     Router, middleware,
-    response::Response,
-    routing::{any, get, get_service, post},
+    routing::{any, get, post},
 };
 use std::{
     env,
@@ -28,11 +27,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tokio::sync::broadcast;
-use tower_http::{
-    cors::CorsLayer,
-    services::{ServeDir, ServeFile},
-    set_header::SetResponseHeaderLayer,
-};
+use tower_http::cors::CorsLayer;
 
 #[tokio::main]
 async fn main() {
@@ -149,9 +144,6 @@ async fn main() {
     };
     version::start_update_checker(state.clone());
 
-    let no_cache =
-        SetResponseHeaderLayer::overriding(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-
     let protected = Router::new()
         .route(
             "/api/control",
@@ -206,19 +198,7 @@ async fn main() {
     let app = Router::new()
         .merge(protected)
         .merge(public_api)
-        .route(
-            "/",
-            get_service(ServeFile::new(format!("{}/index.html", STATIC_DIR))).layer(no_cache),
-        )
-        .fallback_service(get_service(ServeDir::new(STATIC_DIR)).layer(
-            SetResponseHeaderLayer::overriding(CACHE_CONTROL, |res: &Response| {
-                res.status()
-                    .is_success()
-                    .then_some(HeaderValue::from_static(
-                        "public, max-age=31536000, immutable",
-                    ))
-            }),
-        ))
+        .fallback(static_embed::serve)
         .layer(CorsLayer::permissive())
         .with_state(state);
 

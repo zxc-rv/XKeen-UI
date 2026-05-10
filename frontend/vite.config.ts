@@ -2,10 +2,11 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { defineConfig } from 'vite'
+import { compression } from 'vite-plugin-compression2'
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), compression({ exclude: /index.html$/, deleteOriginalAssets: true, algorithms: ['gzip'] })],
     resolve: {
       alias: { '@': path.resolve(__dirname, './src') },
     },

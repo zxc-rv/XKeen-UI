@@ -13,11 +13,13 @@ http = "1.4.0"
 ipnet = "2.12"
 memmap2 = "0.9"
 md5 = "0.8"
+mime_guess = "2"
 nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource"] }
 notify = "8"
 prost = "0.14"
 regex-lite = "0.1.9"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+rust-embed = { version = "8", features = ["axum"] }
 rustix = { version = "1.1", features = ["fs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

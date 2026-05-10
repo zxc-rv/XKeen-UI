@@ -351,38 +351,18 @@ pub async fn post_update(
             _ => return response(false, Some("Архитектура не поддерживается".into())),
         };
 
-        log("INFO", "Загрузка файлов...".into());
-        let (bin, stat) = (tmp_dir.join("bin.tmp"), tmp_dir.join("static.tmp"));
+        log("INFO", "Загрузка исполняемого файла...".into());
         let bin_url = format!(
             "{}/{}/releases/download/{}/xkeen-ui-{}",
             GITHUB_RELEASE, repo, ver, a
         );
-        let stat_url = format!(
-            "{}/{}/releases/download/{}/xkeen-ui-static.tar.gz",
-            GITHUB_RELEASE, repo, ver
-        );
-        let (b_res, s_res) = tokio::join!(
-            download(&state.http_client, &bin_url, &proxies, &bin),
-            download(&state.http_client, &stat_url, &proxies, &stat)
-        );
-        let (bin_d, stat_d) = match (b_res, s_res) {
-            (Ok(b), Ok(s)) => (b, s),
-            (Err(e), _) | (_, Err(e)) => return response(false, Some(e)),
+        let bin_d = match download(&state.http_client, &bin_url, &proxies, &tmp_dir.join("bin.tmp")).await {
+            Ok(d) => d,
+            Err(e) => return response(false, Some(e)),
         };
 
-        log("INFO", "Сохранение и распаковка файлов...".into());
+        log("INFO", "Сохранение файла...".into());
         let unpack = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-            if let Ok(e) = std::fs::read_dir(STATIC_DIR) {
-                for p in e.flatten().map(|x| x.path()) {
-                    if p.file_name().and_then(|n| n.to_str()).unwrap_or("") != "config.json" {
-                        _ = if p.is_dir() {
-                            std::fs::remove_dir_all(p)
-                        } else {
-                            std::fs::remove_file(p)
-                        };
-                    }
-                }
-            }
             let mut out = File::create(tmp_dir.join("xkeen-ui"))?;
             match bin_d {
                 DownloadResult::RAM(d) => out.write_all(&d)?,
@@ -391,19 +371,7 @@ pub async fn post_update(
                     _ = std::fs::remove_file(p);
                 }
             }
-
-            fn unpack<R: Read>(r: R) -> std::io::Result<()> {
-                tar::Archive::new(flate2::read::GzDecoder::new(r)).unpack(STATIC_DIR)
-            }
-
-            match &stat_d {
-                DownloadResult::RAM(d) => unpack(Cursor::new(d.clone()))?,
-                DownloadResult::Disk(p) => unpack(File::open(p)?)?,
-            };
-            if let DownloadResult::Disk(p) = stat_d {
-                _ = std::fs::remove_file(p);
-            }
-            Ok(())
+            out.sync_data()
         })
         .await;
 
