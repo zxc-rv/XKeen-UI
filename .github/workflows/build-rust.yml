@@ -7,7 +7,32 @@ on:
         required: true
         type: string
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+        with:
+          version: latest
+      - uses: actions/setup-node@v6
+        with:
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+          node-version: latest
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
   build:
+    needs: frontend
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -27,6 +52,13 @@ jobs:
             rustflags: "-C target-feature=+crt-static"
     steps:
       - uses: actions/checkout@v6
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
       - name: Set version
         run: |
           sed -i 's/^version = .*/version = "${{ inputs.version }}"/' backend/Cargo.toml
@@ -64,6 +96,12 @@ jobs:
         working-directory: backend
         run: cargo metadata --format-version 1
 
+      - name: Inject frontend dist for cross
+        working-directory: backend
+        run: |
+          cp -r ../frontend/dist ./dist
+          sed -i 's|\.\./frontend/dist|./dist|' src/frontend_embedder.rs
+
       - name: Build binary
         working-directory: backend
         env:
@@ -77,36 +115,9 @@ jobs:
           name: xkeen-ui-${{ matrix.name }}
           path: xkeen-ui-${{ matrix.name }}
 
-  static:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-        with:
-          version: latest
-      - uses: actions/setup-node@v6
-        with:
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-          node-version: latest
-
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          pnpm install
-          pnpm run build
-
-      - name: Pack static files
-        run: tar -czf xkeen-ui-static.tar.gz -C frontend/dist .
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: xkeen-ui-static
-          path: xkeen-ui-static.tar.gz
-
   release:
     runs-on: ubuntu-latest
-    needs: [build, static]
+    needs: build
     permissions:
       contents: write
     steps:
@@ -120,4 +131,4 @@ jobs:
         with:
           tag_name: ${{ inputs.version }}
           prerelease: true
-          files: artifacts/**/**
+          files: artifacts/xkeen-ui-*/*
