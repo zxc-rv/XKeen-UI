@@ -44,6 +44,7 @@ const initialState: AppState = {
   settings: initialSettings,
   version: '',
   isOutdatedUI: false,
+  isOutdatedCore: false,
   clashApiPort: null,
   clashApiSecret: null,
   clashApiUnix: null,
@@ -104,7 +105,7 @@ const useStore = create<StoreState>((set) => ({
         case 'SET_SETTINGS':
           return { settings: { ...state.settings, ...action.settings } }
         case 'SET_VERSION':
-          return { version: action.version, isOutdatedUI: action.isOutdatedUI }
+          return { version: action.version, isOutdatedUI: action.isOutdatedUI, isOutdatedCore: action.isOutdatedCore }
         case 'SET_DASHBOARD_PORT':
           return {
             clashApiPort: action.port,
@@ -181,6 +182,7 @@ const selectCoreState = (s: StoreState): CoreState => ({
   isConfigsLoading: s.isConfigsLoading,
   version: s.version,
   isOutdatedUI: s.isOutdatedUI,
+  isOutdatedCore: s.isOutdatedCore,
   clashApiPort: s.clashApiPort,
   clashApiSecret: s.clashApiSecret,
   clashApiUnix: s.clashApiUnix,

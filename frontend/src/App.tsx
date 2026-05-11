@@ -172,6 +172,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           type: 'SET_VERSION',
           version: data.appVersion.replace(/^v/i, ''),
           isOutdatedUI: !!data.outdated?.app,
+          isOutdatedCore: !!data.outdated?.core,
         })
 
         if (data.coreVersions) {

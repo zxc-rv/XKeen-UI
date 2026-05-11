@@ -87,6 +87,7 @@ export interface AppState {
   settings: AppSettings
   version: string
   isOutdatedUI: boolean
+  isOutdatedCore: boolean
   clashApiPort: string | null
   clashApiSecret: string | null
   clashApiUnix: string | null
@@ -118,7 +119,7 @@ export type AppAction =
   | { type: 'UPDATE_CONFIG_DIRTY'; index: number; isDirty: boolean; content?: string }
   | { type: 'SAVE_CONFIG'; index: number; content: string }
   | { type: 'SET_SETTINGS'; settings: Partial<AppSettings> }
-  | { type: 'SET_VERSION'; version: string; isOutdatedUI: boolean }
+  | { type: 'SET_VERSION'; version: string; isOutdatedUI: boolean; isOutdatedCore: boolean }
   | { type: 'SET_DASHBOARD_PORT'; port: string | null; secret?: string | null; unix?: string | null }
   | { type: 'SET_CONNECTIONS'; connections: Connection[]; wsConnected?: boolean }
   | { type: 'SET_WS_CONNECTED'; connected: boolean }

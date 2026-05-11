@@ -24,7 +24,7 @@ export function StatusBar({
   onLogout: () => void
 }) {
   const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
-  const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI, settings } = state
+  const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI, isOutdatedCore, settings } = state
   const authEnabled = settings.authEnabled
 
   const isRunning = serviceStatus === 'running'
@@ -174,6 +174,12 @@ export function StatusBar({
                   <span className="text-[13px]">{capitalize(currentCore)}</span>
                   {coreVersions[currentCore] && (
                     <span className="text-muted-foreground/60 mt-0.5 text-xs">{coreVersions[currentCore]}</span>
+                  )}
+                  {isOutdatedCore && (
+                    <span className="relative mb-3 -ml-0.75 flex">
+                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                      <span className="relative inline-flex size-1.75 rounded-full bg-blue-500" />
+                    </span>
                   )}
                 </Button>
               </TooltipTrigger>

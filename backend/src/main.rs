@@ -45,6 +45,16 @@ async fn main() {
                 println!("XKeen UI {} ({})", VERSION, get_arch());
                 exit(0);
             }
+            "--restart" | "--start" | "--stop" => {
+                let cmd = arg.trim_start_matches("--");
+                let _ = std::process::Command::new(S99XKEEN_UI)
+                    .arg(cmd)
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn();
+                exit(0);
+            }
             "--reset-password" => {
                 let content = std::fs::read_to_string(APP_CONFIG).unwrap_or_default();
                 let mut json: serde_json::Value =
