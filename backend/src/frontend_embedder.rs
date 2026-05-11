@@ -13,14 +13,21 @@ pub async fn serve(uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
     let path = if path.is_empty() { "index.html" } else { path };
 
-    let (lookup, is_gzipped) = match StaticFiles::get(&format!("{}.gz", path)) {
-        Some(file) => (file, true),
-        None => match StaticFiles::get(path) {
-            Some(file) => (file, false),
-            None => return spa_fallback(),
-        },
-    };
+    if let Some(file) = StaticFiles::get(&format!("{}.gz", path)) {
+        return build_res(path, file.data, true);
+    }
 
+    if let Some(file) = StaticFiles::get(path) {
+        return build_res(path, file.data, false);
+    }
+
+    Response::builder()
+        .status(404)
+        .body(Body::empty())
+        .unwrap()
+}
+
+fn build_res(path: &str, data: impl Into<Body>, is_gzipped: bool) -> Response {
     let mime = mime_guess::from_path(path).first_or_octet_stream();
     let cache = if path == "index.html" {
         "no-store"
@@ -36,19 +43,5 @@ pub async fn serve(uri: Uri) -> Response {
         builder = builder.header(header::CONTENT_ENCODING, "gzip");
     }
 
-    builder.body(Body::from(lookup.data)).unwrap()
-}
-
-fn spa_fallback() -> Response {
-    match StaticFiles::get("index.html") {
-        Some(file) => Response::builder()
-            .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-            .header(header::CACHE_CONTROL, "no-store")
-            .body(Body::from(file.data))
-            .unwrap(),
-        None => Response::builder()
-            .status(404)
-            .body(Body::empty())
-            .unwrap(),
-    }
+    builder.body(data.into()).unwrap()
 }

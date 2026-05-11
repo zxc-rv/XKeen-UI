@@ -320,7 +320,6 @@ fn collect_backup_files() -> io::Result<Vec<(PathBuf, String)>> {
     files.extend(collect_dir_files(XKEEN_CONF, &["lst", "json"])?);
     files.extend(collect_dir_files(XRAY_CONF, &["json"])?);
     files.extend(collect_dir_files(MIHOMO_CONF, &["yaml", "yml"])?);
-    files.extend(collect_single_file(APP_CONFIG)?);
     files.sort_by(|a, b| a.1.cmp(&b.1));
     Ok(files)
 }
@@ -343,14 +342,6 @@ fn collect_dir_files(dir: &str, exts: &[&str]) -> io::Result<Vec<(PathBuf, Strin
     }
 
     Ok(files)
-}
-
-fn collect_single_file(path: &str) -> io::Result<Vec<(PathBuf, String)>> {
-    let path = PathBuf::from(path);
-    if !path.exists() || !path.is_file() {
-        return Ok(Vec::new());
-    }
-    Ok(vec![(path.clone(), to_archive_relative(&path))])
 }
 
 fn matches_extension(path: &Path, exts: &[&str]) -> bool {

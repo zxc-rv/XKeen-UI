@@ -6,9 +6,9 @@ mod controller;
 mod devices;
 mod geo;
 mod logger;
-mod rule_content;
+mod ruleset_inspector;
 mod settings;
-mod static_embed;
+mod frontend_embedder;
 mod types;
 mod updater;
 mod version;
@@ -144,7 +144,7 @@ async fn main() {
     };
     version::start_update_checker(state.clone());
 
-    let protected = Router::new()
+    let secure_api = Router::new()
         .route(
             "/api/control",
             get(controller::get_control).post(controller::post_control),
@@ -169,7 +169,7 @@ async fn main() {
             get(settings::get_settings).patch(settings::patch_settings),
         )
         .route("/api/version", get(version::version_handler))
-        .route("/api/rule-provider-content", get(rule_content::get_rule_provider_content))
+        .route("/api/ruleset", get(ruleset_inspector::get_ruleset_content))
         .route("/api/device-list", get(devices::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))
@@ -188,7 +188,7 @@ async fn main() {
             }
         }));
 
-    let public_api = Router::new()
+    let unsecure_api = Router::new()
         .route("/api/auth/setup", post(auth::post_setup))
         .route(
             "/api/auth/login",
@@ -196,9 +196,9 @@ async fn main() {
         );
 
     let app = Router::new()
-        .merge(protected)
-        .merge(public_api)
-        .fallback(static_embed::serve)
+        .merge(secure_api)
+        .merge(unsecure_api)
+        .fallback(frontend_embedder::serve)
         .layer(CorsLayer::permissive())
         .with_state(state);
 

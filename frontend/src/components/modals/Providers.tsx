@@ -300,7 +300,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
       if (provider.format) params.set('format', provider.format)
       if (provider.behavior) params.set('behavior', provider.behavior)
       if (provider.vehicleType) params.set('vehicleType', provider.vehicleType)
-      const res = await apiCall<{ success: boolean; error?: string; content?: string }>('GET', `rule-provider-content?${params.toString()}`)
+      const res = await apiCall<{ success: boolean; error?: string; content?: string }>('GET', `ruleset?${params.toString()}`)
       if (!res.success || res.content === undefined) throw new Error(res.error ?? 'Нет данных')
       ruleContentCache.set(provider.name, res.content)
       openViewContent({ name: provider.name, content: res.content })

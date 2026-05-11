@@ -46,7 +46,6 @@ export async function clashFetch<T = unknown>(
 
   const maxAttempts = canRetry ? RETRY_DELAYS.length : 0
 
-  // Ретраим только GET-запросы если пришла 502/503/504 или отвалилась сеть
   for (let attempt = 0; attempt <= maxAttempts; attempt++) {
     let res: Response
     try {

@@ -18,7 +18,7 @@ pub struct RuleContentQuery {
     pub vehicle_type: Option<String>,
 }
 
-pub async fn get_rule_provider_content(
+pub async fn get_ruleset_content(
     State(_state): State<AppState>,
     Query(params): Query<RuleContentQuery>,
 ) -> Response {
@@ -40,7 +40,6 @@ pub async fn get_rule_provider_content(
         return error_response(format!("Провайдер '{}' не найден", params.name));
     }
 
-    // Без лишних выделений памяти чекаем INLINE
     if params
         .vehicle_type
         .as_deref()
@@ -63,7 +62,6 @@ pub async fn get_rule_provider_content(
     let final_path = match path {
         Some(p) => resolve_provider_path(p),
         None => match url {
-            // Вычисляем MD5 как нормальные пацаны, без спавна сабпроцессов
             Some(u) => format!("{}/rules/{:x}", MIHOMO_CONF, md5::compute(u)),
             None => return error_response("В провайдере нет ни path, ни url".into()),
         },
