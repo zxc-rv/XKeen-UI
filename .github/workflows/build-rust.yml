@@ -11,21 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v5
-        with:
-          version: latest
-      - uses: actions/setup-node@v6
-        with:
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-          node-version: latest
-
+      - uses: oven-sh/setup-bun@v2
       - name: Build frontend
         working-directory: frontend
-        run: |
-          pnpm install
-          pnpm run build
-
+        run: bun install && bun run build
       - uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
