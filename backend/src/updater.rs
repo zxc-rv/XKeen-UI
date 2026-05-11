@@ -356,7 +356,14 @@ pub async fn post_update(
             "{}/{}/releases/download/{}/xkeen-ui-{}",
             GITHUB_RELEASE, repo, ver, a
         );
-        let bin_d = match download(&state.http_client, &bin_url, &proxies, &tmp_dir.join("bin.tmp")).await {
+        let bin_d = match download(
+            &state.http_client,
+            &bin_url,
+            &proxies,
+            &tmp_dir.join("bin.tmp"),
+        )
+        .await
+        {
             Ok(d) => d,
             Err(e) => return response(false, Some(e)),
         };

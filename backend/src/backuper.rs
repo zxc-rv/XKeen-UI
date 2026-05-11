@@ -73,68 +73,64 @@ pub struct BackupReq {
     contents: Option<Vec<String>>,
 }
 
-pub async fn get_backups(State(state): State<AppState>) -> impl IntoResponse {
-    let tz = state.settings.read().unwrap().log.timezone;
-    match tokio::task::spawn_blocking(move || list_backups_sync(tz)).await {
-        Ok(Ok(backups)) => Json(ApiResponse {
+async fn run_blocking<T: Serialize>(
+    task: tokio::task::JoinHandle<Result<Option<T>, String>>,
+    err_msg: &str,
+) -> impl IntoResponse {
+    match task.await {
+        Ok(Ok(data)) => Json(ApiResponse {
             success: true,
             error: None,
-            data: Some(BackupListData { backups }),
+            data,
         })
         .into_response(),
-        Ok(Err(error)) => {
-            api_error(format!("Не удалось получить список бэкапов: {error}")).into_response()
-        }
-        Err(error) => {
-            api_error(format!("Не удалось получить список бэкапов: {error}")).into_response()
-        }
+        Ok(Err(e)) => api_error(format!("{err_msg}: {e}")).into_response(),
+        Err(e) => api_error(format!("{err_msg}: {e}")).into_response(),
     }
+}
+
+pub async fn get_backups(State(state): State<AppState>) -> impl IntoResponse {
+    let tz = state.settings.read().unwrap().log.timezone;
+    run_blocking(
+        tokio::task::spawn_blocking(move || {
+            list_backups_sync(tz).map(|backups| Some(BackupListData { backups }))
+        }),
+        "Не удалось получить список бэкапов",
+    )
+    .await
 }
 
 pub async fn put_backup(State(state): State<AppState>) -> impl IntoResponse {
     let tz = state.settings.read().unwrap().log.timezone;
-    match tokio::task::spawn_blocking(move || create_backup_sync(tz)).await {
-        Ok(Ok(backup)) => Json(ApiResponse {
-            success: true,
-            error: None,
-            data: Some(BackupData { backup }),
-        })
-        .into_response(),
-        Ok(Err(error)) => api_error(format!("Не удалось создать бэкап: {error}")).into_response(),
-        Err(error) => api_error(format!("Не удалось создать бэкап: {error}")).into_response(),
-    }
+    run_blocking(
+        tokio::task::spawn_blocking(move || {
+            create_backup_sync(tz).map(|backup| Some(BackupData { backup }))
+        }),
+        "Не удалось создать бэкап",
+    )
+    .await
 }
 
 pub async fn post_backup(Json(req): Json<BackupReq>) -> impl IntoResponse {
-    match tokio::task::spawn_blocking(move || restore_backup_sync(&req.name, req.contents)).await {
-        Ok(Ok(())) => Json(ApiResponse::<()> {
-            success: true,
-            error: None,
-            data: None,
-        })
-        .into_response(),
-        Ok(Err(error)) => {
-            api_error(format!("Не удалось восстановить бэкап: {error}")).into_response()
-        }
-        Err(error) => api_error(format!("Не удалось восстановить бэкап: {error}")).into_response(),
-    }
+    run_blocking(
+        tokio::task::spawn_blocking(move || {
+            restore_backup_sync(&req.name, req.contents).map(|_| None::<()>)
+        }),
+        "Не удалось восстановить бэкап",
+    )
+    .await
 }
 
 pub async fn delete_backup(Json(req): Json<BackupReq>) -> impl IntoResponse {
-    match tokio::task::spawn_blocking(move || delete_backup_sync(&req.name)).await {
-        Ok(Ok(())) => Json(ApiResponse::<()> {
-            success: true,
-            error: None,
-            data: None,
-        })
-        .into_response(),
-        Ok(Err(error)) => api_error(format!("Не удалось удалить бэкап: {error}")).into_response(),
-        Err(error) => api_error(format!("Не удалось удалить бэкап: {error}")).into_response(),
-    }
+    run_blocking(
+        tokio::task::spawn_blocking(move || delete_backup_sync(&req.name).map(|_| None::<()>)),
+        "Не удалось удалить бэкап",
+    )
+    .await
 }
 
 fn api_error(message: String) -> Json<ApiResponse<()>> {
-    Json(ApiResponse::<()> {
+    Json(ApiResponse {
         success: false,
         error: Some(message),
         data: None,
@@ -153,36 +149,32 @@ fn list_backups_sync(tz: i32) -> Result<Vec<BackupItem>, String> {
         }
 
         let metadata = match entry.metadata() {
-            Ok(metadata) => metadata,
-            Err(error) => {
+            Ok(md) => md,
+            Err(e) => {
                 log(
                     "WARN",
-                    format!(
-                        "Не удалось прочитать метаданные {}: {}",
-                        path.display(),
-                        error
-                    ),
+                    format!("Не удалось прочитать метаданные {}: {}", path.display(), e),
                 );
                 continue;
             }
         };
 
         let content = match inspect_backup_content(&path) {
-            Ok(result) => result,
-            Err(error) => {
+            Ok(res) => res,
+            Err(e) => {
                 log(
                     "WARN",
                     format!(
                         "Не удалось прочитать содержимое бэкапа {}: {}",
                         path.display(),
-                        error
+                        e
                     ),
                 );
                 BackupContentFiles::default()
             }
         };
 
-        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        let Some(name) = path.file_name().and_then(|v| v.to_str()) else {
             continue;
         };
 
@@ -208,7 +200,7 @@ fn create_backup_sync(tz: i32) -> Result<BackupItem, String> {
     let name = next_backup_name(tz);
     let final_path = Path::new(BACKUP_DIR).join(&name);
     let temp_path = final_path.with_extension("tar.tmp");
-    let content = collect_backup_content(files.iter().map(|(_, relative)| relative.as_str()));
+    let content = collect_backup_content(files.iter().map(|(_, rel)| rel.as_str()));
 
     let write_result = (|| -> io::Result<()> {
         let file = File::create(&temp_path)?;
@@ -261,9 +253,10 @@ fn restore_backup_sync(name: &str, requested_contents: Option<Vec<String>>) -> R
 
         let entry_path = entry.path().map_err(io_error)?;
         let relative = normalize_entry_path(entry_path.as_ref())
-            .map_err(|error| format!("невалидный путь в архиве: {error}"))?;
+            .map_err(|e| format!("невалидный путь в архиве: {e}"))?;
         let content = detect_content_key(&relative)
             .ok_or_else(|| format!("недопустимый путь в архиве: {relative}"))?;
+
         if requested_contents
             .as_ref()
             .is_some_and(|contents| !contents.contains(content))
@@ -312,7 +305,7 @@ fn ensure_backup_dir() -> io::Result<()> {
 }
 
 fn is_tar_file(path: &Path) -> bool {
-    path.is_file() && is_backup_name(path.file_name().and_then(|value| value.to_str()))
+    path.is_file() && is_backup_name(path.file_name().and_then(|v| v.to_str()))
 }
 
 fn collect_backup_files() -> io::Result<Vec<(PathBuf, String)>> {
@@ -328,8 +321,8 @@ fn collect_dir_files(dir: &str, exts: &[&str]) -> io::Result<Vec<(PathBuf, Strin
     let mut files = Vec::new();
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(files),
-        Err(error) => return Err(error),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(files),
+        Err(e) => return Err(e),
     };
 
     for entry in entries {
@@ -346,8 +339,8 @@ fn collect_dir_files(dir: &str, exts: &[&str]) -> io::Result<Vec<(PathBuf, Strin
 
 fn matches_extension(path: &Path, exts: &[&str]) -> bool {
     path.extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|value| exts.iter().any(|ext| value.eq_ignore_ascii_case(ext)))
+        .and_then(|v| v.to_str())
+        .is_some_and(|v| exts.iter().any(|ext| v.eq_ignore_ascii_case(ext)))
 }
 
 fn to_archive_relative(path: &Path) -> String {
@@ -412,7 +405,7 @@ fn validate_backup_entries(path: &Path) -> Result<(), String> {
 
         let entry_path = entry.path().map_err(io_error)?;
         let relative = normalize_entry_path(entry_path.as_ref())
-            .map_err(|error| format!("невалидный путь в архиве: {error}"))?;
+            .map_err(|e| format!("невалидный путь в архиве: {e}"))?;
         if archive_relative_to_target(&relative).is_none() {
             return Err(format!("недопустимый путь в архиве: {relative}"));
         }
@@ -453,21 +446,21 @@ fn detect_content_key(relative: &str) -> Option<&'static str> {
         return Some("xkeen-ui");
     }
 
-    let xkeen_prefix = format!("{}/", XKEEN_CONF.trim_start_matches('/'));
-    if let Some(name) = relative.strip_prefix(&xkeen_prefix) {
-        return (!name.contains('/') && matches_file_name(name, &["lst", "json"]))
-            .then_some("xkeen");
-    }
+    let check_prefix = |prefix: &str, exts: &[&str]| {
+        relative
+            .strip_prefix(prefix.trim_start_matches('/'))
+            .map(|rest| rest.trim_start_matches('/'))
+            .filter(|name| !name.contains('/') && matches_file_name(name, exts))
+    };
 
-    let xray_prefix = format!("{}/", XRAY_CONF.trim_start_matches('/'));
-    if let Some(name) = relative.strip_prefix(&xray_prefix) {
-        return (!name.contains('/') && matches_file_name(name, &["json"])).then_some("xray");
+    if check_prefix(XKEEN_CONF, &["lst", "json"]).is_some() {
+        return Some("xkeen");
     }
-
-    let mihomo_prefix = format!("{}/", MIHOMO_CONF.trim_start_matches('/'));
-    if let Some(name) = relative.strip_prefix(&mihomo_prefix) {
-        return (!name.contains('/') && matches_file_name(name, &["yaml", "yml"]))
-            .then_some("mihomo");
+    if check_prefix(XRAY_CONF, &["json"]).is_some() {
+        return Some("xray");
+    }
+    if check_prefix(MIHOMO_CONF, &["yaml", "yml"]).is_some() {
+        return Some("mihomo");
     }
 
     None
@@ -476,8 +469,8 @@ fn detect_content_key(relative: &str) -> Option<&'static str> {
 fn matches_file_name(name: &str, exts: &[&str]) -> bool {
     Path::new(name)
         .extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|value| exts.iter().any(|ext| value.eq_ignore_ascii_case(ext)))
+        .and_then(|v| v.to_str())
+        .is_some_and(|v| exts.iter().any(|ext| v.eq_ignore_ascii_case(ext)))
 }
 
 fn normalize_requested_contents(
@@ -505,7 +498,7 @@ fn parse_content_key(value: &str) -> Option<&'static str> {
     CONTENT_ORDER
         .iter()
         .copied()
-        .find(|content| *content == value)
+        .find(|&content| content == value)
 }
 
 fn validate_restored_contents(
@@ -519,7 +512,7 @@ fn validate_restored_contents(
     let missing = CONTENT_ORDER
         .iter()
         .copied()
-        .filter(|content| {
+        .filter(|&content| {
             requested_contents.contains(content) && !restored_contents.contains(content)
         })
         .map(content_label)
@@ -563,7 +556,7 @@ fn content_file_name(key: &str, relative: &str) -> String {
         "mihomo" => strip_content_prefix(relative, MIHOMO_CONF),
         "xkeen-ui" => Path::new(relative)
             .file_name()
-            .and_then(|value| value.to_str())
+            .and_then(|v| v.to_str())
             .unwrap_or(relative)
             .to_string(),
         _ => relative.to_string(),
@@ -572,7 +565,8 @@ fn content_file_name(key: &str, relative: &str) -> String {
 
 fn strip_content_prefix(relative: &str, root: &str) -> String {
     relative
-        .strip_prefix(&format!("{}/", root.trim_start_matches('/')))
+        .strip_prefix(root.trim_start_matches('/'))
+        .map(|rest| rest.trim_start_matches('/'))
         .unwrap_or(relative)
         .to_string()
 }
@@ -588,7 +582,7 @@ fn restore_log_message(
     let contents = CONTENT_ORDER
         .iter()
         .copied()
-        .filter(|content| requested_contents.contains(content))
+        .filter(|&content| requested_contents.contains(content))
         .map(content_label)
         .collect::<Vec<_>>()
         .join(", ");
@@ -618,8 +612,8 @@ fn format_backup_date(name: &str, modified: Option<SystemTime>, tz: i32) -> Stri
     }
     modified
         .map(DateTime::<Utc>::from)
-        .map(|value| value.with_timezone(&backup_offset(tz)))
-        .map(|value| value.format("%d.%m.%Y %H:%M:%S").to_string())
+        .map(|v| v.with_timezone(&backup_offset(tz)))
+        .map(|v| v.format("%d.%m.%Y %H:%M:%S").to_string())
         .unwrap_or_else(|| name.to_string())
 }
 
@@ -628,7 +622,7 @@ fn io_error(error: io::Error) -> String {
 }
 
 fn is_backup_name(name: Option<&str>) -> bool {
-    name.is_some_and(|value| value.ends_with(BACKUP_SUFFIX))
+    name.is_some_and(|v| v.ends_with(BACKUP_SUFFIX))
 }
 
 fn backup_now(tz: i32) -> DateTime<FixedOffset> {

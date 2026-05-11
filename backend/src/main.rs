@@ -4,11 +4,11 @@ mod clash;
 mod configs;
 mod controller;
 mod devices;
+mod frontend_embedder;
 mod geo;
 mod logger;
 mod ruleset_inspector;
 mod settings;
-mod frontend_embedder;
 mod types;
 mod updater;
 mod version;
@@ -228,7 +228,11 @@ fn get_arch() -> String {
     } else {
         std::env::consts::ARCH
     };
-    let libc = if cfg!(target_env = "musl") { "musl" } else { "gnu" };
+    let libc = if cfg!(target_env = "musl") {
+        "musl"
+    } else {
+        "gnu"
+    };
     format!("{}/{}", arch, libc)
 }
 
@@ -258,8 +262,17 @@ fn load_settings() -> AppSettings {
             match std::fs::read_to_string(APP_CONFIG_LEGACY) {
                 Ok(c) => {
                     match std::fs::rename(APP_CONFIG_LEGACY, APP_CONFIG) {
-                        Ok(_) => log("INFO", format!("Успешная миграция конфига: {} -> {}", APP_CONFIG_LEGACY, APP_CONFIG)),
-                        Err(e) => log("WARN", format!("Не удалось выполнить миграцию конфига: {}", e)),
+                        Ok(_) => log(
+                            "INFO",
+                            format!(
+                                "Успешная миграция конфига: {} -> {}",
+                                APP_CONFIG_LEGACY, APP_CONFIG
+                            ),
+                        ),
+                        Err(e) => log(
+                            "WARN",
+                            format!("Не удалось выполнить миграцию конфига: {}", e),
+                        ),
                     }
                     (c, APP_CONFIG_LEGACY)
                 }
