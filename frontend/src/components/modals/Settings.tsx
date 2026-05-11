@@ -66,7 +66,7 @@ const updateSettings: ToggleSetting[] = [
     key: 'autoCheckCore',
     path: 'updater.auto_check_core',
     title: 'Автопроверка (ядро)',
-    description: 'Фоновая проверка обновлений ядра с интервалом в 12 часов',
+    description: 'Фоновая проверка обновлений ядра с интервалом в 4 часа',
   },
   {
     id: 'backup',
@@ -457,7 +457,7 @@ export function SettingsModal() {
         </DialogHeader>
 
         <Tabs defaultValue="general" className="flex flex-1 flex-col overflow-hidden">
-          <div className="overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="[scrollbar-width:none] overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <TabsList
               variant="line"
               className="border-border w-max shrink-0 justify-start gap-3 rounded-none border-b px-0 whitespace-nowrap"

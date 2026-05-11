@@ -97,7 +97,7 @@ pub fn start_update_checker(state: AppState) {
                     need(
                         s.updater.auto_check_core,
                         &state.update_checker.last_core_check,
-                        43200,
+                        14400,
                     ),
                     s.updater.github_proxy.clone(),
                 )
