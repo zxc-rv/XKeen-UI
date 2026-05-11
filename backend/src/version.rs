@@ -104,22 +104,27 @@ pub fn start_update_checker(state: AppState) {
             };
 
             if check_ui {
+                let cur = VERSION.trim_start_matches('v');
                 if let Some(latest) =
-                    updater::fetch_latest_version(&state.http_client, "self", &proxies).await
+                    updater::fetch_latest_version(&state.http_client, "self", &proxies, Some(cur))
+                        .await
                 {
                     *state.update_checker.ui_outdated.write().unwrap() =
-                        compare_versions(&latest, VERSION.trim_start_matches('v'));
+                        compare_versions(&latest, cur);
                 }
                 *state.update_checker.last_ui_check.write().unwrap() = Some(Instant::now());
             }
 
             if check_core {
                 let core = state.core.read().unwrap().name.clone();
+                let cur_opt = get_local_core_version(&core).await;
+                let cur_str = cur_opt.as_deref().map(|v| v.trim_start_matches('v'));
+
                 if let Some(latest) =
-                    updater::fetch_latest_version(&state.http_client, &core, &proxies).await
+                    updater::fetch_latest_version(&state.http_client, &core, &proxies, cur_str)
+                        .await
                 {
-                    if let Some(cur) = get_local_core_version(&core).await {
-                        let cur = cur.trim_start_matches('v');
+                    if let Some(cur) = cur_str {
                         if !cur.is_empty() {
                             *state.update_checker.core_outdated.write().unwrap() =
                                 compare_versions(&latest, cur);
@@ -133,8 +138,8 @@ pub fn start_update_checker(state: AppState) {
 }
 
 fn compare_versions(latest: &str, current: &str) -> bool {
-    if current.to_lowercase().contains("alpha") {
-        return false;
+    if current.to_lowercase().contains("alpha") || latest.to_lowercase().contains("alpha") {
+        return latest != current;
     }
 
     let parse = |v: &str| {

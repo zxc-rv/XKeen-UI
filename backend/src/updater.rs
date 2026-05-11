@@ -22,10 +22,17 @@ const GITHUB_API: &str = "https://api.github.com/repos";
 const GITHUB_RELEASE: &str = "https://github.com";
 
 #[derive(Deserialize)]
+struct GhAsset {
+    name: String,
+}
+
+#[derive(Deserialize)]
 struct GhRelease {
     tag_name: String,
     #[serde(default)]
     prerelease: bool,
+    #[serde(default)]
+    assets: Vec<GhAsset>,
 }
 
 enum DownloadResult {
@@ -46,6 +53,7 @@ pub async fn fetch_latest_version(
     client: &reqwest::Client,
     core: &str,
     proxies: &[String],
+    current_ver: Option<&str>,
 ) -> Option<String> {
     let repo = get_repo(core)?;
     let url = format!("{}/{}/releases?per_page=10", GITHUB_API, repo);
@@ -56,6 +64,8 @@ pub async fn fetch_latest_version(
             .filter(|p| !p.is_empty())
             .map(|p| format!("{}/{}", p.trim_end_matches('/'), url)),
     );
+
+    let is_alpha = current_ver.map_or(false, |v| v.contains("alpha"));
 
     for u in list {
         let res = match client
@@ -79,6 +89,20 @@ pub async fn fetch_latest_version(
             Ok(v) => v,
             Err(_) => continue,
         };
+
+        if is_alpha && core == "mihomo" {
+            if let Some(r) = rels.iter().find(|r| r.tag_name == "Prerelease-Alpha") {
+                for asset in &r.assets {
+                    if let Some(idx) = asset.name.find("alpha-") {
+                        let hash = asset.name[idx..]
+                            .trim_end_matches(".gz")
+                            .trim_end_matches(".zip");
+                        return Some(hash.to_string());
+                    }
+                }
+            }
+        }
+
         if let Some(r) = rels.into_iter().find(|r| !r.prerelease) {
             return Some(r.tag_name.trim_start_matches('v').to_string());
         }
