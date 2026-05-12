@@ -125,9 +125,8 @@ pub async fn get_configs(
     if let Ok(mut entries) = tokio::fs::read_dir(XKEEN_CONF).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
-            if path
-                .extension()
-                .map_or(false, |e| e == "lst" || e == "json")
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if path.extension().map_or(false, |e| e == "lst") || name == "xkeen.json"
             {
                 if let Ok(content) = tokio::fs::read_to_string(&path).await {
                     lst_configs.push(ConfigItem {
