@@ -76,7 +76,7 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 
 pub fn start_update_checker(state: AppState) {
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
         loop {
             interval.tick().await;
 
@@ -106,23 +106,19 @@ pub fn start_update_checker(state: AppState) {
             if check_ui {
                 let cur = VERSION.trim_start_matches('v');
                 if let Some(latest) =
-                    updater::fetch_latest_version(&state.http_client, "self", &proxies, Some(cur))
-                        .await
+                    updater::fetch_latest_version(&state.http_client, "self", &proxies, Some(cur)).await
                 {
-                    *state.update_checker.ui_outdated.write().unwrap() =
-                        compare_versions(&latest, cur);
+                    *state.update_checker.ui_outdated.write().unwrap() = compare_versions(&latest, cur);
+                    *state.update_checker.last_ui_check.write().unwrap() = Some(Instant::now());
                 }
-                *state.update_checker.last_ui_check.write().unwrap() = Some(Instant::now());
             }
 
             if check_core {
                 let core = state.core.read().unwrap().name.clone();
                 let cur_opt = get_local_core_version(&core).await;
                 let cur_str = cur_opt.as_deref().map(|v| v.trim_start_matches('v'));
-
                 if let Some(latest) =
-                    updater::fetch_latest_version(&state.http_client, &core, &proxies, cur_str)
-                        .await
+                    updater::fetch_latest_version(&state.http_client, &core, &proxies, cur_str).await
                 {
                     if let Some(cur) = cur_str {
                         if !cur.is_empty() {
@@ -130,8 +126,8 @@ pub fn start_update_checker(state: AppState) {
                                 compare_versions(&latest, cur);
                         }
                     }
+                    *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
                 }
-                *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
             }
         }
     });
