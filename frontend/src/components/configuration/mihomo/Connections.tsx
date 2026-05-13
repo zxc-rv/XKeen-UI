@@ -93,7 +93,7 @@ let sourceNameRetryTimer: ReturnType<typeof setTimeout> | null = null
 let sourceNameRequest: Promise<void> | null = null
 const useSourceNameStore = create<{ version: number }>(() => ({ version: 0 }))
 
-const MAX_CLOSED_CONNECTIONS = 500
+const MAX_CLOSED_CONNECTIONS = 1000
 
 subscribeConnections((connections) => {
   const newMap = toMap(connections)
