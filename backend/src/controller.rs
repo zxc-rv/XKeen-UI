@@ -195,28 +195,14 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
         };
         let alt_string = alt_core.to_string();
 
-        current_core = if !tokio::task::spawn_blocking(move || get_pid(&alt_string))
+        if !tokio::task::spawn_blocking(move || get_pid(&alt_string))
             .await
             .unwrap_or_default()
             .is_empty()
         {
-            get_core_info(alt_core)
-        } else {
-            let configuration = {
-                let path = state.init_file.read().unwrap().clone();
-                if let Some(p) = path {
-                    tokio::fs::read_to_string(p).await.unwrap_or_default()
-                } else {
-                    String::new()
-                }
-            };
-            get_core_info(if configuration.contains("name_client=\"mihomo\"") {
-                "mihomo"
-            } else {
-                "xray"
-            })
-        };
-        *state.core.write().unwrap() = current_core.clone();
+            current_core = get_core_info(alt_core);
+            *state.core.write().unwrap() = current_core.clone();
+        }
     }
 
     let ((xray_exists, xray_running), (mihomo_exists, mihomo_running)) = tokio::join!(
