@@ -88,7 +88,6 @@ const useConnectionsStore = create<ConnectionsState>(() => ({
 
 const SOURCE_NAME_MISS_RETRY_MS = 3000
 const SOURCE_NAME_CACHE_CAP = 1000
-const ASN_CACHE_CAP = 1000
 const sourceNameCache = new Map<string, string | null>()
 const sourceNameRetryAt = new Map<string, number>()
 let sourceNameRetryTimer: ReturnType<typeof setTimeout> | null = null
@@ -685,13 +684,11 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn, showSour
         if (!alive) return
         const text = formatAsn(data)
         asnCache.set(asnIp, text)
-        trimMap(asnCache, ASN_CACHE_CAP)
         setAsnText(text)
       })
       .catch(() => {
         if (!alive) return
         asnCache.set(asnIp, null)
-        trimMap(asnCache, ASN_CACHE_CAP)
         setAsnText(null)
       })
       .finally(() => {
