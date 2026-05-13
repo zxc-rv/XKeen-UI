@@ -51,24 +51,21 @@ pub fn process_log_line(line: String, tz: i32) -> String {
                 .unwrap_or(caps[1].into());
             out = format!("{} [{}] {}", ts, caps[2].to_uppercase(), &caps[3]);
         }
-    } else if out.chars().count() > 19 {
-        let chars: Vec<char> = out.chars().collect();
-        if chars.len() > 4 && chars[4] == '/' {
-            let date_part: String = chars[..19].iter().collect();
-            if let Ok(t) = NaiveDateTime::parse_from_str(&date_part, "%Y/%m/%d %H:%M:%S") {
-                let rest_chars: Vec<char> = chars[19..].iter().cloned().collect();
-                let new_rest = if !rest_chars.is_empty()
-                    && rest_chars[0] == '.'
-                    && rest_chars.len() >= 10
-                    && rest_chars[1..10].iter().all(|c| c.is_digit(10))
-                {
-                    let mut nr = rest_chars[0..7].iter().collect::<String>();
-                    nr.push_str(&rest_chars[10..].iter().collect::<String>());
-                    nr
+    } else {
+        let bytes = out.as_bytes();
+        if bytes.len() > 19 && bytes[4] == b'/' && out.is_char_boundary(19) {
+            if let Ok(t) = NaiveDateTime::parse_from_str(&out[..19], "%Y/%m/%d %H:%M:%S") {
+                let rest = &out[19..];
+                let rest_bytes = rest.as_bytes();
+                let trim_micros = rest_bytes.len() >= 10
+                    && rest_bytes[0] == b'.'
+                    && rest_bytes[1..10].iter().all(|b| b.is_ascii_digit());
+                let formatted_ts = (t + offset).format("%Y/%m/%d %H:%M:%S").to_string();
+                out = if trim_micros {
+                    format!("{}{}{}", formatted_ts, &rest[..7], &rest[10..])
                 } else {
-                    rest_chars.iter().collect()
+                    format!("{}{}", formatted_ts, rest)
                 };
-                out = format!("{}{}", (t + offset).format("%Y/%m/%d %H:%M:%S"), new_rest);
             }
         }
     }
