@@ -12,6 +12,16 @@ import { useWebSocket } from '../../lib/websocket'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']
+const MAX_LOG_LINES = 2000
+
+function trimToCap(el: HTMLDivElement, lines: string[]): void {
+  if (lines.length <= MAX_LOG_LINES) return
+  const drop = lines.length - MAX_LOG_LINES
+  lines.splice(0, drop)
+  for (let i = 0; i < drop && el.firstChild; i++) {
+    el.removeChild(el.firstChild)
+  }
+}
 
 export function LogPanel() {
   const timezone = useSettings((s) => s.timezone)
@@ -48,11 +58,12 @@ export function LogPanel() {
     const el = logRef.current
     if (!el) return
 
-    linesRef.current = lines
-    const hasLines = lines.length > 0
+    const capped = lines.length > MAX_LOG_LINES ? lines.slice(lines.length - MAX_LOG_LINES) : lines
+    linesRef.current = capped
+    const hasLines = capped.length > 0
 
     setIsEmpty(!hasLines)
-    el.innerHTML = hasLines ? lines.join('') : ''
+    el.innerHTML = hasLines ? capped.join('') : ''
 
     if (hasLines && autoScrollRef.current) {
       el.scrollTop = el.scrollHeight
@@ -67,6 +78,7 @@ export function LogPanel() {
     setIsEmpty(false)
     linesRef.current.push(...newLines)
     el.insertAdjacentHTML('beforeend', newLines.join(''))
+    trimToCap(el, linesRef.current)
 
     if (autoScrollRef.current) el.scrollTop = el.scrollHeight
   }, [])
