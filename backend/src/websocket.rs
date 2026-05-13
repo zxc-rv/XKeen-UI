@@ -125,13 +125,13 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             }
             let tx = state.log_tx.clone();
             let handle = tokio::spawn(async move {
-                let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
+                let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel::<String>(32);
                 let mut watcher =
                     notify::recommended_watcher(move |res: Result<notify::Event, _>| {
                         if let Ok(e) = res {
                             if e.kind.is_modify() {
                                 for path in e.paths {
-                                    let _ = mpsc_tx.send(path.to_string_lossy().to_string());
+                                    let _ = mpsc_tx.try_send(path.to_string_lossy().to_string());
                                 }
                             }
                         }

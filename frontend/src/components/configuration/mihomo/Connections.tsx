@@ -87,11 +87,21 @@ const useConnectionsStore = create<ConnectionsState>(() => ({
 }))
 
 const SOURCE_NAME_MISS_RETRY_MS = 3000
+const SOURCE_NAME_CACHE_CAP = 1000
 const sourceNameCache = new Map<string, string | null>()
 const sourceNameRetryAt = new Map<string, number>()
 let sourceNameRetryTimer: ReturnType<typeof setTimeout> | null = null
 let sourceNameRequest: Promise<void> | null = null
 const useSourceNameStore = create<{ version: number }>(() => ({ version: 0 }))
+
+function trimMap<K, V>(map: Map<K, V>, cap: number) {
+  while (map.size > cap) {
+    const firstKey = map.keys().next().value
+    if (firstKey === undefined) break
+    map.delete(firstKey)
+  }
+}
+const MAX_CLOSED_CONNECTIONS = 1000
 
 subscribeConnections((connections) => {
   const newMap = toMap(connections)
@@ -101,6 +111,15 @@ subscribeConnections((connections) => {
     if (!newMap.has(id) && !prevClosed.has(id)) {
       if (nextClosed === prevClosed) nextClosed = new Map(prevClosed)
       nextClosed.set(id, conn)
+    }
+  }
+  if (nextClosed !== prevClosed && nextClosed.size > MAX_CLOSED_CONNECTIONS) {
+    const excess = nextClosed.size - MAX_CLOSED_CONNECTIONS
+    const iter = nextClosed.keys()
+    for (let i = 0; i < excess; i++) {
+      const key = iter.next().value
+      if (key === undefined) break
+      nextClosed.delete(key)
     }
   }
   useConnectionsStore.setState({ map: newMap, closedMap: nextClosed })
@@ -125,10 +144,14 @@ function cacheSourceName(ip: string, name: string | null, retryAt?: number): boo
   const prevRetryAt = sourceNameRetryAt.get(ip)
   const hadCache = sourceNameCache.has(ip)
 
+  if (hadCache) sourceNameCache.delete(ip)
   sourceNameCache.set(ip, name)
   if (name) sourceNameRetryAt.delete(ip)
   else if (retryAt) sourceNameRetryAt.set(ip, retryAt)
   else sourceNameRetryAt.delete(ip)
+
+  trimMap(sourceNameCache, SOURCE_NAME_CACHE_CAP)
+  trimMap(sourceNameRetryAt, SOURCE_NAME_CACHE_CAP)
 
   return !hadCache || prevName !== name || prevRetryAt !== sourceNameRetryAt.get(ip)
 }
