@@ -136,6 +136,33 @@ pub fn get_pid(name: &str) -> Vec<i32> {
         .collect()
 }
 
+const PID_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(2);
+
+pub async fn get_pid_cached(state: &AppState, name: &str) -> Vec<i32> {
+    if let Some(cached) = {
+        let cache = state.pid_cache.read().unwrap();
+        cache
+            .get(name)
+            .filter(|(_, ts)| ts.elapsed() < PID_CACHE_TTL)
+            .map(|(pids, _)| pids.clone())
+    } {
+        return cached;
+    }
+    let name_owned = name.to_string();
+    let pids = tokio::task::spawn_blocking(move || get_pid(&name_owned))
+        .await
+        .unwrap_or_default();
+    state.pid_cache.write().unwrap().insert(
+        name.to_string(),
+        (pids.clone(), std::time::Instant::now()),
+    );
+    pids
+}
+
+pub fn invalidate_pid_cache(state: &AppState) {
+    state.pid_cache.write().unwrap().clear();
+}
+
 pub async fn soft_restart(core: &str) {
     for pid in get_pid(core) {
         _ = kill(Pid::from_raw(pid), Signal::SIGKILL);
@@ -183,23 +210,14 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     let mut current_core = state.core.read().unwrap().clone();
     let core_name = current_core.name.clone();
 
-    if tokio::task::spawn_blocking(move || get_pid(&core_name))
-        .await
-        .unwrap_or_default()
-        .is_empty()
-    {
+    if get_pid_cached(&state, &core_name).await.is_empty() {
         let alt_core = if current_core.name == "mihomo" {
             "xray"
         } else {
             "mihomo"
         };
-        let alt_string = alt_core.to_string();
 
-        current_core = if !tokio::task::spawn_blocking(move || get_pid(&alt_string))
-            .await
-            .unwrap_or_default()
-            .is_empty()
-        {
+        current_core = if !get_pid_cached(&state, alt_core).await.is_empty() {
             get_core_info(alt_core)
         } else {
             let configuration = {
@@ -222,18 +240,12 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     let ((xray_exists, xray_running), (mihomo_exists, mihomo_running)) = tokio::join!(
         async {
             let exists = tokio::fs::metadata("/opt/sbin/xray").await.is_ok();
-            let running = exists
-                && tokio::task::spawn_blocking(|| !get_pid("xray").is_empty())
-                    .await
-                    .unwrap_or(false);
+            let running = exists && !get_pid_cached(&state, "xray").await.is_empty();
             (exists, running)
         },
         async {
             let exists = tokio::fs::metadata("/opt/sbin/mihomo").await.is_ok();
-            let running = exists
-                && tokio::task::spawn_blocking(|| !get_pid("mihomo").is_empty())
-                    .await
-                    .unwrap_or(false);
+            let running = exists && !get_pid_cached(&state, "mihomo").await.is_empty();
             (exists, running)
         }
     );
@@ -380,6 +392,7 @@ pub async fn post_control(
             });
         }
     }
+    invalidate_pid_cache(&state);
     Json(ApiResponse::<()> {
         success: true,
         error: None,

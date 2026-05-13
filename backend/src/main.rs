@@ -150,6 +150,7 @@ async fn main() {
         geo_cache,
         log_tx: log_tx_arc,
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),
+        pid_cache: Arc::new(RwLock::new(std::collections::HashMap::new())),
         debug,
     };
     version::start_update_checker(state.clone());
