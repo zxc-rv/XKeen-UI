@@ -216,6 +216,7 @@ pub async fn put_config(
             data: None,
         });
     }
+    crate::clash::invalidate_clash_target_cache();
     Json(ApiResponse::<()> {
         success: true,
         error: None,
@@ -256,6 +257,7 @@ pub async fn post_config(
             data: None,
         });
     }
+    crate::clash::invalidate_clash_target_cache();
     Json(ApiResponse::<()> {
         success: true,
         error: None,
@@ -281,6 +283,7 @@ pub async fn delete_config(
             data: None,
         });
     }
+    crate::clash::invalidate_clash_target_cache();
     Json(ApiResponse::<()> {
         success: true,
         error: None,
@@ -320,6 +323,7 @@ pub async fn patch_config(
             data: None,
         });
     }
+    crate::clash::invalidate_clash_target_cache();
     Json(ApiResponse::<()> {
         success: true,
         error: None,

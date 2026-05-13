@@ -9,6 +9,8 @@ use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use serde::Deserialize;
 use std::path::Path as FsPath;
 use std::pin::Pin;
+use std::sync::{LazyLock, RwLock};
+use std::time::{Duration, Instant};
 use tokio::net::UnixStream;
 use tokio_tungstenite::{
     client_async, connect_async,
@@ -27,6 +29,14 @@ enum ClashTarget {
     Unix {
         path: String,
     },
+}
+
+const CLASH_TARGET_TTL: Duration = Duration::from_secs(5);
+static CLASH_TARGET_CACHE: LazyLock<RwLock<Option<(ClashTarget, Instant)>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+pub fn invalidate_clash_target_cache() {
+    *CLASH_TARGET_CACHE.write().unwrap() = None;
 }
 
 #[derive(Deserialize)]
@@ -282,6 +292,16 @@ async fn resolve_clash_target(
     secret_override: Option<String>,
     unix_override: Option<String>,
 ) -> Result<ClashTarget, String> {
+    let has_override = port_override.is_some() || secret_override.is_some() || unix_override.is_some();
+    if !has_override {
+        let cache = CLASH_TARGET_CACHE.read().unwrap();
+        if let Some((target, ts)) = cache.as_ref() {
+            if ts.elapsed() < CLASH_TARGET_TTL {
+                return Ok(target.clone());
+            }
+        }
+    }
+
     let mut host = "127.0.0.1".to_string();
     let mut port = port_override;
     let mut secret = secret_override;
@@ -302,15 +322,29 @@ async fn resolve_clash_target(
         }
     }
 
-    if let Some(path) = unix_path {
+    let resolved = if let Some(path) = unix_path {
         if tokio::fs::metadata(&path).await.is_ok() {
-            return Ok(ClashTarget::Unix { path });
+            Some(ClashTarget::Unix { path })
+        } else if let Some(port) = port {
+            Some(ClashTarget::Tcp { host, port, secret })
+        } else {
+            None
         }
+    } else if let Some(port) = port {
+        Some(ClashTarget::Tcp { host, port, secret })
+    } else {
+        None
+    };
+
+    match resolved {
+        Some(target) => {
+            if !has_override {
+                *CLASH_TARGET_CACHE.write().unwrap() = Some((target.clone(), Instant::now()));
+            }
+            Ok(target)
+        }
+        None => Err("Не найден порт external-controller".into()),
     }
-    if let Some(port) = port {
-        return Ok(ClashTarget::Tcp { host, port, secret });
-    }
-    Err("Не найден порт external-controller".into())
 }
 
 async fn read_mihomo_config() -> Result<String, String> {
