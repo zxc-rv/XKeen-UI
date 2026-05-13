@@ -93,6 +93,8 @@ let sourceNameRetryTimer: ReturnType<typeof setTimeout> | null = null
 let sourceNameRequest: Promise<void> | null = null
 const useSourceNameStore = create<{ version: number }>(() => ({ version: 0 }))
 
+const MAX_CLOSED_CONNECTIONS = 1000
+
 subscribeConnections((connections) => {
   const newMap = toMap(connections)
   const { map: prevMap, closedMap: prevClosed } = useConnectionsStore.getState()
@@ -101,6 +103,15 @@ subscribeConnections((connections) => {
     if (!newMap.has(id) && !prevClosed.has(id)) {
       if (nextClosed === prevClosed) nextClosed = new Map(prevClosed)
       nextClosed.set(id, conn)
+    }
+  }
+  if (nextClosed !== prevClosed && nextClosed.size > MAX_CLOSED_CONNECTIONS) {
+    const excess = nextClosed.size - MAX_CLOSED_CONNECTIONS
+    const iter = nextClosed.keys()
+    for (let i = 0; i < excess; i++) {
+      const key = iter.next().value
+      if (key === undefined) break
+      nextClosed.delete(key)
     }
   }
   useConnectionsStore.setState({ map: newMap, closedMap: nextClosed })
