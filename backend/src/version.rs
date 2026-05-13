@@ -35,6 +35,31 @@ pub async fn get_local_core_version(core: &str) -> Option<String> {
     })
 }
 
+const VERSION_CACHE_TTL: Duration = Duration::from_secs(60);
+
+pub async fn get_local_core_version_cached(state: &AppState, core: &str) -> Option<String> {
+    if let Some(cached) = {
+        let cache = state.version_cache.read().unwrap();
+        cache
+            .get(core)
+            .filter(|(_, ts)| ts.elapsed() < VERSION_CACHE_TTL)
+            .map(|(v, _)| v.clone())
+    } {
+        return cached;
+    }
+    let ver = get_local_core_version(core).await;
+    state
+        .version_cache
+        .write()
+        .unwrap()
+        .insert(core.to_string(), (ver.clone(), Instant::now()));
+    ver
+}
+
+pub fn invalidate_version_cache(state: &AppState) {
+    state.version_cache.write().unwrap().clear();
+}
+
 pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse {
     let check = |outdated, last: &std::sync::RwLock<Option<Instant>>| {
         outdated && {
@@ -54,8 +79,8 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
     );
 
     let (xray_version, mihomo_version) = tokio::join!(
-        get_local_core_version("xray"),
-        get_local_core_version("mihomo")
+        get_local_core_version_cached(&state, "xray"),
+        get_local_core_version_cached(&state, "mihomo")
     );
 
     let mut core_versions = serde_json::Map::new();

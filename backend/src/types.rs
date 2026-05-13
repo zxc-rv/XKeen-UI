@@ -95,6 +95,8 @@ pub fn access_log_path() -> String {
     XRAY_LOG_PATHS.read().unwrap().access.clone()
 }
 
+pub type VersionCache = std::collections::HashMap<String, (Option<String>, Instant)>;
+
 #[derive(Clone)]
 pub struct AppState {
     pub core: Arc<RwLock<CoreInfo>>,
@@ -105,6 +107,7 @@ pub struct AppState {
     pub geo_cache: Arc<RwLock<GeoCache>>,
     pub log_tx: Arc<broadcast::Sender<String>>,
     pub log_watcher: Arc<Mutex<Option<AbortHandle>>>,
+    pub version_cache: Arc<RwLock<VersionCache>>,
     pub debug: bool,
 }
 

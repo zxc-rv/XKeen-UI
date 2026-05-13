@@ -623,6 +623,7 @@ pub async fn post_update(
         *c = None;
     }
     *state.update_checker.last_core_toast.write().unwrap() = None;
+    crate::version::invalidate_version_cache(&state);
 
     response(true, None)
 }
