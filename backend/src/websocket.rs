@@ -116,35 +116,40 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         );
     }
 
-    if count == 0 {
-        if debug {
-            println!("{} [INFO] 🚀 Starting log watcher...", ts());
-        }
-        let tx = state.log_tx.clone();
-        let handle = tokio::spawn(async move {
-            let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
-            let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
-                if let Ok(e) = res {
-                    if e.kind.is_modify() {
-                        for path in e.paths {
-                            let _ = mpsc_tx.send(path.to_string_lossy().to_string());
-                        }
-                    }
-                }
-            })
-            .unwrap();
-
-            let error_log = error_log_path();
-            let access_log = access_log_path();
-            let _ = watcher.watch(Path::new(&error_log), RecursiveMode::NonRecursive);
-            let _ = watcher.watch(Path::new(&access_log), RecursiveMode::NonRecursive);
-
-            while let Some(path) = mpsc_rx.recv().await {
-                let _ = tx.send(path);
+    {
+        let mut guard = state.log_watcher.lock().await;
+        let need_spawn = guard.as_ref().map_or(true, |h| h.is_finished());
+        if need_spawn {
+            if debug {
+                println!("{} [INFO] 🚀 Starting log watcher...", ts());
             }
-        });
+            let tx = state.log_tx.clone();
+            let handle = tokio::spawn(async move {
+                let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::unbounded_channel();
+                let mut watcher =
+                    notify::recommended_watcher(move |res: Result<notify::Event, _>| {
+                        if let Ok(e) = res {
+                            if e.kind.is_modify() {
+                                for path in e.paths {
+                                    let _ = mpsc_tx.send(path.to_string_lossy().to_string());
+                                }
+                            }
+                        }
+                    })
+                    .unwrap();
 
-        *state.log_watcher.lock().await = Some(handle.abort_handle());
+                let error_log = error_log_path();
+                let access_log = access_log_path();
+                let _ = watcher.watch(Path::new(&error_log), RecursiveMode::NonRecursive);
+                let _ = watcher.watch(Path::new(&access_log), RecursiveMode::NonRecursive);
+
+                while let Some(path) = mpsc_rx.recv().await {
+                    let _ = tx.send(path);
+                }
+            });
+
+            *guard = Some(handle.abort_handle());
+        }
     }
 
     let (mut tx, mut rx) = socket.split();
