@@ -133,7 +133,7 @@ async fn download(
         let mut buf = if is_disk {
             Vec::new()
         } else {
-            Vec::with_capacity(if size > 0 { size } else { 64 * 1024 })
+            Vec::with_capacity(if size > 0 { size } else { 5 * 1024 * 1024 })
         };
 
         loop {
