@@ -471,5 +471,31 @@ export function syncClashApiPort(delayMs = 0): void {
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────
 
-export const useNowStore = create<{ tick: number }>(() => ({ tick: 0 }))
-setInterval(() => useNowStore.setState((s) => ({ tick: s.tick + 1 })), 1000)
+const nowState = create<{ tick: number }>(() => ({ tick: 0 }))
+let nowIntervalId: ReturnType<typeof setInterval> | null = null
+let nowSubscribers = 0
+
+function ensureNowTick(): void {
+  if (nowIntervalId === null) {
+    nowIntervalId = setInterval(() => nowState.setState((s) => ({ tick: s.tick + 1 })), 1000)
+  }
+}
+
+function maybeStopNowTick(): void {
+  if (nowSubscribers <= 0 && nowIntervalId !== null) {
+    clearInterval(nowIntervalId)
+    nowIntervalId = null
+  }
+}
+
+export function useNowStore<T>(selector: (s: { tick: number }) => T): T {
+  useEffect(() => {
+    nowSubscribers++
+    ensureNowTick()
+    return () => {
+      nowSubscribers--
+      maybeStopNowTick()
+    }
+  }, [])
+  return nowState(selector)
+}
