@@ -93,7 +93,7 @@ let sourceNameRetryTimer: ReturnType<typeof setTimeout> | null = null
 let sourceNameRequest: Promise<void> | null = null
 const useSourceNameStore = create<{ version: number }>(() => ({ version: 0 }))
 
-subscribeConnections((connections) => {
+function handleConnectionsUpdate(connections: Connection[]) {
   const newMap = toMap(connections)
   const { map: prevMap, closedMap: prevClosed } = useConnectionsStore.getState()
   let nextClosed = prevClosed
@@ -104,7 +104,25 @@ subscribeConnections((connections) => {
     }
   }
   useConnectionsStore.setState({ map: newMap, closedMap: nextClosed })
-})
+}
+
+let connectionsSubRefCount = 0
+let connectionsUnsubscribe: (() => void) | null = null
+
+function acquireConnectionsSubscription() {
+  connectionsSubRefCount++
+  if (connectionsUnsubscribe === null) {
+    connectionsUnsubscribe = subscribeConnections(handleConnectionsUpdate)
+  }
+}
+
+function releaseConnectionsSubscription() {
+  connectionsSubRefCount = Math.max(0, connectionsSubRefCount - 1)
+  if (connectionsSubRefCount === 0 && connectionsUnsubscribe !== null) {
+    connectionsUnsubscribe()
+    connectionsUnsubscribe = null
+  }
+}
 
 const asnCache = new Map<string, string | null>()
 
@@ -1098,6 +1116,11 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
 export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }: Props) {
+  useEffect(() => {
+    acquireConnectionsSubscription()
+    return releaseConnectionsSubscription
+  }, [])
+
   const [filter, setFilter] = useState('')
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
