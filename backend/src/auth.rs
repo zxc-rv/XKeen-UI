@@ -24,6 +24,19 @@ const LOCKOUT_SECS: u64 = 60;
 
 static BRUTE_CACHE: LazyLock<Mutex<HashMap<String, (u32, Instant)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+static BRUTE_CACHE_LAST_SWEEP: LazyLock<Mutex<Instant>> =
+    LazyLock::new(|| Mutex::new(Instant::now()));
+const BRUTE_CACHE_SWEEP_INTERVAL: Duration = Duration::from_secs(3600);
+
+fn sweep_brute_cache_if_due() {
+    let mut last = BRUTE_CACHE_LAST_SWEEP.lock().unwrap();
+    if last.elapsed() < BRUTE_CACHE_SWEEP_INTERVAL {
+        return;
+    }
+    *last = Instant::now();
+    let mut cache = BRUTE_CACHE.lock().unwrap();
+    cache.retain(|_, (_, ts)| ts.elapsed() < Duration::from_secs(LOCKOUT_SECS));
+}
 
 #[derive(Deserialize)]
 pub struct PasswordReq {
@@ -172,6 +185,7 @@ pub async fn post_login(
     Json(req): Json<PasswordReq>,
 ) -> Response {
     let ip = get_client_ip(&headers, addr);
+    sweep_brute_cache_if_due();
     {
         let mut cache = BRUTE_CACHE.lock().unwrap();
         let entry = cache.entry(ip.clone()).or_insert((0, Instant::now()));
