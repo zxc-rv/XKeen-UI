@@ -101,6 +101,7 @@ function trimMap<K, V>(map: Map<K, V>, cap: number) {
     map.delete(firstKey)
   }
 }
+const MAX_CLOSED_CONNECTIONS = 1000
 
 subscribeConnections((connections) => {
   const newMap = toMap(connections)
@@ -110,6 +111,15 @@ subscribeConnections((connections) => {
     if (!newMap.has(id) && !prevClosed.has(id)) {
       if (nextClosed === prevClosed) nextClosed = new Map(prevClosed)
       nextClosed.set(id, conn)
+    }
+  }
+  if (nextClosed !== prevClosed && nextClosed.size > MAX_CLOSED_CONNECTIONS) {
+    const excess = nextClosed.size - MAX_CLOSED_CONNECTIONS
+    const iter = nextClosed.keys()
+    for (let i = 0; i < excess; i++) {
+      const key = iter.next().value
+      if (key === undefined) break
+      nextClosed.delete(key)
     }
   }
   useConnectionsStore.setState({ map: newMap, closedMap: nextClosed })
