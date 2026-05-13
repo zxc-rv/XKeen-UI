@@ -120,8 +120,11 @@ const useStore = create<StoreState>((set) => ({
           return { [action.modal]: action.show }
         case 'SET_UPDATE_MODAL_CORE':
           return { updateModalCore: action.core }
-        case 'ADD_TOAST':
-          return { toasts: [action.toast, ...state.toasts] }
+        case 'ADD_TOAST': {
+          const MAX_TOASTS = 5
+          const next = [action.toast, ...state.toasts]
+          return { toasts: next.length > MAX_TOASTS ? next.slice(0, MAX_TOASTS) : next }
+        }
         case 'REMOVE_TOAST':
           return { toasts: state.toasts.filter((t) => t.id !== action.id) }
         case 'SET_PENDING_SAVE_ACTION':
