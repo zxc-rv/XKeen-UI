@@ -4,10 +4,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, RwLock};
+use std::time::SystemTime;
 use tokio::process::Command;
 use yaml_rust2::YamlLoader;
 
 use crate::types::{ApiResponse, AppState, MIHOMO_CONF};
+
+static MRS_CACHE: LazyLock<RwLock<HashMap<(String, String), (SystemTime, Arc<String>)>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 #[derive(Deserialize)]
 pub struct RuleContentQuery {
@@ -91,11 +97,26 @@ pub async fn get_ruleset_content(
 }
 
 async fn convert_mrs(mrs_path: &str, behavior: &str) -> Result<String, String> {
-    if tokio::fs::metadata(mrs_path).await.is_err() {
-        return Err(format!("MRS файл не найден: {mrs_path}"));
-    }
+    let meta = tokio::fs::metadata(mrs_path)
+        .await
+        .map_err(|_| format!("MRS файл не найден: {mrs_path}"))?;
+    let mtime = meta
+        .modified()
+        .map_err(|e| format!("Ошибка чтения mtime: {e}"))?;
 
     let behavior = behavior.to_ascii_lowercase();
+    let cache_key = (mrs_path.to_string(), behavior.clone());
+
+    if let Some(cached) = {
+        let cache = MRS_CACHE.read().unwrap();
+        cache
+            .get(&cache_key)
+            .filter(|(ts, _)| *ts == mtime)
+            .map(|(_, content)| content.clone())
+    } {
+        return Ok((*cached).clone());
+    }
+
     let tmp_path = format!("/opt/tmp/convert_{}", random_suffix());
 
     let output = Command::new("/opt/sbin/mihomo")
@@ -121,10 +142,16 @@ async fn convert_mrs(mrs_path: &str, behavior: &str) -> Result<String, String> {
 
     let content = tokio::fs::read_to_string(&tmp_path)
         .await
-        .map_err(|e| format!("Ошибка чтения результата конвертации: {e}"));
+        .map_err(|e| format!("Ошибка чтения результата конвертации: {e}"))?;
 
     let _ = tokio::fs::remove_file(&tmp_path).await;
-    content
+
+    let arc = Arc::new(content.clone());
+    MRS_CACHE
+        .write()
+        .unwrap()
+        .insert(cache_key, (mtime, arc));
+    Ok(content)
 }
 
 fn random_suffix() -> String {
