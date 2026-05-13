@@ -150,6 +150,7 @@ async fn main() {
         geo_cache,
         log_tx: log_tx_arc,
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),
+        update_checker_task: Arc::new(tokio::sync::Mutex::new(None)),
         debug,
     };
     version::start_update_checker(state.clone());

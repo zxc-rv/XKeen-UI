@@ -105,6 +105,7 @@ pub struct AppState {
     pub geo_cache: Arc<RwLock<GeoCache>>,
     pub log_tx: Arc<broadcast::Sender<String>>,
     pub log_watcher: Arc<Mutex<Option<AbortHandle>>>,
+    pub update_checker_task: Arc<Mutex<Option<AbortHandle>>>,
     pub debug: bool,
 }
 

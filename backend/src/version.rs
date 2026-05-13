@@ -75,7 +75,8 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 }
 
 pub fn start_update_checker(state: AppState) {
-    tokio::spawn(async move {
+    let task_slot = state.update_checker_task.clone();
+    let handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(300));
         loop {
             interval.tick().await;
@@ -130,6 +131,9 @@ pub fn start_update_checker(state: AppState) {
                 }
             }
         }
+    });
+    tokio::spawn(async move {
+        *task_slot.lock().await = Some(handle.abort_handle());
     });
 }
 
