@@ -66,8 +66,11 @@ fn read_log_file(
         let line_len = line.len() + 1;
         bytes_read += line_len as u64;
 
-        let normalized = if !query.is_empty() {
-            line.replace("[Debug]", "[DEBUG]")
+        let matched = if query.is_empty() {
+            true
+        } else {
+            let normalized = line
+                .replace("[Debug]", "[DEBUG]")
                 .replace("level=debug", "level=DEBUG")
                 .replace("[Info]", "[INFO]")
                 .replace("level=info", "level=INFO")
@@ -76,12 +79,11 @@ fn read_log_file(
                 .replace("[Error]", "[ERROR]")
                 .replace("level=error", "level=ERROR")
                 .replace("[Fatal]", "[FATAL]")
-                .replace("level=fatal", "level=FATAL")
-        } else {
-            line.clone()
+                .replace("level=fatal", "level=FATAL");
+            keywords.iter().any(|k| normalized.contains(k))
         };
 
-        if query.is_empty() || keywords.iter().any(|k| normalized.contains(k)) {
+        if matched {
             let proc = process_log_line(line, tz);
             if !proc.is_empty() {
                 if full && !query.is_empty() {
