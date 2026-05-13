@@ -68,10 +68,16 @@ fn resolve_xray_log_paths() -> XrayLogPaths {
         let Ok(content) = std::fs::read_to_string(&path) else {
             continue;
         };
+        if !content.contains("\"log\"") {
+            continue;
+        }
         let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {
             continue;
         };
         let log = json.get("log").and_then(|v| v.as_object());
+        if log.is_none() {
+            continue;
+        }
         if let Some(access) = log.and_then(|v| v.get("access")).and_then(|v| v.as_str()) {
             paths.access = normalize_xray_log_path(Some(access), DEFAULT_ACCESS_LOG);
         }
