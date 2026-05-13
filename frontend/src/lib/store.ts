@@ -395,6 +395,19 @@ export const useProxiesStore = create<ProxiesStore>(() => ({
 const iconCache = new Map<string, string>()
 const fetchingIcons = new Set<string>()
 
+function setIconCacheEntry(key: string, blobUrl: string): void {
+  const prev = iconCache.get(key)
+  if (prev && prev !== blobUrl) URL.revokeObjectURL(prev)
+  iconCache.set(key, blobUrl)
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    for (const url of iconCache.values()) URL.revokeObjectURL(url)
+    iconCache.clear()
+  })
+}
+
 async function preloadIcons(urls: string[]) {
   let updated = false
   await Promise.allSettled(
@@ -404,7 +417,7 @@ async function preloadIcons(urls: string[]) {
       try {
         const res = await fetch(url)
         if (res.ok) {
-          iconCache.set(url, URL.createObjectURL(await res.blob()))
+          setIconCacheEntry(url, URL.createObjectURL(await res.blob()))
           updated = true
         }
       } catch {
