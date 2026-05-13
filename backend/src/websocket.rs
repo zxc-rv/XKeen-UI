@@ -61,6 +61,8 @@ fn read_log_file(
         .map(|s| s.to_string())
         .collect();
     let reader = BufReader::new(f);
+    const HARD_MEM_CAP: usize = 512 * 1024;
+    const FILTER_CAP: usize = 128_000;
 
     for line in reader.lines().map_while(Result::ok) {
         let line_len = line.len() + 1;
@@ -84,13 +86,14 @@ fn read_log_file(
         if query.is_empty() || keywords.iter().any(|k| normalized.contains(k)) {
             let proc = process_log_line(line, tz);
             if !proc.is_empty() {
-                if full && !query.is_empty() {
-                    total_bytes += line_len;
-                    if total_bytes >= 128000 {
-                        break;
-                    }
-                }
+                total_bytes += proc.len();
                 lines.push(proc);
+                if full && !query.is_empty() && total_bytes >= FILTER_CAP {
+                    break;
+                }
+                if total_bytes >= HARD_MEM_CAP {
+                    break;
+                }
             }
         }
     }
