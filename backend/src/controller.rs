@@ -136,10 +136,11 @@ pub fn get_pid(name: &str) -> Vec<i32> {
         .collect()
 }
 
-pub async fn soft_restart(core: &str) {
+pub async fn soft_restart(core: &str) -> Result<(), String> {
     for pid in get_pid(core) {
         _ = kill(Pid::from_raw(pid), Signal::SIGKILL);
     }
+
     let mut cmd = Command::new(core);
     match core {
         "mihomo" => {
@@ -152,11 +153,8 @@ pub async fn soft_restart(core: &str) {
             ]);
         }
     }
-    let lim = if cfg!(target_arch = "aarch64") {
-        40000
-    } else {
-        10000
-    };
+
+    let lim = if cfg!(target_arch = "aarch64") { 40000 } else { 10000 };
     unsafe {
         cmd.pre_exec(move || {
             setsid()?;
@@ -165,6 +163,7 @@ pub async fn soft_restart(core: &str) {
             Ok(())
         });
     }
+
     if let Ok(f) = std::fs::File::options()
         .append(true)
         .create(true)
@@ -172,11 +171,21 @@ pub async fn soft_restart(core: &str) {
     {
         cmd.stdout(f.try_clone().unwrap()).stderr(f);
     }
-    if let Ok(mut c) = cmd.spawn() {
-        tokio::spawn(async move {
-            _ = c.wait().await;
-        });
+
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    match child.try_wait() {
+        Ok(Some(status)) if !status.success() => {
+            return Err(format!("не удалось перезапустить {}: {}", core, status));
+        }
+        _ => {
+            tokio::spawn(async move {
+                _ = child.wait().await;
+            });
+        }
     }
+
+    Ok(())
 }
 
 pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
@@ -331,7 +340,15 @@ pub async fn post_control(
                 });
             }
         }
-        "softRestart" => soft_restart(&req.core).await,
+        "softRestart" => {
+            if let Err(e) = soft_restart(&req.core).await {
+                return Json(ApiResponse {
+                    success: false,
+                    error: Some(e),
+                    data: None,
+                });
+            }
+        }
         a if ["start", "stop", "hardRestart"].contains(&a) => {
             let arg = match a {
                 "start" => "start",
