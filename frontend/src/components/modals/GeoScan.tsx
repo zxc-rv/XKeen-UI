@@ -10,7 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { IconSearch, IconServer, IconWorld, IconX } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { useAppContext, useModalContext } from '../../lib/store'
-import { cn } from '../../lib/utils'
+import { cn, copyText } from '../../lib/utils'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 type GeoType = 'domain' | 'ip'
@@ -176,7 +176,7 @@ export function GeoScanModal() {
         </div>
 
         {/* File list — fixed height, scrollable */}
-        <ScrollArea className="border-border bg-input-background relative max-h-62.5 min-h-62.5 overflow-y-auto rounded-lg border [scrollbar-width:thin]">
+        <ScrollArea className="border-border bg-input-background relative max-h-62.5 min-h-62.5 [scrollbar-width:thin] overflow-y-auto rounded-lg border">
           {loading ? (
             <div className="space-y-1 p-1.5">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -222,7 +222,9 @@ export function GeoScanModal() {
                             key={cat}
                             variant="outline"
                             onClick={() =>
-                              navigator.clipboard.writeText(`"ext:${file}:${cat}"`).then(() => showToast('Категория скопирована'))
+                              copyText(`"ext:${file}:${cat.toLowerCase()}"`).then((ok) =>
+                                ok ? showToast('Категория скопирована') : showToast('Ошибка копирования', 'error')
+                              )
                             }
                             className={cn(
                               'h-6 cursor-pointer rounded-sm border-none p-2 pt-2.5 text-[11px] tracking-wide transition-colors',
