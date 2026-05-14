@@ -605,7 +605,7 @@ pub async fn post_update(
         if run {
             if let Some(ref init) = init {
                 log("INFO", "Запуск XKeen...".into());
-                _ = Command::new(init).arg("start").status();
+                _ = Command::new(init).arg("start").status().await;
             }
         }
     }
