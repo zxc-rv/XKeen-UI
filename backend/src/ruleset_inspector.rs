@@ -4,10 +4,44 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
+use std::sync::{Arc, LazyLock, RwLock};
+use std::time::SystemTime;
 use tokio::process::Command;
-use yaml_rust2::YamlLoader;
+use yaml_rust2::{Yaml, YamlLoader};
 
 use crate::types::{ApiResponse, AppState, MIHOMO_CONF};
+
+const MIHOMO_CONFIG_PATH: &str = "/opt/etc/mihomo/config.yaml";
+
+static MIHOMO_YAML_CACHE: LazyLock<RwLock<Option<(SystemTime, Arc<Vec<Yaml>>)>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
+    let mtime = tokio::fs::metadata(MIHOMO_CONFIG_PATH)
+        .await
+        .map_err(|e| format!("Ошибка чтения конфига: {e}"))?
+        .modified()
+        .map_err(|e| format!("Ошибка чтения mtime: {e}"))?;
+
+    if let Some(cached) = {
+        let guard = MIHOMO_YAML_CACHE.read().unwrap();
+        guard
+            .as_ref()
+            .filter(|(ts, _)| *ts == mtime)
+            .map(|(_, docs)| docs.clone())
+    } {
+        return Ok(cached);
+    }
+
+    let content = tokio::fs::read_to_string(MIHOMO_CONFIG_PATH)
+        .await
+        .map_err(|e| format!("Ошибка чтения конфига: {e}"))?;
+    let docs = YamlLoader::load_from_str(&content)
+        .map_err(|e| format!("Ошибка парсинга YAML: {e}"))?;
+    let arc = Arc::new(docs);
+    *MIHOMO_YAML_CACHE.write().unwrap() = Some((mtime, arc.clone()));
+    Ok(arc)
+}
 
 #[derive(Deserialize)]
 pub struct RuleContentQuery {
@@ -22,14 +56,9 @@ pub async fn get_ruleset_content(
     State(_state): State<AppState>,
     Query(params): Query<RuleContentQuery>,
 ) -> Response {
-    let config = match tokio::fs::read_to_string("/opt/etc/mihomo/config.yaml").await {
-        Ok(c) => c,
-        Err(e) => return error_response(format!("Ошибка чтения конфига: {e}")),
-    };
-
-    let docs = match YamlLoader::load_from_str(&config) {
-        Ok(v) => v,
-        Err(e) => return error_response(format!("Ошибка парсинга YAML: {e}")),
+    let docs = match load_mihomo_yaml().await {
+        Ok(d) => d,
+        Err(e) => return error_response(e),
     };
     let Some(parsed) = docs.first() else {
         return error_response("YAML пуст".into());
