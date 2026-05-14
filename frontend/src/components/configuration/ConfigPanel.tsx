@@ -523,7 +523,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
       core: currentCore,
     })
     showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
-    dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
+    dispatch({ type: 'SET_SERVICE_STATUS', status: r?.success ? 'running' : 'stopped' })
     if (r?.success) {
       syncClashApiPort(200)
     }
