@@ -1,6 +1,6 @@
 mod auth;
 mod backuper;
-mod clash;
+mod api_relay;
 mod configs;
 mod controller;
 mod devices;
@@ -188,8 +188,8 @@ async fn main() {
         .route("/api/geo/ip", get(geo::get_geoip))
         .route("/api/auth/logout", post(auth::post_logout))
         .route("/api/auth/reset", post(auth::post_auth_reset))
-        .route("/clash/{*path}", any(clash::proxy_http))
-        .route("/clash-ws/{*path}", get(clash::proxy_ws))
+        .route("/clash/{*path}", any(api_relay::proxy_http))
+        .route("/clash-ws/{*path}", get(api_relay::proxy_ws))
         .route("/ws", get(websocket::ws_handler))
         .route_layer(middleware::from_fn({
             let state = state.clone();

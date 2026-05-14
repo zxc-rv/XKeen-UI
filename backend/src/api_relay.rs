@@ -33,7 +33,6 @@ enum ClashTarget {
 pub struct ClashWsQuery {
     pub port: Option<String>,
     pub secret: Option<String>,
-    #[serde(rename = "unix")]
     pub unix: Option<String>,
 }
 
@@ -47,11 +46,10 @@ pub async fn proxy_http(
     let secret_override = header_value(&parts.headers, "x-clash-secret");
     let unix_override = header_value(&parts.headers, "x-clash-unix");
 
-    let target =
-        match resolve_clash_target(&state, port_override, secret_override, unix_override).await {
-            Ok(t) => t,
-            Err(e) => return make_bad_gateway(e),
-        };
+    let target = match resolve_clash_target(port_override, secret_override, unix_override).await {
+        Ok(t) => t,
+        Err(e) => return make_bad_gateway(e),
+    };
 
     const CLASH_BODY_LIMIT: usize = 16 * 1024 * 1024;
     let body_bytes = match to_bytes(body, CLASH_BODY_LIMIT).await {
@@ -81,12 +79,11 @@ pub async fn proxy_http(
 }
 
 pub async fn proxy_ws(
-    State(state): State<AppState>,
     Path(path): Path<String>,
     Query(q): Query<ClashWsQuery>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    let target = match resolve_clash_target(&state, q.port, q.secret, q.unix).await {
+    let target = match resolve_clash_target(q.port, q.secret, q.unix).await {
         Ok(t) => t,
         Err(e) => {
             return (
@@ -278,137 +275,34 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
 }
 
 async fn resolve_clash_target(
-    _state: &AppState,
     port_override: Option<String>,
     secret_override: Option<String>,
     unix_override: Option<String>,
 ) -> Result<ClashTarget, String> {
-    let mut host = "127.0.0.1".to_string();
-    let mut port = port_override;
-    let mut secret = secret_override;
-    let mut unix_path: Option<String> = None;
-
     if let Some(u) = unix_override {
-        unix_path = sanitize_unix_name(u);
-    } else if let Ok(content) = read_mihomo_config().await {
-        unix_path = parse_external_controller_unix(&content).map(resolve_unix_path);
-        if port.is_none() {
-            if let Some((h, p)) = parse_external_controller(&content) {
-                host = h;
-                port = Some(p);
+        if let Some(path) = sanitize_unix_name(&u) {
+            if tokio::fs::metadata(&path).await.is_ok() {
+                return Ok(ClashTarget::Unix { path });
             }
-        }
-        if secret.is_none() {
-            secret = parse_secret(&content);
+            return Err("Unix сокет не найден на диске".into());
         }
     }
 
-    if let Some(path) = unix_path {
-        if tokio::fs::metadata(&path).await.is_ok() {
-            return Ok(ClashTarget::Unix { path });
-        }
+    if let Some(port) = port_override {
+        return Ok(ClashTarget::Tcp {
+            host: "127.0.0.1".to_string(),
+            port,
+            secret: secret_override,
+        });
     }
-    if let Some(port) = port {
-        return Ok(ClashTarget::Tcp { host, port, secret });
-    }
-    Err("Не найден порт external-controller".into())
+
+    Err("Фронт не передал данные для подключения".into())
 }
 
-async fn read_mihomo_config() -> Result<String, String> {
-    let candidates = [
-        format!("{}/config.yaml", MIHOMO_CONF),
-        format!("{}/config.yml", MIHOMO_CONF),
-    ];
-    for path in candidates {
-        if let Ok(content) = tokio::fs::read_to_string(&path).await {
-            return Ok(content);
-        }
-    }
-    Err("Не найден конфиг mihomo".into())
-}
-
-fn parse_external_controller(content: &str) -> Option<(String, String)> {
-    let raw = parse_yaml_value(content, "external-controller:")?;
-    parse_host_port(&raw)
-}
-
-fn parse_external_controller_unix(content: &str) -> Option<String> {
-    parse_yaml_value(content, "external-controller-unix:")
-}
-
-fn parse_secret(content: &str) -> Option<String> {
-    parse_yaml_value(content, "secret:")
-}
-
-fn parse_yaml_value(content: &str, key: &str) -> Option<String> {
-    for line in content.lines() {
-        let clean = line.split('#').next().unwrap_or("").trim_start();
-        if let Some(rest) = clean.strip_prefix(key) {
-            let value = rest.trim().trim_matches(&['"', '\''][..]).trim();
-            if value.is_empty() {
-                return None;
-            }
-            return Some(value.to_string());
-        }
-    }
-    None
-}
-
-fn parse_host_port(raw: &str) -> Option<(String, String)> {
-    let value = raw.trim().trim_matches(&['"', '\''][..]).trim();
-    if value.is_empty() {
-        return None;
-    }
-
-    if value.starts_with('[') {
-        if let Some(end) = value.find(']') {
-            let host = value[1..end].to_string();
-            let rest = value[end + 1..].trim();
-            if let Some(port) = rest.strip_prefix(':') {
-                return Some((normalize_host(host), port.trim().to_string()));
-            }
-        }
-    }
-
-    if let Some((host, port)) = value.rsplit_once(':') {
-        if port.chars().all(|c| c.is_ascii_digit()) {
-            let host = if host.is_empty() {
-                "127.0.0.1".to_string()
-            } else {
-                host.to_string()
-            };
-            return Some((normalize_host(host), port.to_string()));
-        }
-    }
-
-    if value.chars().all(|c| c.is_ascii_digit()) {
-        return Some(("127.0.0.1".to_string(), value.to_string()));
-    }
-
-    None
-}
-
-fn normalize_host(host: String) -> String {
-    match host.as_str() {
-        "0.0.0.0" | "::" => "127.0.0.1".to_string(),
-        _ => host,
-    }
-}
-
-fn resolve_unix_path(raw: String) -> String {
-    let p = FsPath::new(&raw);
-    if p.is_absolute() {
-        raw
-    } else {
-        format!("{}/{}", MIHOMO_CONF, raw)
-    }
-}
-
-fn sanitize_unix_name(raw: String) -> Option<String> {
+fn sanitize_unix_name(raw: &str) -> Option<String> {
     let name = FsPath::new(raw.trim())
         .file_name()?
-        .to_string_lossy()
-        .to_string();
+        .to_string_lossy();
     if name.is_empty() {
         return None;
     }
