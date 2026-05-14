@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { IconSearch, IconServer, IconWorld, IconX } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppContext, useModalContext } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
@@ -32,6 +32,7 @@ export function GeoScanModal() {
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus>>({})
   const [scanning, setScanning] = useState(false)
   const [loading, setLoading] = useState(true)
+  const scanAbortRef = useRef<AbortController | null>(null)
 
   const close = () => dispatch({ type: 'SHOW_MODAL', modal: 'showGeoScanModal', show: false })
 
@@ -61,6 +62,10 @@ export function GeoScanModal() {
 
   useEffect(() => {
     loadGeoFiles()
+    return () => {
+      scanAbortRef.current?.abort()
+      scanAbortRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -77,41 +82,52 @@ export function GeoScanModal() {
 
   async function scan() {
     if (!input.trim() || selectedFiles.length === 0) return
+    scanAbortRef.current?.abort()
+    const controller = new AbortController()
+    scanAbortRef.current = controller
+    const signal = controller.signal
     setScanning(true)
     const endpoint = geoType === 'ip' ? '/api/geo/ip' : '/api/geo/site'
     const paramName = geoType === 'ip' ? 'ip' : 'domain'
 
-    for (const file of selectedFiles) {
-      setFileStatuses((prev) => ({
-        ...prev,
-        [file]: { status: 'scanning', categories: [] },
-      }))
-      try {
-        const res = await fetch(`${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input.trim())}`)
-        const data = await res.json()
-        if (!data.success && data.error) {
-          showToast(data.error, 'error')
+    try {
+      for (const file of selectedFiles) {
+        if (signal.aborted) break
+        setFileStatuses((prev) => ({
+          ...prev,
+          [file]: { status: 'scanning', categories: [] },
+        }))
+        try {
+          const res = await fetch(`${endpoint}?file=${encodeURIComponent(file)}&${paramName}=${encodeURIComponent(input.trim())}`, { signal })
+          const data = await res.json()
+          if (signal.aborted) break
+          if (!data.success && data.error) {
+            showToast(data.error, 'error')
+            setFileStatuses((prev) => ({
+              ...prev,
+              [file]: { status: 'error', categories: [] },
+            }))
+          } else {
+            setFileStatuses((prev) => ({
+              ...prev,
+              [file]:
+                data.success && data.categories?.length
+                  ? { status: 'found', categories: data.categories }
+                  : { status: 'not-found', categories: [] },
+            }))
+          }
+        } catch (err) {
+          if (signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) return
           setFileStatuses((prev) => ({
             ...prev,
             [file]: { status: 'error', categories: [] },
           }))
-        } else {
-          setFileStatuses((prev) => ({
-            ...prev,
-            [file]:
-              data.success && data.categories?.length
-                ? { status: 'found', categories: data.categories }
-                : { status: 'not-found', categories: [] },
-          }))
         }
-      } catch {
-        setFileStatuses((prev) => ({
-          ...prev,
-          [file]: { status: 'error', categories: [] },
-        }))
       }
+    } finally {
+      if (scanAbortRef.current === controller) scanAbortRef.current = null
+      if (!signal.aborted) setScanning(false)
     }
-    setScanning(false)
   }
 
   const currentFiles = geoFiles[geoType]
