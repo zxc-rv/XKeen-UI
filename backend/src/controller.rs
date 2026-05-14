@@ -84,7 +84,7 @@ async fn resolve_init_file(state: &AppState) -> Result<String, String> {
     Ok(new_path)
 }
 
-async fn run_init_command(state: &AppState, args: &[&str]) -> Result<(), String> {
+pub async fn run_init_command(state: &AppState, args: &[&str]) -> Result<(), String> {
     let path = resolve_init_file(state).await?;
     let result = if let Ok(f) = std::fs::OpenOptions::new()
         .create(true)
