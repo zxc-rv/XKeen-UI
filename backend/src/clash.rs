@@ -53,7 +53,8 @@ pub async fn proxy_http(
             Err(e) => return make_bad_gateway(e),
         };
 
-    let body_bytes = match to_bytes(body, usize::MAX).await {
+    const CLASH_BODY_LIMIT: usize = 16 * 1024 * 1024;
+    let body_bytes = match to_bytes(body, CLASH_BODY_LIMIT).await {
         Ok(b) => b,
         Err(e) => return make_bad_gateway(e.to_string()),
     };
