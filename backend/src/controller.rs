@@ -176,7 +176,7 @@ pub async fn soft_restart(core: &str) -> Result<(), String> {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     match child.try_wait() {
         Ok(Some(status)) if !status.success() => {
-            return Err(format!("не удалось перезапустить {}: {}", core, status));
+            return Err(format!("Не удалось перезапустить {}: {}", core, status));
         }
         _ => {
             tokio::spawn(async move {

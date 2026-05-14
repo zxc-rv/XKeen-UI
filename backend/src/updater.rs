@@ -584,7 +584,10 @@ pub async fn post_update(
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run {
             log("INFO", format!("Перезапуск {}...", core_cap));
-            crate::controller::soft_restart(&req.core).await;
+            if let Err(e) = crate::controller::soft_restart(&req.core).await {
+                log("ERROR", format!("{}", e));
+                return response(false, Some(format!("{}", e)));
+            }
         }
     } else {
         log(
