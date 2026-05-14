@@ -12,6 +12,7 @@ import { useWebSocket } from '../../lib/websocket'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']
+const MAX_LINES = 2000
 
 export function LogPanel() {
   const timezone = useSettings((s) => s.timezone)
@@ -44,32 +45,50 @@ export function LogPanel() {
     if (el) el.scrollTop = el.scrollHeight
   }, [])
 
+  const trimToCap = useCallback(() => {
+    const el = logRef.current
+    if (!el) return
+    const overflow = linesRef.current.length - MAX_LINES
+    if (overflow <= 0) return
+    linesRef.current.splice(0, overflow)
+    for (let i = 0; i < overflow && el.firstChild; i++) {
+      el.removeChild(el.firstChild)
+    }
+  }, [])
+
   const renderAll = useCallback((lines: string[]) => {
     const el = logRef.current
     if (!el) return
 
-    linesRef.current = lines
-    const hasLines = lines.length > 0
+    const capped = lines.length > MAX_LINES ? lines.slice(lines.length - MAX_LINES) : lines
+    linesRef.current = capped
+    const hasLines = capped.length > 0
 
     setIsEmpty(!hasLines)
-    el.innerHTML = hasLines ? lines.join('') : ''
+    el.innerHTML = hasLines ? capped.join('') : ''
 
     if (hasLines && autoScrollRef.current) {
       el.scrollTop = el.scrollHeight
     }
   }, [])
 
-  const appendLines = useCallback((newLines: string[]) => {
-    if (newLines.length === 0) return
-    const el = logRef.current
-    if (!el) return
+  const appendLines = useCallback(
+    (newLines: string[]) => {
+      if (newLines.length === 0) return
+      const el = logRef.current
+      if (!el) return
 
-    setIsEmpty(false)
-    linesRef.current.push(...newLines)
-    el.insertAdjacentHTML('beforeend', newLines.join(''))
+      setIsEmpty(false)
+      linesRef.current.push(...newLines)
+      el.insertAdjacentHTML('beforeend', newLines.join(''))
 
-    if (autoScrollRef.current) el.scrollTop = el.scrollHeight
-  }, [])
+      if (autoScrollRef.current) {
+        trimToCap()
+        el.scrollTop = el.scrollHeight
+      }
+    },
+    [trimToCap]
+  )
 
   const handleMessage = useCallback(
     (data: WsMessage) => {
@@ -132,6 +151,7 @@ export function LogPanel() {
   function handleScrollToBottom() {
     autoScrollRef.current = true
     setShowScrollBtn(false)
+    trimToCap()
     scrollToBottom()
   }
 
