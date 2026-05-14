@@ -591,11 +591,9 @@ pub async fn post_update(
             "WARN",
             "Атомарная замена не удалась, фолбек на копирование...".into(),
         );
-        let init = state.init_file.read().unwrap().clone();
         if run {
-            if let Some(ref init) = init {
-                _ = Command::new(init).arg("stop").status().await;
-            }
+            log("INFO", "Остановка XKeen...".into());
+            _ = crate::controller::run_init_command(&state, &["stop"]).await;
         }
         if let Err(e) = fs::copy(&source, &target).await {
             return response(false, Some(format!("Ошибка установки: {}", e)));
@@ -603,10 +601,8 @@ pub async fn post_update(
         _ = fs::remove_file(&source).await;
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run {
-            if let Some(ref init) = init {
-                log("INFO", "Запуск XKeen...".into());
-                _ = Command::new(init).arg("start").status().await;
-            }
+            log("INFO", "Запуск XKeen...".into());
+            _ = crate::controller::run_init_command(&state, &["start", "on"]).await;
         }
     }
 
