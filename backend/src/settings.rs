@@ -3,7 +3,6 @@ use axum::{
     extract::State,
     response::{IntoResponse, Json},
 };
-use std::fs;
 
 pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
@@ -16,7 +15,9 @@ pub async fn patch_settings(
     State(state): State<AppState>,
     Json(patch): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let mut file_json = fs::read_to_string(APP_CONFIG)
+    let _guard = state.app_config_lock.lock().await;
+    let mut file_json = tokio::fs::read_to_string(APP_CONFIG)
+        .await
         .ok()
         .and_then(|c| serde_json::from_str(&c).ok())
         .unwrap_or(serde_json::json!({}));
@@ -62,11 +63,13 @@ pub async fn patch_settings(
 
     *state.settings.write().unwrap() = settings;
 
-    match fs::write(
-        APP_CONFIG,
-        serde_json::to_string_pretty(&file_json).unwrap(),
-    ) {
-        Ok(_) => Json(serde_json::json!({"success": true})),
+    let serialized = serde_json::to_string_pretty(&file_json).unwrap();
+    let tmp = format!("{}.tmp", APP_CONFIG);
+    match tokio::fs::write(&tmp, &serialized).await {
+        Ok(_) => match tokio::fs::rename(&tmp, APP_CONFIG).await {
+            Ok(_) => Json(serde_json::json!({"success": true})),
+            Err(e) => Json(serde_json::json!({"success": false, "error": e.to_string()})),
+        },
         Err(e) => Json(serde_json::json!({"success": false, "error": e.to_string()})),
     }
 }
