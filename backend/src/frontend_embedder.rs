@@ -1,8 +1,6 @@
-use axum::{
-    body::Body,
-    http::{Uri, header},
-    response::Response,
-};
+use axum::body::Body;
+use axum::http::{Uri, header};
+use axum::response::Response;
 use rust_embed::Embed;
 
 #[derive(Embed)]

@@ -1,8 +1,6 @@
-use axum::{
-    extract::{Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Response},
-};
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use std::sync::{Arc, LazyLock, RwLock};
 use std::time::SystemTime;
@@ -13,8 +11,7 @@ use crate::types::{ApiResponse, AppState, MIHOMO_CONF};
 
 const MIHOMO_CONFIG_PATH: &str = "/opt/etc/mihomo/config.yaml";
 
-static MIHOMO_YAML_CACHE: LazyLock<RwLock<Option<(SystemTime, Arc<Vec<Yaml>>)>>> =
-    LazyLock::new(|| RwLock::new(None));
+static MIHOMO_YAML_CACHE: LazyLock<RwLock<Option<(SystemTime, Arc<Vec<Yaml>>)>>> = LazyLock::new(|| RwLock::new(None));
 
 async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
     let mtime = tokio::fs::metadata(MIHOMO_CONFIG_PATH)
@@ -36,8 +33,7 @@ async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
     let content = tokio::fs::read_to_string(MIHOMO_CONFIG_PATH)
         .await
         .map_err(|e| format!("Ошибка чтения конфига: {e}"))?;
-    let docs = YamlLoader::load_from_str(&content)
-        .map_err(|e| format!("Ошибка парсинга YAML: {e}"))?;
+    let docs = YamlLoader::load_from_str(&content).map_err(|e| format!("Ошибка парсинга YAML: {e}"))?;
     let arc = Arc::new(docs);
     *MIHOMO_YAML_CACHE.write().unwrap() = Some((mtime, arc.clone()));
     Ok(arc)
@@ -52,10 +48,7 @@ pub struct RuleContentQuery {
     pub vehicle_type: Option<String>,
 }
 
-pub async fn get_ruleset_content(
-    State(_state): State<AppState>,
-    Query(params): Query<RuleContentQuery>,
-) -> Response {
+pub async fn get_ruleset_content(State(_state): State<AppState>, Query(params): Query<RuleContentQuery>) -> Response {
     let docs = match load_mihomo_yaml().await {
         Ok(d) => d,
         Err(e) => return error_response(e),
@@ -128,13 +121,7 @@ async fn convert_mrs(mrs_path: &str, behavior: &str) -> Result<String, String> {
     let tmp_path = format!("/opt/tmp/convert_{}", random_suffix());
 
     let output = Command::new("/opt/sbin/mihomo")
-        .args([
-            "convert-ruleset",
-            behavior.as_str(),
-            "mrs",
-            mrs_path,
-            &tmp_path,
-        ])
+        .args(["convert-ruleset", behavior.as_str(), "mrs", mrs_path, &tmp_path])
         .output()
         .await
         .map_err(|e| format!("Ошибка запуска mihomo: {e}"))?;

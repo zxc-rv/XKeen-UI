@@ -1,8 +1,6 @@
 use crate::types::*;
-use axum::{
-    extract::State,
-    response::{IntoResponse, Json},
-};
+use axum::extract::State;
+use axum::response::{IntoResponse, Json};
 
 pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
@@ -11,10 +9,7 @@ pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     )
 }
 
-pub async fn patch_settings(
-    State(state): State<AppState>,
-    Json(patch): Json<serde_json::Value>,
-) -> impl IntoResponse {
+pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<serde_json::Value>) -> impl IntoResponse {
     let _guard = state.app_config_lock.lock().await;
     let mut file_json = tokio::fs::read_to_string(APP_CONFIG)
         .await
@@ -29,11 +24,7 @@ pub async fn patch_settings(
     if let serde_json::Value::Object(ref mut map) = file_json {
         if let Some(legacy) = map.remove("timezoneOffset") {
             if !patch_sets_tz {
-                if let Some(log) = map
-                    .entry("log")
-                    .or_insert(serde_json::json!({}))
-                    .as_object_mut()
-                {
+                if let Some(log) = map.entry("log").or_insert(serde_json::json!({})).as_object_mut() {
                     log.insert("timezone".into(), legacy);
                 }
             }
@@ -50,14 +41,10 @@ pub async fn patch_settings(
     }
     settings.clash_api.ping_url = settings.clash_api.ping_url.trim().to_string();
     if settings.clash_api.ping_url.is_empty() {
-        return Json(
-            serde_json::json!({"success": false, "error": "URL пинг-теста не может быть пустым"}),
-        );
+        return Json(serde_json::json!({"success": false, "error": "URL пинг-теста не может быть пустым"}));
     }
     if settings.clash_api.ping_timeout == 0 {
-        return Json(
-            serde_json::json!({"success": false, "error": "Таймаут пинг-теста должен быть больше 0"}),
-        );
+        return Json(serde_json::json!({"success": false, "error": "Таймаут пинг-теста должен быть больше 0"}));
     }
     settings.normalize_proxies();
 

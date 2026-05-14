@@ -1,12 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    sync::{Arc, LazyLock, RwLock},
-    time::Instant,
-};
-use tokio::{
-    sync::{Mutex, broadcast},
-    task::AbortHandle,
-};
+use std::io::BufReader;
+use std::sync::{Arc, LazyLock, RwLock};
+use std::time::Instant;
+use tokio::sync::{Mutex, broadcast};
+use tokio::task::AbortHandle;
 
 pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 pub const APP_CONFIG: &str = "/opt/etc/xkeen/xkeen-ui.json";
@@ -38,8 +35,7 @@ impl Default for XrayLogPaths {
     }
 }
 
-static XRAY_LOG_PATHS: LazyLock<RwLock<XrayLogPaths>> =
-    LazyLock::new(|| RwLock::new(XrayLogPaths::default()));
+static XRAY_LOG_PATHS: LazyLock<RwLock<XrayLogPaths>> = LazyLock::new(|| RwLock::new(XrayLogPaths::default()));
 
 fn normalize_xray_log_path(path: Option<&str>, fallback: &str) -> String {
     path.map(str::trim)
@@ -53,30 +49,32 @@ fn resolve_xray_log_paths() -> XrayLogPaths {
     let Ok(entries) = std::fs::read_dir(XRAY_CONF) else {
         return paths;
     };
+
     let mut json_files: Vec<_> = entries
         .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.extension()
-                .and_then(|ext| ext.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-        })
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("json")))
         .collect();
+
     json_files.sort();
 
     for path in json_files {
-        let Ok(content) = std::fs::read_to_string(&path) else {
+        let Ok(file) = std::fs::File::open(&path) else {
             continue;
         };
-        let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {
+        let reader = BufReader::new(file);
+
+        let Ok(json) = serde_json::from_reader::<_, serde_json::Value>(reader) else {
             continue;
         };
-        let log = json.get("log").and_then(|v| v.as_object());
-        if let Some(access) = log.and_then(|v| v.get("access")).and_then(|v| v.as_str()) {
-            paths.access = normalize_xray_log_path(Some(access), DEFAULT_ACCESS_LOG);
-        }
-        if let Some(error) = log.and_then(|v| v.get("error")).and_then(|v| v.as_str()) {
-            paths.error = normalize_xray_log_path(Some(error), DEFAULT_ERROR_LOG);
+
+        if let Some(log) = json.get("log").and_then(|v| v.as_object()) {
+            if let Some(access) = log.get("access").and_then(|v| v.as_str()) {
+                paths.access = normalize_xray_log_path(Some(access), DEFAULT_ACCESS_LOG);
+            }
+            if let Some(error) = log.get("error").and_then(|v| v.as_str()) {
+                paths.error = normalize_xray_log_path(Some(error), DEFAULT_ERROR_LOG);
+            }
         }
     }
 

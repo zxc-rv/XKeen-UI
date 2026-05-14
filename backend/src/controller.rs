@@ -1,22 +1,16 @@
 use crate::logger::log;
 use crate::types::*;
-use axum::{
-    extract::State,
-    response::{IntoResponse, Json},
-};
-use nix::{
-    sys::{
-        resource::{Resource, setrlimit},
-        signal::{Signal, kill},
-    },
-    unistd::{Gid, Pid, setgid, setsid},
-};
+use axum::extract::State;
+use axum::response::{IntoResponse, Json};
+use nix::sys::resource::{Resource, setrlimit};
+use nix::sys::signal::{Signal, kill};
+use nix::unistd::{Gid, Pid, setgid, setsid};
 use serde::Deserialize;
-use std::{fs::Permissions, os::unix::fs::PermissionsExt, path::Path};
-use tokio::{
-    fs::{self, set_permissions},
-    process::Command,
-};
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use tokio::fs::{self, set_permissions};
+use tokio::process::Command;
 
 #[derive(Deserialize)]
 pub struct ControlReq {
@@ -53,12 +47,7 @@ pub fn find_init_file(log_enabled: bool) -> Option<String> {
 
     if log_enabled {
         if let Some(p) = &final_path {
-            println!(
-                "{} [INFO] Defined initd_file ({}): {}",
-                crate::logger::ts(),
-                source,
-                p
-            );
+            println!("{} [INFO] Defined initd_file ({}): {}", crate::logger::ts(), source, p);
         }
     }
 
@@ -75,11 +64,7 @@ async fn resolve_init_file(state: &AppState) -> Result<String, String> {
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "Не найден init файл XKeen".to_string())?;
-    println!(
-        "{} [INFO] Updated initd_file: {}",
-        crate::logger::ts(),
-        new_path
-    );
+    println!("{} [INFO] Updated initd_file: {}", crate::logger::ts(), new_path);
     *state.init_file.write().unwrap() = Some(new_path.clone());
     Ok(new_path)
 }
@@ -147,10 +132,7 @@ pub async fn soft_restart(core: &str) -> Result<(), String> {
             cmd.env("CLASH_HOME_DIR", MIHOMO_CONF);
         }
         _ => {
-            cmd.envs([
-                ("XRAY_LOCATION_CONFDIR", XRAY_CONF),
-                ("XRAY_LOCATION_ASSET", XRAY_ASSET),
-            ]);
+            cmd.envs([("XRAY_LOCATION_CONFDIR", XRAY_CONF), ("XRAY_LOCATION_ASSET", XRAY_ASSET)]);
         }
     }
 
@@ -271,16 +253,15 @@ async fn check_core_config(core: &str) -> Result<(), String> {
             })
             .unwrap_or(false);
         if !has_json {
-            return Err("Не найдены конфигурационные файлы. Настройте их в /opt/etc/xray/configs перед запуском".into());
+            return Err(
+                "Не найдены конфигурационные файлы. Настройте их в /opt/etc/xray/configs перед запуском".into(),
+            );
         }
     }
     Ok(())
 }
 
-pub async fn post_control(
-    State(state): State<AppState>,
-    Json(req): Json<ControlReq>,
-) -> impl IntoResponse {
+pub async fn post_control(State(state): State<AppState>, Json(req): Json<ControlReq>) -> impl IntoResponse {
     match req.action.as_str() {
         "switchCore" => {
             let old = state.core.read().unwrap().name.clone();

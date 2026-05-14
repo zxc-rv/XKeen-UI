@@ -1,14 +1,11 @@
-use argon2::{
-    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng},
-};
-use axum::{
-    Json,
-    extract::{ConnectInfo, Request, State},
-    http::{HeaderMap, HeaderValue, StatusCode, header},
-    middleware::Next,
-    response::{IntoResponse, Response},
-};
+use argon2::password_hash::SaltString;
+use argon2::password_hash::rand_core::OsRng;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use axum::Json;
+use axum::extract::{ConnectInfo, Request, State};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -22,8 +19,7 @@ const SESSION_COOKIE: &str = "session_id";
 const MAX_ATTEMPTS: u32 = 5;
 const LOCKOUT_SECS: u64 = 60;
 
-static BRUTE_CACHE: LazyLock<Mutex<HashMap<String, (u32, Instant)>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static BRUTE_CACHE: LazyLock<Mutex<HashMap<String, (u32, Instant)>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Deserialize)]
 pub struct PasswordReq {
@@ -33,10 +29,7 @@ pub struct PasswordReq {
 }
 
 fn now_ts() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
 fn get_client_ip(headers: &HeaderMap, addr: SocketAddr) -> String {
@@ -75,11 +68,7 @@ fn is_session_valid(session_ids: &[String], cookie: &str) -> bool {
 
 fn set_cookie_header(headers_in: &HeaderMap, value: String, max_age: u64) -> HeaderMap {
     let mut headers = HeaderMap::new();
-    let secure = if headers_in
-        .get("x-forwarded-proto")
-        .and_then(|v| v.to_str().ok())
-        == Some("https")
-    {
+    let secure = if headers_in.get("x-forwarded-proto").and_then(|v| v.to_str().ok()) == Some("https") {
         "Secure; "
     } else {
         ""
@@ -108,14 +97,10 @@ fn clear_cookie_header() -> HeaderMap {
     headers
 }
 
-pub async fn get_login_info(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+pub async fn get_login_info(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
-    let authenticated = get_session_cookie(&headers).map_or(false, |cookie| {
-        is_session_valid(&s.auth.session_ids, cookie)
-    });
+    let authenticated =
+        get_session_cookie(&headers).map_or(false, |cookie| is_session_valid(&s.auth.session_ids, cookie));
     Json(serde_json::json!({
         "enabled": s.auth.enabled,
         "has_password": s.auth.password_hash.is_some(),
@@ -124,9 +109,7 @@ pub async fn get_login_info(
 }
 
 pub async fn post_setup(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Json(req): Json<PasswordReq>,
+    State(state): State<AppState>, headers: HeaderMap, Json(req): Json<PasswordReq>,
 ) -> impl IntoResponse {
     if state.settings.read().unwrap().auth.password_hash.is_some() {
         return (
@@ -166,9 +149,7 @@ pub async fn post_setup(
 }
 
 pub async fn post_login(
-    State(state): State<AppState>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
+    State(state): State<AppState>, ConnectInfo(addr): ConnectInfo<SocketAddr>, headers: HeaderMap,
     Json(req): Json<PasswordReq>,
 ) -> Response {
     let ip = get_client_ip(&headers, addr);
@@ -179,11 +160,7 @@ pub async fn post_login(
             entry.0 = 0;
         }
         if entry.0 >= MAX_ATTEMPTS {
-            println!(
-                "{} [WARN] Authorization blocked [{}]",
-                crate::logger::ts(),
-                ip
-            );
+            println!("{} [WARN] Authorization blocked [{}]", crate::logger::ts(), ip);
             return (
                 StatusCode::TOO_MANY_REQUESTS,
                 Json(ApiResponse::<()> {
@@ -271,8 +248,7 @@ pub async fn post_logout(State(state): State<AppState>, headers: HeaderMap) -> i
     if let Some(cookie) = get_session_cookie(&headers) {
         let cookie = cookie.to_string();
         update_auth(&state, |auth| {
-            auth.session_ids
-                .retain(|id| !id.starts_with(&cookie) && id != &cookie)
+            auth.session_ids.retain(|id| !id.starts_with(&cookie) && id != &cookie)
         })
         .await;
     }
@@ -312,8 +288,7 @@ pub async fn auth_middleware(state: AppState, request: Request, next: Next) -> R
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    let is_valid =
-        get_session_cookie(request.headers()).map_or(false, |c| is_session_valid(&session_ids, c));
+    let is_valid = get_session_cookie(request.headers()).map_or(false, |c| is_session_valid(&session_ids, c));
     if !is_valid {
         return StatusCode::UNAUTHORIZED.into_response();
     }
@@ -331,11 +306,7 @@ fn hash_password(password: &str) -> String {
 
 fn verify_password(password: &str, hash: &str) -> bool {
     PasswordHash::new(hash)
-        .map(|parsed| {
-            Argon2::default()
-                .verify_password(password.as_bytes(), &parsed)
-                .is_ok()
-        })
+        .map(|parsed| Argon2::default().verify_password(password.as_bytes(), &parsed).is_ok())
         .unwrap_or(false)
 }
 

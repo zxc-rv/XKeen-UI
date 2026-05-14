@@ -1,17 +1,15 @@
-use crate::{
-    logger::log,
-    types::{APP_CONFIG, ApiResponse, AppState, MIHOMO_CONF, XKEEN_CONF, XRAY_CONF},
-};
-use axum::{Json, extract::State, response::IntoResponse};
+use crate::logger::log;
+use crate::types::{APP_CONFIG, ApiResponse, AppState, MIHOMO_CONF, XKEEN_CONF, XRAY_CONF};
+use axum::Json;
+use axum::extract::State;
+use axum::response::IntoResponse;
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashSet,
-    fs::{self, File},
-    io,
-    path::{Component, Path, PathBuf},
-    time::SystemTime,
-};
+use std::collections::HashSet;
+use std::fs::{self, File};
+use std::io;
+use std::path::{Component, Path, PathBuf};
+use std::time::SystemTime;
 use tar::{Archive, Builder};
 
 const BACKUP_DIR: &str = "/opt/backups";
@@ -74,8 +72,7 @@ pub struct BackupReq {
 }
 
 async fn run_blocking<T: Serialize>(
-    task: tokio::task::JoinHandle<Result<Option<T>, String>>,
-    err_msg: &str,
+    task: tokio::task::JoinHandle<Result<Option<T>, String>>, err_msg: &str,
 ) -> impl IntoResponse {
     match task.await {
         Ok(Ok(data)) => Json(ApiResponse {
@@ -92,9 +89,7 @@ async fn run_blocking<T: Serialize>(
 pub async fn get_backups(State(state): State<AppState>) -> impl IntoResponse {
     let tz = state.settings.read().unwrap().log.timezone;
     run_blocking(
-        tokio::task::spawn_blocking(move || {
-            list_backups_sync(tz).map(|backups| Some(BackupListData { backups }))
-        }),
+        tokio::task::spawn_blocking(move || list_backups_sync(tz).map(|backups| Some(BackupListData { backups }))),
         "Не удалось получить список бэкапов",
     )
     .await
@@ -103,9 +98,7 @@ pub async fn get_backups(State(state): State<AppState>) -> impl IntoResponse {
 pub async fn put_backup(State(state): State<AppState>) -> impl IntoResponse {
     let tz = state.settings.read().unwrap().log.timezone;
     run_blocking(
-        tokio::task::spawn_blocking(move || {
-            create_backup_sync(tz).map(|backup| Some(BackupData { backup }))
-        }),
+        tokio::task::spawn_blocking(move || create_backup_sync(tz).map(|backup| Some(BackupData { backup }))),
         "Не удалось создать бэкап",
     )
     .await
@@ -113,9 +106,7 @@ pub async fn put_backup(State(state): State<AppState>) -> impl IntoResponse {
 
 pub async fn post_backup(Json(req): Json<BackupReq>) -> impl IntoResponse {
     run_blocking(
-        tokio::task::spawn_blocking(move || {
-            restore_backup_sync(&req.name, req.contents).map(|_| None::<()>)
-        }),
+        tokio::task::spawn_blocking(move || restore_backup_sync(&req.name, req.contents).map(|_| None::<()>)),
         "Не удалось восстановить бэкап",
     )
     .await
@@ -164,11 +155,7 @@ fn list_backups_sync(tz: i32) -> Result<Vec<BackupItem>, String> {
             Err(e) => {
                 log(
                     "WARN",
-                    format!(
-                        "Не удалось прочитать содержимое бэкапа {}: {}",
-                        path.display(),
-                        e
-                    ),
+                    format!("Не удалось прочитать содержимое бэкапа {}: {}", path.display(), e),
                 );
                 BackupContentFiles::default()
             }
@@ -222,10 +209,7 @@ fn create_backup_sync(tz: i32) -> Result<BackupItem, String> {
     }
 
     let metadata = fs::metadata(&final_path).map_err(io_error)?;
-    log(
-        "INFO",
-        format!("Бэкап конфигураций создан: {}", final_path.display()),
-    );
+    log("INFO", format!("Бэкап конфигураций создан: {}", final_path.display()));
 
     Ok(BackupItem {
         name: name.clone(),
@@ -252,10 +236,9 @@ fn restore_backup_sync(name: &str, requested_contents: Option<Vec<String>>) -> R
         }
 
         let entry_path = entry.path().map_err(io_error)?;
-        let relative = normalize_entry_path(entry_path.as_ref())
-            .map_err(|e| format!("невалидный путь в архиве: {e}"))?;
-        let content = detect_content_key(&relative)
-            .ok_or_else(|| format!("недопустимый путь в архиве: {relative}"))?;
+        let relative =
+            normalize_entry_path(entry_path.as_ref()).map_err(|e| format!("невалидный путь в архиве: {e}"))?;
+        let content = detect_content_key(&relative).ok_or_else(|| format!("недопустимый путь в архиве: {relative}"))?;
 
         if requested_contents
             .as_ref()
@@ -263,8 +246,8 @@ fn restore_backup_sync(name: &str, requested_contents: Option<Vec<String>>) -> R
         {
             continue;
         }
-        let target = archive_relative_to_target(&relative)
-            .ok_or_else(|| format!("недопустимый путь в архиве: {relative}"))?;
+        let target =
+            archive_relative_to_target(&relative).ok_or_else(|| format!("недопустимый путь в архиве: {relative}"))?;
 
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent).map_err(io_error)?;
@@ -283,20 +266,14 @@ fn restore_backup_sync(name: &str, requested_contents: Option<Vec<String>>) -> R
     }
 
     validate_restored_contents(&requested_contents, &restored_contents)?;
-    log(
-        "INFO",
-        restore_log_message(&backup_path, &requested_contents),
-    );
+    log("INFO", restore_log_message(&backup_path, &requested_contents));
     Ok(())
 }
 
 fn delete_backup_sync(name: &str) -> Result<(), String> {
     let backup_path = resolve_backup_path(name)?;
     fs::remove_file(&backup_path).map_err(io_error)?;
-    log(
-        "INFO",
-        format!("Бэкап конфигураций удалён: {}", backup_path.display()),
-    );
+    log("INFO", format!("Бэкап конфигураций удалён: {}", backup_path.display()));
     Ok(())
 }
 
@@ -404,8 +381,8 @@ fn validate_backup_entries(path: &Path) -> Result<(), String> {
         }
 
         let entry_path = entry.path().map_err(io_error)?;
-        let relative = normalize_entry_path(entry_path.as_ref())
-            .map_err(|e| format!("невалидный путь в архиве: {e}"))?;
+        let relative =
+            normalize_entry_path(entry_path.as_ref()).map_err(|e| format!("невалидный путь в архиве: {e}"))?;
         if archive_relative_to_target(&relative).is_none() {
             return Err(format!("недопустимый путь в архиве: {relative}"));
         }
@@ -495,15 +472,11 @@ fn normalize_requested_contents(
 }
 
 fn parse_content_key(value: &str) -> Option<&'static str> {
-    CONTENT_ORDER
-        .iter()
-        .copied()
-        .find(|&content| content == value)
+    CONTENT_ORDER.iter().copied().find(|&content| content == value)
 }
 
 fn validate_restored_contents(
-    requested_contents: &Option<HashSet<&'static str>>,
-    restored_contents: &HashSet<&'static str>,
+    requested_contents: &Option<HashSet<&'static str>>, restored_contents: &HashSet<&'static str>,
 ) -> Result<(), String> {
     let Some(requested_contents) = requested_contents else {
         return Ok(());
@@ -512,9 +485,7 @@ fn validate_restored_contents(
     let missing = CONTENT_ORDER
         .iter()
         .copied()
-        .filter(|&content| {
-            requested_contents.contains(content) && !restored_contents.contains(content)
-        })
+        .filter(|&content| requested_contents.contains(content) && !restored_contents.contains(content))
         .map(content_label)
         .collect::<Vec<_>>();
 
@@ -522,10 +493,7 @@ fn validate_restored_contents(
         return Ok(());
     }
 
-    Err(format!(
-        "в архиве не найдены категории: {}",
-        missing.join(", ")
-    ))
+    Err(format!("в архиве не найдены категории: {}", missing.join(", ")))
 }
 
 fn collect_backup_content<'a>(paths: impl Iterator<Item = &'a str>) -> BackupContentFiles {
@@ -571,10 +539,7 @@ fn strip_content_prefix(relative: &str, root: &str) -> String {
         .to_string()
 }
 
-fn restore_log_message(
-    backup_path: &Path,
-    requested_contents: &Option<HashSet<&'static str>>,
-) -> String {
+fn restore_log_message(backup_path: &Path, requested_contents: &Option<HashSet<&'static str>>) -> String {
     let Some(requested_contents) = requested_contents else {
         return format!("Конфигурации восстановлены из {}", backup_path.display());
     };
@@ -587,11 +552,7 @@ fn restore_log_message(
         .collect::<Vec<_>>()
         .join(", ");
 
-    format!(
-        "Конфигурации {} восстановлены из {}",
-        contents,
-        backup_path.display()
-    )
+    format!("Конфигурации {} восстановлены из {}", contents, backup_path.display())
 }
 
 fn next_backup_name(tz: i32) -> String {

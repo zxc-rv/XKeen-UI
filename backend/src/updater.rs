@@ -1,22 +1,20 @@
 use crate::logger::log;
 use crate::types::*;
-use axum::{
-    extract::State,
-    http::{HeaderMap, header},
-    response::{IntoResponse, Json},
-};
+use axum::extract::State;
+use axum::http::{HeaderMap, header};
+use axum::response::{IntoResponse, Json};
 use futures_util::StreamExt;
 use serde::Deserialize;
 use serde_json::{Value, json};
+use std::fs::File;
+use std::io::{Cursor, Read, Seek, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::{
-    fs::File,
-    io::{Cursor, Read, Seek, Write},
-    os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
-    time::Duration,
-};
-use tokio::{fs, io::AsyncWriteExt, process::Command};
+use std::time::Duration;
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
+use tokio::process::Command;
 
 const GITHUB_API: &str = "https://api.github.com/repos";
 const GITHUB_RELEASE: &str = "https://github.com";
@@ -50,10 +48,7 @@ fn get_repo(core: &str) -> Option<&'static str> {
 }
 
 pub async fn fetch_latest_version(
-    client: &reqwest::Client,
-    core: &str,
-    proxies: &[String],
-    current_ver: Option<&str>,
+    client: &reqwest::Client, core: &str, proxies: &[String], current_ver: Option<&str>,
 ) -> Option<String> {
     let repo = get_repo(core)?;
     let url = format!("{}/{}/releases?per_page=10", GITHUB_API, repo);
@@ -94,9 +89,7 @@ pub async fn fetch_latest_version(
             if let Some(r) = rels.iter().find(|r| r.tag_name == "Prerelease-Alpha") {
                 for asset in &r.assets {
                     if let Some(idx) = asset.name.find("alpha-") {
-                        let hash = asset.name[idx..]
-                            .trim_end_matches(".gz")
-                            .trim_end_matches(".zip");
+                        let hash = asset.name[idx..].trim_end_matches(".gz").trim_end_matches(".zip");
                         return Some(hash.to_string());
                     }
                 }
@@ -117,10 +110,7 @@ fn response(success: bool, error: Option<String>) -> (HeaderMap, Json<Value>) {
 }
 
 async fn download(
-    client: &reqwest::Client,
-    url: &str,
-    proxies: &[String],
-    tmp_path: &Path,
+    client: &reqwest::Client, url: &str, proxies: &[String], tmp_path: &Path,
 ) -> Result<DownloadResult, String> {
     async fn load(r: reqwest::Response, path: &Path, source: &str) -> Option<DownloadResult> {
         let size = r.content_length().unwrap_or(0) as usize;
@@ -158,11 +148,7 @@ async fn download(
                         "INFO",
                         format!(
                             "Файл загружен {} ({:.1} МБ)",
-                            if is_disk {
-                                "на диск"
-                            } else {
-                                "в ОЗУ"
-                            },
+                            if is_disk { "на диск" } else { "в ОЗУ" },
                             (if is_disk { size } else { buf.len() }) as f64 / 1048576.0
                         ),
                     );
@@ -188,8 +174,7 @@ async fn download(
         None
     }
 
-    let list =
-        std::iter::once(url.to_string()).chain(proxies.iter().map(|p| format!("{}/{}", p, url)));
+    let list = std::iter::once(url.to_string()).chain(proxies.iter().map(|p| format!("{}/{}", p, url)));
     for (i, u) in list.enumerate() {
         let (source, is_proxy) = if i == 0 {
             ("напрямую", false)
@@ -216,15 +201,7 @@ async fn download(
                 if let Some(res) = load(
                     r,
                     tmp_path,
-                    &format!(
-                        "{}{}",
-                        source,
-                        if is_proxy {
-                            format!(" #{}", i)
-                        } else {
-                            "".into()
-                        }
-                    ),
+                    &format!("{}{}", source, if is_proxy { format!(" #{}", i) } else { "".into() }),
                 )
                 .await
                 {
@@ -261,11 +238,7 @@ async fn install_jq() -> Result<(), String> {
     Ok(())
 }
 
-async fn install_yq(
-    client: &reqwest::Client,
-    proxies: &[String],
-    tmp_dir: &Path,
-) -> Result<(), String> {
+async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path) -> Result<(), String> {
     let arch = std::env::consts::ARCH;
     let url = match arch {
         "aarch64" => format!(
@@ -301,9 +274,7 @@ async fn install_yq(
     })
     .await;
 
-    if let Ok(Err(e)) | Err(e) =
-        written.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-    {
+    if let Ok(Err(e)) | Err(e) = written.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) {
         return Err(format!("Ошибка записи yq: {}", e));
     }
 
@@ -319,19 +290,11 @@ async fn install_yq(
     Ok(())
 }
 
-pub async fn post_update(
-    State(state): State<AppState>,
-    Json(req): Json<UpdateReq>,
-) -> impl IntoResponse {
+pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
     let Some(repo) = get_repo(&req.core) else {
         return response(false, Some("Неизвестное ядро".into()));
     };
-    let ver = if req
-        .version
-        .chars()
-        .next()
-        .map_or(false, |c| c.is_ascii_digit())
-    {
+    let ver = if req.version.chars().next().map_or(false, |c| c.is_ascii_digit()) {
         format!("v{}", req.version)
     } else {
         req.version.clone()
@@ -347,11 +310,7 @@ pub async fn post_update(
         "INFO",
         format!(
             "Запущено обновление {} до {}",
-            if req.core == "self" {
-                "XKeen UI"
-            } else {
-                &core_cap
-            },
+            if req.core == "self" { "XKeen UI" } else { &core_cap },
             ver
         ),
     );
@@ -376,18 +335,8 @@ pub async fn post_update(
         };
 
         log("INFO", "Загрузка исполняемого файла...".into());
-        let bin_url = format!(
-            "{}/{}/releases/download/{}/xkeen-ui-{}",
-            GITHUB_RELEASE, repo, ver, a
-        );
-        let bin_d = match download(
-            &state.http_client,
-            &bin_url,
-            &proxies,
-            &tmp_dir.join("bin.tmp"),
-        )
-        .await
-        {
+        let bin_url = format!("{}/{}/releases/download/{}/xkeen-ui-{}", GITHUB_RELEASE, repo, ver, a);
+        let bin_d = match download(&state.http_client, &bin_url, &proxies, &tmp_dir.join("bin.tmp")).await {
             Ok(d) => d,
             Err(e) => return response(false, Some(e)),
         };
@@ -406,9 +355,7 @@ pub async fn post_update(
         })
         .await;
 
-        if let Ok(Err(e)) | Err(e) =
-            unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-        {
+        if let Ok(Err(e)) | Err(e) = unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) {
             return response(false, Some(format!("Ошибка распаковки: {}", e)));
         }
 
@@ -446,10 +393,7 @@ pub async fn post_update(
                 "mips" => "Xray-linux-mips32.zip",
                 _ => return response(false, Some("Архитектура не поддерживается".into())),
             };
-            (
-                x.into(),
-                format!("{GITHUB_RELEASE}/{repo}/releases/download/{ver}/{x}"),
-            )
+            (x.into(), format!("{GITHUB_RELEASE}/{repo}/releases/download/{ver}/{x}"))
         }
         "mihomo" => {
             let m = match arch {
@@ -468,26 +412,17 @@ pub async fn post_update(
                 match found {
                     Some(name) => (
                         name.clone(),
-                        format!(
-                            "{}/{}/releases/download/{}/{}",
-                            GITHUB_RELEASE, repo, ver, name
-                        ),
+                        format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, name),
                     ),
                     None => {
-                        return response(
-                            false,
-                            Some("Ассет не найден — обновите страницу и повторите".into()),
-                        );
+                        return response(false, Some("Ассет не найден — обновите страницу и повторите".into()));
                     }
                 }
             } else {
                 let n = format!("mihomo-linux-{}-{}.gz", m, ver);
                 (
                     n.clone(),
-                    format!(
-                        "{}/{}/releases/download/{}/{}",
-                        GITHUB_RELEASE, repo, ver, n
-                    ),
+                    format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, n),
                 )
             }
         }
@@ -511,14 +446,7 @@ pub async fn post_update(
     }
 
     log("INFO", format!("Загрузка: {}", url));
-    let dl_res = match download(
-        &state.http_client,
-        &url,
-        &proxies,
-        &tmp_dir.join("download.tmp"),
-    )
-    .await
-    {
+    let dl_res = match download(&state.http_client, &url, &proxies, &tmp_dir.join("download.tmp")).await {
         Ok(r) => r,
         Err(e) => return response(false, Some(e)),
     };
@@ -526,12 +454,7 @@ pub async fn post_update(
     log("INFO", "Распаковка файла...".into());
     let (core_name, is_zip) = (req.core.clone(), asset.ends_with(".zip"));
 
-    fn unpack<R: Read + Seek>(
-        rdr: R,
-        out_path: &Path,
-        core: &str,
-        is_zip: bool,
-    ) -> std::io::Result<()> {
+    fn unpack<R: Read + Seek>(rdr: R, out_path: &Path, core: &str, is_zip: bool) -> std::io::Result<()> {
         let mut out = File::create(out_path)?;
         if is_zip {
             std::io::copy(&mut zip::ZipArchive::new(rdr)?.by_name(core)?, &mut out)?;
@@ -555,9 +478,7 @@ pub async fn post_update(
     })
     .await;
 
-    if let Ok(Err(e)) | Err(e) =
-        unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-    {
+    if let Ok(Err(e)) | Err(e) = unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) {
         return response(false, Some(format!("Ошибка распаковки: {}", e)));
     }
 
@@ -566,9 +487,8 @@ pub async fn post_update(
         let bk = format!(
             "/opt/sbin/core-backup/{}-{}",
             req.core,
-            (chrono::Utc::now()
-                + chrono::Duration::hours(state.settings.read().unwrap().log.timezone as i64))
-            .format("%Y%m%d-%H%M%S")
+            (chrono::Utc::now() + chrono::Duration::hours(state.settings.read().unwrap().log.timezone as i64))
+                .format("%Y%m%d-%H%M%S")
         );
         _ = fs::create_dir_all("/opt/sbin/core-backup").await;
         log("INFO", format!("Создание бэкапа: {}", bk));
@@ -590,10 +510,7 @@ pub async fn post_update(
             }
         }
     } else {
-        log(
-            "WARN",
-            "Атомарная замена не удалась, фолбек на копирование...".into(),
-        );
+        log("WARN", "Атомарная замена не удалась, фолбек на копирование...".into());
         if run {
             log("INFO", "Остановка XKeen...".into());
             _ = crate::controller::run_init_command(&state, &["stop"]).await;
@@ -609,10 +526,7 @@ pub async fn post_update(
         }
     }
 
-    log(
-        "INFO",
-        format!("Обновление {} до {} завершено", core_cap, ver),
-    );
+    log("INFO", format!("Обновление {} до {} завершено", core_cap, ver));
     {
         let mut c = state.update_checker.core_outdated.write().unwrap();
         *c = false;

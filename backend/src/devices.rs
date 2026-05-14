@@ -1,8 +1,6 @@
 use crate::types::AppState;
-use axum::{
-    extract::State,
-    response::{IntoResponse, Json},
-};
+use axum::extract::State;
+use axum::response::{IntoResponse, Json};
 use std::time::Duration;
 
 pub async fn get_device_list(State(state): State<AppState>) -> impl IntoResponse {

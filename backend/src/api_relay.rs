@@ -1,19 +1,15 @@
-use axum::{
-    body::{Body, to_bytes},
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    extract::{Path, Query, State},
-    http::{HeaderMap, HeaderName, Request, StatusCode},
-    response::{IntoResponse, Response},
-};
+use axum::body::{Body, to_bytes};
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{Path, Query, State};
+use axum::http::{HeaderMap, HeaderName, Request, StatusCode};
+use axum::response::{IntoResponse, Response};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use serde::Deserialize;
 use std::path::Path as FsPath;
 use std::pin::Pin;
 use tokio::net::UnixStream;
-use tokio_tungstenite::{
-    client_async, connect_async,
-    tungstenite::{Error as TError, Message as TMessage},
-};
+use tokio_tungstenite::tungstenite::{Error as TError, Message as TMessage};
+use tokio_tungstenite::{client_async, connect_async};
 
 use crate::types::{ApiResponse, AppState, MIHOMO_CONF};
 
@@ -36,11 +32,7 @@ pub struct ClashWsQuery {
     pub unix: Option<String>,
 }
 
-pub async fn proxy_http(
-    State(state): State<AppState>,
-    Path(path): Path<String>,
-    req: Request<Body>,
-) -> Response {
+pub async fn proxy_http(State(state): State<AppState>, Path(path): Path<String>, req: Request<Body>) -> Response {
     let (parts, body) = req.into_parts();
     let port_override = header_value(&parts.headers, "x-clash-port");
     let secret_override = header_value(&parts.headers, "x-clash-secret");
@@ -48,13 +40,13 @@ pub async fn proxy_http(
 
     let target = match resolve_clash_target(port_override, secret_override, unix_override).await {
         Ok(t) => t,
-        Err(e) => return make_bad_gateway(e),
+        Err(e) => return make_error(StatusCode::BAD_GATEWAY, e),
     };
 
     const CLASH_BODY_LIMIT: usize = 16 * 1024 * 1024;
     let body_bytes = match to_bytes(body, CLASH_BODY_LIMIT).await {
         Ok(b) => b,
-        Err(e) => return make_bad_gateway(e.to_string()),
+        Err(e) => return make_error(StatusCode::BAD_GATEWAY, e.to_string()),
     };
 
     match target {
@@ -71,7 +63,7 @@ pub async fn proxy_http(
                 .build()
             {
                 Ok(c) => c,
-                Err(e) => return make_bad_gateway(e.to_string()),
+                Err(e) => return make_error(StatusCode::BAD_GATEWAY, e.to_string()),
             };
             do_proxy_http(client, parts, body_bytes, url, None).await
         }
@@ -79,23 +71,11 @@ pub async fn proxy_http(
 }
 
 pub async fn proxy_ws(
-    Path(path): Path<String>,
-    Query(q): Query<ClashWsQuery>,
-    ws: WebSocketUpgrade,
+    Path(path): Path<String>, Query(q): Query<ClashWsQuery>, ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
     let target = match resolve_clash_target(q.port, q.secret, q.unix).await {
         Ok(t) => t,
-        Err(e) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                axum::Json(ApiResponse::<()> {
-                    success: false,
-                    error: Some(e),
-                    data: None,
-                }),
-            )
-                .into_response();
-        }
+        Err(e) => return make_error(StatusCode::BAD_REQUEST, e),
     };
 
     ws.on_upgrade(move |socket| async move {
@@ -105,11 +85,7 @@ pub async fn proxy_ws(
     })
 }
 
-async fn proxy_ws_inner(
-    client_ws: WebSocket,
-    path: String,
-    target: ClashTarget,
-) -> Result<(), String> {
+async fn proxy_ws_inner(client_ws: WebSocket, path: String, target: ClashTarget) -> Result<(), String> {
     type UpstreamSink = Pin<Box<dyn Sink<TMessage, Error = TError> + Send>>;
     type UpstreamStream = Pin<Box<dyn Stream<Item = Result<TMessage, TError>> + Send>>;
 
@@ -125,9 +101,7 @@ async fn proxy_ws_inner(
         }
         ClashTarget::Unix { path: socket_path } => {
             let url = build_url("ws", "localhost", "80", &path, None);
-            let stream = UnixStream::connect(socket_path)
-                .await
-                .map_err(|e| e.to_string())?;
+            let stream = UnixStream::connect(socket_path).await.map_err(|e| e.to_string())?;
             let (ws, _) = client_async(url, stream).await.map_err(|e| e.to_string())?;
             let (tx, rx) = ws.split();
             (Box::pin(tx), Box::pin(rx))
@@ -220,9 +194,9 @@ fn header_value(headers: &HeaderMap, name: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
-fn make_bad_gateway(err: String) -> Response {
+fn make_error(status: StatusCode, err: String) -> Response {
     (
-        StatusCode::BAD_GATEWAY,
+        status,
         axum::Json(ApiResponse::<()> {
             success: false,
             error: Some(err),
@@ -233,10 +207,7 @@ fn make_bad_gateway(err: String) -> Response {
 }
 
 async fn do_proxy_http(
-    client: reqwest::Client,
-    parts: http::request::Parts,
-    body_bytes: axum::body::Bytes,
-    url: String,
+    client: reqwest::Client, parts: http::request::Parts, body_bytes: axum::body::Bytes, url: String,
     secret: Option<String>,
 ) -> Response {
     let mut builder = client.request(parts.method.clone(), url);
@@ -251,17 +222,14 @@ async fn do_proxy_http(
 
     match builder.body(body_bytes).send().await {
         Ok(upstream) => build_http_response(upstream).await,
-        Err(e) => make_bad_gateway(e.to_string()),
+        Err(e) => make_error(StatusCode::BAD_GATEWAY, e.to_string()),
     }
 }
 
 async fn build_http_response(upstream: reqwest::Response) -> Response {
     let status = upstream.status();
     let headers = upstream.headers().clone();
-    let bytes = match upstream.bytes().await {
-        Ok(b) => b,
-        Err(_) => axum::body::Bytes::new(),
-    };
+    let bytes = upstream.bytes().await.unwrap_or_default();
 
     let mut response = Response::builder().status(status);
     for (name, value) in headers.iter() {
@@ -275,9 +243,7 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
 }
 
 async fn resolve_clash_target(
-    port_override: Option<String>,
-    secret_override: Option<String>,
-    unix_override: Option<String>,
+    port_override: Option<String>, secret_override: Option<String>, unix_override: Option<String>,
 ) -> Result<ClashTarget, String> {
     if let Some(u) = unix_override {
         if let Some(path) = sanitize_unix_name(&u) {
@@ -300,9 +266,7 @@ async fn resolve_clash_target(
 }
 
 fn sanitize_unix_name(raw: &str) -> Option<String> {
-    let name = FsPath::new(raw.trim())
-        .file_name()?
-        .to_string_lossy();
+    let name = FsPath::new(raw.trim()).file_name()?.to_string_lossy();
     if name.is_empty() {
         return None;
     }
@@ -310,13 +274,7 @@ fn sanitize_unix_name(raw: &str) -> Option<String> {
 }
 
 fn build_url(scheme: &str, host: &str, port: &str, path: &str, query: Option<&str>) -> String {
-    let mut url = format!(
-        "{}://{}:{}/{}",
-        scheme,
-        host,
-        port,
-        path.trim_start_matches('/')
-    );
+    let mut url = format!("{}://{}:{}/{}", scheme, host, port, path.trim_start_matches('/'));
     if let Some(q) = query {
         url.push('?');
         url.push_str(q);

@@ -1,16 +1,17 @@
 use crate::types::*;
-use axum::{
-    extract::{Query, State},
-    response::{IntoResponse, Json},
-};
+use axum::extract::{Query, State};
+use axum::response::{IntoResponse, Json};
 use memmap2::{Advice, MmapOptions};
 use prost::bytes::Buf;
 use prost::encoding::{DecodeContext, WireType, decode_key, decode_varint, skip_field};
 use regex_lite::Regex;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::fs::File;
+use std::net::IpAddr;
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::SystemTime;
-use std::{collections::HashMap, fs::File, net::IpAddr, path::Path};
 use tokio::task;
 
 #[derive(Serialize, Clone)]
@@ -195,17 +196,12 @@ fn detect_geo_file_type(data: &[u8]) -> (bool, bool) {
     (false, false)
 }
 
-pub fn list_geo_files(
-    cache_arc: Arc<RwLock<crate::types::GeoCache>>,
-) -> Result<GeoFilesResponse, String> {
+pub fn list_geo_files(cache_arc: Arc<RwLock<crate::types::GeoCache>>) -> Result<GeoFilesResponse, String> {
     let mut site_files = Vec::new();
     let mut ip_files = Vec::new();
     let mut new_cache_entries = Vec::new();
 
-    for entry in std::fs::read_dir(XRAY_ASSET)
-        .map_err(|e| e.to_string())?
-        .flatten()
-    {
+    for entry in std::fs::read_dir(XRAY_ASSET).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
         if !entry.file_type().map_or(false, |ft| ft.is_file()) {
             continue;
@@ -214,11 +210,7 @@ pub fn list_geo_files(
             continue;
         }
 
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
         let mtime = entry
             .metadata()
             .and_then(|m| m.modified())
@@ -253,10 +245,7 @@ pub fn list_geo_files(
 
     site_files.sort();
     ip_files.sort();
-    Ok(GeoFilesResponse {
-        site_files,
-        ip_files,
-    })
+    Ok(GeoFilesResponse { site_files, ip_files })
 }
 
 pub async fn get_geo(State(state): State<AppState>) -> impl IntoResponse {
@@ -281,15 +270,13 @@ pub async fn get_geo(State(state): State<AppState>) -> impl IntoResponse {
 }
 
 pub async fn get_geoip(
-    State(state): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    State(state): State<AppState>, Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     geo_query_handler(params, true, Some(state.http_client)).await
 }
 
 pub async fn get_geosite(
-    State(_): State<AppState>,
-    Query(params): Query<HashMap<String, String>>,
+    State(_): State<AppState>, Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     geo_query_handler(params, false, None).await
 }
@@ -334,9 +321,7 @@ async fn resolve_domain(client: &reqwest::Client, domain: &str) -> Result<IpAddr
 }
 
 async fn geo_query_handler(
-    params: HashMap<String, String>,
-    is_ip: bool,
-    client: Option<reqwest::Client>,
+    params: HashMap<String, String>, is_ip: bool, client: Option<reqwest::Client>,
 ) -> impl IntoResponse {
     let key = if is_ip { "ip" } else { "domain" };
     let (Some(filename), Some(target)) = (params.get("file"), params.get(key)) else {
@@ -400,14 +385,10 @@ async fn geo_query_handler(
                 IpAddr::V4(v4) => (Some(u32::from(v4)), None),
                 IpAddr::V6(v6) => (None, Some(u128::from(v6))),
             };
-            Ok(find_categories(&mmap, |buf| {
-                parse_cidr_and_match(buf, v4, v6)
-            }))
+            Ok(find_categories(&mmap, |buf| parse_cidr_and_match(buf, v4, v6)))
         } else {
             let dom_low = target.to_lowercase();
-            Ok(find_categories(&mmap, |buf| {
-                parse_domain_and_match(buf, &dom_low)
-            }))
+            Ok(find_categories(&mmap, |buf| parse_domain_and_match(buf, &dom_low)))
         }
     })
     .await;

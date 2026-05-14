@@ -1,6 +1,6 @@
+mod api_relay;
 mod auth;
 mod backuper;
-mod api_relay;
 mod configs;
 mod controller;
 mod devices;
@@ -15,24 +15,30 @@ mod version;
 mod websocket;
 use crate::logger::{log, ts};
 use crate::types::*;
-use axum::{
-    Router, middleware,
-    routing::{any, get, post},
-};
-use std::{
-    env,
-    net::SocketAddr,
-    path::Path,
-    process::{Stdio, exit},
-    sync::{Arc, RwLock},
-};
+use axum::routing::{any, get, post};
+use axum::{Router, middleware};
+use std::env;
+use std::net::SocketAddr;
+use std::path::Path;
+use std::process::{Stdio, exit};
+use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
+
+fn run_ui_script(cmd: &str) {
+    let _ = std::process::Command::new(S99XKEEN_UI)
+        .arg(cmd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+}
 
 #[tokio::main]
 async fn main() {
     let (mut port, mut debug) = ("1000".to_string(), false);
     let mut args = env::args().skip(1);
+
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-p" => {
@@ -46,22 +52,18 @@ async fn main() {
                 exit(0);
             }
             "--restart" | "--start" | "--stop" => {
-                let cmd = arg.trim_start_matches("--");
-                let _ = std::process::Command::new(S99XKEEN_UI)
-                    .arg(cmd)
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn();
+                run_ui_script(arg.trim_start_matches("--"));
                 exit(0);
             }
             "--reset-password" => {
                 let content = std::fs::read_to_string(APP_CONFIG).unwrap_or_default();
                 let mut json: serde_json::Value =
                     serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}));
+
                 if !json.is_object() {
                     json = serde_json::json!({});
                 }
+
                 let auth = json
                     .as_object_mut()
                     .unwrap()
@@ -70,21 +72,20 @@ async fn main() {
                 if !auth.is_object() {
                     *auth = serde_json::json!({});
                 }
-                let auth = auth.as_object_mut().unwrap();
-                auth.remove("password_hash");
-                auth.insert("session_ids".into(), serde_json::json!([]));
+
+                let auth_obj = auth.as_object_mut().unwrap();
+                auth_obj.remove("password_hash");
+                auth_obj.insert("session_ids".into(), serde_json::json!([]));
+
                 std::fs::write(APP_CONFIG, serde_json::to_string_pretty(&json).unwrap()).unwrap();
+
                 let current_pid = std::process::id() as i32;
-                let was_running = controller::get_pid("xkeen-ui")
+                if controller::get_pid("xkeen-ui")
                     .into_iter()
-                    .any(|pid| pid != current_pid);
-                if was_running && Path::new(S99XKEEN_UI).exists() {
-                    let _ = std::process::Command::new(S99XKEEN_UI)
-                        .arg("restart")
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn();
+                    .any(|pid| pid != current_pid)
+                    && Path::new(S99XKEEN_UI).exists()
+                {
+                    run_ui_script("restart");
                 }
                 println!("Пароль сброшен, установить новый можно при открытии панели");
                 exit(0);
@@ -97,20 +98,14 @@ async fn main() {
     refresh_xray_log_paths();
     let error_log = error_log_path();
     let access_log = access_log_path();
-    if let Some(p) = Path::new(&error_log).parent() {
-        let _ = std::fs::create_dir_all(p);
+
+    for path in [&error_log, &access_log] {
+        if let Some(p) = Path::new(path).parent() {
+            let _ = std::fs::create_dir_all(p);
+        }
+        let _ = std::fs::OpenOptions::new().create(true).append(true).open(path);
     }
-    if let Some(p) = Path::new(&access_log).parent() {
-        let _ = std::fs::create_dir_all(p);
-    }
-    let _ = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&error_log);
-    let _ = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&access_log);
+
     println!(
         "{} [INFO] Defined xray logs: access={}, error={}",
         ts(),
@@ -118,24 +113,23 @@ async fn main() {
         error_log
     );
 
-    let init_file: Option<String> =
-        tokio::task::spawn_blocking(|| controller::find_init_file(true))
-            .await
-            .unwrap()
-            .or_else(|| {
-                log(
-                    "ERROR",
-                    format!("Не удалось найти файл инициализации XKeen"),
-                );
-                None
-            });
+    let init_file = tokio::task::spawn_blocking(|| controller::find_init_file(true))
+        .await
+        .unwrap()
+        .or_else(|| {
+            log("ERROR", "Не удалось найти файл инициализации XKeen".into());
+            None
+        });
+
     let geo_cache = Arc::new(RwLock::new(std::collections::HashMap::new()));
     let gc_clone = geo_cache.clone();
     tokio::task::spawn_blocking(move || {
         let _ = crate::geo::list_geo_files(gc_clone);
     });
+
     let (log_tx, _) = broadcast::channel::<String>(16);
     let log_tx_arc = Arc::new(log_tx);
+
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(init_file.as_deref()))),
         settings: Arc::new(RwLock::new(load_settings())),
@@ -193,7 +187,7 @@ async fn main() {
         .route("/ws", get(websocket::ws_handler))
         .route_layer(middleware::from_fn({
             let state = state.clone();
-            move |req: axum::extract::Request, next: middleware::Next| {
+            move |req, next| {
                 let state = state.clone();
                 async move { auth::auth_middleware(state, req, next).await }
             }
@@ -201,10 +195,7 @@ async fn main() {
 
     let unsecure_api = Router::new()
         .route("/api/auth/setup", post(auth::post_setup))
-        .route(
-            "/api/auth/login",
-            get(auth::get_login_info).post(auth::post_login),
-        );
+        .route("/api/auth/login", get(auth::get_login_info).post(auth::post_login));
 
     let app = Router::new()
         .merge(secure_api)
@@ -229,11 +220,7 @@ fn get_arch() -> String {
     } else {
         std::env::consts::ARCH
     };
-    let libc = if cfg!(target_env = "musl") {
-        "musl"
-    } else {
-        "gnu"
-    };
+    let libc = if cfg!(target_env = "musl") { "musl" } else { "gnu" };
     format!("{}/{}", arch, libc)
 }
 
@@ -260,24 +247,18 @@ fn load_settings() -> AppSettings {
     let (content, path) = match std::fs::read_to_string(APP_CONFIG) {
         Ok(c) => (c, APP_CONFIG),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            match std::fs::read_to_string(APP_CONFIG_LEGACY) {
-                Ok(c) => {
-                    match std::fs::rename(APP_CONFIG_LEGACY, APP_CONFIG) {
-                        Ok(_) => log(
-                            "INFO",
-                            format!(
-                                "Успешная миграция конфига: {} -> {}",
-                                APP_CONFIG_LEGACY, APP_CONFIG
-                            ),
-                        ),
-                        Err(e) => log(
-                            "WARN",
-                            format!("Не удалось выполнить миграцию конфига: {}", e),
-                        ),
-                    }
-                    (c, APP_CONFIG_LEGACY)
+            if let Ok(c) = std::fs::read_to_string(APP_CONFIG_LEGACY) {
+                if std::fs::rename(APP_CONFIG_LEGACY, APP_CONFIG).is_ok() {
+                    log(
+                        "INFO",
+                        format!("Успешная миграция конфига: {} -> {}", APP_CONFIG_LEGACY, APP_CONFIG),
+                    );
+                } else {
+                    log("WARN", "Не удалось выполнить миграцию конфига".into());
                 }
-                Err(_) => return AppSettings::default(),
+                (c, APP_CONFIG_LEGACY)
+            } else {
+                return AppSettings::default();
             }
         }
         Err(e) => {
@@ -285,14 +266,15 @@ fn load_settings() -> AppSettings {
             return AppSettings::default();
         }
     };
+
     match serde_json::from_str::<AppSettings>(&content) {
-        Err(e) => {
-            log("ERROR", format!("Ошибка чтения {}: {}", path, e));
-            AppSettings::default()
-        }
         Ok(mut s) => {
             s.normalize_proxies();
             s
+        }
+        Err(e) => {
+            log("ERROR", format!("Ошибка парсинга {}: {}", path, e));
+            AppSettings::default()
         }
     }
 }

@@ -1,22 +1,15 @@
-use crate::{
-    logger::{process_log_line, ts},
-    types::*,
-};
-use axum::{
-    extract::{
-        State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-    },
-    response::IntoResponse,
-};
-use futures_util::{sink::SinkExt, stream::StreamExt};
+use crate::logger::{process_log_line, ts};
+use crate::types::*;
+use axum::extract::State;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::response::IntoResponse;
+use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
 use notify::{RecursiveMode, Watcher};
-use std::{
-    fs::File,
-    io::{BufRead, BufReader, Seek, SeekFrom},
-    path::Path,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 static WS_COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -24,13 +17,7 @@ pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> 
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
-fn read_log_file(
-    p: String,
-    offset: u64,
-    query: String,
-    full: bool,
-    tz: i32,
-) -> (String, Vec<String>, u64) {
+fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> (String, Vec<String>, u64) {
     let mut f = match File::open(&p) {
         Ok(f) => f,
         _ => return ("clear".into(), vec![], 0),
@@ -96,15 +83,7 @@ fn read_log_file(
             }
         }
     }
-    (
-        if full {
-            "initial".into()
-        } else {
-            "append".into()
-        },
-        lines,
-        bytes_read,
-    )
+    (if full { "initial".into() } else { "append".into() }, lines, bytes_read)
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
@@ -128,17 +107,16 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             let tx = state.log_tx.clone();
             let handle = tokio::spawn(async move {
                 let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel::<String>(32);
-                let mut watcher =
-                    notify::recommended_watcher(move |res: Result<notify::Event, _>| {
-                        if let Ok(e) = res {
-                            if e.kind.is_modify() {
-                                for path in e.paths {
-                                    let _ = mpsc_tx.try_send(path.to_string_lossy().to_string());
-                                }
+                let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
+                    if let Ok(e) = res {
+                        if e.kind.is_modify() {
+                            for path in e.paths {
+                                let _ = mpsc_tx.try_send(path.to_string_lossy().to_string());
                             }
                         }
-                    })
-                    .unwrap();
+                    }
+                })
+                .unwrap();
 
                 let error_log = error_log_path();
                 let access_log = access_log_path();
@@ -162,21 +140,16 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let p_clone = path.clone();
     let q_clone = query.clone();
-    let (t, l, mut offset) =
-        tokio::task::spawn_blocking(move || read_log_file(p_clone, 0, q_clone, true, tz))
-            .await
-            .unwrap();
+    let (t, l, mut offset) = tokio::task::spawn_blocking(move || read_log_file(p_clone, 0, q_clone, true, tz))
+        .await
+        .unwrap();
 
     let init_msg = if l.is_empty() {
         serde_json::json!({"type": "clear"})
     } else {
         serde_json::json!({"type": t, "lines": l})
     };
-    if tx
-        .send(Message::Text(init_msg.to_string().into()))
-        .await
-        .is_err()
-    {
+    if tx.send(Message::Text(init_msg.to_string().into())).await.is_err() {
         return;
     }
 
