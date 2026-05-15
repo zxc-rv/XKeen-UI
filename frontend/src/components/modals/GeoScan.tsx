@@ -176,7 +176,7 @@ export function GeoScanModal() {
         </div>
 
         {/* File list — fixed height, scrollable */}
-        <ScrollArea className="border-border bg-input-background relative max-h-62.5 min-h-62.5 [scrollbar-width:thin] overflow-y-auto rounded-lg border">
+        <ScrollArea className="border-border bg-input-background relative max-h-62.5 min-h-62.5 scrollbar-thin overflow-y-auto rounded-lg border">
           {loading ? (
             <div className="space-y-1 p-1.5">
               {Array.from({ length: 6 }).map((_, i) => (

@@ -813,7 +813,7 @@ const ConnectionDialog = memo(function ConnectionDialog({
       <DialogContent className="flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden">
         <DialogHeader className="shrink-0">{renderedConn && <ConnectionDialogTitle conn={renderedConn} />}</DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+        <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
           {renderedConn && (
             <>
               <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} />
@@ -1220,7 +1220,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           onClearFilter={clearFilter}
           onCloseAll={closeAll}
         />
-        <div className="flex-1 overflow-auto [scrollbar-width:thin]">
+        <div className="flex-1 scrollbar-thin overflow-auto">
           <Table className="min-w-240 md:min-w-190">
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
             {activeTab === 'active' ? (

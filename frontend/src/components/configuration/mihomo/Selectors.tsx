@@ -858,7 +858,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   return (
     <TooltipProvider delayDuration={700}>
-      <div className="absolute inset-4 flex flex-col gap-4 overflow-y-auto [scrollbar-width:thin]">
+      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
         {selectorNames.map((name) => (
           <SelectorRow
             key={name}

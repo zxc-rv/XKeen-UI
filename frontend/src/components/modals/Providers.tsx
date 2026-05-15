@@ -327,7 +327,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
               </DialogTitle>
             </DialogHeader>
 
-            <div className="border-border bg-input-background min-h-0 flex-1 overflow-auto rounded-xl border [scrollbar-width:thin]">
+            <div className="border-border bg-input-background min-h-0 flex-1 scrollbar-thin overflow-auto rounded-xl border">
               {loading ? (
                 <div className="p-4">
                   <LoadingTable kind={kind} />
@@ -528,7 +528,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                 </Badge>
               </DialogTitle>
             </DialogHeader>
-            <div className="border-border bg-input-background min-h-0 flex-1 overflow-auto rounded-xl border [scrollbar-width:thin]">
+            <div className="border-border bg-input-background min-h-0 flex-1 scrollbar-thin overflow-auto rounded-xl border">
               <pre className="p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap">{viewContent?.content}</pre>
             </div>
           </div>
