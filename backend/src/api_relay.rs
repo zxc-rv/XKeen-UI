@@ -2,11 +2,12 @@ use axum::body::{Body, to_bytes};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderName, Request, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{IntoResponse, Json, Response};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use serde::Deserialize;
 use std::path::Path as FsPath;
 use std::pin::Pin;
+use std::time::Duration;
 use tokio::net::UnixStream;
 use tokio_tungstenite::tungstenite::{Error as TError, Message as TMessage};
 use tokio_tungstenite::{client_async, connect_async};
@@ -30,6 +31,34 @@ pub struct ClashWsQuery {
     pub port: Option<String>,
     pub secret: Option<String>,
     pub unix: Option<String>,
+}
+
+pub async fn get_device_list(State(state): State<AppState>) -> impl IntoResponse {
+    let response = match state
+        .http_client
+        .get("http://localhost:79/rci/show/device-list")
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(e) => return Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+    };
+
+    if !response.status().is_success() {
+        return Json(serde_json::json!({
+            "success": false,
+            "error": format!("RCI вернул {}", response.status()),
+        }));
+    }
+
+    match response.json::<serde_json::Value>().await {
+        Ok(data) => Json(serde_json::json!({
+            "success": true,
+            "host": data.get("host").cloned().unwrap_or_else(|| serde_json::json!([])),
+        })),
+        Err(e) => Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
 }
 
 pub async fn proxy_http(State(state): State<AppState>, Path(path): Path<String>, req: Request<Body>) -> Response {
@@ -59,7 +88,7 @@ pub async fn proxy_http(State(state): State<AppState>, Path(path): Path<String>,
             let client = match reqwest::Client::builder()
                 .unix_socket(socket_path)
                 .user_agent("XKeen-UI")
-                .timeout(std::time::Duration::from_secs(120))
+                .timeout(Duration::from_secs(120))
                 .build()
             {
                 Ok(c) => c,

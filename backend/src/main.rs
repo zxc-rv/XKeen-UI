@@ -3,7 +3,6 @@ mod auth;
 mod backuper;
 mod configs;
 mod controller;
-mod devices;
 mod frontend_embedder;
 mod geo;
 mod logger;
@@ -175,7 +174,7 @@ async fn main() {
         )
         .route("/api/version", get(version::version_handler))
         .route("/api/ruleset", get(ruleset_inspector::get_ruleset_content))
-        .route("/api/device-list", get(devices::get_device_list))
+        .route("/api/device-list", get(api_relay::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))
         .route("/api/geo/site", get(geo::get_geosite))
