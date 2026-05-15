@@ -17,6 +17,9 @@ const toYaml = (obj, indent = 0) => {
   }, '')
 }
 
+const randomHwid = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(6)), (n) => n.toString(16).padStart(2, '0').toUpperCase()).join('')
+
 const getStreamSettings = (type, params) => {
   const number = (val) => (val ? +val : undefined)
   const bool = (val) => val === 'true' || val === true || val === '1' || undefined
@@ -377,6 +380,10 @@ function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
               url: 'https://www.gstatic.com/generate_204',
               interval: 300,
               'expected-status': 204,
+            },
+            header: {
+              'User-Agent': '["ClashMeta/1.19.24; mihomo/1.19.24"]',
+              'x-hwid': `["${randomHwid()}"]`,
             },
             override: { udp: true, tfo: true },
           },

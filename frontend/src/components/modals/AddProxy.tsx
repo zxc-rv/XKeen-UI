@@ -48,10 +48,30 @@ function highlightYamlValue(value: string): string {
   if (/^-?\d+\.?\d*$/.test(trimmed)) return value.replace(trimmed, `<span style="color:#ff9e64">${trimmed}</span>`)
   if (/^(true|false|null|~)$/.test(trimmed)) return value.replace(trimmed, `<span style="color:#bb9af7">${trimmed}</span>`)
   if (/^["']/.test(trimmed)) return value.replace(trimmed, `<span style="color:#9ece6a">${trimmed}</span>`)
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) return highlightInlineYaml(value)
   if (trimmed && !trimmed.startsWith('{') && !trimmed.startsWith('[') && !trimmed.startsWith('*') && !trimmed.startsWith('&'))
     return value.replace(trimmed, `<span style="color:#9ece6a">${trimmed}</span>`)
 
   return value
+}
+
+function highlightInlineYaml(value: string): string {
+  let result = ''
+  let i = 0
+  while (i < value.length) {
+    const char = value[i]
+    if (char === '"' || char === "'") {
+      const quote = char
+      let end = i + 1
+      while (end < value.length && value[end] !== quote) end++
+      result += `<span style="color:#9ece6a">${value.slice(i, Math.min(end + 1, value.length))}</span>`
+      i = end + 1
+    } else {
+      result += /[[\]{}]/.test(char) ? `<span style="color:#89ddff">${char}</span>` : char
+      i++
+    }
+  }
+  return result
 }
 
 function highlightJson(code: string): string {
@@ -59,6 +79,7 @@ function highlightJson(code: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+    .replace(/([[\]{}])/g, '<span style="color:#89ddff">$1</span>')
     .replace(/"([^"]+)"(\s*:)/g, '<span style="color:#7aa2f7">"$1"</span>$2')
     .replace(/:\s*"([^"]*)"/g, ': <span style="color:#9ece6a">"$1"</span>')
     .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:#ff9e64">$1</span>')

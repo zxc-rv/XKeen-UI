@@ -383,7 +383,7 @@ export function LogPanel() {
                 ref={logRef}
                 tabIndex={0}
                 className={cn(
-                  'text-foreground h-full overflow-y-auto px-3 py-1.5 font-mono text-[13px] leading-[1.6] wrap-anywhere contain-content [scrollbar-width:thin]',
+                  'text-foreground scrollbar-width:thin h-full overflow-y-auto px-3 py-1.5 font-mono text-[13px] leading-[1.6] wrap-anywhere contain-content',
                   isAnimating && 'pointer-events-none'
                 )}
                 onScroll={handleScroll}
