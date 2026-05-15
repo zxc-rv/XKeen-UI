@@ -312,7 +312,7 @@ function getConnectionSortValue(conn: Connection, column: SortColumn, showSource
 }
 
 function getConnectionHost(conn: Connection): string {
-  return conn.metadata.host || conn.metadata.destinationIP
+  return conn.metadata.host || conn.metadata.sniffHost || conn.metadata.destinationIP
 }
 
 function getConnectionHostLabel(conn: Connection): string {
@@ -785,7 +785,7 @@ function ConnectionDialogTraffic({ conn }: { conn: Connection }) {
 }
 
 const ConnectionDialogTitle = memo(function ConnectionDialogTitle({ conn }: { conn: Connection }) {
-  const title = conn.metadata.host || conn.metadata.destinationIP || 'Соединение'
+  const title = getConnectionHost(conn) || 'Соединение'
   return <DialogTitle className="truncate pr-8 text-base">{title}</DialogTitle>
 })
 
