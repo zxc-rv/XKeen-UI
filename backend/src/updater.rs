@@ -215,6 +215,21 @@ async fn download(
     log("ERROR", "Не удалось выполнить обновление".into());
     Err("Не удалось выполнить обновление".into())
 }
+async fn save(dl: DownloadResult, out_path: PathBuf) -> std::io::Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let mut out = File::create(&out_path)?;
+        match dl {
+            DownloadResult::RAM(d) => out.write_all(&d)?,
+            DownloadResult::Disk(p) => {
+                std::io::copy(&mut File::open(&p)?, &mut out)?;
+                _ = std::fs::remove_file(p);
+            }
+        }
+        out.sync_data()
+    })
+    .await
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
+}
 
 async fn install_jq() -> Result<(), String> {
     log("INFO", "Установка jq через opkg...".into());
@@ -258,26 +273,12 @@ async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path
 
     log("INFO", format!("Загрузка yq: {}", url));
     let dl_res = download(client, &url, proxies, &tmp_dir.join("yq.tmp")).await?;
-
     let target = "/opt/sbin/yq";
-    let tmp_bin = tmp_dir.join("yq.bin");
-    let written = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        let mut out = File::create(&tmp_bin)?;
-        match dl_res {
-            DownloadResult::RAM(d) => out.write_all(&d)?,
-            DownloadResult::Disk(p) => {
-                std::io::copy(&mut File::open(&p)?, &mut out)?;
-                _ = std::fs::remove_file(p);
-            }
-        }
-        out.sync_data()
-    })
-    .await;
-
-    if let Ok(Err(e)) | Err(e) = written.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) {
+    if let Err(e) = save(dl_res, tmp_dir.join("yq.bin")).await {
         return Err(format!("Ошибка записи yq: {}", e));
     }
 
+    log("INFO", "Установка yq...".into());
     let src = tmp_dir.join("yq.bin");
     if fs::rename(&src, target).await.is_err() {
         fs::copy(&src, target)
@@ -294,17 +295,15 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let Some(repo) = get_repo(&req.core) else {
         return response(false, Some("Неизвестное ядро".into()));
     };
-    let ver = if req.version.chars().next().map_or(false, |c| c.is_ascii_digit()) {
+    let ver = if req.version.starts_with(|c: char| c.is_ascii_digit()) {
         format!("v{}", req.version)
     } else {
         req.version.clone()
     };
-    let core_cap = req
-        .core
-        .chars()
-        .next()
-        .map(|c| c.to_uppercase().to_string() + &req.core[1..])
-        .unwrap_or_default();
+    let mut core_cap = req.core.clone();
+    if let Some(r) = core_cap.get_mut(0..1) {
+        r.make_ascii_uppercase();
+    }
 
     log(
         "INFO",
@@ -321,7 +320,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     let arch = std::env::consts::ARCH;
 
     if req.core == "self" {
-        let a = match arch {
+        let arch_suffix = match arch {
             "aarch64" => "arm64-v8a",
             "mips" if cfg!(target_endian = "little") => {
                 if Path::new("/lib/ld-musl-mipsel-sf.so.1").exists() {
@@ -335,32 +334,20 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         };
 
         log("INFO", "Загрузка исполняемого файла...".into());
-        let bin_url = format!("{}/{}/releases/download/{}/xkeen-ui-{}", GITHUB_RELEASE, repo, ver, a);
+        let bin_url = format!("{GITHUB_RELEASE}/{repo}/releases/download/{ver}/xkeen-ui-{arch_suffix}");
         let bin_d = match download(&state.http_client, &bin_url, &proxies, &tmp_dir.join("bin.tmp")).await {
             Ok(d) => d,
             Err(e) => return response(false, Some(e)),
         };
 
-        log("INFO", "Сохранение файла...".into());
-        let unpack = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-            let mut out = File::create(tmp_dir.join("xkeen-ui"))?;
-            match bin_d {
-                DownloadResult::RAM(d) => out.write_all(&d)?,
-                DownloadResult::Disk(p) => {
-                    std::io::copy(&mut File::open(&p)?, &mut out)?;
-                    _ = std::fs::remove_file(p);
-                }
-            }
-            out.sync_data()
-        })
-        .await;
+        log("INFO", "Установка обновления...".into());
 
-        if let Ok(Err(e)) | Err(e) = unpack.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())) {
-            return response(false, Some(format!("Ошибка распаковки: {}", e)));
+        let source = tmp_dir.join("xkeen-ui");
+        if let Err(e) = save(bin_d, source.clone()).await {
+            return response(false, Some(format!("Ошибка сохранения: {}", e)));
         }
 
-        log("INFO", "Установка обновления...".into());
-        let (target, source) = ("/opt/sbin/xkeen-ui", tmp_dir.join("xkeen-ui"));
+        let target = "/opt/sbin/xkeen-ui";
         if let Err(e) = fs::rename(&source, target).await {
             return response(false, Some(format!("Ошибка установки: {}", e)));
         }
@@ -369,6 +356,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         _ = tokio::task::spawn_blocking(rustix::fs::sync).await;
 
         log("INFO", format!("Обновление XKeen UI до {} завершено", ver));
+
         if Path::new(S99XKEEN_UI).exists() {
             log("INFO", "Перезапуск...".into());
             _ = Command::new(S99XKEEN_UI)
@@ -384,7 +372,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         }
         return response(true, None);
     }
-
     let (asset, url) = match req.core.as_str() {
         "xray" => {
             let x = match arch {
@@ -451,7 +438,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         Err(e) => return response(false, Some(e)),
     };
 
-    log("INFO", "Распаковка файла...".into());
+    log("INFO", "Установка обновления...".into());
     let (core_name, is_zip) = (req.core.clone(), asset.ends_with(".zip"));
 
     fn unpack<R: Read + Seek>(rdr: R, out_path: &Path, core: &str, is_zip: bool) -> std::io::Result<()> {
@@ -495,7 +482,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         _ = fs::copy(&target, &bk).await;
     }
 
-    log("INFO", "Установка обновления...".into());
     let (run, source) = (
         !crate::controller::get_pid(&req.core).is_empty(),
         tmp_dir.join(&req.core),
