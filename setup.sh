@@ -90,27 +90,6 @@ download_files() {
     download_url="$base_url/download/$beta_tag"
   fi
 
-  if ! [ -f /opt/bin/tar ]; then
-    ( opkg update >/dev/null 2>&1; opkg install tar >/dev/null 2>&1 ) &
-    ! spinner $! "Установка tar..." && printf "${RED_BOLD}\n Не удалось установить tar.${NCN}"
-  fi
-
-  mkdir -p $STATIC_DIR
-
-  if [ "$LOCAL" = true ] && [ -f "/opt/tmp/xkeen-ui-static.tar.gz" ]; then
-    ( set -e; tar -xz -C "$STATIC_DIR" < "/opt/tmp/xkeen-ui-static.tar.gz" ) &
-    if ! spinner $! "Локальная установка статики..."; then
-      printf "${RED_BOLD}\n Не удалось распаковать статику.${NCN}"
-      exit 1
-    fi
-  else
-    ( set -e; curl -Ls "$download_url/xkeen-ui-static.tar.gz" | tar -xz -C "$STATIC_DIR" ) &
-    if ! spinner $! "Загрузка статики..."; then
-      printf "${RED_BOLD}\n Не удалось загрузить статику.${NCN}"
-      exit 1
-    fi
-  fi
-
   if [ "$LOCAL" = true ] && [ -f "/opt/tmp/$bin_name" ]; then
     ( set -e; mv "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
     if ! spinner $! "Локальная установка бинарника..."; then
@@ -134,13 +113,9 @@ install_xkeenui() {
 
   printf "${INFO} Начинаем установку...${NCN}"
 
-  [ -f "/opt/tmp/xkeen-ui-static.tar.gz" ] || [ -f "/opt/tmp/xkeen-ui-$ARCH" ] && LOCAL=true
+  [ -f "/opt/tmp/xkeen-ui-$ARCH" ] && LOCAL=true
 
   download_files; create_xkeenui_init
-
-  if [ "$LOCAL" = true ]; then
-    rm -f "/opt/tmp/xkeen-ui-static.tar.gz"
-  fi
 
   sync & spinner $! "Запись данных..."
 
