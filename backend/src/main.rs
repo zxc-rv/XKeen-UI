@@ -247,6 +247,9 @@ fn load_settings() -> AppSettings {
         Ok(c) => (c, APP_CONFIG),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             if let Ok(c) = std::fs::read_to_string(APP_CONFIG_LEGACY) {
+                if let Err(e) = std::fs::create_dir_all(XKEEN_CONF) {
+                    log("WARN", format!("Не удалось создать {}: {}", XKEEN_CONF, e));
+                }
                 if std::fs::rename(APP_CONFIG_LEGACY, APP_CONFIG).is_ok() {
                     log(
                         "INFO",
