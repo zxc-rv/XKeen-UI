@@ -1,0 +1,56 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wiki/**'
+      - '.github/workflows/wiki.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Push wiki/ to GitHub Wiki
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -d wiki ] || [ -z "$(ls -A wiki 2>/dev/null)" ]; then
+            echo "wiki/ is empty or missing; nothing to sync"
+            exit 0
+          fi
+
+          tmp="$(mktemp -d)"
+          wiki_url="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+
+          if ! git clone --depth=1 "$wiki_url" "$tmp" 2>/dev/null; then
+            echo "::error::Failed to clone wiki repo. Initialize the Wiki in repo Settings then create at least one page in GitHub UI, then re-run."
+            exit 1
+          fi
+
+          rsync -av --delete --exclude='.git' wiki/ "$tmp"/
+
+          cd "$tmp"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Wiki already up to date"
+            exit 0
+          fi
+
+          git commit -m "Sync wiki from ${GITHUB_SHA::7}"
+          git push origin HEAD:master
