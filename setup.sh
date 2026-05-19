@@ -71,10 +71,32 @@ get_arch() {
   fi
 }
 
+verify_binary() {
+  timeout 5 "$XKEENUI_BIN" -v >/dev/null 2>&1
+}
+
+_fetch_arch_bin() {
+  local download_url="$1"
+  local bin_name="xkeen-ui-$ARCH"
+  local msg
+
+  if [ "$LOCAL" = true ] && [ -f "/opt/tmp/$bin_name" ]; then
+    msg="Локальная установка бинарника..."
+    ( set -e; mv "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
+  else
+    msg="Загрузка бинарника..."
+    ( set -e; curl -Lsfo $XKEENUI_BIN $download_url/$bin_name && chmod +x $XKEENUI_BIN ) &
+  fi
+
+  if ! spinner $! "$msg"; then
+    printf "${RED_BOLD}\n Не удалось получить бинарник $bin_name.${NCN}"
+    exit 1
+  fi
+}
+
 download_files() {
   local base_url="https://github.com/zxc-rv/XKeen-UI/releases"
   local download_url="$base_url/latest/download"
-  local bin_name="xkeen-ui-$ARCH"
 
   if [ "$BETA" = true ]; then
     local beta_tag="/tmp/xkeen_beta"
@@ -90,16 +112,16 @@ download_files() {
     download_url="$base_url/download/$beta_tag"
   fi
 
-  if [ "$LOCAL" = true ] && [ -f "/opt/tmp/$bin_name" ]; then
-    ( set -e; mv "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
-    if ! spinner $! "Локальная установка бинарника..."; then
-      printf "${RED_BOLD}\n Не удалось переместить бинарник.${NCN}"
-      exit 1
-    fi
-  else
-    ( set -e; curl -Lsfo $XKEENUI_BIN $download_url/$bin_name && chmod +x $XKEENUI_BIN ) &
-    if ! spinner $! "Загрузка бинарника..."; then
-      printf "${RED_BOLD}\n Не удалось загрузить бинарник.${NCN}"
+  _fetch_arch_bin "$download_url"
+
+  if [ "$ARCH" = "mips32le" ] && ! verify_binary; then
+    printf "${YELLOW}\n Бинарник mips32le несовместим с системой, переключение на mips32le-gnu...\n${NC}"
+    ARCH="mips32le-gnu"
+    LOCAL=false
+    [ -f "/opt/tmp/xkeen-ui-$ARCH" ] && LOCAL=true
+    _fetch_arch_bin "$download_url"
+    if ! verify_binary; then
+      printf "${RED_BOLD}\n Бинарник $ARCH также не запускается. Прерывание.${NCN}"
       exit 1
     fi
   fi
