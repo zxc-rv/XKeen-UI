@@ -41,8 +41,10 @@ spinner() {
 }
 
 get_arch() {
-  local cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
+  local hw_id
+  hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | ascii_upcase')
 
+  local cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
   case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
     *'armv8'* | *'aarch64'* | *'cortex-a'* ) ARCH='arm64-v8a';;
     *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* ) ARCH='mips32le';;
@@ -59,23 +61,24 @@ get_arch() {
         fi
         ;;
   esac
-
   if [[ "$ARCH" = mips32 || "$ARCH" = mips64 ]]; then
     [ -f /opt/bin/lscpu ] || opkg install lscpu &>/dev/null
     local lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
     echo "$lscpu_output" | grep -q "little endian" && ARCH="${ARCH}le"
   fi
-
   if [[ "$ARCH" == "mips32le" ]]; then
-    [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu"
+    case "$hw_id" in
+      KN-1710|KN-1711|KN-1713) ARCH="${ARCH}-gnu";;
+      *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
+    esac
   fi
 }
 
-verify_binary() {
+healthcheck() {
   timeout 5 "$XKEENUI_BIN" -v >/dev/null 2>&1
 }
 
-_fetch_arch_bin() {
+_fetch_binary() {
   local download_url="$1"
   local bin_name="xkeen-ui-$ARCH"
   local msg
@@ -112,16 +115,16 @@ download_files() {
     download_url="$base_url/download/$beta_tag"
   fi
 
-  _fetch_arch_bin "$download_url"
+  _fetch_binary "$download_url"
 
-  if [ "$ARCH" = "mips32le" ] && ! verify_binary; then
-    printf "${YELLOW}\n Бинарник mips32le несовместим с системой, переключение на mips32le-gnu...\n${NC}"
+  if [ "$ARCH" = "mips32le" ] && ! healthcheck; then
+    printf "${YELLOW}\n Исполняемый файл mips32le несовместим с системой, фолбэк на gnu...\n${NC}"
     ARCH="mips32le-gnu"
     LOCAL=false
     [ -f "/opt/tmp/xkeen-ui-$ARCH" ] && LOCAL=true
-    _fetch_arch_bin "$download_url"
-    if ! verify_binary; then
-      printf "${RED_BOLD}\n Бинарник $ARCH также не запускается. Прерывание.${NCN}"
+    _fetch_binary "$download_url"
+    if ! healthcheck; then
+      printf "${RED_BOLD}\n Исполняемый файл $ARCH также не запускается. Прерывание.${NCN}"
       exit 1
     fi
   fi
