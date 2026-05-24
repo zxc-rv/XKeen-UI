@@ -123,7 +123,7 @@ fn install_panic_logger() {
         if let Ok(mut file) = open_process_log() {
             let _ = writeln!(
                 file,
-                "\n{} [PANIC] thread={} location={} payload={}",
+                "{} [PANIC] thread={} location={} payload={}",
                 ts(),
                 thread_name,
                 location,
@@ -173,12 +173,12 @@ extern "C" fn fatal_signal_handler(sig: i32) {
 
 fn fatal_signal_message(sig: i32) -> &'static [u8] {
     match sig {
-        x if x == nix::libc::SIGABRT => b"\n[FATAL] received SIGABRT\n",
-        x if x == nix::libc::SIGBUS => b"\n[FATAL] received SIGBUS\n",
-        x if x == nix::libc::SIGFPE => b"\n[FATAL] received SIGFPE\n",
-        x if x == nix::libc::SIGILL => b"\n[FATAL] received SIGILL\n",
-        x if x == nix::libc::SIGSEGV => b"\n[FATAL] received SIGSEGV\n",
-        _ => b"\n[FATAL] received fatal signal\n",
+        x if x == nix::libc::SIGABRT => b"[FATAL] received SIGABRT\n",
+        x if x == nix::libc::SIGBUS => b"[FATAL] received SIGBUS\n",
+        x if x == nix::libc::SIGFPE => b"[FATAL] received SIGFPE\n",
+        x if x == nix::libc::SIGILL => b"[FATAL] received SIGILL\n",
+        x if x == nix::libc::SIGSEGV => b"[FATAL] received SIGSEGV\n",
+        _ => b"[FATAL] received fatal signal\n",
     }
 }
 
@@ -370,17 +370,16 @@ async fn main() {
         .fallback(frontend_embedder::serve)
         .layer(CorsLayer::permissive())
         .with_state(state);
-
     let addr: SocketAddr = format!("0.0.0.0:{}", port)
         .parse()
-        .unwrap_or_else(|e| report_process_error(&format!("Invalid listen address 0.0.0.0:{}: {}", port, e)));
+        .unwrap_or_else(|e| report_process_error(&format!("Error listening on 0.0.0.0:{}: {}", port, e)));
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .unwrap_or_else(|e| report_process_error(&format!("Error listening on {}: {}", addr, e)));
     println!("{} [INFO] Listening on {}", ts(), addr);
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await
-        .unwrap_or_else(|e| report_process_error(&format!("Ошибка HTTP сервера: {}", e)));
+        .unwrap_or_else(|e| report_process_error(&format!("HTTP server error: {}", e)));
 }
 
 fn get_arch() -> String {
