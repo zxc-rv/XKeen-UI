@@ -69,7 +69,7 @@ get_arch() {
     command -v jq &>/dev/null || { opkg update &>/dev/null && opkg install jq &>/dev/null; }
     local hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | ascii_upcase')
     case "$hw_id" in
-      KN-1710|KN-1711|KN-1713) ARCH="${ARCH}-gnu";;
+      KN-1710|KN-1711|KN-1713|KN-1714) ARCH="${ARCH}-gnu";;
       *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
     esac
   fi
