@@ -41,8 +41,10 @@ spinner() {
 }
 
 get_arch() {
-  local cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
+  local hw_id
+  hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | ascii_upcase')
 
+  local cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
   case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
     *'armv8'* | *'aarch64'* | *'cortex-a'* ) ARCH='arm64-v8a';;
     *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* ) ARCH='mips32le';;
@@ -59,15 +61,18 @@ get_arch() {
         fi
         ;;
   esac
-
+  
   if [[ "$ARCH" = mips32 || "$ARCH" = mips64 ]]; then
     [ -f /opt/bin/lscpu ] || opkg install lscpu &>/dev/null
     local lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
     echo "$lscpu_output" | grep -q "little endian" && ARCH="${ARCH}le"
   fi
-
+  
   if [[ "$ARCH" == "mips32le" ]]; then
-    [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu"
+    case "$hw_id" in
+      KN-1710|KN-1711|KN-1713) ARCH="${ARCH}-gnu";;
+      *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
+    esac
   fi
 }
 
