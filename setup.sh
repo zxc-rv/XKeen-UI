@@ -41,10 +41,8 @@ spinner() {
 }
 
 get_arch() {
-  local hw_id
-  hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | ascii_upcase')
-
   local cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
+
   case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
     *'armv8'* | *'aarch64'* | *'cortex-a'* ) ARCH='arm64-v8a';;
     *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* ) ARCH='mips32le';;
@@ -61,45 +59,22 @@ get_arch() {
         fi
         ;;
   esac
+
   if [[ "$ARCH" = mips32 || "$ARCH" = mips64 ]]; then
     [ -f /opt/bin/lscpu ] || opkg install lscpu &>/dev/null
     local lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
     echo "$lscpu_output" | grep -q "little endian" && ARCH="${ARCH}le"
   fi
+
   if [[ "$ARCH" == "mips32le" ]]; then
-    case "$hw_id" in
-      KN-1710|KN-1711|KN-1713) ARCH="${ARCH}-gnu";;
-      *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
-    esac
-  fi
-}
-
-healthcheck() {
-  timeout 5 "$XKEENUI_BIN" -v >/dev/null 2>&1
-}
-
-_fetch_binary() {
-  local download_url="$1"
-  local bin_name="xkeen-ui-$ARCH"
-  local msg
-
-  if [ "$LOCAL" = true ] && [ -f "/opt/tmp/$bin_name" ]; then
-    msg="Локальная установка бинарника..."
-    ( set -e; mv "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
-  else
-    msg="Загрузка бинарника..."
-    ( set -e; curl -Lsfo $XKEENUI_BIN $download_url/$bin_name && chmod +x $XKEENUI_BIN ) &
-  fi
-
-  if ! spinner $! "$msg"; then
-    printf "${RED_BOLD}\n Не удалось получить бинарник $bin_name.${NCN}"
-    exit 1
+    [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu"
   fi
 }
 
 download_files() {
   local base_url="https://github.com/zxc-rv/XKeen-UI/releases"
   local download_url="$base_url/latest/download"
+  local bin_name="xkeen-ui-$ARCH"
 
   if [ "$BETA" = true ]; then
     local beta_tag="/tmp/xkeen_beta"
@@ -115,16 +90,16 @@ download_files() {
     download_url="$base_url/download/$beta_tag"
   fi
 
-  _fetch_binary "$download_url"
-
-  if [ "$ARCH" = "mips32le" ] && ! healthcheck; then
-    printf "${YELLOW}\n Исполняемый файл mips32le несовместим с системой, фолбэк на gnu...\n${NC}"
-    ARCH="mips32le-gnu"
-    LOCAL=false
-    [ -f "/opt/tmp/xkeen-ui-$ARCH" ] && LOCAL=true
-    _fetch_binary "$download_url"
-    if ! healthcheck; then
-      printf "${RED_BOLD}\n Исполняемый файл $ARCH также не запускается. Прерывание.${NCN}"
+  if [ "$LOCAL" = true ] && [ -f "/opt/tmp/$bin_name" ]; then
+    ( set -e; mv "/opt/tmp/$bin_name" $XKEENUI_BIN && chmod +x $XKEENUI_BIN ) &
+    if ! spinner $! "Локальная установка бинарника..."; then
+      printf "${RED_BOLD}\n Не удалось переместить бинарник.${NCN}"
+      exit 1
+    fi
+  else
+    ( set -e; curl -Lsfo $XKEENUI_BIN $download_url/$bin_name && chmod +x $XKEENUI_BIN ) &
+    if ! spinner $! "Загрузка бинарника..."; then
+      printf "${RED_BOLD}\n Не удалось загрузить бинарник.${NCN}"
       exit 1
     fi
   fi
