@@ -13,7 +13,7 @@ http = "1.4.0"
 memmap2 = "0.9"
 md5 = "0.8"
 mime_guess = "2"
-nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource"] }
+nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource", "fs"] }
 notify = "8"
 prost = "0.14"
 regex-lite = "0.1.9"

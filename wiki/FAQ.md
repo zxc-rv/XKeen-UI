@@ -2,7 +2,7 @@
 
 ## 1. Не удалось запустить XKeen UI"
 
-**Q**: UI не запускается и появляется следующая ошибка
+**Q**: Панель не запускается на mipsel и появляется следующая ошибка:
 
 ```bash
 xkeen-ui -v
@@ -19,6 +19,10 @@ Error relocating /opt/sbin/xkeen-ui: posix_spawn_file_actions_addchdir_np: symbo
 Error relocating /opt/sbin/xkeen-ui: waitid: symbol not found
 ```
 
-**A**: Понятно, ставьте [версию с припиской «gnu»](https://github.com/zxc-rv/XKeen-UI/releases/tag/v1.0.0).
-Закинуть в `/opt/sbin` с названием `xkeen-ui`
-затем `chmod +x /opt/sbin/xkeen-ui && xkeen-ui --start`
+**A**: Поставьте gnu версию исполяемого файла:
+
+```SH
+killall -9 xkeen-ui
+curl -Lo /opt/sbin/xkeen-ui https://github.com/zxc-rv/XKeen-UI/releases/latest/download/xkeen-ui-mips32le-gnu
+chmod +x /opt/sbin/xkeen-ui && xkeen-ui --start
+```

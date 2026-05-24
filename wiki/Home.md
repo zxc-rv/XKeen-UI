@@ -70,6 +70,7 @@ curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh -s -- 
 | `xkeen-ui -p <port>` | старт на указанном порту |
 | `xkeen-ui -d` | debug-режим |
 | `xkeen-ui -v` | вывод версии |
+| `xkeen-ui --create-init` | создание init-скрипта автозапуска |
 | `xkeen-ui --reset-password` | сброс пароля |
 
 ## Пути в системе

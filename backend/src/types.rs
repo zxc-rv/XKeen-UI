@@ -14,6 +14,7 @@ pub const MIHOMO_CONF: &str = "/opt/etc/mihomo";
 pub const XKEEN_CONF: &str = "/opt/etc/xkeen";
 pub const DEFAULT_ERROR_LOG: &str = "/opt/var/log/xray/error.log";
 pub const DEFAULT_ACCESS_LOG: &str = "/opt/var/log/xray/access.log";
+pub const XKEEN_UI_LOG: &str = "/opt/var/log/xkeen-ui.log";
 pub const S99XKEEN: &str = "/opt/etc/init.d/S99xkeen";
 pub const S99XKEEN_UI: &str = "/opt/etc/init.d/S99xkeen-ui";
 pub const S24XRAY: &str = "/opt/etc/init.d/S24xray";

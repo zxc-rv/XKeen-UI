@@ -17,20 +17,169 @@ use crate::types::*;
 use axum::routing::{any, get, post};
 use axum::{Router, middleware};
 use std::env;
+use std::fs::OpenOptions;
+use std::io::{self, Write};
 use std::net::SocketAddr;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Stdio, exit};
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
 
-fn run_ui_script(cmd: &str) {
-    let _ = std::process::Command::new(S99XKEEN_UI)
+const XKEEN_UI_INIT_CONTENT: &str = r#"#!/bin/sh
+
+ENABLED=yes
+PROCS=xkeen-ui
+ARGS="-p 1000"
+PREARGS=""
+DESC="$PROCS"
+PATH=/opt/sbin:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+. /opt/etc/init.d/rc.func
+"#;
+
+const XKEEN_UI_LOG_C: &[u8] = b"/opt/var/log/xkeen-ui.log\0";
+
+fn create_init() -> std::io::Result<()> {
+    if let Some(dir) = Path::new(S99XKEEN_UI).parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(S99XKEEN_UI, XKEEN_UI_INIT_CONTENT)?;
+    std::fs::set_permissions(S99XKEEN_UI, std::fs::Permissions::from_mode(0o755))
+}
+
+fn run_init(cmd: &str) -> std::io::Result<()> {
+    std::process::Command::new(S99XKEEN_UI)
         .arg(cmd)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .spawn();
+        .spawn()
+        .map(|_| ())
+}
+
+fn open_process_log() -> io::Result<std::fs::File> {
+    if let Some(dir) = Path::new(XKEEN_UI_LOG).parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    OpenOptions::new().create(true).append(true).open(XKEEN_UI_LOG)
+}
+
+fn setup_process_logging() {
+    if let Err(e) = open_process_log() {
+        eprintln!("Не удалось открыть лог {}: {}", XKEEN_UI_LOG, e);
+    }
+
+    install_panic_logger();
+    install_crash_signal_handlers();
+
+    if !stdio_is_interactive() {
+        if let Err(e) = redirect_stderr_to_process_log() {
+            eprintln!("Не удалось перенаправить stderr в {}: {}", XKEEN_UI_LOG, e);
+        }
+    }
+}
+
+fn stdio_is_interactive() -> bool {
+    unsafe { nix::libc::isatty(nix::libc::STDOUT_FILENO) == 1 || nix::libc::isatty(nix::libc::STDERR_FILENO) == 1 }
+}
+
+fn redirect_stderr_to_process_log() -> io::Result<()> {
+    let file = open_process_log()?;
+    nix::unistd::dup2_stderr(&file).map_err(io::Error::from)?;
+    Ok(())
+}
+
+fn write_process_log(level: &str, msg: &str) {
+    if let Ok(mut file) = open_process_log() {
+        let _ = writeln!(file, "{} [{}] {}", ts(), level, msg);
+    }
+}
+
+fn report_process_error(msg: &str) -> ! {
+    eprintln!("{} [ERROR] {}", ts(), msg);
+    if stdio_is_interactive() {
+        write_process_log("ERROR", msg);
+    }
+    exit(1);
+}
+
+fn install_panic_logger() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let payload = info
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| info.payload().downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("<non-string panic payload>");
+        let location = info
+            .location()
+            .map(|loc| format!("{}:{}:{}", loc.file(), loc.line(), loc.column()))
+            .unwrap_or_else(|| "unknown".into());
+        let thread = std::thread::current();
+        let thread_name = thread.name().unwrap_or("unnamed");
+        if let Ok(mut file) = open_process_log() {
+            let _ = writeln!(
+                file,
+                "\n{} [PANIC] thread={} location={} payload={}",
+                ts(),
+                thread_name,
+                location,
+                payload
+            );
+            let backtrace = std::backtrace::Backtrace::capture();
+            if matches!(backtrace.status(), std::backtrace::BacktraceStatus::Captured) {
+                let _ = writeln!(file, "Backtrace:\n{}", backtrace);
+            }
+        }
+
+        default_hook(info);
+    }));
+}
+
+fn install_crash_signal_handlers() {
+    use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal, sigaction};
+
+    let action = SigAction::new(
+        SigHandler::Handler(fatal_signal_handler),
+        SaFlags::SA_RESETHAND,
+        SigSet::empty(),
+    );
+
+    for signal in [Signal::SIGABRT, Signal::SIGBUS, Signal::SIGFPE, Signal::SIGILL, Signal::SIGSEGV] {
+        unsafe {
+            let _ = sigaction(signal, &action);
+        }
+    }
+}
+
+extern "C" fn fatal_signal_handler(sig: i32) {
+    let msg = fatal_signal_message(sig);
+    unsafe {
+        let fd = nix::libc::open(
+            XKEEN_UI_LOG_C.as_ptr().cast(),
+            nix::libc::O_WRONLY | nix::libc::O_CREAT | nix::libc::O_APPEND,
+            0o644,
+        );
+        if fd >= 0 {
+            let _ = nix::libc::write(fd, msg.as_ptr().cast(), msg.len());
+            let _ = nix::libc::close(fd);
+        }
+        let _ = nix::libc::kill(nix::libc::getpid(), sig);
+    }
+}
+
+fn fatal_signal_message(sig: i32) -> &'static [u8] {
+    match sig {
+        x if x == nix::libc::SIGABRT => b"\n[FATAL] received SIGABRT\n",
+        x if x == nix::libc::SIGBUS => b"\n[FATAL] received SIGBUS\n",
+        x if x == nix::libc::SIGFPE => b"\n[FATAL] received SIGFPE\n",
+        x if x == nix::libc::SIGILL => b"\n[FATAL] received SIGILL\n",
+        x if x == nix::libc::SIGSEGV => b"\n[FATAL] received SIGSEGV\n",
+        _ => b"\n[FATAL] received fatal signal\n",
+    }
 }
 
 #[tokio::main]
@@ -51,7 +200,24 @@ async fn main() {
                 exit(0);
             }
             "--restart" | "--start" | "--stop" => {
-                run_ui_script(arg.trim_start_matches("--"));
+                if !Path::new(S99XKEEN_UI).exists() {
+                    eprintln!(
+                        "Ошибка выполнения команды: отсутствует init скрипт\nСоздайте init script командой: xkeen-ui --create-init"
+                    );
+                    exit(1);
+                }
+                if let Err(e) = run_init(arg.trim_start_matches("--")) {
+                    eprintln!("Ошибка выполнения команды: {}", e);
+                    exit(1);
+                }
+                exit(0);
+            }
+            "--create-init" => {
+                if let Err(e) = create_init() {
+                    eprintln!("Не удалось создать {}: {}", S99XKEEN_UI, e);
+                    exit(1);
+                }
+                println!("Создан {}", S99XKEEN_UI);
                 exit(0);
             }
             "--reset-password" => {
@@ -84,7 +250,7 @@ async fn main() {
                     .any(|pid| pid != current_pid)
                     && Path::new(S99XKEEN_UI).exists()
                 {
-                    run_ui_script("restart");
+                    let _ = run_init("restart");
                 }
                 println!("Пароль сброшен, установить новый можно при открытии панели");
                 exit(0);
@@ -92,6 +258,8 @@ async fn main() {
             _ => {}
         }
     }
+
+    setup_process_logging();
     println!("XKeen UI {} ({})", VERSION, get_arch());
 
     refresh_xray_log_paths();
@@ -203,14 +371,16 @@ async fn main() {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
-    println!("{} [INFO] Listening on http://{}", ts(), addr);
-    axum::serve(
-        tokio::net::TcpListener::bind(&addr).await.unwrap(),
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+    let addr: SocketAddr = format!("0.0.0.0:{}", port)
+        .parse()
+        .unwrap_or_else(|e| report_process_error(&format!("Invalid listen address 0.0.0.0:{}: {}", port, e)));
+    let listener = tokio::net::TcpListener::bind(&addr)
+        .await
+        .unwrap_or_else(|e| report_process_error(&format!("Error listening on {}: {}", addr, e)));
+    println!("{} [INFO] Listening on {}", ts(), addr);
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .unwrap_or_else(|e| report_process_error(&format!("Ошибка HTTP сервера: {}", e)));
 }
 
 fn get_arch() -> String {
