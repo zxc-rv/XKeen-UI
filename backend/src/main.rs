@@ -148,7 +148,14 @@ fn install_crash_signal_handlers() {
         SigSet::empty(),
     );
 
-    for signal in [Signal::SIGABRT, Signal::SIGBUS, Signal::SIGFPE, Signal::SIGILL, Signal::SIGSEGV] {
+    for signal in [
+        Signal::SIGABRT,
+        Signal::SIGBUS,
+        Signal::SIGFPE,
+        Signal::SIGILL,
+        Signal::SIGSEGV,
+        Signal::SIGTERM,
+    ] {
         unsafe {
             let _ = sigaction(signal, &action);
         }
@@ -178,6 +185,7 @@ fn fatal_signal_message(sig: i32) -> &'static [u8] {
         x if x == nix::libc::SIGFPE => b"[FATAL] received SIGFPE\n",
         x if x == nix::libc::SIGILL => b"[FATAL] received SIGILL\n",
         x if x == nix::libc::SIGSEGV => b"[FATAL] received SIGSEGV\n",
+        x if x == nix::libc::SIGTERM => b"[FATAL] received SIGTERM\n",
         _ => b"[FATAL] received fatal signal\n",
     }
 }
