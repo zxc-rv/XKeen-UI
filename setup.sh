@@ -69,7 +69,7 @@ get_arch() {
     command -v jq &>/dev/null || { opkg update &>/dev/null && opkg install jq &>/dev/null; }
     local hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | ascii_upcase')
     case "$hw_id" in
-      KN-1710|KN-1711|KN-1713|KN-1714) ARCH="${ARCH}-gnu";;
+      KN-1410|KN-1710|KN-1711|KN-1713|KN-1714) ARCH="${ARCH}-gnu";;
       *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
     esac
   fi
@@ -87,7 +87,7 @@ download_files() {
   jq -re '.[0] | select(.prerelease == true) | .tag_name' > $beta_tag) &
     if ! spinner $! "Поиск бета-релиза..."; then
       printf "${RED_BOLD}\n Нет актуального бета-релиза${NCN}"
-      $XKEENUI_INIT start >/dev/null 2>&1 || :
+      $XKEENUI_INIT start &>/dev/null || :
       exit 1
     fi
     beta_tag=$(cat $beta_tag)
@@ -123,7 +123,7 @@ install_xkeenui() {
 
   sync & spinner $! "Запись данных..."
 
-  $XKEENUI_INIT start >/dev/null 2>&1 &
+  $XKEENUI_INIT start &>/dev/null &
   if ! spinner $! "Запуск XKeen UI..."; then
     printf "${RED_BOLD}\n Не удалось запустить XKeen UI.${NCN}"
     exit 1
@@ -140,14 +140,14 @@ update_xkeenui() {
   if [ ! -f $XKEENUI_INIT ]; then
     (
       set -e
-      killall -q -9 xkeen-ui >/dev/null 2>&1 || :
+      killall -q -9 xkeen-ui &>/dev/null || :
       create_xkeenui_init
     ) &
     spinner $! "Создание скрипта запуска..."
-  elif pidof xkeen-ui >/dev/null 2>&1; then
+  elif pidof xkeen-ui &>/dev/null; then
     (
       sed -i 's|^PROCS=/opt/sbin/xkeen-ui$|PROCS=xkeen-ui|' /opt/etc/init.d/S99xkeen-ui
-      $XKEENUI_INIT stop >/dev/null 2>&1 || :
+      $XKEENUI_INIT stop &>/dev/null || :
       killall -q -9 xkeen-ui || :
     ) &
     spinner $! "Остановка XKeen UI..."
@@ -159,7 +159,7 @@ update_xkeenui() {
 
   sync & spinner $! "Запись данных..."
 
-  $XKEENUI_INIT start >/dev/null 2>&1 &
+  $XKEENUI_INIT start &>/dev/null &
   if ! spinner $! "Запуск XKeen UI..."; then
     printf "${RED_BOLD}\n Не удалось запустить XKeen UI.${NCN}"
     exit 1
@@ -179,15 +179,15 @@ uninstall_xkeenui() {
 
   (
     if [[ -f "$LIGHTTPD_INIT" && -f "$LIGHTTPD_CONF" ]]; then
-      if $LIGHTTPD_INIT status >/dev/null 2>&1; then
-          $LIGHTTPD_INIT stop >/dev/null 2>&1 || :
-          opkg remove --autoremove --force-removal-of-dependent-packages lighttpd >/dev/null 2>&1
+      if $LIGHTTPD_INIT status &>/dev/null; then
+          $LIGHTTPD_INIT stop &>/dev/null || :
+          opkg remove --autoremove --force-removal-of-dependent-packages lighttpd &>/dev/null
           rm -rf $LIGHTTPD_DIR
       fi
     fi
     if [ -f $XKEENUI_INIT ]; then
-      if $XKEENUI_INIT status >/dev/null 2>&1; then
-        $XKEENUI_INIT stop >/dev/null 2>&1 || :
+      if $XKEENUI_INIT status &>/dev/null; then
+        $XKEENUI_INIT stop &>/dev/null || :
         killall -q -9 xkeen-ui || :
       fi
     fi
@@ -210,7 +210,7 @@ finish_setup() {
 
 legacy_installation_check() {
   if [ -f "$LIGHTTPD_CONF" ]; then
-    $LIGHTTPD_INIT status >/dev/null 2>&1 && $LIGHTTPD_INIT stop
+    $LIGHTTPD_INIT status &>/dev/null && $LIGHTTPD_INIT stop
     rm -f "$LIGHTTPD_CONF"
     printf "${YELLOW}\n Веб-сервер lighttpd для работы XKeen UI более не используется.\n${NC}"
     read -p " Удалить его? [Y/n]: " response < /dev/tty
@@ -241,12 +241,12 @@ EOF
 get_status() {
   [ ! -f "$XKEENUI_BIN" ] && printf "Статус панели: ${RED_BOLD}не установлена${NC}" && return
 
-  local version=$(timeout 1 $XKEENUI_BIN -v 2>/dev/null | awk '{print $3}')
+  local version=$(timeout 3 $XKEENUI_BIN -v 2>/dev/null | awk '{print $3}')
   local status="${RED_BOLD}не запущена"
 
   version=${version:-"N/A"}
 
-  pidof xkeen-ui >/dev/null 2>&1 && status="${GREEN_BOLD}запущена"
+  pidof xkeen-ui &>/dev/null && status="${GREEN_BOLD}запущена"
   printf "Статус панели: $status ${NC}[$version]"
 }
 
