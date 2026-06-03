@@ -291,28 +291,6 @@ async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path
     Ok(())
 }
 
-async fn get_mipsel_suffix(client: &reqwest::Client) -> &'static str {
-    const GNU_MODELS: &[&str] = &["KN-1710", "KN-1711", "KN-1713", "KN-1714"];
-    if let Ok(res) = client
-        .get("http://127.0.0.1:79/rci/show/version")
-        .timeout(Duration::from_secs(3))
-        .send()
-        .await
-    {
-        if let Ok(json) = res.json::<Value>().await {
-            if let Some(hw_id) = json["hw_id"].as_str() {
-                if GNU_MODELS.contains(&hw_id.to_ascii_uppercase().as_str()) {
-                    return "mips32le-gnu";
-                }
-            }
-        }
-    }
-    if Path::new("/lib/ld-musl-mipsel-sf.so.1").exists() {
-        "mips32le"
-    } else {
-        "mips32le-gnu"
-    }
-}
 
 pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
     let Some(repo) = get_repo(&req.core) else {
@@ -345,7 +323,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     if req.core == "self" {
         let arch_suffix = match arch {
             "aarch64" => "arm64-v8a",
-            "mips" if cfg!(target_endian = "little") => get_mipsel_suffix(&state.http_client).await,
+            "mips" if cfg!(target_endian = "little") => "mips32le",
             "mips" => "mips32",
             _ => return response(false, Some("Архитектура не поддерживается".into())),
         };
