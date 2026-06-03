@@ -1,0 +1,9 @@
+[target.mips-unknown-linux-musl]
+image = "ghcr.io/cross-rs/mips-unknown-linux-musl:edge"
+pre-build = ["ln -s /usr/local/lib/gcc/mips-linux-muslsf/9.2.0/libgcc.a /usr/local/lib/gcc/mips-linux-muslsf/9.2.0/libunwind.a"]
+
+[target.mipsel-unknown-linux-musl]
+image = "ghcr.io/cross-rs/mipsel-unknown-linux-musl:edge"
+pre-build = ["ln -s /usr/local/lib/gcc/mipsel-linux-muslsf/9.2.0/libgcc.a /usr/local/lib/gcc/mipsel-linux-muslsf/9.2.0/libunwind.a"]
+
+[target.mipsel-unknown-linux-gnu]
