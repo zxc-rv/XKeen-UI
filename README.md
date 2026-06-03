@@ -35,8 +35,8 @@
 
 ## 🔌 Совместимость
 
-- 🌕 Полная: роутеры Keenetic/Netcraze на `ARM (aarch64)` чипах
-- 🌗 Частичная*: роутеры Keenetic/Netcraze на `mips/mipsle` чипах
+- 🌕 Полная: роутеры Keenetic/Netcraze на `arm64 (aarch64)` чипах
+- 🌗 Частичная*: роутеры Keenetic/Netcraze на `mips[le]` чипах
   
 <sub> *На определенных mips/mipsle моделях может не работать некоторый функционал. При возникновении проблем с запуском создайте Issue с указанием названия модели, версии Keenetic OS и выводом команды `xkeen-ui -v` </sub>
   
