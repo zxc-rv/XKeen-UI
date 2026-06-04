@@ -8,6 +8,7 @@ argon2 = { version = "0.5", features = ["std"] }
 axum = { version = "0.8", features = ["ws"] }
 chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
+colored = "3"
 flate2 = "1.1"
 futures-util = "0.3"
 http = "1.4.0"

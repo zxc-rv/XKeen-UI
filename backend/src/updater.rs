@@ -291,7 +291,6 @@ async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path
     Ok(())
 }
 
-
 pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
     let Some(repo) = get_repo(&req.core) else {
         return response(false, Some("Неизвестное ядро".into()));

@@ -19,12 +19,13 @@ use axum::{Router, middleware};
 
 use clap::builder::styling::{AnsiColor, Styles};
 use clap::{FromArgMatches, Parser, Subcommand};
+use colored::Colorize;
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::{Stdio, exit};
+use std::process::{exit};
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
@@ -38,7 +39,12 @@ const STYLES: Styles = Styles::styled()
 #[derive(Parser)]
 #[command(name = "xkeen-ui", before_help = "", about = "Веб-панель управления сервисом XKeen", disable_version_flag = true, disable_help_subcommand = true, styles = STYLES)]
 struct Cli {
-    #[arg(short = 'p', long = "port", default_value = "1000", help = "Запуск сервиса с указанием порта")]
+    #[arg(
+        short = 'p',
+        long = "port",
+        default_value = "1000",
+        help = "Запуск сервиса с указанием порта"
+    )]
     port: String,
 
     #[arg(short = 'd', long = "debug", help = "Режим отладки")]
@@ -58,6 +64,8 @@ enum Command {
     Stop,
     /// Перезапустить сервис (трeбуется init скрипт)
     Restart,
+    /// Статус сервиса (трeбуется init скрипт)
+    Status,
     /// Сбросить пароль и перезапустить сервис (трeбуется init скрипт)
     ResetPassword,
     /// Запустить установочный скрипт
@@ -86,14 +94,11 @@ fn create_init() -> std::io::Result<()> {
     std::fs::set_permissions(S99XKEEN_UI, std::fs::Permissions::from_mode(0o755))
 }
 
-fn run_init(cmd: &str) -> std::io::Result<()> {
-    std::process::Command::new(S99XKEEN_UI)
-        .arg(cmd)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map(|_| ())
+fn exec_init(cmd: &str) -> ! {
+    use std::os::unix::process::CommandExt;
+    let err = std::process::Command::new(S99XKEEN_UI).arg(cmd).exec();
+    eprintln!("{} {}", " Ошибка выполнения команды:".red().bold(), err);
+    exit(1);
 }
 
 fn open_process_log() -> io::Result<std::fs::File> {
@@ -105,7 +110,7 @@ fn open_process_log() -> io::Result<std::fs::File> {
 
 fn setup_process_logging() {
     if let Err(e) = open_process_log() {
-        eprintln!("Не удалось открыть лог {}: {}", XKEEN_UI_LOG, e);
+        eprintln!("{} {}: {}", " Не удалось открыть лог".red().bold(), XKEEN_UI_LOG, e);
     }
 
     install_panic_logger();
@@ -113,7 +118,7 @@ fn setup_process_logging() {
 
     if !stdio_is_interactive() {
         if let Err(e) = redirect_stderr_to_process_log() {
-            eprintln!("Не удалось перенаправить stderr в {}: {}", XKEEN_UI_LOG, e);
+            eprintln!("{} {}: {}", " Не удалось перенаправить stderr в".red().bold(), XKEEN_UI_LOG, e);
         }
     }
 }
@@ -236,12 +241,19 @@ async fn main() {
             .ok()
             .and_then(|out| serde_json::from_slice::<serde_json::Value>(&out.stdout).ok());
 
-        let device = router_info.as_ref().and_then(|i| i["description"].as_str()).unwrap_or("");
+        let device = router_info
+            .as_ref()
+            .and_then(|i| i["description"].as_str())
+            .unwrap_or("");
         let os = router_info.as_ref().and_then(|i| i["title"].as_str()).unwrap_or("");
 
         println!("XKeen UI {} ({})", VERSION, get_arch());
-        if !os.is_empty() { println!("Keenetic OS: {}", os); }
-        if !device.is_empty() { println!("Device: {}", device); }
+        if !os.is_empty() {
+            println!("Keenetic OS: {}", os);
+        }
+        if !device.is_empty() {
+            println!("Device: {}", device);
+        }
         exit(0);
     }
 
@@ -263,15 +275,20 @@ async fn main() {
             Command::Setup => {
                 use std::os::unix::process::CommandExt;
                 let err = std::process::Command::new("sh")
-                    .args(["-c", "curl -fsSL https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh"])
+                    .args([
+                        "-c",
+                        "curl -fsSL https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh",
+                    ])
                     .exec();
-                eprintln!("Ошибка запуска setup: {}", err);
+                eprintln!(" {} {}", " Ошибка запуска setup:".red().bold(), err);
                 exit(1);
             }
-            Command::Start | Command::Stop | Command::Restart => {
+            Command::Start | Command::Stop | Command::Restart | Command::Status => {
                 if !Path::new(S99XKEEN_UI).exists() {
                     eprintln!(
-                        "Ошибка выполнения команды: отсутствует init скрипт\nСоздайте init script командой: xkeen-ui create-init"
+                        "\n{} отсутствует init скрипт\n Создайте скрипт командой: {}\n",
+                        " Ошибка:".red().bold(),
+                        "xkeen-ui create-init".green().bold()
                     );
                     exit(1);
                 }
@@ -279,20 +296,17 @@ async fn main() {
                     Command::Start => "start",
                     Command::Stop => "stop",
                     Command::Restart => "restart",
+                    Command::Status => "status",
                     _ => unreachable!(),
                 };
-                if let Err(e) = run_init(cmd) {
-                    eprintln!("Ошибка выполнения команды: {}", e);
-                    exit(1);
-                }
-                exit(0);
+                exec_init(cmd);
             }
             Command::CreateInit => {
                 if let Err(e) = create_init() {
-                    eprintln!("Не удалось создать {}: {}", S99XKEEN_UI, e);
+                    eprintln!("{} {}: {}", " Не удалось создать".red().bold(), S99XKEEN_UI, e);
                     exit(1);
                 }
-                println!("Создан {}", S99XKEEN_UI);
+                println!("\n{} создан {}\n", " Успех:".green().bold(), S99XKEEN_UI);
                 exit(0);
             }
             Command::ResetPassword => {
@@ -319,15 +333,23 @@ async fn main() {
 
                 std::fs::write(APP_CONFIG, serde_json::to_string_pretty(&json).unwrap()).unwrap();
 
+                if !Path::new(S99XKEEN_UI).exists() {
+                    eprintln!(
+                        "\n{} отсутствует init скрипт\n Создайте скрипт командой: {}\n",
+                        " Ошибка:".red().bold(),
+                        "xkeen-ui create-init".green().bold()
+                    );
+                    exit(1);
+                }
                 let current_pid = std::process::id() as i32;
                 if controller::get_pid("xkeen-ui")
                     .into_iter()
                     .any(|pid| pid != current_pid)
-                    && Path::new(S99XKEEN_UI).exists()
                 {
-                    let _ = run_init("restart");
+                    println!("\n{} пароль сброшен\n", " Успех:".green().bold());
+                    exec_init("restart");
                 }
-                println!("Пароль сброшен, установить новый можно при открытии панели");
+                println!("\n{} пароль сброшен\n", " Успех:".green().bold());
                 exit(0);
             }
         }
