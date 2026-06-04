@@ -259,8 +259,7 @@ async fn main() {
 
     let version: &'static str = Box::leak(format!("{} ({})", VERSION, get_arch()).into_boxed_str());
     let mut command = <Cli as clap::CommandFactory>::command()
-        .version(version)
-        .name("XKeen UI");
+        .version(version);
 
     if std::env::args().any(|arg| arg == "-h" || arg == "--help") {
         command.print_help().unwrap();
