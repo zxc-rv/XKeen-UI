@@ -204,8 +204,7 @@ finish_setup() {
   local port=$(sed -n 's/.*-p \([0-9]*\).*/\1/p' $XKEENUI_INIT 2>/dev/null); port=${port:-1000}
 
   printf "${SUCCESS} XKeen UI успешно $1!${NCN}"
-  printf " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port${NC}"
-  [ $1 == "обновлен" ] && printf "\n После перехода нажмите Ctrl+Shift+R для обновления кэша\n\n" || printf "\n\n"
+  printf " Панель доступна по адресу: ${GREEN_BOLD}http://$ip:$port${NC}\n\n"
 }
 
 legacy_installation_check() {
