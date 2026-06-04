@@ -241,7 +241,7 @@ EOF
 get_status() {
   [ ! -f "$XKEENUI_BIN" ] && printf "Статус панели: ${RED_BOLD}не установлена${NC}" && return
 
-  local version=$($XKEENUI_BIN -v 2>/dev/null | awk '{print $3}')
+  local version=$($XKEENUI_BIN -v 2>/dev/null | awk 'NR==1{print $3}')
   local status="${RED_BOLD}не запущена"
 
   version=${version:-"N/A"}

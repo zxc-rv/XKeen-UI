@@ -16,7 +16,9 @@ use crate::logger::{log, ts};
 use crate::types::*;
 use axum::routing::{any, get, post};
 use axum::{Router, middleware};
-use std::env;
+
+use clap::builder::styling::{AnsiColor, Styles};
+use clap::{FromArgMatches, Parser, Subcommand};
 use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::net::SocketAddr;
@@ -26,6 +28,41 @@ use std::process::{Stdio, exit};
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
+
+const STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Yellow.on_default().bold())
+    .usage(AnsiColor::Yellow.on_default().bold())
+    .literal(AnsiColor::Cyan.on_default().bold())
+    .placeholder(AnsiColor::Cyan.on_default());
+
+#[derive(Parser)]
+#[command(name = "xkeen-ui", before_help = "", about = "Веб-панель управления сервисом XKeen", disable_version_flag = true, disable_help_subcommand = true, styles = STYLES)]
+struct Cli {
+    #[arg(short = 'p', long = "port", default_value = "1000", help = "Запуск сервиса с указанием порта")]
+    port: String,
+
+    #[arg(short = 'd', long = "debug", help = "Режим отладки")]
+    debug: bool,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Создать init скрипт
+    CreateInit,
+    /// Запустить сервис (трeбуется init скрипт)
+    Start,
+    /// Остановить сервис (трeбуется init скрипт)
+    Stop,
+    /// Перезапустить сервис (трeбуется init скрипт)
+    Restart,
+    /// Сбросить пароль и перезапустить сервис (трeбуется init скрипт)
+    ResetPassword,
+    /// Запустить установочный скрипт
+    Setup,
+}
 
 const XKEEN_UI_INIT_CONTENT: &str = r#"#!/bin/sh
 
@@ -192,35 +229,65 @@ fn fatal_signal_message(sig: i32) -> &'static [u8] {
 
 #[tokio::main]
 async fn main() {
-    let (mut port, mut debug) = ("1000".to_string(), false);
-    let mut args = env::args().skip(1);
+    if std::env::args().any(|arg| arg == "-v" || arg == "-V" || arg == "--version") {
+        let router_info = std::process::Command::new("curl")
+            .args(["-sf", "http://127.0.0.1:79/rci/show/version"])
+            .output()
+            .ok()
+            .and_then(|out| serde_json::from_slice::<serde_json::Value>(&out.stdout).ok());
 
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "-p" => {
-                if let Some(p) = args.next() {
-                    port = p
-                }
+        let device = router_info.as_ref().and_then(|i| i["description"].as_str()).unwrap_or("");
+        let os = router_info.as_ref().and_then(|i| i["title"].as_str()).unwrap_or("");
+
+        println!("XKeen UI {} ({})", VERSION, get_arch());
+        if !os.is_empty() { println!("Keenetic OS: {}", os); }
+        if !device.is_empty() { println!("Device: {}", device); }
+        exit(0);
+    }
+
+    let version: &'static str = Box::leak(format!("{} ({})", VERSION, get_arch()).into_boxed_str());
+    let mut command = <Cli as clap::CommandFactory>::command()
+        .version(version)
+        .name("XKeen UI");
+
+    if std::env::args().any(|arg| arg == "-h" || arg == "--help") {
+        command.print_help().unwrap();
+        println!();
+        exit(0);
+    }
+    let matches = command.get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+
+    if let Some(command) = cli.command {
+        match command {
+            Command::Setup => {
+                use std::os::unix::process::CommandExt;
+                let err = std::process::Command::new("sh")
+                    .args(["-c", "curl -fsSL https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh"])
+                    .exec();
+                eprintln!("Ошибка запуска setup: {}", err);
+                exit(1);
             }
-            "-d" => debug = true,
-            "-v" | "-V" => {
-                println!("XKeen UI {} ({})", VERSION, get_arch());
-                exit(0);
-            }
-            "--restart" | "--start" | "--stop" => {
+            Command::Start | Command::Stop | Command::Restart => {
                 if !Path::new(S99XKEEN_UI).exists() {
                     eprintln!(
-                        "Ошибка выполнения команды: отсутствует init скрипт\nСоздайте init script командой: xkeen-ui --create-init"
+                        "Ошибка выполнения команды: отсутствует init скрипт\nСоздайте init script командой: xkeen-ui create-init"
                     );
                     exit(1);
                 }
-                if let Err(e) = run_init(arg.trim_start_matches("--")) {
+                let cmd = match command {
+                    Command::Start => "start",
+                    Command::Stop => "stop",
+                    Command::Restart => "restart",
+                    _ => unreachable!(),
+                };
+                if let Err(e) = run_init(cmd) {
                     eprintln!("Ошибка выполнения команды: {}", e);
                     exit(1);
                 }
                 exit(0);
             }
-            "--create-init" => {
+            Command::CreateInit => {
                 if let Err(e) = create_init() {
                     eprintln!("Не удалось создать {}: {}", S99XKEEN_UI, e);
                     exit(1);
@@ -228,7 +295,7 @@ async fn main() {
                 println!("Создан {}", S99XKEEN_UI);
                 exit(0);
             }
-            "--reset-password" => {
+            Command::ResetPassword => {
                 let content = std::fs::read_to_string(APP_CONFIG).unwrap_or_default();
                 let mut json: serde_json::Value =
                     serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}));
@@ -263,7 +330,6 @@ async fn main() {
                 println!("Пароль сброшен, установить новый можно при открытии панели");
                 exit(0);
             }
-            _ => {}
         }
     }
 
@@ -320,7 +386,7 @@ async fn main() {
         log_tx: log_tx_arc,
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),
         app_config_lock: Arc::new(tokio::sync::Mutex::new(())),
-        debug,
+        debug: cli.debug,
     };
     version::start_update_checker(state.clone());
 
@@ -378,9 +444,9 @@ async fn main() {
         .fallback(frontend_embedder::serve)
         .layer(CorsLayer::permissive())
         .with_state(state);
-    let addr: SocketAddr = format!("0.0.0.0:{}", port)
+    let addr: SocketAddr = format!("0.0.0.0:{}", cli.port)
         .parse()
-        .unwrap_or_else(|e| report_process_error(&format!("Error listening on 0.0.0.0:{}: {}", port, e)));
+        .unwrap_or_else(|e| report_process_error(&format!("Error listening on 0.0.0.0:{}: {}", cli.port, e)));
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .unwrap_or_else(|e| report_process_error(&format!("Error listening on {}: {}", addr, e)));
