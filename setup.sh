@@ -65,14 +65,14 @@ get_arch() {
     echo "$lscpu_output" | grep -q "little endian" && ARCH="${ARCH}le"
   fi
   
-  if [[ "$ARCH" == "mips32le" ]]; then
-    command -v jq &>/dev/null || { opkg update &>/dev/null && opkg install jq &>/dev/null; }
-    local hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | split("-") | .[1]')
-    case "$hw_id" in
-      12??|1410|17??) ARCH="${ARCH}-gnu";;
-      *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
-    esac
-  fi
+  # if [[ "$ARCH" == "mips32le" ]]; then
+  #   command -v jq &>/dev/null || { opkg update &>/dev/null && opkg install jq &>/dev/null; }
+  #   local hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | split("-") | .[1]')
+  #   case "$hw_id" in
+  #     12??|1410|17??) ARCH="${ARCH}-gnu";;
+  #     *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
+  #   esac
+  # fi
 }
 
 download_files() {
