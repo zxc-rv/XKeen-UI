@@ -30,22 +30,22 @@ const getStreamSettings = (type, params) => {
     tlsSettings:
       params.security === 'tls'
         ? {
-            fingerprint: string(params.fp) || 'chrome',
-            serverName: string(params.sni),
-            alpn: params.alpn?.split(','),
-            allowInsecure: bool(params.allowinsecure || params.insecure),
-          }
+          fingerprint: string(params.fp) || 'chrome',
+          serverName: string(params.sni),
+          alpn: params.alpn?.split(','),
+          allowInsecure: bool(params.allowinsecure || params.insecure),
+        }
         : undefined,
     realitySettings:
       params.security === 'reality'
         ? {
-            fingerprint: string(params.fp) || 'chrome',
-            serverName: string(params.sni),
-            publicKey: string(params.pbk),
-            shortId: string(params.sid),
-            spiderX: string(params.spx),
-            mldsa65Verify: string(params.pqv),
-          }
+          fingerprint: string(params.fp) || 'chrome',
+          serverName: string(params.sni),
+          publicKey: string(params.pbk),
+          shortId: string(params.sid),
+          spiderX: string(params.spx),
+          mldsa65Verify: string(params.pqv),
+        }
         : undefined,
   }
   if (type === 'tcp' && params.headerType) output.tcpSettings = { header: { type: params.headerType } }
@@ -54,7 +54,7 @@ const getStreamSettings = (type, params) => {
     let extra
     try {
       extra = params.extra ? JSON.parse(decodeURIComponent(params.extra)) : undefined
-    } catch {}
+    } catch { }
     output.xhttpSettings = {
       host: string(params.host),
       path: params.path || '/',
@@ -76,7 +76,7 @@ const getStreamSettings = (type, params) => {
     }
   if (type === 'grpc')
     output.grpcSettings = {
-      serviceName: string(params.serviceName || params.path),
+      serviceName: string(params.servicename || params.path),
       authority: string(params.authority),
       multiMode: params.mode === 'multi',
       user_agent: string(params.user_agent),
@@ -166,7 +166,7 @@ const protocols = {
       const decoded = safeBase64(userinfo).split(':')
       method = decoded[0]
       password = decoded.slice(1).join(':')
-      ;[address, port] = server.split(':')
+        ;[address, port] = server.split(':')
       if (address.startsWith('[') && server.includes(']:')) {
         const parts = server.split(']:')
         address = parts[0] + ']'
@@ -176,7 +176,7 @@ const protocols = {
       const decoded = safeBase64(head)
       const match = decoded.match(/^(.*?):(.*?)@(.*):(\d+)$/)
       if (!match) throw new Error('Ошибка парсинга')
-      ;[, method, password, address, port] = match
+        ;[, method, password, address, port] = match
     }
 
     return {
@@ -312,13 +312,13 @@ function convertToMihomoYaml(proxyConfig) {
     const mapXmux = (xmux) =>
       xmux
         ? {
-            'max-connections': xmux.maxConnections,
-            'max-concurrency': xmux.maxConcurrency,
-            'c-max-reuse-times': xmux.cMaxReuseTimes,
-            'h-max-request-times': xmux.hMaxRequestTimes,
-            'h-max-reusable-secs': xmux.hMaxReusableSecs,
-            'h-keep-alive-period': xmux.hKeepAlivePeriod,
-          }
+          'max-connections': xmux.maxConnections,
+          'max-concurrency': xmux.maxConcurrency,
+          'c-max-reuse-times': xmux.cMaxReuseTimes,
+          'h-max-request-times': xmux.hMaxRequestTimes,
+          'h-max-reusable-secs': xmux.hMaxReusableSecs,
+          'h-keep-alive-period': xmux.hKeepAlivePeriod,
+        }
         : undefined
 
     common['xhttp-opts'] = {
@@ -331,27 +331,27 @@ function convertToMihomoYaml(proxyConfig) {
       'reuse-settings': mapXmux(extra.xmux),
       'download-settings': extra.downloadSettings
         ? (() => {
-            const ds = extra.downloadSettings
-            const tls = ds.tlsSettings || {}
-            const xs = ds.xhttpSettings || {}
-            return {
-              // xhttp part
-              path: xs.path,
-              host: xs.host,
-              headers: xs.headers,
-              'no-grpc-header': xs.noGRPCHeader || undefined,
-              'x-padding-bytes': xs.xPaddingBytes,
-              'reuse-settings': mapXmux(xs.xmux),
-              // proxy part
-              server: ds.address,
-              port: ds.port,
-              tls: ds.security === 'tls' || undefined,
-              alpn: tls.alpn,
-              'skip-cert-verify': tls.allowInsecure || undefined,
-              servername: tls.serverName,
-              'client-fingerprint': tls.fingerprint,
-            }
-          })()
+          const ds = extra.downloadSettings
+          const tls = ds.tlsSettings || {}
+          const xs = ds.xhttpSettings || {}
+          return {
+            // xhttp part
+            path: xs.path,
+            host: xs.host,
+            headers: xs.headers,
+            'no-grpc-header': xs.noGRPCHeader || undefined,
+            'x-padding-bytes': xs.xPaddingBytes,
+            'reuse-settings': mapXmux(xs.xmux),
+            // proxy part
+            server: ds.address,
+            port: ds.port,
+            tls: ds.security === 'tls' || undefined,
+            alpn: tls.alpn,
+            'skip-cert-verify': tls.allowInsecure || undefined,
+            servername: tls.serverName,
+            'client-fingerprint': tls.fingerprint,
+          }
+        })()
         : undefined,
     }
   }
