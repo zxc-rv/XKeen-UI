@@ -37,12 +37,6 @@ curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh -s -- 
 
 Хеширование — Argon2. Защита от перебора: 5 неуспешных попыток → блокировка на 60 секунд. Сброс пароля из CLI: `xkeen-ui --reset-password`.
 
-## Управление сервисом
-
-```sh
-/opt/etc/init.d/S99xkeen-ui {start|restart|stop|status}
-```
-
 ## Возможности
 
 - Мониторинг и управление сервисом XKeen (start / stop / restart / status)
@@ -63,15 +57,21 @@ curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh -s -- 
 | `xkeen-ui-mips32le` | `mipsel-unknown-linux-musl` | MIPS LE (musl) |
 | `xkeen-ui-mips32le-gnu` | `mipsel-unknown-linux-gnu` | MIPS LE (glibc) |
 
-## CLI
+| Команда | Описание |
+|----------|----------|
+| `create-init` | Создать init-скрипт |
+| `start` | Запустить сервис (требуется init-скрипт) |
+| `stop` | Остановить сервис (требуется init-скрипт) |
+| `restart` | Перезапустить сервис (требуется init-скрипт) |
+| `status` | Показать статус сервиса (требуется init-скрипт) |
+| `reset-password` | Сбросить пароль и перезапустить сервис (требуется init-скрипт) |
+| `setup` | Запустить установочный скрипт |
 
-| Команда | Назначение |
-|---|---|
-| `xkeen-ui -p <port>` | старт на указанном порту |
-| `xkeen-ui -d` | debug-режим |
-| `xkeen-ui -v` | вывод версии |
-| `xkeen-ui --create-init` | создание init-скрипта автозапуска |
-| `xkeen-ui --reset-password` | сброс пароля |
+| Опция | Описание |
+|--------|----------|
+| `-p, --port <PORT>` | Запуск сервиса с указанием порта (по умолчанию: `1000`) |
+| `-d, --debug` | Режим отладки |
+| `-h, --help` | Показать список доступных команд|
 
 ## Пути в системе
 
@@ -79,7 +79,7 @@ curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh -s -- 
 |---|---|
 | `/opt/sbin/xkeen-ui` | бинарь |
 | `/opt/etc/init.d/S99xkeen-ui` | init-скрипт |
-| `/opt/etc/xkeen/xkeen-ui.json` | конфиг приложения |
+| `/opt/etc/xkeen/xkeen-ui.json` | конфиг панели |
 
 ## Ссылки
 
