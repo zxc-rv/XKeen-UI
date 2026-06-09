@@ -43,7 +43,6 @@ import { cn, stripJsonComments } from '../../lib/utils'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
-import { Spinner } from '../ui/spinner'
 import type { CodeMirrorRef } from './CodeMirror'
 
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
@@ -754,12 +753,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                 onReady={handleEditorReady}
                 onSave={() => saveCurrentConfig()}
               />
-              {(currentPanel === 'config') && (!isEditorMounted || isConfigsLoading) && (
-                <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
-                  <Spinner className="mr-2 size-5" />
-                  {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}
-                </div>
-              )}
             </div>
           </div>
 
