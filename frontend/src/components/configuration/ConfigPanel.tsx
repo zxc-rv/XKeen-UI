@@ -285,8 +285,8 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
 
   const [isEditorMounted, setIsEditorMounted] = useState(false)
 
-  const [activePanel, setActivePanel] = useState<'config' | 'selectors' | 'connections'>('config')
-  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['config']))
+  const [activePanel, setActivePanel] = useState<'selectors' | 'connections' | 'config'>('selectors')
+  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['selectors']))
   const [mode, setMode] = useState<ClashMode>('rule')
   const [allSelectorsCollapsed, setAllSelectorsCollapsed] = useState(false)
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
@@ -345,7 +345,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
         .then((data) => {
           if (data.mode) setMode(data.mode)
         })
-        .catch(() => {})
+        .catch(() => { })
     }, 200)
     return () => {
       cancelled = true
@@ -516,8 +516,8 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', {
       action:
         !xkeenConfigs.some((c) => c.file === cfg.file) &&
-        (lang === 'json' || lang === 'yaml') &&
-        !hasCriticalChanges(cfg.savedContent, content, lang)
+          (lang === 'json' || lang === 'yaml') &&
+          !hasCriticalChanges(cfg.savedContent, content, lang)
           ? 'softRestart'
           : 'hardRestart',
       core: currentCore,
@@ -590,14 +590,14 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                     className="w-max flex-row!"
                   >
                     <TabsList variant="line" className="mb-2 w-max shrink-0 gap-3 p-0 whitespace-nowrap md:mb-0">
-                      <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
-                        Конфигурация
-                      </TabsTrigger>
                       <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
                         Селекторы
                       </TabsTrigger>
                       <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
                         Соединения
+                      </TabsTrigger>
+                      <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
+                        Конфигурация
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
@@ -754,7 +754,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                 onReady={handleEditorReady}
                 onSave={() => saveCurrentConfig()}
               />
-              {(!isEditorMounted || isConfigsLoading) && (
+              {(currentPanel === 'config') && (!isEditorMounted || isConfigsLoading) && (
                 <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
                   <Spinner className="mr-2 size-5" />
                   {isConfigsLoading ? 'Загрузка конфигураций...' : 'Инициализация редактора...'}
