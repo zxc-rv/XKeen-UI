@@ -247,12 +247,13 @@ async fn main() {
             .unwrap_or("");
         let os = router_info.as_ref().and_then(|i| i["title"].as_str()).unwrap_or("");
 
-        println!("XKeen UI {} ({})", VERSION, get_arch());
-        if !os.is_empty() {
-            println!("Keenetic OS: {}", os);
-        }
+        println!("  {}", format!("XKeen UI {}", VERSION).cyan().bold());
+        println!("  {} {}", "Target:".cyan().bold(), env!("BUILD_TARGET"));
         if !device.is_empty() {
-            println!("Device: {}", device);
+            println!("  {} {}", "Device:".cyan().bold(), device);
+        }
+        if !os.is_empty() {
+            println!("  {} {}", "Keenetic OS:".cyan().bold(), os);
         }
         exit(0);
     }
