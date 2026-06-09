@@ -336,7 +336,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
         log("INFO", "Установка обновления...".into());
 
-        let source = tmp_dir.join("xkeen-ui");
+        let source = tmp_dir.join(format!("xkeen-ui_{}", ver));
         if let Err(e) = save(bin_d, source.clone()).await {
             return response(false, Some(format!("Ошибка сохранения: {}", e)));
         }
@@ -446,8 +446,9 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         Ok(())
     }
 
+    let tmp_name = format!("{}_{}", core_name, ver);
     let unpack = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        let bin = tmp_dir.join(&core_name);
+        let bin = tmp_dir.join(&tmp_name);
         match dl_res {
             DownloadResult::RAM(d) => unpack(Cursor::new(d), &bin, &core_name, is_zip)?,
             DownloadResult::Disk(p) => {
@@ -478,7 +479,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     let (run, source) = (
         !crate::controller::get_pid(&req.core).is_empty(),
-        tmp_dir.join(&req.core),
+        tmp_dir.join(format!("{}_{}", req.core, ver)),
     );
     if fs::rename(&source, &target).await.is_ok() {
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
