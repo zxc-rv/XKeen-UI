@@ -222,8 +222,8 @@ pub async fn post_login(
     BRUTE_CACHE.lock().unwrap().remove(&ip);
     println!("{} [INFO] Successful auth {}", crate::logger::ts(), ip);
 
-    let max_age = if req.remember { 604800 } else { 0 };
-    let backend_ttl = if req.remember { 604800 } else { 86400 };
+    let max_age = if req.remember { 2592000 } else { 0 };
+    let backend_ttl = if req.remember { 2592000 } else { 86400 };
 
     let session_id = Uuid::new_v4().to_string();
     let session_val = format!("{}:{}", session_id, now_ts() + backend_ttl);

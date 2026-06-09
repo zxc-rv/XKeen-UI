@@ -101,7 +101,7 @@ export function LoginForm({ mode, onAuth }: LoginFormProps) {
           {mode === 'login' && (
             <div className="flex items-center gap-2">
               <Checkbox id="remember" checked={remember} onCheckedChange={(v) => setRemember(!!v)} />
-              <Label htmlFor="remember">Запомнить на 7 дней</Label>
+              <Label htmlFor="remember">Запомнить меня</Label>
             </div>
           )}
 
