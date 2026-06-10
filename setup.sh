@@ -41,38 +41,12 @@ spinner() {
 }
 
 get_arch() {
-  local cpuinfo=$(grep -i 'model name' /proc/cpuinfo | sed -e 's/.*: //i' | tr '[:upper:]' '[:lower:]')
-  case "$(uname -m | tr '[:upper:]' '[:lower:]')" in
-    *'armv8'* | *'aarch64'* | *'cortex-a'* ) ARCH='arm64-v8a';;
-    *'mipsle'* | *'mips 1004'* | *'mips 34'* | *'mips 24'* ) ARCH='mips32le';;
-    *'mips'* ) ARCH='mips32';;
-    *)  if echo "${cpuinfo}" | grep -qe 'armv8' -e 'aarch64' -e 'cortex-a'; then
-          ARCH='arm64-v8a'
-        elif echo "${cpuinfo}" | grep -qe 'mips32le' -e 'mips 1004' -e 'mips 34' -e 'mips 24'; then
-            ARCH='mips32le'
-        elif echo "${cpuinfo}" | grep -q 'mips'; then
-            ARCH='mips32'
-        else
-            printf "${RED_BOLD}\n Не удалось определить архитектуру.${NCN}" >&2
-            exit 1
-        fi
-        ;;
+  case "$(opkg print-architecture)" in
+    *aarch64*) ARCH='arm64-v8a' ;;
+    *mipsel*)  ARCH='mips32le' ;;
+    *mips*)    ARCH='mips32' ;;
+    *) printf "${RED_BOLD}\n Не удалось определить архитектуру.${NCN}" >&2; exit 1 ;;
   esac
-  
-  if [[ "$ARCH" = mips32 || "$ARCH" = mips64 ]]; then
-    command -v lscpu &>/dev/null || { opkg update &>/dev/null && opkg install lscpu &>/dev/null; }
-    local lscpu_output="$(lscpu 2>/dev/null | tr '[:upper:]' '[:lower:]')"
-    echo "$lscpu_output" | grep -q "little endian" && ARCH="${ARCH}le"
-  fi
-  
-  # if [[ "$ARCH" == "mips32le" ]]; then
-  #   command -v jq &>/dev/null || { opkg update &>/dev/null && opkg install jq &>/dev/null; }
-  #   local hw_id=$(curl -sf http://localhost:79/rci/show/version | jq -r '.hw_id | split("-") | .[1]')
-  #   case "$hw_id" in
-  #     12??|1410|17??) ARCH="${ARCH}-gnu";;
-  #     *) [ -f /lib/ld-musl-mipsel-sf.so.1 ] || ARCH="${ARCH}-gnu";;
-  #   esac
-  # fi
 }
 
 download_files() {

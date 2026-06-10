@@ -1,28 +1,105 @@
-# FAQ
+# ❓ FAQ — Часто задаваемые вопросы
 
-## 1. Не удалось запустить XKeen UI"
+---
 
-**Q**: Панель не запускается на mipsel и появляется следующая ошибка:
+<details>
+<summary><b>Q1: Не получается запустить установочный скрипт / Curl висит на загрузке уже N времени</b></summary>
+  
+### Воспользуйтесь установкой вручную  
+  
+**1. Узнайте архитектуру процессора:**
 
-```bash
-xkeen-ui -v
-Error relocating /opt/sbin/xkeen-ui: stat: symbol not found
-Error relocating /opt/sbin/xkeen-ui: pthread_setname_np: symbol not found
-Error relocating /opt/sbin/xkeen-ui: posix_spawnattr_setpgroup: symbol not found
-Error relocating /opt/sbin/xkeen-ui: pthread_getattr_np: symbol not found
-Error relocating /opt/sbin/xkeen-ui: posix_spawnp: symbol not found
-Error relocating /opt/sbin/xkeen-ui: bcmp: symbol not found
-Error relocating /opt/sbin/xkeen-ui: lstat: symbol not found
-Error relocating /opt/sbin/xkeen-ui: clock_gettime: symbol not found
-Error relocating /opt/sbin/xkeen-ui: fstat: symbol not found
-Error relocating /opt/sbin/xkeen-ui: posix_spawn_file_actions_addchdir_np: symbol not found
-Error relocating /opt/sbin/xkeen-ui: waitid: symbol not found
+```sh
+opkg print-architecture
 ```
 
-**A**: Поставьте gnu версию исполяемого файла:
+| Архитектура | Бинарник |
+|---|---|
+| `aarch64-3.10` | `xkeen-ui-arm64-v8a` |
+| `mipsel-3.4` | `xkeen-ui-mips32` |
+| `mips-3.4` | `xkeen-ui-mips32le` |
 
-```SH
-killall -9 xkeen-ui
-curl -Lo /opt/sbin/xkeen-ui https://github.com/zxc-rv/XKeen-UI/releases/latest/download/xkeen-ui-mips32le-gnu
-chmod +x /opt/sbin/xkeen-ui && xkeen-ui --start
+**2. Скачайте нужный файл из релиза, переименуйте и поместите его по пути `/opt/sbin/xkeen-ui`**
+
+**3. Создайте init-скрипт и запустите сервис:**
+
+```sh
+chmod +x /opt/sbin/xkeen-ui && xkeen-ui create-init && xkeen-ui start
 ```
+
+**4. Если ошибок нет — панель будет доступна по адресу `http://IP_Роутера:1000`**
+
+</details>
+
+---
+
+<details>
+<summary><b>Q2: Можно ли добавить HTTPS-подписку? Поддерживается ли передача HWID?</b></summary>
+<br>
+
+Да, при использовании ядра **Mihomo**.
+
+Перейдите в **Утилиты → Добавить прокси**, вставьте HTTPS-ссылку и нажмите «Добавить». HWID-хедер сгенерируется автоматически.
+
+Также можно воспользоваться [веб-генератором](https://zxc-rv.github.io/XKeen-UI/Outbound_Generator/).
+
+</details>
+
+---
+
+<details>
+<summary><b>Q3: Как настроить автопереключение при падении прокси-узла?</b></summary>
+<br>
+
+Перейдите в **Утилиты → Шаблоны конфигураций** и выберите подходящий шаблон.
+
+В каждом шаблоне уже реализованы два селектора:
+
+- **Fastest** — автовыбор по пингу
+- **Fallback** — автопереключение при таймауте пинга  
+
+После импорта шаблона добавьте свою подписку или подключение.
+
+</details>
+
+---
+
+<details>
+<summary><b>Q4: Установил панель, но не вижу вкладок «Селекторы» и «Соединения» из превью</b></summary>
+<br>
+
+Данный функционал работает через Clash API и доступен **только при использовании ядра Mihomo**.
+
+Если ядро Mihomo уже используется, но вкладки всё равно не отображаются — убедитесь, что в конфигурационном файле Mihomo присутствует одна из строк:
+
+```yaml
+external-controller: 0.0.0.0:9090
+```
+
+или
+
+```yaml
+external-controller-unix: mihomo.sock
+```
+
+</details>
+
+---
+
+<details>
+<summary><b>Q5: Забыл пароль от панели</b></summary>
+<br>
+
+Выполните команду:
+
+```sh
+xkeen-ui reset-password
+```
+
+Пароль сбросится, панель перезапустится. Новый пароль задаётся при следующем открытии панели.
+
+⚠️ **Пока новый пароль не выставлен — панель остаётся без защиты.**
+
+</details>
+
+---
