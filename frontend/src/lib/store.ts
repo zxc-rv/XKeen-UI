@@ -394,6 +394,21 @@ export const useProxiesStore = create<ProxiesStore>(() => ({
 
 const iconCache = new Map<string, string>()
 const fetchingIcons = new Set<string>()
+const ICON_CACHE_CAP = 512
+
+// FIFO-кэп: каждый createObjectURL держит backing-буфер до закрытия страницы
+// (Firefox не освобождает по GC). Вытесняем старейший и revoke'аем его blob.
+function cacheIcon(url: string, blobUrl: string) {
+  iconCache.set(url, blobUrl)
+  if (iconCache.size > ICON_CACHE_CAP) {
+    const oldestKey = iconCache.keys().next().value
+    if (oldestKey !== undefined) {
+      const oldBlob = iconCache.get(oldestKey)
+      if (oldBlob) URL.revokeObjectURL(oldBlob)
+      iconCache.delete(oldestKey)
+    }
+  }
+}
 
 async function preloadIcons(urls: string[]) {
   let updated = false
@@ -404,7 +419,7 @@ async function preloadIcons(urls: string[]) {
       try {
         const res = await fetch(url)
         if (res.ok) {
-          iconCache.set(url, URL.createObjectURL(await res.blob()))
+          cacheIcon(url, URL.createObjectURL(await res.blob()))
           updated = true
         }
       } catch {
@@ -472,4 +487,8 @@ export function syncClashApiPort(delayMs = 0): void {
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────
 
 export const useNowStore = create<{ tick: number }>(() => ({ tick: 0 }))
-setInterval(() => useNowStore.setState((s) => ({ tick: s.tick + 1 })), 1000)
+// Тикаем только при видимой вкладке: иначе все TimeAgoCell (по строке на
+// соединение) ре-рендерятся 1 Гц даже когда панель в фоне.
+setInterval(() => {
+  if (!document.hidden) useNowStore.setState((s) => ({ tick: s.tick + 1 }))
+}, 1000)

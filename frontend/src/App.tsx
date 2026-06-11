@@ -34,6 +34,19 @@ function useThemeMode(theme: ThemeMode) {
   }, [theme])
 }
 
+// Пауза непрерывных декоративных анимаций при скрытой вкладке (см. globals.css
+// `html.anim-paused`). На Windows Firefox это останавливает ре-растеризацию,
+// которая раздувает пул GPU-текстур пока панель в фоне.
+function usePauseAnimationsWhenHidden() {
+  useEffect(() => {
+    const root = document.documentElement
+    const sync = () => root.classList.toggle('anim-paused', document.hidden)
+    sync()
+    document.addEventListener('visibilitychange', sync)
+    return () => document.removeEventListener('visibilitychange', sync)
+  }, [])
+}
+
 interface ModalManagerProps {
   onSwitchCore: (core: string) => void
   onInstalled: () => void
@@ -450,6 +463,7 @@ export default function App() {
   const theme = useSettings((s) => s.theme)
 
   useThemeMode(theme)
+  usePauseAnimationsWhenHidden()
 
   useEffect(() => {
     fetch('/api/auth/login')

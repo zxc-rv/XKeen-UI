@@ -44,7 +44,7 @@ export function ShineBorder({ borderWidth = 1, duration = 14, shineColor = '#000
         } as React.CSSProperties
       }
       className={cn(
-        'motion-safe:animate-shine pointer-events-none absolute inset-0 size-full rounded-[inherit] will-change-[background-position]',
+        'motion-safe:animate-shine pointer-events-none absolute inset-0 size-full rounded-[inherit]',
         className
       )}
       {...props}

@@ -85,6 +85,12 @@ export function LogPanel() {
       if (autoScrollRef.current) {
         trimToCap()
         el.scrollTop = el.scrollHeight
+      } else {
+        // Кэпируем массив и DOM даже при скролле вверх, иначе лог растёт
+        // безгранично. Компенсируем scrollTop, чтобы вьюпорт не дёргался.
+        const heightBefore = el.scrollHeight
+        trimToCap()
+        el.scrollTop -= heightBefore - el.scrollHeight
       }
     },
     [trimToCap]
@@ -395,7 +401,7 @@ export function LogPanel() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                className="bg-background/80 absolute right-8 bottom-8 z-10 shadow-lg backdrop-blur!"
+                className="bg-background absolute right-8 bottom-8 z-10 shadow-lg"
                 onClick={handleScrollToBottom}
               >
                 <IconChevronDown size={14} />

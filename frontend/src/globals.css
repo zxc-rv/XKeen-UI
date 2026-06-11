@@ -198,6 +198,16 @@
       background-position: 0% 0%;
     }
   }
+  /* Перенаправляем animate-in/animate-out на filter-free keyframes (xk-enter/
+     xk-exit, см. ниже). Значение 1:1 повторяет tw-animate-css, меняется только
+     имя keyframe. Переопределение переменной (last-wins) надёжнее override
+     одноимённых @keyframes, которые Lightning CSS сливает. */
+  --animate-in: xk-enter var(--tw-animation-duration, var(--tw-duration, 0.15s)) var(--tw-ease, ease)
+    var(--tw-animation-delay, 0s) var(--tw-animation-iteration-count, 1) var(--tw-animation-direction, normal)
+    var(--tw-animation-fill-mode, none);
+  --animate-out: xk-exit var(--tw-animation-duration, var(--tw-duration, 0.15s)) var(--tw-ease, ease)
+    var(--tw-animation-delay, 0s) var(--tw-animation-iteration-count, 1) var(--tw-animation-direction, normal)
+    var(--tw-animation-fill-mode, none);
 }
 
 @layer base {
@@ -287,11 +297,11 @@
   0%,
   100% {
     opacity: 0.35;
-    transform: translateZ(0) scale(1);
+    transform: scale(1);
   }
   50% {
     opacity: 0.7;
-    transform: translateZ(0) scale(1.02);
+    transform: scale(1.02);
   }
 }
 
@@ -310,7 +320,41 @@
   opacity: 0.35;
   animation: dark-glow 2.4s ease-in-out infinite;
   pointer-events: none;
-  will-change: opacity, transform;
+}
+
+/* Pause continuous decorative animations when the tab is hidden — на Windows
+   Firefox (WebRender + ANGLE/D3D11) непрерывная ре-растеризация раздувает пул
+   текстур GPU-процесса. Класс anim-paused тогглится в App.tsx по visibilitychange. */
+html.anim-paused .animate-aurora,
+html.anim-paused .animate-shine,
+html.anim-paused .animate-ping,
+html.anim-paused .animate-dark-glow::after {
+  animation-play-state: paused;
+}
+
+/* Drop-in replacement for tw-animate-css enter/exit keyframes WITHOUT
+   `filter: blur(0)`. Даже blur(0) заставляет Firefox-Windows выделять
+   полноэкранную filter-поверхность на каждое открытие модалки/поповера.
+   Уникальные имена (xk-*) — иначе Lightning CSS сливает одноимённые
+   keyframes и blur из библиотечной версии возвращается. Утилиты
+   blur-in/blur-out не используются, поэтому фильтр убран целиком.
+   Редирект на эти keyframes — через override --animate-in/--animate-out
+   в @theme выше. */
+@keyframes xk-enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1))
+      rotate(var(--tw-enter-rotate, 0));
+  }
+}
+@keyframes xk-exit {
+  to {
+    opacity: var(--tw-exit-opacity, 1);
+    transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0)
+      scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1))
+      rotate(var(--tw-exit-rotate, 0));
+  }
 }
 
 @media (max-width: 768px) {
