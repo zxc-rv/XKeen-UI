@@ -453,6 +453,13 @@ const SelectorCombobox = memo(function SelectorCombobox({
   )
   const [open, setOpen] = useState(false)
 
+  useEffect(() => {
+    if (!visible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setOpen(false)
+    }
+  }, [visible])
+
   return (
     <Combobox
       items={options}
@@ -622,7 +629,7 @@ const SelectorRow = memo(function SelectorRow({
         >
           <div className={cn('min-h-0', collapsed ? 'overflow-visible' : 'overflow-hidden')}>
             <SelectorCombobox
-              key={collapsed ? `${selectorName}-collapsed` : `${selectorName}-expanded`}
+              key={selectorName}
               selectorName={selectorName}
               options={allProxies}
               autoPolicy={autoPolicy}

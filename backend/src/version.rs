@@ -4,13 +4,15 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Json};
 use std::time::{Duration, Instant};
 use tokio::process::Command;
+use tokio::time::timeout;
 
 pub async fn get_local_core_version(core: &str) -> Option<String> {
     let arg = if core == "mihomo" { "-v" } else { "version" };
-    let out = Command::new(format!("/opt/sbin/{}", core))
-        .arg(arg)
-        .output()
+    let mut cmd = Command::new(format!("/opt/sbin/{}", core));
+    cmd.arg(arg);
+    let out = timeout(Duration::from_secs(5), cmd.output())
         .await
+        .ok()?
         .ok()?;
 
     let s = String::from_utf8_lossy(&out.stdout);

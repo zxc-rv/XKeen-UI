@@ -71,11 +71,13 @@ async fn resolve_init_file(state: &AppState) -> Result<String, String> {
 
 pub async fn run_init_command(state: &AppState, args: &[&str]) -> Result<(), String> {
     let path = resolve_init_file(state).await?;
-    let result = if let Ok(f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(error_log_path())
-    {
+    let log_path = error_log_path();
+    let file_opt = tokio::task::spawn_blocking(move || {
+        std::fs::OpenOptions::new().create(true).append(true).open(log_path)
+    })
+    .await
+    .unwrap_or_else(|_| Err(std::io::Error::other("spawn_blocking failed")));
+    let result = if let Ok(f) = file_opt {
         Command::new(&path)
             .args(args)
             .stdout(f.try_clone().unwrap())
@@ -246,12 +248,19 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
 async fn check_core_config(core: &str) -> Result<(), String> {
     if core == "xray" {
         fs::create_dir_all(XRAY_CONF).await.ok();
-        let has_json = std::fs::read_dir(XRAY_CONF)
-            .map(|dir| {
-                dir.flatten()
-                    .any(|e| e.path().extension().map_or(false, |x| x == "json"))
-            })
-            .unwrap_or(false);
+        let has_json = match fs::read_dir(XRAY_CONF).await {
+            Ok(mut dir) => {
+                let mut found = false;
+                while let Ok(Some(entry)) = dir.next_entry().await {
+                    if entry.path().extension().map_or(false, |x| x == "json") {
+                        found = true;
+                        break;
+                    }
+                }
+                found
+            }
+            Err(_) => false,
+        };
         if !has_json {
             return Err(
                 "Не найдены конфигурационные файлы. Настройте их в /opt/etc/xray/configs перед запуском".into(),

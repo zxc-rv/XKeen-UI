@@ -4,7 +4,6 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 #[derive(Serialize)]
@@ -191,7 +190,16 @@ pub async fn put_config(State(state): State<AppState>, Json(req): Json<ConfigReq
     } else {
         req.content
     };
-    if fs::write(&req.file, content).is_err() {
+    let tmp = format!("{}.tmp", req.file);
+    let write_ok = async {
+        tokio::fs::write(&tmp, &content).await?;
+        let f = tokio::fs::File::open(&tmp).await?;
+        f.sync_all().await?;
+        tokio::fs::rename(&tmp, &req.file).await
+    }
+    .await;
+    if write_ok.is_err() {
+        let _ = tokio::fs::remove_file(&tmp).await;
         return Json(ApiResponse::<()> {
             success: false,
             error: Some("Write error".into()),
@@ -228,7 +236,16 @@ pub async fn post_config(State(state): State<AppState>, Json(req): Json<ConfigRe
     } else {
         req.content
     };
-    if fs::write(&req.file, content).is_err() {
+    let tmp = format!("{}.tmp", req.file);
+    let write_ok = async {
+        tokio::fs::write(&tmp, &content).await?;
+        let f = tokio::fs::File::open(&tmp).await?;
+        f.sync_all().await?;
+        tokio::fs::rename(&tmp, &req.file).await
+    }
+    .await;
+    if write_ok.is_err() {
+        let _ = tokio::fs::remove_file(&tmp).await;
         return Json(ApiResponse::<()> {
             success: false,
             error: Some("Write error".into()),
@@ -250,7 +267,7 @@ pub async fn delete_config(State(state): State<AppState>, Json(req): Json<Delete
             data: None,
         });
     }
-    if fs::remove_file(&req.file).is_err() {
+    if tokio::fs::remove_file(&req.file).await.is_err() {
         return Json(ApiResponse::<()> {
             success: false,
             error: Some("Delete error".into()),
@@ -286,7 +303,7 @@ pub async fn patch_config(State(state): State<AppState>, Json(req): Json<RenameR
             data: None,
         });
     }
-    if fs::rename(&req.file, &req.new_file).is_err() {
+    if tokio::fs::rename(&req.file, &req.new_file).await.is_err() {
         return Json(ApiResponse::<()> {
             success: false,
             error: Some("Rename error".into()),

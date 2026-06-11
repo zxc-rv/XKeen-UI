@@ -38,8 +38,6 @@ export default defineConfig(() => {
             if (id.includes('prettier')) return 'prettier'
             if (id.includes('@radix-ui')) return 'radix'
             if (id.includes('@tabler/icons-react')) return 'icons'
-            if (id.includes('react-markdown') || id.includes('remark-gfm')) return 'markdown'
-            if (id.includes('framer-motion')) return 'motion'
           },
         },
       },

@@ -1,6 +1,6 @@
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { IconAlertCircle, IconCircleCheck, IconX } from '@tabler/icons-react'
-import { AnimatePresence, LazyMotion, domMax, m } from 'framer-motion'
+import { AnimatePresence, LazyMotion, m } from 'framer-motion'
 import { useAppActions, useToasts } from '../../lib/store'
 import type { ToastMessage } from '../../lib/types'
 
@@ -39,7 +39,7 @@ export function Toast() {
   const toasts = useToasts()
 
   return (
-    <LazyMotion features={domMax}>
+    <LazyMotion strict features={() => import('@/lib/motion-features').then((mod) => mod.domMax)}>
       <div className="fixed right-0 bottom-6 left-0 z-100 flex flex-col items-center gap-2 px-4 md:right-6 md:left-auto md:w-90 md:items-end md:px-0">
         <AnimatePresence>
           {toasts.map((alert) => (

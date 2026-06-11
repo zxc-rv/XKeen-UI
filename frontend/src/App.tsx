@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { LoginForm } from './components/auth/Login'
 import type { CodeMirrorRef } from './components/configuration/CodeMirror'
@@ -444,6 +443,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
 }
 
 type AuthState = 'loading' | 'login' | 'setup' | 'authenticated'
+type ViewKey = 'login' | 'app'
 
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>('loading')
@@ -467,20 +467,40 @@ export default function App() {
     setAuthState('login')
   }, [])
 
+  const targetView: ViewKey = authState === 'login' || authState === 'setup' ? 'login' : 'app'
+  const [displayView, setDisplayView] = useState<ViewKey>(targetView)
+  const [visible, setVisible] = useState(true)
+  const pendingView = useRef<ViewKey>(targetView)
+
+  useEffect(() => {
+    if (authState === 'loading') return
+    if (targetView === displayView) return
+    pendingView.current = targetView
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisible(false)
+  }, [targetView, displayView, authState])
+
+  const handleTransitionEnd = useCallback(() => {
+    if (visible) return
+    setDisplayView(pendingView.current)
+    requestAnimationFrame(() => setVisible(true))
+  }, [visible])
+
   if (authState === 'loading') return null
 
   return (
-    <AnimatePresence mode="wait">
-      {authState === 'login' || authState === 'setup' ? (
-        <motion.div key="login" initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-          <LoginForm mode={authState} onAuth={() => setAuthState('authenticated')} />
+    <div
+      className={`transition-opacity duration-[250ms] ${visible ? 'opacity-100' : 'opacity-0'}`}
+      onTransitionEnd={handleTransitionEnd}
+    >
+      {displayView === 'login' ? (
+        <>
+          <LoginForm mode={authState === 'setup' ? 'setup' : 'login'} onAuth={() => setAuthState('authenticated')} />
           <Toast />
-        </motion.div>
+        </>
       ) : (
-        <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
-          <AppContent onLogout={handleLogout} />
-        </motion.div>
+        <AppContent onLogout={handleLogout} />
       )}
-    </AnimatePresence>
+    </div>
   )
 }
