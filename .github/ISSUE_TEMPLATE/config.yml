@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Вопрос / Обсуждение
+    url: https://github.com/zxc-rv/XKeen-UI/discussions/new?category=q-a
+    about: Общие вопросы задавайте в Discussions

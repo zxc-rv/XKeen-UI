@@ -1,0 +1,14 @@
+name: 🚀 Новый функционал
+description: Запросить новый функционал
+labels: [FEATURE-REQUEST]
+body:
+  - type: textarea
+    attributes:
+      label: Описание фичи
+      placeholder: Что бы вы хотели видеть в панели?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Зачем это нужно?

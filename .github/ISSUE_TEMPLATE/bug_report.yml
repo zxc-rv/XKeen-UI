@@ -1,0 +1,41 @@
+name: 🐛 Баг
+description: Сообщить о проблеме с работой панели
+labels: [BUG]
+body:
+  - type: checkboxes
+    attributes:
+      label: Прежде чем продолжить
+      options:
+        - label: Проблема не связана с работой ядра Xray/Mihomo
+          required: true
+        - label: Проблема не связана с работой XKeen
+          required: true
+        - label: Проблема связана исключительно с панелью XKeen UI
+          required: true
+        - label: С FAQ ознакомлен(а) и решение по проблеме там отсутствует
+          required: true
+
+  - type: textarea
+    attributes:
+      label: Информация об устройстве
+      placeholder: Вывод команды xkeen-ui -v
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Описание
+      placeholder: Что пошло не так?
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Шаги воспроизведения
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Лог ошибок (при необходимости)
+      placeholder: Находится в /opt/var/log/xkeen-ui.log
