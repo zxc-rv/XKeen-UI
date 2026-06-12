@@ -134,7 +134,7 @@ const useStore = create<StoreState>((set) => ({
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type ShowToastFn = (message: string | { title: string; body: string; persistent?: boolean }, type?: 'success' | 'error') => void
+type ShowToastFn = (message: string | { title: string; body: string; persistent?: boolean; id?: string }, type?: 'success' | 'error') => void
 
 type CoreState = Omit<
   AppState,
@@ -198,9 +198,10 @@ const selectCoreStateWithConfigsAndSettings = (s: StoreState): CoreStateWithConf
 
 // ─── Hooks & Utilities ─────────────────────────────────────────────────────────
 
-export function showToast(message: string | { title: string; body: string; persistent?: boolean }, type: 'success' | 'error' = 'success') {
+export function showToast(message: string | { title: string; body: string; persistent?: boolean; id?: string }, type: 'success' | 'error' = 'success') {
   const dispatch = useStore.getState().dispatch
-  const id = Math.random().toString(36).slice(2)
+  const id = typeof message === 'string' ? Math.random().toString(36).slice(2) : (message.id ?? Math.random().toString(36).slice(2))
+  if (typeof message !== 'string' && message.id) dispatch({ type: 'REMOVE_TOAST', id: message.id })
   const toast: ToastMessage =
     typeof message === 'string'
       ? { id, title: type === 'error' ? 'Ошибка' : 'Успех', body: message, type }

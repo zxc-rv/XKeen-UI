@@ -112,7 +112,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   const { dispatch, showToast } = useAppActions()
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
-    switchTab: () => {},
+    switchTab: () => { },
     getActiveIndex: () => 0,
   })
 
@@ -192,6 +192,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             title: 'Доступно обновление',
             body: `Доступна новая версия ${capitalize(getAppState().currentCore)}`,
             persistent: true,
+            id: 'update-core',
           })
       } catch {
         /* ignore */

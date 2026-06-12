@@ -151,6 +151,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
     if (!selectedVersion) return
     setInstalling(true)
     close()
+    if (updateModalCore !== 'self') dispatch({ type: 'REMOVE_TOAST', id: 'update-core' })
     dispatch({
       type: 'SET_SERVICE_STATUS',
       status: 'pending',
