@@ -1,6 +1,6 @@
 # XKeen UI
 
-Ультра-лёгкая и быстрая панель управления для [XKeen](https://github.com/Skrill0/XKeen) — обёртки Xray-core / Mihomo (Clash Meta) для роутеров Keenetic. Один самодостаточный бинарь, минимум зависимостей, LAN-доступ через браузер.
+Ультра-лёгкая и быстрая панель управления для [XKeen](https://github.com/jameszeroX/XKeen) — обёртки Xray-core / Mihomo (Clash Meta) для роутеров Keenetic. Один самодостаточный бинарь, минимум зависимостей, LAN-доступ через браузер.
 
 ![preview](https://github.com/zxc-rv/XKeen-UI/blob/main/preview.gif?raw=true)
 
@@ -53,9 +53,8 @@ curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh -s -- 
 | Бинарь | Rust target | Применение |
 |---|---|---|
 | `xkeen-ui-arm64-v8a` | `aarch64-unknown-linux-musl` | Keenetic ARM64 |
-| `xkeen-ui-mips32` | `mips-unknown-linux-musl` | MIPS BE |
-| `xkeen-ui-mips32le` | `mipsel-unknown-linux-musl` | MIPS LE (musl) |
-| `xkeen-ui-mips32le-gnu` | `mipsel-unknown-linux-gnu` | MIPS LE (glibc) |
+| `xkeen-ui-mips32` | `mips-unknown-linux-musl` | Keenetic MIPS |
+| `xkeen-ui-mips32le` | `mipsel-unknown-linux-musl` | Keenetic MIPSEL |
 
 | Команда | Описание |
 |----------|----------|
@@ -80,11 +79,12 @@ curl https://raw.githubusercontent.com/zxc-rv/XKeen-UI/main/setup.sh | sh -s -- 
 | `/opt/sbin/xkeen-ui` | бинарь |
 | `/opt/etc/init.d/S99xkeen-ui` | init-скрипт |
 | `/opt/etc/xkeen/xkeen-ui.json` | конфиг панели |
+| `/opt/backups` | бэкапы конфигураций |
 
 ## Ссылки
 
 - [Руководство](Guide) — пошаговая настройка _(в разработке)_
-- [FAQ](FAQ) — частые вопросы _(в разработке)_
+- [FAQ](FAQ) — Часто задаваемые вопросы
 - [Outbound Generator (web)](https://zxc-rv.github.io/XKeen-UI/Outbound_Generator/)
 - [Релизы](https://github.com/zxc-rv/XKeen-UI/releases)
 - [Issues](https://github.com/zxc-rv/XKeen-UI/issues)
