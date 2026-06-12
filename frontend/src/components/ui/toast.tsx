@@ -40,7 +40,7 @@ export function Toast() {
 
   return (
     <LazyMotion features={domMax}>
-      <div className="fixed right-0 bottom-6 left-0 z-100 flex flex-col items-center gap-2 px-4 md:right-6 md:left-auto md:w-90 md:items-end md:px-0">
+      <div className="fixed right-0 bottom-6 left-0 z-40 flex flex-col items-center gap-2 px-4 md:right-6 md:left-auto md:w-90 md:items-end md:px-0">
         <AnimatePresence>
           {toasts.map((alert) => (
             <AlertItem key={alert.id} alert={alert} />
