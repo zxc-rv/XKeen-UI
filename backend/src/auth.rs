@@ -155,6 +155,7 @@ pub async fn post_login(
     let ip = get_client_ip(&headers, addr);
     {
         let mut cache = BRUTE_CACHE.lock().unwrap();
+        cache.retain(|_, (_, t)| t.elapsed() < Duration::from_secs(LOCKOUT_SECS * 2));
         let entry = cache.entry(ip.clone()).or_insert((0, Instant::now()));
         if entry.1.elapsed() > Duration::from_secs(LOCKOUT_SECS) {
             entry.0 = 0;

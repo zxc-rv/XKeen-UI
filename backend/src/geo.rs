@@ -11,7 +11,7 @@ use std::fs::File;
 use std::net::IpAddr;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 use tokio::task;
 
 #[derive(Serialize, Clone)]
@@ -300,6 +300,7 @@ async fn resolve_domain(client: &reqwest::Client, domain: &str) -> Result<IpAddr
                 .get(*provider)
                 .header("accept", "application/dns-json")
                 .query(&[("name", domain), ("type", qtype)])
+                .timeout(Duration::from_secs(5))
                 .send()
                 .await
             else {

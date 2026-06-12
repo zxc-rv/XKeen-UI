@@ -190,12 +190,18 @@ async fn download(
 
         match client.get(&u).send().await {
             Ok(r) if r.status().is_success() => {
-                if is_proxy
-                    && r.headers()
-                        .get("content-type")
-                        .map_or(false, |v| v.to_str().unwrap_or("").contains("text/html"))
+                if r.headers()
+                    .get("content-type")
+                    .map_or(false, |v| v.to_str().unwrap_or("").contains("text/html"))
                 {
-                    log("WARN", format!("Прокси #{} вернул HTML", i));
+                    log(
+                        "WARN",
+                        if is_proxy {
+                            format!("Прокси #{} вернул HTML", i)
+                        } else {
+                            "Прямой URL вернул HTML".into()
+                        },
+                    );
                     continue;
                 }
                 if let Some(res) = load(
@@ -339,6 +345,34 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let source = tmp_dir.join(format!("xkeen-ui_{}", ver));
         if let Err(e) = save(bin_d, source.clone()).await {
             return response(false, Some(format!("Ошибка сохранения: {}", e)));
+        }
+
+        let integrity_check = tokio::task::spawn_blocking({
+            let source = source.clone();
+            move || -> Result<(), String> {
+                let meta = std::fs::metadata(&source)
+                    .map_err(|e| format!("Ошибка проверки файла: {}", e))?;
+                if meta.len() < 1024 * 1024 {
+                    return Err("Файл меньше 1МБ — повреждённый артефакт".into());
+                }
+                let mut f = std::fs::File::open(&source)
+                    .map_err(|e| format!("Ошибка открытия файла: {}", e))?;
+                let mut magic = [0u8; 4];
+                f.read_exact(&mut magic)
+                    .map_err(|e| format!("Ошибка чтения файла: {}", e))?;
+                if magic != [0x7F, b'E', b'L', b'F'] {
+                    return Err("Файл не является ELF-бинарём — отменено".into());
+                }
+                Ok(())
+            }
+        })
+        .await
+        .map_err(|e| format!("Ошибка проверки: {}", e))
+        .and_then(|r| r);
+
+        if let Err(e) = integrity_check {
+            _ = std::fs::remove_file(&source);
+            return response(false, Some(e));
         }
 
         let target = "/opt/sbin/xkeen-ui";

@@ -9,6 +9,7 @@ use std::path::Path as FsPath;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::net::UnixStream;
+use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::{Error as TError, Message as TMessage};
 use tokio_tungstenite::{client_async, connect_async};
 
@@ -36,7 +37,7 @@ pub struct ClashWsQuery {
 pub async fn get_device_list(State(state): State<AppState>) -> impl IntoResponse {
     let response = match state
         .http_client
-        .get("http://localhost:79/rci/show/device-list")
+        .get("http://127.0.0.1:79/rci/show/device-list")
         .timeout(Duration::from_secs(5))
         .send()
         .await
@@ -84,7 +85,7 @@ pub async fn proxy_http(State(state): State<AppState>, Path(path): Path<String>,
             do_proxy_http(state.http_client.clone(), parts, body_bytes, url, secret).await
         }
         ClashTarget::Unix { path: socket_path } => {
-            let url = build_url("http", "localhost", "80", &path, parts.uri.query());
+            let url = build_url("http", "127.0.0.1", "80", &path, parts.uri.query());
             let client = match reqwest::Client::builder()
                 .unix_socket(socket_path)
                 .user_agent("XKeen-UI")
@@ -124,14 +125,22 @@ async fn proxy_ws_inner(client_ws: WebSocket, path: String, target: ClashTarget)
             if let Some(secret) = secret {
                 url.push_str(&format!("?token={}", urlencoding::encode(&secret)));
             }
-            let (ws, _) = connect_async(url).await.map_err(|e| e.to_string())?;
+            let (ws, _) = timeout(Duration::from_secs(5), connect_async(url))
+                .await
+                .map_err(|_| "Upstream connect timeout".to_string())?
+                .map_err(|e| e.to_string())?;
             let (tx, rx) = ws.split();
             (Box::pin(tx), Box::pin(rx))
         }
         ClashTarget::Unix { path: socket_path } => {
-            let url = build_url("ws", "localhost", "80", &path, None);
-            let stream = UnixStream::connect(socket_path).await.map_err(|e| e.to_string())?;
-            let (ws, _) = client_async(url, stream).await.map_err(|e| e.to_string())?;
+            let url = build_url("ws", "127.0.0.1", "80", &path, None);
+            let (ws, _) = timeout(Duration::from_secs(5), async {
+                let stream = UnixStream::connect(socket_path).await?;
+                client_async(url, stream).await.map_err(|e| std::io::Error::other(e.to_string()))
+            })
+            .await
+            .map_err(|_| "Upstream connect timeout".to_string())?
+            .map_err(|e| e.to_string())?;
             let (tx, rx) = ws.split();
             (Box::pin(tx), Box::pin(rx))
         }
