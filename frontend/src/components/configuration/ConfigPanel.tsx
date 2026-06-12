@@ -739,21 +739,23 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
               </>
             )}
 
-            <div
-              className={cn(
-                'absolute inset-0',
-                isAnyGui && 'pointer-events-none invisible opacity-0',
-                isMihomo && currentPanel !== 'config' && 'hidden'
-              )}
-            >
-              <CodeMirrorEditorLazy
-                ref={editorRef}
-                onContentChange={handleContentChange}
-                onValidationChange={handleValidationChange}
-                onReady={handleEditorReady}
-                onSave={() => saveCurrentConfig()}
-              />
-            </div>
+            {!isConfigsLoading && (!isMihomo || mountedPanels.has('config')) && (
+              <div
+                className={cn(
+                  'absolute inset-0',
+                  isAnyGui && 'pointer-events-none invisible opacity-0',
+                  isMihomo && currentPanel !== 'config' && 'hidden'
+                )}
+              >
+                <CodeMirrorEditorLazy
+                  ref={editorRef}
+                  onContentChange={handleContentChange}
+                  onValidationChange={handleValidationChange}
+                  onReady={handleEditorReady}
+                  onSave={() => saveCurrentConfig()}
+                />
+              </div>
+            )}
           </div>
 
           {(!isMihomo || currentPanel === 'config') && (
