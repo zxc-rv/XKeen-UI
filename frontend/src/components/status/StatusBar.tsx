@@ -1,4 +1,3 @@
-import { AuroraText } from '@/components/ui/aurora-text'
 import { Button } from '@/components/ui/button'
 import { ShineBorder } from '@/components/ui/shine-border'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -157,9 +156,11 @@ export function StatusBar({
             rel="noreferrer"
             className="rounded-md transition-opacity hover:opacity-85"
           >
-            <AuroraText className="animate-dark-glow text-[28px] font-semibold" colors={['#00D3F2', '#2B7FFF', '#155DFC']}>
+            <span
+              className="text-[28px] font-semibold bg-gradient-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-transparent"
+            >
               XKeen UI
-            </AuroraText>
+            </span>
           </a>
         </div>
 
