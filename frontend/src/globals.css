@@ -138,6 +138,15 @@
   --status-pending-bg: #fffbeb;
   --status-pending-color: #d97706;
   --status-pending-border: #fde68a;
+  --status-running-glow:
+    0 0 6px 1px color-mix(in srgb, var(--status-running-color) 25%, transparent),
+    inset 0 0 6px 0px color-mix(in srgb, var(--status-running-color) 8%, transparent);
+  --status-pending-glow:
+    0 0 6px 1px color-mix(in srgb, var(--status-pending-color) 25%, transparent),
+    inset 0 0 6px 0px color-mix(in srgb, var(--status-pending-color) 8%, transparent);
+  --status-stopped-glow:
+    0 0 6px 1px color-mix(in srgb, var(--status-badge-stopped-color) 20%, transparent),
+    inset 0 0 6px 0px color-mix(in srgb, var(--status-badge-stopped-color) 6%, transparent);
   --log-badge-debug-bg: #fff;
   --log-badge-debug-color: #0f172a;
   --log-badge-debug-border: #cbd5e1;
@@ -197,6 +206,15 @@
   --status-pending-bg: #2a1f0d;
   --status-pending-color: #f59e0b;
   --status-pending-border: #2a1f0d;
+  --status-running-glow:
+    0 0 10px 2px color-mix(in srgb, var(--status-running-color) 40%, transparent),
+    inset 0 0 8px 0px color-mix(in srgb, var(--status-running-color) 14%, transparent);
+  --status-pending-glow:
+    0 0 10px 2px color-mix(in srgb, var(--status-pending-color) 40%, transparent),
+    inset 0 0 8px 0px color-mix(in srgb, var(--status-pending-color) 14%, transparent);
+  --status-stopped-glow:
+    0 0 10px 2px color-mix(in srgb, var(--status-badge-stopped-color) 35%, transparent),
+    inset 0 0 8px 0px color-mix(in srgb, var(--status-badge-stopped-color) 10%, transparent);
   --log-badge-debug-bg: #080e1d;
   --log-badge-debug-color: #fff;
   --log-badge-debug-border: #1e293b;
@@ -348,16 +366,43 @@
   border-radius: 8px;
   border: 1px solid var(--status-badge-border);
   white-space: nowrap;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    background 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
   user-select: none;
 }
 
+.status-badge-running {
+  background: var(--status-running-bg);
+  color: var(--status-running-color);
+  border-color: color-mix(in srgb, var(--status-running-color) 50%, transparent);
+  box-shadow: var(--status-running-glow);
+}
+
+.status-badge-pending {
+  background: var(--status-pending-bg);
+  color: var(--status-pending-color);
+  border-color: color-mix(in srgb, var(--status-pending-color) 50%, transparent);
+  box-shadow: var(--status-pending-glow);
+}
+
 .status-badge-stopped {
   background: var(--status-badge-stopped-bg);
   color: var(--status-badge-stopped-color);
-  border-color: var(--status-badge-stopped-border);
+  border-color: color-mix(in srgb, var(--status-badge-stopped-color) 50%, transparent);
+  box-shadow: var(--status-stopped-glow);
+}
+
+.status-badge-wave {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 @keyframes dark-glow {

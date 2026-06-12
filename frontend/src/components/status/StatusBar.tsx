@@ -8,6 +8,33 @@ import { useEffect } from 'react'
 import { apiCall, capitalize } from '../../lib/api'
 import { syncClashApiPort, useAppContext } from '../../lib/store'
 import { cn } from '../../lib/utils'
+import type { ServiceStatus } from '../../lib/types'
+
+function StatusWaveform({ status }: { status: ServiceStatus }) {
+  const isStopped = status === 'stopped'
+  const color = isStopped
+    ? 'color-mix(in srgb, var(--status-badge-stopped-color) 30%, transparent)'
+    : status === 'running'
+      ? 'color-mix(in srgb, var(--status-running-color) 35%, transparent)'
+      : 'color-mix(in srgb, var(--status-pending-color) 35%, transparent)'
+
+  return (
+    <svg aria-hidden="true" className="status-badge-wave" viewBox="0 0 200 36" preserveAspectRatio="none" fill="none">
+      {isStopped ? (
+        <line x1="0" y1="18" x2="200" y2="18" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      ) : (
+        <path
+          d="M 0,18 L 22,18 L 26,14.5 L 30,18 L 36,18 L 39,21 L 43,4 L 47,30 L 51,18 L 57,13.5 L 63,18 L 112,18 L 116,14.5 L 120,18 L 126,18 L 129,21 L 133,4 L 137,30 L 141,18 L 147,13.5 L 153,18 L 200,18"
+          stroke={color}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+    </svg>
+  )
+}
 
 export function StatusBar({
   onOpenCoreManage,
@@ -45,7 +72,7 @@ export function StatusBar({
   }
 
   async function startService() {
-    setPending('Запуск...')
+    setPending('Запуск сервиса...')
     const result = await apiCall<any>('POST', 'control', { action: 'start' })
     showToast(result.success ? 'XKeen запущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
@@ -56,7 +83,7 @@ export function StatusBar({
   }
 
   async function stopService() {
-    setPending('Остановка...')
+    setPending('Остановка сервиса...')
     const result = await apiCall<any>('POST', 'control', { action: 'stop' })
     showToast(result.success ? 'XKeen остановлен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     onRefreshStatus()
@@ -76,22 +103,19 @@ export function StatusBar({
   const statusLabel =
     serviceStatus === 'running' ? 'Сервис запущен' : serviceStatus === 'stopped' ? 'Сервис остановлен' : pendingText || 'Загрузка...'
 
-  const badgeClasses = cn('status-badge-custom', serviceStatus === 'stopped' && 'status-badge-stopped')
-
-  const shineColors = isRunning ? ['#195040', '#34d399', '#195040'] : isPending ? ['#4a3615', '#fbbf24', '#4a3615'] : null
-
-  const badgeBg = isRunning
-    ? { background: 'var(--status-running-bg)', color: 'var(--status-running-color)', border: '1px solid var(--status-running-border)' }
-    : isPending
-      ? { background: 'var(--status-pending-bg)', color: 'var(--status-pending-color)', border: '1px solid var(--status-pending-border)' }
-      : {}
+  const badgeClasses = cn(
+    'status-badge-custom',
+    isRunning && 'status-badge-running',
+    isPending && 'status-badge-pending',
+    serviceStatus === 'stopped' && 'status-badge-stopped'
+  )
 
   return (
     <TooltipProvider delayDuration={500}>
       <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
         <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
-          <div className={badgeClasses} style={badgeBg}>
-            {shineColors && <ShineBorder duration={8} borderWidth={2} shineColor={shineColors} />}
+          <div className={badgeClasses}>
+            <StatusWaveform status={serviceStatus} />
             {statusLabel}
           </div>
           <div className="flex items-center gap-1.5">
@@ -157,7 +181,7 @@ export function StatusBar({
             className="rounded-md transition-opacity hover:opacity-85"
           >
             <span
-              className="text-[28px] font-semibold bg-gradient-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-transparent"
+              className="text-[28px] font-semibold bg-linear-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-transparent"
             >
               XKeen UI
             </span>
