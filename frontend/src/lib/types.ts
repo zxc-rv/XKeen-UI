@@ -101,6 +101,7 @@ export interface AppState {
   showSettingsModal: boolean
   showCommentsWarningModal: boolean
   showGeoScanModal: boolean
+  showBackupsModal: boolean
   updateModalCore: string
   toasts: ToastMessage[]
   pendingSaveAction: (() => void) | null
@@ -109,11 +110,11 @@ export interface AppState {
 export type AppAction =
   | { type: 'SET_SERVICE_STATUS'; status: ServiceStatus; pendingText?: string }
   | {
-      type: 'SET_CORE_INFO'
-      currentCore: string
-      coreVersions: Record<string, string>
-      availableCores: string[]
-    }
+    type: 'SET_CORE_INFO'
+    currentCore: string
+    coreVersions: Record<string, string>
+    availableCores: string[]
+  }
   | { type: 'SET_CONFIGS_LOADING'; loading: boolean }
   | { type: 'SET_CONFIGS'; configs: Config[] }
   | { type: 'UPDATE_CONFIG_DIRTY'; index: number; isDirty: boolean; content?: string }
@@ -124,20 +125,21 @@ export type AppAction =
   | { type: 'SET_CONNECTIONS'; connections: Connection[]; wsConnected?: boolean }
   | { type: 'SET_WS_CONNECTED'; connected: boolean }
   | {
-      type: 'SHOW_MODAL'
-      modal: keyof Pick<
-        AppState,
-        | 'showDirtyModal'
-        | 'showCoreManageModal'
-        | 'showUpdateModal'
-        | 'showImportModal'
-        | 'showTemplateModal'
-        | 'showSettingsModal'
-        | 'showCommentsWarningModal'
-        | 'showGeoScanModal'
-      >
-      show: boolean
-    }
+    type: 'SHOW_MODAL'
+    modal: keyof Pick<
+      AppState,
+      | 'showDirtyModal'
+      | 'showCoreManageModal'
+      | 'showUpdateModal'
+      | 'showImportModal'
+      | 'showTemplateModal'
+      | 'showSettingsModal'
+      | 'showCommentsWarningModal'
+      | 'showGeoScanModal'
+      | 'showBackupsModal'
+    >
+    show: boolean
+  }
   | { type: 'SET_UPDATE_MODAL_CORE'; core: string }
   | { type: 'ADD_TOAST'; toast: ToastMessage }
   | { type: 'REMOVE_TOAST'; id: string }

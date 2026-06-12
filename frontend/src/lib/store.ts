@@ -58,6 +58,7 @@ const initialState: AppState = {
   showSettingsModal: false,
   showCommentsWarningModal: false,
   showGeoScanModal: false,
+  showBackupsModal: false,
   updateModalCore: '',
   toasts: [],
   pendingSaveAction: null,
@@ -146,6 +147,7 @@ type CoreState = Omit<
   | 'showSettingsModal'
   | 'showCommentsWarningModal'
   | 'showGeoScanModal'
+  | 'showBackupsModal'
   | 'updateModalCore'
   | 'pendingSaveAction'
   | 'toasts'
@@ -165,6 +167,7 @@ type ModalState = Pick<
   | 'showSettingsModal'
   | 'showCommentsWarningModal'
   | 'showGeoScanModal'
+  | 'showBackupsModal'
   | 'updateModalCore'
   | 'pendingSaveAction'
 >
@@ -261,6 +264,7 @@ export function useModalContext() {
         showSettingsModal: s.showSettingsModal,
         showCommentsWarningModal: s.showCommentsWarningModal,
         showGeoScanModal: s.showGeoScanModal,
+        showBackupsModal: s.showBackupsModal,
         updateModalCore: s.updateModalCore,
         pendingSaveAction: s.pendingSaveAction,
       })

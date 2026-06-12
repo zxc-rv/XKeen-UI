@@ -34,10 +34,10 @@ import {
   IconX,
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
-import { syncClashApiPort, useAppContext, useConnectionsSync, useSettings } from '../../lib/store'
+import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
 import { cn, stripJsonComments } from '../../lib/utils'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
@@ -52,6 +52,25 @@ const ProvidersModal = lazyLoad(() => import('../modals/Providers'), 'ProvidersM
 const BackupsModal = lazyLoad(() => import('../modals/Backups'), 'BackupsModal')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
+
+const BackupsModalContainer = memo(function BackupsModalContainer({
+  onRefreshConfigs,
+}: {
+  onRefreshConfigs: () => Promise<unknown>
+}) {
+  const { modals, dispatch } = useModalContext()
+  const mounted = useLazyMount(modals.showBackupsModal)
+  const handleOpenChange = useCallback(
+    (open: boolean) => dispatch({ type: 'SHOW_MODAL', modal: 'showBackupsModal', show: open }),
+    [dispatch]
+  )
+  if (!mounted) return null
+  return (
+    <LazyBoundary>
+      <BackupsModal open={modals.showBackupsModal} onOpenChange={handleOpenChange} onRefreshConfigs={onRefreshConfigs} />
+    </LazyBoundary>
+  )
+})
 
 type ClashMode = 'rule' | 'global' | 'direct'
 type ProvidersModalKind = 'rules' | 'proxies'
@@ -291,8 +310,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
-  const [isBackupsModalOpen, setIsBackupsModalOpen] = useState(false)
-  const mountBackupsModal = useLazyMount(isBackupsModalOpen)
   const currentPanel = isRunning ? activePanel : 'config'
 
   const configsRef = useRef(configs)
@@ -431,10 +448,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     setProvidersModalKind(kind)
     setIsProvidersModalOpen(true)
   }, [])
-  const openBackupsModal = useCallback(() => setIsBackupsModalOpen(true), [])
+  const openBackupsModal = useCallback(() => dispatch({ type: 'SHOW_MODAL', modal: 'showBackupsModal', show: true }), [dispatch])
 
   const handleProvidersModalOpenChange = useCallback((open: boolean) => setIsProvidersModalOpen(open), [])
-  const handleBackupsModalOpenChange = useCallback((open: boolean) => setIsBackupsModalOpen(open), [])
 
   const refreshConfigsAndEditor = useCallback(async () => {
     const currentCfg = configsRef.current[activeIndexRef.current]
@@ -874,15 +890,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
             />
           </LazyBoundary>
         )}
-        {mountBackupsModal && (
-          <LazyBoundary>
-            <BackupsModal
-              open={isBackupsModalOpen}
-              onOpenChange={handleBackupsModalOpenChange}
-              onRefreshConfigs={refreshConfigsAndEditor}
-            />
-          </LazyBoundary>
-        )}
+        <BackupsModalContainer onRefreshConfigs={refreshConfigsAndEditor} />
       </>
     </TooltipProvider>
   )
