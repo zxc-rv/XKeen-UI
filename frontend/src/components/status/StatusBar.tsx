@@ -196,7 +196,7 @@ export function StatusBar({
                   variant="outline"
                   onClick={() => onOpenUpdate('self')}
                   className={cn(
-                    'relative overflow-hidden text-xs tracking-wider',
+                    'relative overflow-hidden text-xs tracking-wider [contain:paint]',
                     isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
                   )}
                 >

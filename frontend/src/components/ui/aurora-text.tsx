@@ -15,7 +15,7 @@ export const AuroraText = memo(
       WebkitBackgroundClip: 'text',
       WebkitTextFillColor: 'transparent',
       animationDuration: `${12 / speed}s`,
-      animationTimingFunction: 'steps(240)',
+      animationTimingFunction: 'steps(60)',
     }
 
     return (
