@@ -358,6 +358,38 @@ function convertToMihomoYaml(proxyConfig) {
   return `  - ${toYaml(common).trim().replace(/\n/g, '\n    ')}`
 }
 
+const parseHysteria2Xray = (uri) => {
+  const url = new URL(uri)
+  const params = Object.fromEntries([...url.searchParams].map(([k, v]) => [k.toLowerCase(), v]))
+  const tag = decodeURIComponent(url.hash.slice(1)) || 'PROXY'
+  let finalmask = { quicParams: { congestion: 'bbr', debug: false } }
+  try {
+    if (params.fm) finalmask = JSON.parse(decodeURIComponent(params.fm))
+  } catch { }
+  return {
+    tag,
+    protocol: 'hysteria',
+    settings: {
+      address: url.hostname,
+      port: +url.port || 443,
+      version: 2,
+    },
+    streamSettings: {
+      network: 'hysteria',
+      security: params.security || 'tls',
+      hysteriaSettings: {
+        auth: decodeURIComponent(url.username),
+        version: 2,
+      },
+      tlsSettings: {
+        serverName: params.sni ?? '',
+        alpn: params.alpn?.split(',') ?? ['h3'],
+      },
+      finalmask,
+    },
+  }
+}
+
 function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
   const generateName = (base) => {
     let index = 1
@@ -394,7 +426,11 @@ function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
   }
 
   if (core !== 'mihomo' && uri.startsWith('http')) throw new Error('Подписки в Xray не поддерживаются')
-  if (core !== 'mihomo' && (uri.startsWith('hysteria2') || uri.startsWith('hy2'))) throw new Error('Hysteria2 в Xray не поддерживается')
+  if (core !== 'mihomo' && (uri.startsWith('hysteria2') || uri.startsWith('hy2'))) {
+    const config = parseHysteria2Xray(uri)
+    if (config.tag === 'PROXY' || existingConfig.includes(config.tag)) config.tag = generateName('hysteria')
+    return { type: 'outbound', content: JSON.stringify(config, null, 2) }
+  }
 
   const config = parseProxyUri(uri)
   if (config.tag === 'PROXY' || existingConfig.includes(config.tag)) config.tag = generateName(config.protocol)
