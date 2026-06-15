@@ -502,7 +502,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
               aria-disabled={disabledOptions[proxyName] || undefined}
               className={cn(
                 disabledOptions[proxyName] &&
-                  'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
+                'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
               )}
             >
               <CollapsedProxyOption proxyName={proxyName} disabled={!!disabledOptions[proxyName]} onTestSingle={onTestSingle} />
@@ -755,13 +755,14 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: true } }))
       try {
         applyDelayResults([[proxyName, await requestProxyDelay(proxyName)]])
+        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
       } catch {
         /* */
       } finally {
         useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
       }
     },
-    [applyDelayResults, requestProxyDelay]
+    [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
   )
 
   const selectProxy = useCallback(
@@ -772,27 +773,27 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       useProxiesStore.setState((state) => ({
         proxies: { ...state.proxies, [selectorName]: { ...state.proxies[selectorName], now: proxyName } },
       }))
-      ;(async () => {
-        try {
-          await clashFetch(clashApiPort, `proxies/${encodeURIComponent(selectorName)}`, {
-            method: 'PUT',
-            secret: clashApiSecret,
-            unix: clashApiUnix ?? null,
-            body: { name: proxyName },
-          })
-          await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
-          const affected = getConnections()
-            .filter((conn) => conn.chains?.includes(selectorName))
-            .map((conn) => conn.id)
-          await Promise.all(
-            affected.map((id) =>
-              clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
+        ; (async () => {
+          try {
+            await clashFetch(clashApiPort, `proxies/${encodeURIComponent(selectorName)}`, {
+              method: 'PUT',
+              secret: clashApiSecret,
+              unix: clashApiUnix ?? null,
+              body: { name: proxyName },
+            })
+            await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
+            const affected = getConnections()
+              .filter((conn) => conn.chains?.includes(selectorName))
+              .map((conn) => conn.id)
+            await Promise.all(
+              affected.map((id) =>
+                clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
+              )
             )
-          )
-        } catch {
-          /* */
-        }
-      })()
+          } catch {
+            /* */
+          }
+        })()
     },
     [clashApiPort, clashApiSecret, clashApiUnix]
   )
@@ -815,13 +816,14 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
             .map(async (name) => [name, await requestProxyDelay(name)] as const)
         )
         applyDelayResults(results)
+        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
       } catch {
         /* */
       } finally {
         useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
       }
     },
-    [applyDelayResults, requestProxyDelay]
+    [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
   )
 
   const toggleCollapse = useCallback((selectorName: string) => {
