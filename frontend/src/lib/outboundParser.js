@@ -139,7 +139,7 @@ const protocols = {
     parseUrl(uri, 'hysteria2', (url, params) => ({
       address: url.hostname,
       port: +url.port || 443,
-      password: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password ? `${url.username}:${url.password}` : url.username),
       sni: params.sni,
       insecure: params.insecure === '1' || params.allowInsecure === '1',
       obfs: params.obfs,
@@ -378,7 +378,7 @@ const parseHysteria2Xray = (uri) => {
       network: 'hysteria',
       security: params.security || 'tls',
       hysteriaSettings: {
-        auth: decodeURIComponent(url.username),
+        auth: decodeURIComponent(url.password ? `${url.username}:${url.password}` : url.username),
         version: 2,
       },
       tlsSettings: {
