@@ -170,12 +170,14 @@ const ProxyCard = memo(function ProxyCard({
   proxyName,
   selectorName,
   autoPolicy,
+  lockSelection,
   onSelect,
   onTestSingle,
 }: {
   proxyName: string
   selectorName: string
   autoPolicy: boolean
+  lockSelection?: boolean
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
 }) {
@@ -195,7 +197,7 @@ const ProxyCard = memo(function ProxyCard({
   const delay = getLastDelay(proxy)
   const hasHistory = hasDelayHistory(proxy)
   const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
-  const selectionDisabled = isSelectionDisabled(autoPolicy, proxy)
+  const selectionDisabled = lockSelection || isSelectionDisabled(autoPolicy, proxy)
   const transport = getProxyTransport(proxy)?.toLowerCase() ?? proxy.type.toLowerCase()
 
   return (
@@ -429,6 +431,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
   selectorName,
   options,
   autoPolicy,
+  lockSelection,
   onSelect,
   onTestSingle,
   visible,
@@ -436,6 +439,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
   selectorName: string
   options: string[]
   autoPolicy: boolean
+  lockSelection?: boolean
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
   visible: boolean
@@ -447,7 +451,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
   const disabledOptions = useProxiesStore(
     useShallow((s) =>
       Object.fromEntries(
-        options.map((proxyName) => [proxyName, isSelectionDisabled(autoPolicy, s.proxies[proxyName] as ProxyInfo | undefined)])
+        options.map((proxyName) => [proxyName, lockSelection || isSelectionDisabled(autoPolicy, s.proxies[proxyName] as ProxyInfo | undefined)])
       )
     )
   )
@@ -479,7 +483,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
         )}
         openBorderColor={isFixed ? '#c084fc' : undefined}
         openShadowColor={isFixed ? 'rgba(192,132,252,0.2)' : undefined}
-        placeholder="Выберите прокси"
+        placeholder={lockSelection ? 'Балансировка нагрузки' : 'Выберите прокси'}
       >
         {selectedProxy?.icon && (
           <InputGroupAddon align="inline-start">
@@ -543,6 +547,7 @@ const SelectorRow = memo(function SelectorRow({
 
   const allProxies = selector.all ?? []
   const autoPolicy = AUTO_POLICY_TYPES.has(selector.type)
+  const lockSelection = selector.type === 'LoadBalance'
   const selectedDelay = selectedProxy ? getLastDelay(selectedProxy) : null
   const showSelectedDelay = !!selectedProxy && selectedDelay !== null && selectedDelay > 0
 
@@ -613,6 +618,7 @@ const SelectorRow = memo(function SelectorRow({
                   proxyName={proxyName}
                   selectorName={selectorName}
                   autoPolicy={autoPolicy}
+                  lockSelection={lockSelection}
                   onSelect={onSelect}
                   onTestSingle={onTestSingle}
                 />
@@ -633,6 +639,7 @@ const SelectorRow = memo(function SelectorRow({
               selectorName={selectorName}
               options={allProxies}
               autoPolicy={autoPolicy}
+              lockSelection={lockSelection}
               onSelect={onSelect}
               onTestSingle={onTestSingle}
               visible={collapsed}
