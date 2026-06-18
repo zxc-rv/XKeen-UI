@@ -25,7 +25,7 @@ use std::io::{self, Write};
 use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::{exit};
+use std::process::exit;
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
@@ -118,7 +118,12 @@ fn setup_process_logging() {
 
     if !stdio_is_interactive() {
         if let Err(e) = redirect_stderr_to_process_log() {
-            eprintln!("{} {}: {}", " Не удалось перенаправить stderr в".red().bold(), XKEEN_UI_LOG, e);
+            eprintln!(
+                "{} {}: {}",
+                " Не удалось перенаправить stderr в".red().bold(),
+                XKEEN_UI_LOG,
+                e
+            );
         }
     }
 }
@@ -259,8 +264,7 @@ async fn main() {
     }
 
     let version: &'static str = Box::leak(format!("{} ({})", VERSION, get_arch()).into_boxed_str());
-    let mut command = <Cli as clap::CommandFactory>::command()
-        .version(version);
+    let mut command = <Cli as clap::CommandFactory>::command().version(version);
 
     if std::env::args().any(|arg| arg == "-h" || arg == "--help") {
         command.print_help().unwrap();
@@ -408,6 +412,7 @@ async fn main() {
         log_tx: log_tx_arc,
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),
         app_config_lock: Arc::new(tokio::sync::Mutex::new(())),
+        service_op_lock: Arc::new(tokio::sync::Mutex::new(())),
         debug: cli.debug,
     };
     version::start_update_checker(state.clone());

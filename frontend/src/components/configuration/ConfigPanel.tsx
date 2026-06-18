@@ -33,7 +33,6 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react'
-import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
@@ -521,26 +520,31 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
       dispatch({ type: 'SHOW_MODAL', modal: 'showCommentsWarningModal', show: true })
       return
     }
-    const saveResult = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: cfg.file, content })
-    if (!saveResult.success) return showToast(`Ошибка сохранения: ${saveResult.error}`, 'error')
-    editorRef.current.setSavedContent(content)
-    dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
-    saveViewState(cfg.file, false)
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Перезапуск...' })
-    const lang = getFileLanguage(cfg.file)
-    const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', {
-      action:
-        !xkeenConfigs.some((c) => c.file === cfg.file) &&
-          (lang === 'json' || lang === 'yaml') &&
-          !hasCriticalChanges(cfg.savedContent, content, lang)
-          ? 'softRestart'
-          : 'hardRestart',
-      core: currentCore,
-    })
-    showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
-    dispatch({ type: 'SET_SERVICE_STATUS', status: r?.success ? 'running' : 'stopped' })
-    if (r?.success) {
+    try {
+      const saveResult = await apiCall<{
+        success: boolean
+        error?: string
+        rollbackPerformed?: boolean
+        stage?: string
+      }>('PUT', 'configs', { file: cfg.file, content, apply: true })
+      if (!saveResult.success) {
+        const errorText = saveResult.rollbackPerformed
+          ? `Ошибка применения (${saveResult.stage ?? 'rollback'}): ${saveResult.error}`
+          : `Ошибка применения (${saveResult.stage ?? 'unknown'}): ${saveResult.error}`
+        dispatch({ type: 'SET_SERVICE_STATUS', status: saveResult.rollbackPerformed ? 'running' : 'stopped' })
+        return showToast(errorText, 'error')
+      }
+
+      editorRef.current.setSavedContent(content)
+      dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
+      saveViewState(cfg.file, false)
+      showToast('Изменения применены', 'success')
+      dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
       syncClashApiPort(200)
+    } catch (e: any) {
+      dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+      showToast(`Ошибка применения: ${e.message}`, 'error')
     }
   }
 
@@ -813,7 +817,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                           <IconRefresh data-icon="inline-start" /> Применить
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>Сохранить и перезапустить</TooltipContent>
+                      <TooltipContent>Сохранить и перезапустить. При сбое выполняется автоматический rollback.</TooltipContent>
                     </Tooltip>
                     <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
                       <IconDeviceFloppy data-icon="inline-start" /> Сохранить
@@ -898,24 +902,4 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
 
 function hasComments(content: string) {
   return /(?<!:)\/\/|\/\*[\s\S]*?\*\//.test(content) || /^\s*#/m.test(content)
-}
-
-function hasCriticalChanges(oldContent: string, newContent: string, language: string): boolean {
-  try {
-    if (language === 'yaml') {
-      const o = jsyaml.load(oldContent) as Record<string, unknown>
-      const n = jsyaml.load(newContent) as Record<string, unknown>
-      return ['listeners', 'redir-port', 'tproxy-port'].some((f) => JSON.stringify(o?.[f]) !== JSON.stringify(n?.[f]))
-    }
-    if (language === 'json') {
-      const o = JSON.parse(stripJsonComments(oldContent))
-      const n = JSON.parse(stripJsonComments(newContent))
-      const clean = (arr: Record<string, unknown>[]) =>
-        (arr || []).map((item) => Object.fromEntries(Object.entries(item).filter(([k]) => k !== 'sniffing')))
-      return JSON.stringify(clean(o?.inbounds)) !== JSON.stringify(clean(n?.inbounds))
-    }
-  } catch {
-    return false
-  }
-  return false
 }

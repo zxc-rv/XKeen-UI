@@ -8,7 +8,8 @@ use nix::unistd::{Gid, Pid, setgid, setsid};
 use serde::Deserialize;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tokio::fs::{self, set_permissions};
 use tokio::process::Command;
 
@@ -17,6 +18,34 @@ pub struct ControlReq {
     action: String,
     #[serde(default)]
     core: String,
+}
+
+pub fn normalize_core_name(name: &str) -> Option<&'static str> {
+    match name {
+        "xray" => Some("xray"),
+        "mihomo" => Some("mihomo"),
+        _ => None,
+    }
+}
+
+pub fn core_binary_path(core: &str) -> Option<&'static str> {
+    match normalize_core_name(core) {
+        Some("xray") => Some("/opt/sbin/xray"),
+        Some("mihomo") => Some("/opt/sbin/mihomo"),
+        _ => None,
+    }
+}
+
+pub fn core_config_dir(core: &str) -> Option<&'static str> {
+    match normalize_core_name(core) {
+        Some("xray") => Some(XRAY_CONF),
+        Some("mihomo") => Some(MIHOMO_CONF),
+        _ => None,
+    }
+}
+
+pub fn current_core_name(state: &AppState) -> String {
+    state.core.read().unwrap().name.clone()
 }
 
 pub fn find_init_file(log_enabled: bool) -> Option<String> {
@@ -122,11 +151,12 @@ pub fn get_pid(name: &str) -> Vec<i32> {
 }
 
 pub async fn soft_restart(core: &str) -> Result<(), String> {
+    let core = normalize_core_name(core).ok_or_else(|| "Неизвестное ядро".to_string())?;
     for pid in get_pid(core) {
         _ = kill(Pid::from_raw(pid), Signal::SIGKILL);
     }
 
-    let mut cmd = Command::new(core);
+    let mut cmd = Command::new(core_binary_path(core).unwrap_or(core));
     match core {
         "mihomo" => {
             cmd.env("CLASH_HOME_DIR", MIHOMO_CONF);
@@ -168,6 +198,32 @@ pub async fn soft_restart(core: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+pub fn is_core_running(core: &str) -> bool {
+    normalize_core_name(core).is_some_and(|name| !get_pid(name).is_empty())
+}
+
+pub async fn wait_for_core_healthy(core: &str) -> Result<(), String> {
+    let core = normalize_core_name(core).ok_or_else(|| "Неизвестное ядро".to_string())?;
+    let start_deadline = tokio::time::Instant::now() + Duration::from_secs(6);
+
+    loop {
+        if is_core_running(core) {
+            break;
+        }
+        if tokio::time::Instant::now() >= start_deadline {
+            return Err(format!("{} не запустился за отведённое время", core));
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    if is_core_running(core) {
+        Ok(())
+    } else {
+        Err(format!("{} запустился, но быстро завершился", core))
+    }
 }
 
 pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
@@ -243,10 +299,11 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     )
 }
 
-async fn check_core_config(core: &str) -> Result<(), String> {
+pub async fn check_core_config_at(core: &str, dir: &Path) -> Result<(), String> {
+    let core = normalize_core_name(core).ok_or_else(|| "Неизвестное ядро".to_string())?;
     if core == "xray" {
-        fs::create_dir_all(XRAY_CONF).await.ok();
-        let has_json = std::fs::read_dir(XRAY_CONF)
+        fs::create_dir_all(dir).await.ok();
+        let has_json = std::fs::read_dir(dir)
             .map(|dir| {
                 dir.flatten()
                     .any(|e| e.path().extension().map_or(false, |x| x == "json"))
@@ -261,11 +318,66 @@ async fn check_core_config(core: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn check_core_config(core: &str) -> Result<(), String> {
+    let dir = core_config_dir(core).ok_or_else(|| "Неизвестное ядро".to_string())?;
+    check_core_config_at(core, Path::new(dir)).await
+}
+
+pub async fn validate_core_config(core: &str, dir: &Path) -> Result<(), String> {
+    let core = normalize_core_name(core).ok_or_else(|| "Неизвестное ядро".to_string())?;
+    check_core_config_at(core, dir).await?;
+
+    let binary = core_binary_path(core).ok_or_else(|| "Не найден бинарник ядра".to_string())?;
+    let mut cmd = Command::new(binary);
+    match core {
+        "xray" => {
+            cmd.args(["run", "-test", "-confdir"]);
+            cmd.arg(dir);
+            cmd.env("XRAY_LOCATION_ASSET", XRAY_ASSET);
+        }
+        "mihomo" => {
+            let config_file: PathBuf = dir.join("config.yaml");
+            cmd.args(["-t", "-d"]);
+            cmd.arg(dir);
+            cmd.arg("-f");
+            cmd.arg(&config_file);
+        }
+        _ => unreachable!(),
+    }
+
+    let output = cmd
+        .output()
+        .await
+        .map_err(|e| format!("Ошибка запуска валидатора: {e}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let details = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!("код {}", output.status)
+    };
+    Err(details)
+}
+
 pub async fn post_control(State(state): State<AppState>, Json(req): Json<ControlReq>) -> impl IntoResponse {
+    let _guard = state.service_op_lock.lock().await;
     match req.action.as_str() {
         "switchCore" => {
+            let Some(target_core) = normalize_core_name(&req.core) else {
+                return Json(ApiResponse {
+                    success: false,
+                    error: Some("Bad core".into()),
+                    data: None,
+                });
+            };
             let old = state.core.read().unwrap().name.clone();
-            if old == req.core {
+            if old == target_core {
                 return Json(ApiResponse {
                     success: true,
                     error: None,
@@ -288,28 +400,28 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             if let Ok(content) = fs::read_to_string(&init_file).await {
                 let new_content = content.replace(
                     &format!("name_client=\"{}\"", old),
-                    &format!("name_client=\"{}\"", req.core),
+                    &format!("name_client=\"{}\"", target_core),
                 );
                 _ = fs::write(&init_file, new_content).await;
                 _ = set_permissions(&init_file, Permissions::from_mode(0o755)).await;
             }
 
-            *state.core.write().unwrap() = get_core_info(&req.core);
+            *state.core.write().unwrap() = get_core_info(target_core);
 
-            if let Err(e) = check_core_config(&req.core).await {
+            if let Err(e) = check_core_config(target_core).await {
                 log("ERROR", e);
                 return Json(ApiResponse {
                     success: false,
                     error: Some(format!(
                         "Не удалось запустить {}{}",
-                        &req.core[..1].to_uppercase(),
-                        &req.core[1..]
+                        &target_core[..1].to_uppercase(),
+                        &target_core[1..]
                     )),
                     data: None,
                 });
             }
 
-            if req.core != "xray" {
+            if target_core != "xray" {
                 _ = fs::write(error_log_path(), b"").await;
             }
 
@@ -322,7 +434,14 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             }
         }
         "softRestart" => {
-            if let Err(e) = soft_restart(&req.core).await {
+            let Some(target_core) = normalize_core_name(&req.core) else {
+                return Json(ApiResponse {
+                    success: false,
+                    error: Some("Bad core".into()),
+                    data: None,
+                });
+            };
+            if let Err(e) = soft_restart(target_core).await {
                 return Json(ApiResponse {
                     success: false,
                     error: Some(e),

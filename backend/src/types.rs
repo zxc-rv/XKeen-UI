@@ -105,6 +105,7 @@ pub struct AppState {
     pub log_tx: Arc<broadcast::Sender<String>>,
     pub log_watcher: Arc<Mutex<Option<AbortHandle>>>,
     pub app_config_lock: Arc<Mutex<()>>,
+    pub service_op_lock: Arc<Mutex<()>>,
     pub debug: bool,
 }
 
