@@ -184,7 +184,6 @@ fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SafeApplyData {
-    applied: bool,
     rollback_performed: bool,
     stage: String,
     validate_only: bool,
@@ -209,13 +208,12 @@ fn normalize_content(file: &str, content: String) -> String {
 }
 
 fn safe_apply_response(
-    success: bool, stage: &str, error: Option<String>, applied: bool, rollback_performed: bool, validate_only: bool,
+    success: bool, stage: &str, error: Option<String>, rollback_performed: bool, validate_only: bool,
 ) -> Json<ApiResponse<SafeApplyData>> {
     Json(ApiResponse {
         success,
         error,
         data: Some(SafeApplyData {
-            applied,
             rollback_performed,
             stage: stage.into(),
             validate_only,
@@ -427,22 +425,22 @@ async fn safe_apply_config(state: &AppState, file: String, content: String) -> J
     let snapshot = match take_snapshot(&target_path).await {
         Ok(snapshot) => snapshot,
         Err(e) => {
-            return safe_apply_response(false, "backup", Some(e), false, false, false);
+            return safe_apply_response(false, "backup", Some(e), false, false);
         }
     };
 
     if !is_xkeen_config(&file) {
         if let Err(e) = validate_candidate(state, &target_core, &target_path, &content).await {
-            return safe_apply_response(false, "validate", Some(e), false, false, false);
+            return safe_apply_response(false, "validate", Some(e), false, false);
         }
     }
 
     if let Err(e) = write_file_atomically(&target_path, content.as_bytes(), snapshot.mode).await {
-        return safe_apply_response(false, "write", Some(e), false, false, false);
+        return safe_apply_response(false, "write", Some(e), false, false);
     }
 
     match restart_with_healthcheck(state, &target_core).await {
-        Ok(()) => safe_apply_response(true, "completed", None, true, false, false),
+        Ok(()) => safe_apply_response(true, "completed", None, false, false),
         Err(restart_error) => {
             if let Err(e) = restore_snapshot(&target_path, &snapshot).await {
                 return safe_apply_response(
@@ -452,7 +450,6 @@ async fn safe_apply_config(state: &AppState, file: String, content: String) -> J
                         "Сервис не поднялся после применения: {}. Дополнительно не удалось восстановить snapshot: {}",
                         restart_error, e
                     )),
-                    false,
                     false,
                     false,
                 );
@@ -468,7 +465,6 @@ async fn safe_apply_config(state: &AppState, file: String, content: String) -> J
                     )),
                     false,
                     false,
-                    false,
                 );
             }
 
@@ -479,7 +475,6 @@ async fn safe_apply_config(state: &AppState, file: String, content: String) -> J
                     "Новый конфиг не применён: {}. Выполнен автоматический rollback предыдущей рабочей версии.",
                     restart_error
                 )),
-                false,
                 true,
                 false,
             )
@@ -513,14 +508,13 @@ pub async fn put_config(State(state): State<AppState>, Json(req): Json<ConfigReq
                 "validate",
                 Some("Для этого файла validate-only не поддерживается".into()),
                 false,
-                false,
                 true,
             )
             .into_response();
         }
         return match validate_candidate(&state, &target_core, Path::new(&req.file), &content).await {
-            Ok(()) => safe_apply_response(true, "validated", None, false, false, true).into_response(),
-            Err(e) => safe_apply_response(false, "validate", Some(e), false, false, true).into_response(),
+            Ok(()) => safe_apply_response(true, "validated", None, false, true).into_response(),
+            Err(e) => safe_apply_response(false, "validate", Some(e), false, true).into_response(),
         };
     }
 

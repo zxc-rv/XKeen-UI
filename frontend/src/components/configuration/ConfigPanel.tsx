@@ -527,7 +527,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
         success: boolean
         error?: string
         data?: {
-          applied?: boolean
           rollbackPerformed?: boolean
           stage?: string
         }
