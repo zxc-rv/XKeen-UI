@@ -11,7 +11,8 @@ import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
 import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config, type ThemeMode } from './lib/types'
-import { parseClashApiCredentials, stripJsonComments } from './lib/utils'
+import { parseClashApiCredentials } from './lib/utils'
+import { parse as parseJsonc } from 'jsonc-parser'
 
 const CommentsWarningModal = lazyLoad(() => import('./components/modals/CommentsWarning'), 'CommentsWarningModal')
 const CoreManageModal = lazyLoad(() => import('./components/modals/CoreManagement'), 'CoreManageModal')
@@ -307,12 +308,12 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
       } else {
         try {
           try {
-            const obj = JSON.parse(stripJsonComments(appState.configs[targetIndex].content))
+            const obj = parseJsonc(appState.configs[targetIndex].content)
             if (!Array.isArray(obj.outbounds)) throw new Error()
           } catch {
             targetIndex = appState.configs.findIndex((cfg) => {
               try {
-                return Array.isArray(JSON.parse(stripJsonComments(cfg.content)).outbounds)
+                return Array.isArray(parseJsonc(cfg.content).outbounds)
               } catch {
                 return false
               }
@@ -388,7 +389,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           }
         } else {
           try {
-            const obj = JSON.parse(stripJsonComments(current))
+            const obj = parseJsonc(current)
             if (position === 'start') obj.outbounds.unshift(JSON.parse(generated))
             else obj.outbounds.push(JSON.parse(generated))
             editorWrapper.replaceAll(JSON.stringify(obj, null, 2))

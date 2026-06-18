@@ -6,7 +6,8 @@ import { forwardRef, memo, useCallback, useEffect, useRef, useState } from 'reac
 import { apiCall } from '../../../lib/api'
 import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
-import { cn, stripJsonComments } from '../../../lib/utils'
+import { cn } from '../../../lib/utils'
+import { parse as parseJsonc } from 'jsonc-parser'
 import type { CodeMirrorRef } from '../CodeMirror'
 
 const RULE_FIELDS = {
@@ -35,7 +36,7 @@ type Rule = Record<string, any>
 
 function parseRules(content: string): Rule[] {
   try {
-    const json = JSON.parse(stripJsonComments(content))
+    const json = parseJsonc(content)
     if (json?.routing?.rules && Array.isArray(json.routing.rules)) return JSON.parse(JSON.stringify(json.routing.rules))
   } catch {
     /* */
@@ -116,7 +117,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     try {
       const c = configs.find((x) => x.file.toLowerCase().includes('outbound'))
       if (c) {
-        const j = JSON.parse(stripJsonComments(c.content))
+        const j = parseJsonc(c.content)
         outbounds = j.outbounds?.filter((o: any) => o.tag).map((o: any) => o.tag) ?? []
       }
     } catch {
@@ -125,7 +126,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     try {
       const c = configs.find((x) => x.file.toLowerCase().includes('inbound'))
       if (c) {
-        const j = JSON.parse(stripJsonComments(c.content))
+        const j = parseJsonc(c.content)
         inbounds = j.inbounds?.filter((i: any) => i.tag).map((i: any) => i.tag) ?? []
       }
     } catch {
@@ -133,7 +134,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     }
     try {
       const content = configs[activeConfigIndex]?.content ?? editorRef.current?.getValue() ?? ''
-      const j = JSON.parse(stripJsonComments(content))
+      const j = parseJsonc(content)
       balancers = j.routing?.balancers?.filter((b: any) => b.tag).map((b: any) => b.tag) ?? []
     } catch {
       /* */
@@ -173,7 +174,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
       const wrapper = editorRef.current
       if (!wrapper) return
       try {
-        const json = JSON.parse(stripJsonComments(wrapper.getValue()))
+        const json = parseJsonc(wrapper.getValue())
         json.routing.rules = newRules
         const text = JSON.stringify(json, null, 2)
         wrapper.replaceAll(text)

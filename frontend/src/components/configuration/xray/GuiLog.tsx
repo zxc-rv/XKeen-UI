@@ -3,7 +3,8 @@ import { useCallback, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
-import { cn, stripJsonComments } from '../../../lib/utils'
+import { cn } from '../../../lib/utils'
+import { parse as parseJsonc } from 'jsonc-parser'
 import type { CodeMirrorRef } from '../CodeMirror'
 
 const LOG_LEVELS = ['none', 'error', 'warning', 'info', 'debug'] as const
@@ -29,7 +30,7 @@ interface LogConfig {
 
 function parseLogConfig(content: string): LogConfig | null {
   try {
-    const json = JSON.parse(stripJsonComments(content))
+    const json = parseJsonc(content)
     if (!json?.log) return null
     return {
       access: json.log.access ?? '',
@@ -77,7 +78,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
       const wrapper = editorRef.current
       if (!wrapper) return
       try {
-        const json = JSON.parse(stripJsonComments(wrapper.getValue()))
+        const json = parseJsonc(wrapper.getValue())
         json.log = {
           access: newCfg.access || 'none',
           error: newCfg.error || 'none',

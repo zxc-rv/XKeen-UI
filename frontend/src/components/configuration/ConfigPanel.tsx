@@ -39,7 +39,8 @@ import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
-import { cn, stripJsonComments } from '../../lib/utils'
+import { cn } from '../../lib/utils'
+import { parse as parseJsonc } from 'jsonc-parser'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
@@ -555,7 +556,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     if (!guiRouting || !fileForGui) return false
     if (!fileForGui.toLowerCase().includes('routing')) return false
     try {
-      const j = JSON.parse(stripJsonComments(contentForGui || ''))
+      const j = parseJsonc(contentForGui || '')
       return j && typeof j.routing === 'object'
     } catch {
       return false
@@ -566,7 +567,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     if (!guiLog || !fileForGui) return false
     if (!fileForGui.toLowerCase().includes('log')) return false
     try {
-      const j = JSON.parse(stripJsonComments(contentForGui || ''))
+      const j = parseJsonc(contentForGui || '')
       return j && typeof j.log === 'object'
     } catch {
       return false
@@ -908,8 +909,8 @@ function hasCriticalChanges(oldContent: string, newContent: string, language: st
       return ['listeners', 'redir-port', 'tproxy-port'].some((f) => JSON.stringify(o?.[f]) !== JSON.stringify(n?.[f]))
     }
     if (language === 'json') {
-      const o = JSON.parse(stripJsonComments(oldContent))
-      const n = JSON.parse(stripJsonComments(newContent))
+      const o = parseJsonc(oldContent)
+      const n = parseJsonc(newContent)
       const clean = (arr: Record<string, unknown>[]) =>
         (arr || []).map((item) => Object.fromEntries(Object.entries(item).filter(([k]) => k !== 'sniffing')))
       return JSON.stringify(clean(o?.inbounds)) !== JSON.stringify(clean(n?.inbounds))

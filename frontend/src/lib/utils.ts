@@ -5,8 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export const stripJsonComments = (s: string) => s.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '')
-
 export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator?.clipboard?.writeText) {
