@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::fs::{self, set_permissions};
 use tokio::process::Command;
+use yaml_rust2::YamlLoader;
 
 #[derive(Deserialize)]
 pub struct ControlReq {
@@ -204,6 +205,125 @@ pub fn is_core_running(core: &str) -> bool {
     normalize_core_name(core).is_some_and(|name| !get_pid(name).is_empty())
 }
 
+enum MihomoControllerTarget {
+    Tcp {
+        port: String,
+        secret: Option<String>,
+    },
+    Unix {
+        path: PathBuf,
+    },
+}
+
+fn parse_mihomo_controller_target(dir: &Path, content: &str) -> Option<MihomoControllerTarget> {
+    let docs = YamlLoader::load_from_str(content).ok()?;
+    let doc = docs.first()?;
+
+    if let Some(raw_path) = doc["external-controller-unix"].as_str().map(str::trim).filter(|s| !s.is_empty()) {
+        let path = Path::new(raw_path);
+        return Some(MihomoControllerTarget::Unix {
+            path: if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                dir.join(path)
+            },
+        });
+    }
+
+    let controller = doc["external-controller"].as_str()?.trim();
+    let (_, port) = controller.rsplit_once(':')?;
+    if port.is_empty() || !port.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+
+    let secret = doc["secret"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(ToOwned::to_owned);
+
+    Some(MihomoControllerTarget::Tcp {
+        port: port.to_string(),
+        secret,
+    })
+}
+
+async fn check_mihomo_controller_once(target: &MihomoControllerTarget) -> Result<(), String> {
+    match target {
+        MihomoControllerTarget::Tcp { port, secret } => {
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(1))
+                .build()
+                .map_err(|e| format!("Не удалось создать HTTP клиент: {e}"))?;
+            let mut request = client.get(format!("http://127.0.0.1:{port}/version"));
+            if let Some(secret) = secret {
+                request = request.header("Authorization", format!("Bearer {secret}"));
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|e| format!("HTTP запрос к controller API завершился ошибкой: {e}"))?;
+            if response.status().is_success() {
+                Ok(())
+            } else {
+                Err(format!("controller API вернул {}", response.status()))
+            }
+        }
+        MihomoControllerTarget::Unix { path } => {
+            let client = reqwest::Client::builder()
+                .unix_socket(path.clone())
+                .timeout(Duration::from_secs(1))
+                .build()
+                .map_err(|e| format!("Не удалось создать HTTP клиент для unix-сокета: {e}"))?;
+            let response = client
+                .get("http://127.0.0.1/version")
+                .send()
+                .await
+                .map_err(|e| format!("HTTP запрос к controller API через unix-сокет завершился ошибкой: {e}"))?;
+            if response.status().is_success() {
+                Ok(())
+            } else {
+                Err(format!("controller API вернул {}", response.status()))
+            }
+        }
+    }
+}
+
+async fn wait_for_mihomo_controller_ready() -> Result<(), String> {
+    let config_path = Path::new(MIHOMO_CONF).join("config.yaml");
+    let content = fs::read_to_string(&config_path)
+        .await
+        .map_err(|e| format!("Не удалось прочитать {}: {}", config_path.display(), e))?;
+
+    let Some(target) = parse_mihomo_controller_target(Path::new(MIHOMO_CONF), &content) else {
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        return if is_core_running("mihomo") {
+            Ok(())
+        } else {
+            Err("mihomo запустился, но быстро завершился".into())
+        };
+    };
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+
+    loop {
+        if !is_core_running("mihomo") {
+            return Err("mihomo запустился, но завершился до готовности controller API".into());
+        }
+
+        let last_error = match check_mihomo_controller_once(&target).await {
+            Ok(()) => return Ok(()),
+            Err(e) => e,
+        };
+
+        if tokio::time::Instant::now() >= deadline {
+            return Err(format!("mihomo не подтвердил готовность controller API: {}", last_error));
+        }
+
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
 pub async fn wait_for_core_healthy(core: &str) -> Result<(), String> {
     let core = normalize_core_name(core).ok_or_else(|| "Неизвестное ядро".to_string())?;
     let start_deadline = tokio::time::Instant::now() + Duration::from_secs(6);
@@ -218,11 +338,54 @@ pub async fn wait_for_core_healthy(core: &str) -> Result<(), String> {
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
 
+    if core == "mihomo" {
+        return wait_for_mihomo_controller_ready().await;
+    }
+
     tokio::time::sleep(Duration::from_secs(2)).await;
     if is_core_running(core) {
         Ok(())
     } else {
         Err(format!("{} запустился, но быстро завершился", core))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_mihomo_tcp_controller_settings() {
+        let config = r#"
+external-controller: 0.0.0.0:9090
+secret: test-secret
+"#;
+
+        let target = parse_mihomo_controller_target(Path::new(MIHOMO_CONF), config);
+
+        match target {
+            Some(MihomoControllerTarget::Tcp { port, secret }) => {
+                assert_eq!(port, "9090");
+                assert_eq!(secret.as_deref(), Some("test-secret"));
+            }
+            _ => panic!("expected tcp controller target"),
+        }
+    }
+
+    #[test]
+    fn parses_mihomo_unix_controller_settings() {
+        let config = r#"
+external-controller-unix: ./clash.sock
+"#;
+
+        let target = parse_mihomo_controller_target(Path::new(MIHOMO_CONF), config);
+
+        match target {
+            Some(MihomoControllerTarget::Unix { path }) => {
+                assert_eq!(path, Path::new(MIHOMO_CONF).join("clash.sock"));
+            }
+            _ => panic!("expected unix controller target"),
+        }
     }
 }
 

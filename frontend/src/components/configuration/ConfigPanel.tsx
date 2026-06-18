@@ -513,6 +513,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     const cfg = configsRef.current[activeIndexRef.current]
     if (!cfg || !editorRef.current) return
     const content = editorRef.current.getValue()
+    const previousServiceStatus = serviceStatus
     if (!content.trim()) return showToast('Файл пустой', 'error')
     if (!editorRef.current.isValid(cfg.file)) return showToast('Файл содержит ошибки', 'error')
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
@@ -525,14 +526,18 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
       const saveResult = await apiCall<{
         success: boolean
         error?: string
-        rollbackPerformed?: boolean
-        stage?: string
+        data?: {
+          applied?: boolean
+          rollbackPerformed?: boolean
+          stage?: string
+        }
       }>('PUT', 'configs', { file: cfg.file, content, apply: true })
       if (!saveResult.success) {
-        const errorText = saveResult.rollbackPerformed
-          ? `Ошибка применения (${saveResult.stage ?? 'rollback'}): ${saveResult.error}`
-          : `Ошибка применения (${saveResult.stage ?? 'unknown'}): ${saveResult.error}`
-        dispatch({ type: 'SET_SERVICE_STATUS', status: saveResult.rollbackPerformed ? 'running' : 'stopped' })
+        const stage = saveResult.data?.stage ?? 'unknown'
+        const rollbackPerformed = saveResult.data?.rollbackPerformed === true
+        const statusPreserved = rollbackPerformed || stage === 'backup' || stage === 'validate' || stage === 'write'
+        const errorText = `Ошибка применения (${rollbackPerformed ? 'rollback' : stage}): ${saveResult.error}`
+        dispatch({ type: 'SET_SERVICE_STATUS', status: statusPreserved ? previousServiceStatus : 'stopped' })
         return showToast(errorText, 'error')
       }
 
@@ -543,7 +548,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
       dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
       syncClashApiPort(200)
     } catch (e: any) {
-      dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+      dispatch({ type: 'SET_SERVICE_STATUS', status: previousServiceStatus })
       showToast(`Ошибка применения: ${e.message}`, 'error')
     }
   }
