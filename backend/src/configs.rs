@@ -175,7 +175,9 @@ fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
     Ok(file.ends_with(".lst"))
 }
 
-pub async fn put_config(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {
+pub async fn put_config(
+    State(state): State<AppState>, Query(params): Query<HashMap<String, String>>, Json(req): Json<ConfigReq>,
+) -> impl IntoResponse {
     let is_lst = match check_access(&req.file, &state) {
         Ok(val) => val,
         Err(e) => {
@@ -191,7 +193,58 @@ pub async fn put_config(State(state): State<AppState>, Json(req): Json<ConfigReq
     } else {
         req.content
     };
-    if fs::write(&req.file, content).is_err() {
+
+    if let Some(core_type) = params.get("validate") {
+        let mut validate_files = Vec::new();
+        if core_type == "mihomo" {
+            validate_files.push(ConfigReq {
+                file: req.file.clone(),
+                content: content.clone(),
+            });
+        } else if core_type == "xray" {
+            if let Ok(mut entries) = tokio::fs::read_dir(XRAY_CONF).await {
+                let mut found_current = false;
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    let path = entry.path();
+                    if path.extension().map_or(false, |e| e == "json") {
+                        let path_str = path.to_string_lossy().into_owned();
+                        let file_content = if path_str == req.file {
+                            found_current = true;
+                            content.clone()
+                        } else {
+                            tokio::fs::read_to_string(&path).await.unwrap_or_default()
+                        };
+                        validate_files.push(ConfigReq {
+                            file: path_str,
+                            content: file_content,
+                        });
+                    }
+                }
+                if !found_current {
+                    validate_files.push(ConfigReq {
+                        file: req.file.clone(),
+                        content: content.clone(),
+                    });
+                }
+            } else {
+                validate_files.push(ConfigReq {
+                    file: req.file.clone(),
+                    content: content.clone(),
+                });
+            }
+        }
+
+        if let Err(err_msg) = validate_core(core_type, &validate_files).await {
+            log("ERROR", err_msg);
+            return Json(ApiResponse::<()> {
+                success: false,
+                error: Some("Validation failed".into()),
+                data: None,
+            });
+        }
+    }
+
+    if fs::write(&req.file, &content).is_err() {
         return Json(ApiResponse::<()> {
             success: false,
             error: Some("Write error".into()),
@@ -298,4 +351,53 @@ pub async fn patch_config(State(state): State<AppState>, Json(req): Json<RenameR
         error: None,
         data: None,
     })
+}
+
+async fn validate_core(core: &str, files: &[ConfigReq]) -> Result<(), String> {
+    let temp_dir = std::env::temp_dir().join(format!(
+        "xkeen-validate-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default()
+    ));
+    tokio::fs::create_dir_all(&temp_dir).await.map_err(|e| e.to_string())?;
+
+    for item in files {
+        let Some(name) = Path::new(&item.file).file_name() else {
+            continue;
+        };
+        if let Err(e) = tokio::fs::write(temp_dir.join(name), &item.content).await {
+            _ = tokio::fs::remove_dir_all(&temp_dir).await;
+            return Err(e.to_string());
+        }
+    }
+
+    let mut command = match core {
+        "mihomo" => {
+            let mut cmd = tokio::process::Command::new("mihomo");
+            cmd.args(["-t", "-f"]).arg(temp_dir.join("config.yaml"));
+            cmd.env("CLASH_HOME_DIR", MIHOMO_CONF);
+            cmd
+        }
+        _ => {
+            let mut cmd = tokio::process::Command::new("xray");
+            cmd.args(["-test", "-confdir"]).arg(&temp_dir);
+            cmd.env("XRAY_LOCATION_ASSET", XRAY_ASSET);
+            cmd
+        }
+    };
+
+    let output = command.output().await;
+    _ = tokio::fs::remove_dir_all(&temp_dir).await;
+
+    let output = output.map_err(|e| e.to_string())?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
+    combined.push_str(&String::from_utf8_lossy(&output.stderr));
+    Err(combined)
 }

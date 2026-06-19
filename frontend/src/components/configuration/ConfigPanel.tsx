@@ -35,7 +35,7 @@ import {
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
-import { apiCall, clashFetch, getFileLanguage } from '../../lib/api'
+import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
@@ -522,8 +522,29 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
       dispatch({ type: 'SHOW_MODAL', modal: 'showCommentsWarningModal', show: true })
       return
     }
-    const saveResult = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: cfg.file, content })
-    if (!saveResult.success) return showToast(`Ошибка сохранения: ${saveResult.error}`, 'error')
+
+    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Применение...' })
+
+    let url = 'configs'
+    if (!cfg.file.startsWith('/opt/etc/xkeen')) {
+      if (currentCore === 'mihomo') {
+        url += '?validate=mihomo'
+      } else if (currentCore === 'xray') {
+        url += '?validate=xray'
+      }
+    }
+
+    const saveResult = await apiCall<{ success: boolean; error?: string }>('PUT', url, { file: cfg.file, content })
+    if (!saveResult.success) {
+      dispatch({ type: 'SET_SERVICE_STATUS', status: isRunning ? 'running' : 'stopped' })
+      return showToast(
+        saveResult.error === 'Validation failed'
+          ? `Ошибка валидации ${capitalize(currentCore)}: проверьте журнал`
+          : `Ошибка сохранения: ${saveResult.error}`,
+        'error'
+      )
+    }
+
     editorRef.current.setSavedContent(content)
     dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
     saveViewState(cfg.file, false)
