@@ -15,19 +15,38 @@ http = "1.4.0"
 memmap2 = "0.9"
 md5 = "0.8"
 mime_guess = "2"
-nix = { version = "0.31", default-features = false, features = ["signal", "process", "user", "resource", "fs"] }
+nix = { version = "0.31", default-features = false, features = [
+  "signal",
+  "process",
+  "user",
+  "resource",
+  "fs",
+] }
 notify = "8"
 prost = "0.14"
 regex-lite = "0.1.9"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream", "blocking"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+  "stream",
+  "blocking",
+] }
 rust-embed = { version = "8", features = ["axum"] }
 rustix = { version = "1.1", features = ["fs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tar = "0.4.45"
-tokio = { version = "1",  features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "net"] }
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "fs",
+  "process",
+  "sync",
+  "io-util",
+  "net",
+] }
 tokio-tungstenite = "0.29"
-tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
+tower-http = { version = "0.7", features = ["fs", "cors", "set-header"] }
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
 yaml-rust2 = { version = "0.11", default-features = false }
