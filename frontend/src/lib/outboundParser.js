@@ -257,7 +257,7 @@ function convertToMihomoYaml(proxyConfig) {
     if (settings.insecure) common['skip-cert-verify'] = true
     if (settings.obfs) common.obfs = settings.obfs
     if (settings.obfsPassword) common['obfs-password'] = settings.obfsPassword
-    if (settings.fingerprint) common.fingerprint = settings.fingerprint
+    if (settings.fingerprint) common['client-fingerprint'] = settings.fingerprint
     if (settings.alpn) common.alpn = settings.alpn
     if (settings.up) common.up = settings.up
     if (settings.down) common.down = settings.down
@@ -366,6 +366,15 @@ const parseHysteria2Xray = (uri) => {
   try {
     if (params.fm) finalmask = JSON.parse(decodeURIComponent(params.fm))
   } catch { }
+
+  const streamSettings = getStreamSettings('hysteria', { ...params, security: params.security || 'tls' })
+  streamSettings.hysteriaSettings = {
+    auth: decodeURIComponent(url.password ? `${url.username}:${url.password}` : url.username),
+    version: 2,
+  }
+  if (streamSettings.tlsSettings) streamSettings.tlsSettings.alpn = streamSettings.tlsSettings.alpn || ['h3']
+  streamSettings.finalmask = finalmask
+
   return {
     tag,
     protocol: 'hysteria',
@@ -374,19 +383,7 @@ const parseHysteria2Xray = (uri) => {
       port: +url.port || 443,
       version: 2,
     },
-    streamSettings: {
-      network: 'hysteria',
-      security: params.security || 'tls',
-      hysteriaSettings: {
-        auth: decodeURIComponent(url.password ? `${url.username}:${url.password}` : url.username),
-        version: 2,
-      },
-      tlsSettings: {
-        serverName: params.sni ?? '',
-        alpn: params.alpn?.split(',') ?? ['h3'],
-      },
-      finalmask,
-    },
+    streamSettings,
   }
 }
 
