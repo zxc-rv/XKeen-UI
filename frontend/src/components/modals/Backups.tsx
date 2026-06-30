@@ -1,7 +1,6 @@
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -202,7 +201,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
   )
 
   const closeConfirm = useCallback(() => {
-    if (pendingAction === null) setConfirmAction(null)
+    if (pendingAction === null) setTimeout(() => setConfirmAction(null), 0)
   }, [pendingAction])
 
   const submitConfirm = useCallback(async () => {
@@ -349,8 +348,14 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!confirmAction} onOpenChange={(next) => !next && closeConfirm()}>
-        <AlertDialogContent size="sm">
+      <AlertDialog open={!!confirmAction} onOpenChange={(next) => !next}>
+        <AlertDialogContent
+          size="sm"
+          onEscapeKeyDown={(event) => {
+            event.preventDefault()
+            closeConfirm()
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogMedia className={activeDialogAction?.type === 'delete' ? 'bg-destructive/10 text-destructive' : undefined}>
               {activeDialogAction?.type === 'delete' ? <IconTrash /> : <IconAlertTriangle />}
@@ -367,7 +372,9 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={pendingAction !== null}>Отмена</AlertDialogCancel>
+            <Button variant="outline" disabled={pendingAction !== null} onClick={closeConfirm}>
+              Отмена
+            </Button>
             <AlertDialogAction
               variant={activeDialogAction?.type === 'delete' ? 'destructive' : 'default'}
               onClick={() => void submitConfirm()}
