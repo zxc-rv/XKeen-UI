@@ -349,7 +349,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!confirmAction} onOpenChange={(next) => !next && closeConfirm()}>
+      <AlertDialog open={!!confirmAction} onOpenChange={(next) => !next}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
             <AlertDialogMedia className={activeDialogAction?.type === 'delete' ? 'bg-destructive/10 text-destructive' : undefined}>
