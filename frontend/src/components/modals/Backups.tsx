@@ -295,7 +295,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
                               {isRestoring ? <Spinner data-icon="inline-start" /> : <IconRestore />}
                               Восстановить
                             </Button>
-                            <DropdownMenu>
+                            <DropdownMenu modal={false}>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="outline" size="sm" className="px-2" disabled={isRestoreDisabled || contents.length <= 1}>
                                   <IconChevronDown />
