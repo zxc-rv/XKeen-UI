@@ -439,19 +439,32 @@ async function preloadIcons(urls: string[]) {
 export async function fetchClashProxies(port: string, secret?: string | null, silent = false, unix?: string | null): Promise<void> {
   if (!silent) useProxiesStore.setState({ loading: true, error: false })
   try {
-    const data = await clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix })
-    if (data.proxies) {
+    const [proxiesData, providersData] = await Promise.all([
+      clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix }),
+      clashFetch<{ providers?: Record<string, { proxies?: unknown[] }> }>(port, 'providers/proxies', { secret, unix }).catch(() => ({ providers: undefined })),
+    ])
+
+    if (proxiesData.proxies) {
+      const proxies = { ...proxiesData.proxies }
+
+      for (const provider of Object.values(providersData.providers ?? {})) {
+        for (const proxy of provider.proxies ?? []) {
+          const name = (proxy as any).name
+          if (name && !proxies[name]) proxies[name] = proxy
+        }
+      }
+
       const urlsToFetch = new Set<string>()
 
-      for (const key in data.proxies) {
-        const p = data.proxies[key] as any
+      for (const key in proxies) {
+        const p = proxies[key] as any
         if (p.icon) {
           if (iconCache.has(p.icon)) p.icon = iconCache.get(p.icon)
           else if (typeof p.icon === 'string' && !p.icon.startsWith('blob:')) urlsToFetch.add(p.icon)
         }
       }
 
-      useProxiesStore.setState({ proxies: data.proxies, ...(!silent && { loading: false }) })
+      useProxiesStore.setState({ proxies, ...(!silent && { loading: false }) })
       if (urlsToFetch.size > 0) preloadIcons(Array.from(urlsToFetch))
     } else if (!silent) {
       useProxiesStore.setState({ loading: false, error: true })

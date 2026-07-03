@@ -684,7 +684,11 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
   const requestProxyDelay = useCallback(
     async (proxyName: string) => {
       try {
-        const data = await clashFetch<{ delay?: number }>(clashApiPort, `proxies/${encodeURIComponent(proxyName)}/delay?${pingTestQuery}`, {
+        const providerName = (useProxiesStore.getState().proxies[proxyName] as ProxyInfo | undefined)?.['provider-name']
+        const endpoint = providerName
+          ? `providers/proxies/${encodeURIComponent(providerName)}/${encodeURIComponent(proxyName)}/healthcheck?${pingTestQuery}`
+          : `proxies/${encodeURIComponent(proxyName)}/delay?${pingTestQuery}`
+        const data = await clashFetch<{ delay?: number }>(clashApiPort, endpoint, {
           secret: clashApiSecret,
           unix: clashApiUnix ?? null,
           retry: false,
