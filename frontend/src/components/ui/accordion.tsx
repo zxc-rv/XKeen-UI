@@ -1,11 +1,40 @@
-import { Accordion as AccordionPrimitive } from 'radix-ui'
+import { Accordion as AccordionPrimitive } from '@base-ui/react/accordion'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react'
 
-function Accordion({ className, ...props }: React.ComponentProps<typeof AccordionPrimitive.Root>) {
-  return <AccordionPrimitive.Root data-slot="accordion" className={cn('flex w-full flex-col', className)} {...props} />
+type AccordionProps = Omit<React.ComponentProps<typeof AccordionPrimitive.Root>, 'value' | 'defaultValue' | 'onValueChange'> & {
+  type?: 'single' | 'multiple'
+  collapsible?: boolean
+  value?: string | string[]
+  defaultValue?: string | string[]
+  onValueChange?: (value: any) => void
+}
+
+function toAccordionValue(value: string | string[] | undefined) {
+  if (value === undefined) return undefined
+  return Array.isArray(value) ? value : [value]
+}
+
+function fromAccordionValue(value: unknown[], multiple: boolean) {
+  return multiple ? (value as string[]) : ((value[0] as string | undefined) ?? '')
+}
+
+function Accordion({ className, type, value, defaultValue, onValueChange, ...props }: AccordionProps) {
+  const multiple = type === 'multiple'
+
+  return (
+    <AccordionPrimitive.Root
+      data-slot="accordion"
+      multiple={multiple || undefined}
+      value={toAccordionValue(value)}
+      defaultValue={toAccordionValue(defaultValue)}
+      onValueChange={onValueChange ? (nextValue) => onValueChange(fromAccordionValue(nextValue, multiple)) : undefined}
+      className={cn('flex w-full flex-col', className)}
+      {...props}
+    />
+  )
 }
 
 function AccordionItem({ className, ...props }: React.ComponentProps<typeof AccordionPrimitive.Item>) {
@@ -37,22 +66,22 @@ function AccordionTrigger({ className, children, ...props }: React.ComponentProp
   )
 }
 
-function AccordionContent({ className, children, ...props }: React.ComponentProps<typeof AccordionPrimitive.Content>) {
+function AccordionContent({ className, children, ...props }: React.ComponentProps<typeof AccordionPrimitive.Panel>) {
   return (
-    <AccordionPrimitive.Content
+    <AccordionPrimitive.Panel
       data-slot="accordion-content"
-      className="data-open:animate-accordion-down data-closed:animate-accordion-up overflow-hidden text-sm"
+      className="h-(--accordion-panel-height) overflow-hidden text-sm transition-[height] duration-200 data-ending-style:h-0 data-starting-style:h-0"
       {...props}
     >
       <div
         className={cn(
-          '[&_a]:hover:text-foreground h-(--radix-accordion-content-height) pt-0 pb-4 [&_a]:underline [&_a]:underline-offset-3 [&_p:not(:last-child)]:mb-4',
+          '[&_a]:hover:text-foreground pt-0 pb-4 [&_a]:underline [&_a]:underline-offset-3 [&_p:not(:last-child)]:mb-4',
           className
         )}
       >
         {children}
       </div>
-    </AccordionPrimitive.Content>
+    </AccordionPrimitive.Panel>
   )
 }
 

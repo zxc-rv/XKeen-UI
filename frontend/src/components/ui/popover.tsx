@@ -1,35 +1,62 @@
-import { Popover as PopoverPrimitive } from 'radix-ui'
+import { Popover as PopoverPrimitive } from '@base-ui/react/popover'
 import * as React from 'react'
 
+import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
 
-function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
-  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+function PopoverTrigger({ asChild, children, render, ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger> & { asChild?: boolean }) {
+  return (
+    <PopoverPrimitive.Trigger data-slot="popover-trigger" render={getRenderProp(asChild, children, render)} {...props}>
+      {getRenderChildren(asChild, children)}
+    </PopoverPrimitive.Trigger>
+  )
 }
 
-function PopoverContent({ className, align = 'center', sideOffset = 4, ...props }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+function PopoverContent({
+  className,
+  align = 'center',
+  sideOffset = 4,
+  avoidCollisions,
+  anchor,
+  side,
+  alignOffset,
+  ...props
+}: React.ComponentProps<typeof PopoverPrimitive.Popup> &
+  Pick<PopoverPrimitive.Positioner.Props, 'align' | 'sideOffset' | 'anchor' | 'side' | 'alignOffset'> & {
+    avoidCollisions?: boolean
+  }) {
+  void avoidCollisions
+
   return (
     <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Content
-        data-slot="popover-content"
-        align={align}
-        sideOffset={sideOffset}
-        className={cn(
-          'bg-card text-popover-foreground ring-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-50 flex w-72 origin-(--radix-popover-content-transform-origin) flex-col gap-2.5 rounded-lg p-2.5 text-sm shadow-md ring-1 outline-hidden duration-200',
-          className
-        )}
-        {...props}
-      />
+      <PopoverPrimitive.Positioner align={align} sideOffset={sideOffset} anchor={anchor} side={side} alignOffset={alignOffset} className="isolate z-50">
+        <PopoverPrimitive.Popup
+          data-slot="popover-content"
+          className={cn(
+            'bg-card text-popover-foreground ring-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 flex w-72 origin-(--transform-origin) flex-col gap-2.5 rounded-lg p-2.5 text-sm shadow-md ring-1 outline-hidden transition duration-200 ease-out data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0',
+            className
+          )}
+          {...props}
+        />
+      </PopoverPrimitive.Positioner>
     </PopoverPrimitive.Portal>
   )
 }
 
-function PopoverAnchor({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Anchor>) {
-  return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
+function PopoverAnchor({ asChild, children, ...props }: React.ComponentProps<'div'> & { asChild?: boolean }) {
+  if (asChild && React.isValidElement<{ 'data-slot'?: string }>(children)) {
+    return React.cloneElement(children, { 'data-slot': 'popover-anchor' })
+  }
+
+  return (
+    <div data-slot="popover-anchor" {...props}>
+      {children}
+    </div>
+  )
 }
 
 function PopoverHeader({ className, ...props }: React.ComponentProps<'div'>) {

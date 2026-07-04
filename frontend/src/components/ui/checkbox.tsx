@@ -1,6 +1,6 @@
 'use client'
 
-import { Checkbox as CheckboxPrimitive } from 'radix-ui'
+import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -16,7 +16,7 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
       )}
       {...props}
     >
-      <span className="bg-primary absolute inset-0 scale-0 transition-transform duration-150 ease-in-out group-data-[state=checked]:scale-100" />
+      <span className="bg-primary absolute inset-0 scale-0 transition-transform duration-150 ease-in-out group-data-checked:scale-100" />
       <CheckboxPrimitive.Indicator
         data-slot="checkbox-indicator"
         className="text-primary-foreground relative z-10 grid place-content-center transition-none [&>svg]:size-3.5"

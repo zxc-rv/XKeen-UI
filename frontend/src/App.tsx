@@ -405,7 +405,10 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
 
   const logout = onLogout
   const onInstalled = useCallback(() => void checkVersion(), [checkVersion])
-  const openModal = useCallback((modal: string) => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), [dispatch])
+  const openModal = useCallback(
+    (modal: string) => setTimeout(() => dispatch({ type: 'SHOW_MODAL', modal: modal as any, show: true }), 0),
+    [dispatch]
+  )
 
   return (
     <div className="bg-muted dark:bg-background flex min-h-dvh flex-col">
@@ -427,6 +430,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             onOpenImport={() => openModal('showImportModal')}
             onOpenTemplate={() => openModal('showTemplateModal')}
             onOpenGeoScan={() => openModal('showGeoScanModal')}
+            onOpenBackups={() => openModal('showBackupsModal')}
             onRefreshConfigs={() => loadConfigs(undefined, false, true)}
           />
           <LogPanel />

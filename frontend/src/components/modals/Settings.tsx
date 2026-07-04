@@ -479,7 +479,7 @@ export function SettingsModal() {
                       <FieldLabel htmlFor="theme">Тема приложения</FieldLabel>
                       <FieldDescription className="text-[13px]">Ручной режим или синхронизация с системой</FieldDescription>
                     </FieldContent>
-                    <Select value={settings.theme} onValueChange={setTheme}>
+                    <Select value={settings.theme} items={Object.fromEntries(themeOptions.map((o) => [o.value, o.label]))} onValueChange={setTheme}>
                       <SelectTrigger id="theme" className="w-34 text-sm">
                         <SelectValue />
                       </SelectTrigger>
@@ -504,7 +504,7 @@ export function SettingsModal() {
                       <FieldLabel htmlFor="timezone">Часовой пояс</FieldLabel>
                       <FieldDescription className="text-[13px]">Сдвиг времени для записей в журнале</FieldDescription>
                     </FieldContent>
-                    <Select value={String(settings.timezone)} onValueChange={setTimezone}>
+                    <Select value={String(settings.timezone)} items={Object.fromEntries(Array.from({ length: 27 }, (_, i) => { const v = String(i - 12); return [v, `UTC${i - 12 >= 0 ? '+' : ''}${v}`] }))} onValueChange={setTimezone}>
                       <SelectTrigger id="timezone" className="w-30 text-sm">
                         <SelectValue />
                       </SelectTrigger>

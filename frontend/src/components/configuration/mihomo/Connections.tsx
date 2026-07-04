@@ -393,7 +393,7 @@ function ProxyIcon({ name, className }: { name: string; className?: string }) {
       alt=""
       className={className ?? 'size-4.5 shrink-0 object-contain'}
       onError={(e) => {
-        ;(e.target as HTMLImageElement).style.display = 'none'
+        ; (e.target as HTMLImageElement).style.display = 'none'
       }}
     />
   )

@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -43,7 +44,7 @@ import { cn } from '../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
-import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import type { CodeMirrorRef } from './CodeMirror'
 
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
@@ -82,6 +83,7 @@ interface Props {
   onOpenImport: () => void
   onOpenTemplate: () => void
   onOpenGeoScan: () => void
+  onOpenBackups: () => void
   onRefreshConfigs: () => Promise<Config[]>
   editorRef: React.RefObject<CodeMirrorRef | null>
   configActionsRef: React.RefObject<{ switchTab: (index: number) => void; getActiveIndex: () => number }>
@@ -177,20 +179,19 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
     )
 
   return (
-    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+    <Popover open={popoverOpen} onOpenChange={(open) => { if (!open) setPopoverOpen(false) }}>
       <ContextMenu>
         <ContextMenuTrigger className="contents">
           <Tooltip>
-            <PopoverAnchor asChild>
+            <PopoverTrigger asChild>
               <TooltipTrigger asChild>
                 <span className="inline-flex">{tabsTrigger}</span>
               </TooltipTrigger>
-            </PopoverAnchor>
+            </PopoverTrigger>
             <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
           </Tooltip>
         </ContextMenuTrigger>
         <ContextMenuContent
-          side="right"
           onCloseAutoFocus={(e) => {
             if (pendingInputFocusRef.current) {
               e.preventDefault()
@@ -232,10 +233,6 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
         align="start"
         className="w-auto min-w-64"
         avoidCollisions={!isMobile}
-        onOpenAutoFocus={(e) => {
-          e.preventDefault()
-        }}
-        onFocusOutside={(e) => e.preventDefault()}
       >
         {dialogData?.type === 'delete' ? (
           <>
@@ -281,7 +278,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   )
 }
 
-export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRefreshConfigs, editorRef, configActionsRef }: Props) {
+export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpenBackups, onRefreshConfigs, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
@@ -449,7 +446,6 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
     setProvidersModalKind(kind)
     setIsProvidersModalOpen(true)
   }, [])
-  const openBackupsModal = useCallback(() => dispatch({ type: 'SHOW_MODAL', modal: 'showBackupsModal', show: true }), [dispatch])
 
   const handleProvidersModalOpenChange = useCallback((open: boolean) => setIsProvidersModalOpen(open), [])
 
@@ -647,7 +643,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
             {isMihomo && currentPanel === 'connections' && (
               <div className="ml-auto flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">Режим маршрутизации</span>
-                <Select value={mode} onValueChange={(value) => changeMode(value as ClashMode)}>
+                <Select value={mode} items={{ direct: 'DIRECT', rule: 'RULE', global: 'GLOBAL' }} onValueChange={(value) => changeMode(value as ClashMode)}>
                   <SelectTrigger className="w-30">
                     <SelectValue />
                   </SelectTrigger>
@@ -855,29 +851,31 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onRef
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-57">
-                        <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={onOpenImport}>
-                          <IconLink /> Добавить прокси
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onOpenTemplate}>
-                          <IconFileText /> Шаблоны конфигураций
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={openBackupsModal}>
-                          <IconBox /> Бэкапы конфигураций
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onOpenGeoScan}>
-                          <IconSearch /> Скан геофайлов
-                        </DropdownMenuItem>
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={onOpenImport}>
+                            <IconLink /> Добавить прокси
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={onOpenTemplate}>
+                            <IconFileText /> Шаблоны конфигураций
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={onOpenBackups}>
+                            <IconBox /> Бэкапы конфигураций
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={onOpenGeoScan}>
+                            <IconSearch /> Скан геофайлов
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
                         <DropdownMenuSeparator />
                         {isMobile ? (
-                          <>
+                          <DropdownMenuGroup>
                             <DropdownMenuLabel>Полезные ссылки</DropdownMenuLabel>
                             {usefulLinks.map((link) => (
                               <DropdownMenuItem key={link.url} onClick={() => window.open(link.url, '_blank', 'noopener,noreferrer')}>
                                 <IconExternalLinkFilled /> {link.title}
                               </DropdownMenuItem>
                             ))}
-                          </>
+                          </DropdownMenuGroup>
                         ) : (
                           <DropdownMenuSub>
                             <DropdownMenuSubTrigger>
