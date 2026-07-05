@@ -37,12 +37,17 @@ export interface Release {
   assets: string[]
 }
 
+export interface ToastAction {
+  url: string
+}
+
 export interface ToastMessage {
   id: string
   title: string
   body: string
   type: 'success' | 'error'
   persistent?: boolean
+  action?: ToastAction
 }
 
 export interface ConnectionMetadata {

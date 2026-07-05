@@ -38,7 +38,7 @@ enum DownloadResult {
     Disk(PathBuf),
 }
 
-fn get_repo(core: &str) -> Option<&'static str> {
+pub fn get_repo(core: &str) -> Option<&'static str> {
     match core {
         "xray" => Some("XTLS/Xray-core"),
         "mihomo" => Some("MetaCubeX/mihomo"),
@@ -49,7 +49,7 @@ fn get_repo(core: &str) -> Option<&'static str> {
 
 pub async fn fetch_latest_version(
     client: &reqwest::Client, core: &str, proxies: &[String], current_ver: Option<&str>,
-) -> Option<String> {
+) -> Option<(String, String)> {
     let repo = get_repo(core)?;
     let url = format!("{}/{}/releases?per_page=10", GITHUB_API, repo);
     let list = std::iter::once(url.clone()).chain(
@@ -90,14 +90,15 @@ pub async fn fetch_latest_version(
                 for asset in &r.assets {
                     if let Some(idx) = asset.name.find("alpha-") {
                         let hash = asset.name[idx..].trim_end_matches(".gz").trim_end_matches(".zip");
-                        return Some(hash.to_string());
+                        return Some((hash.to_string(), "Prerelease-Alpha".into()));
                     }
                 }
             }
         }
 
         if let Some(r) = rels.into_iter().find(|r| !r.prerelease) {
-            return Some(r.tag_name.trim_start_matches('v').to_string());
+            let tag = r.tag_name.clone();
+            return Some((tag.trim_start_matches('v').to_string(), tag));
         }
     }
     None

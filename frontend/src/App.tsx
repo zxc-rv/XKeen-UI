@@ -167,34 +167,52 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     async (showUpdateToast = false) => {
       try {
         const data = await apiCall<any>('GET', 'version')
-        if (!data.success || !data.appVersion) return
+        if (!data.success) return
+
+        const ui = data['xkeen-ui']
+        if (!ui) return
+
+        let isOutdatedCore = false
+        const coreVersions: Record<string, string> = {}
+        for (const core of ['mihomo', 'xray']) {
+          if (data[core]?.version) {
+            coreVersions[core] = data[core].version
+            if (data[core].outdated) isOutdatedCore = true
+          }
+        }
 
         dispatch({
           type: 'SET_VERSION',
-          version: data.appVersion.replace(/^v/i, ''),
-          isOutdatedUI: !!data.outdated?.app,
-          isOutdatedCore: !!data.outdated?.core,
+          version: ui.version,
+          isOutdatedUI: !!ui.outdated,
+          isOutdatedCore,
         })
 
-        if (data.coreVersions) {
+        if (Object.keys(coreVersions).length > 0) {
           const appState = getAppState()
           dispatch({
             type: 'SET_CORE_INFO',
             currentCore: appState.currentCore,
-            coreVersions: { ...appState.coreVersions, ...data.coreVersions },
+            coreVersions: { ...appState.coreVersions, ...coreVersions },
             availableCores: appState.availableCores,
           })
         }
 
         if (!showUpdateToast) return
-        if (data.show_toast?.app) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true })
-        if (data.show_toast?.core)
-          showToast({
-            title: 'Доступно обновление',
-            body: `Доступна новая версия ${capitalize(getAppState().currentCore)}`,
-            persistent: true,
-            id: 'update-core',
-          })
+        if (ui.show_toast) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true, id: 'update-ui', ...(ui.link && { action: { url: ui.link } }) })
+
+        for (const core of ['mihomo', 'xray']) {
+          const entry = data[core]
+          if (entry?.show_toast) {
+            showToast({
+              title: 'Доступно обновление',
+              body: `Доступна новая версия ${capitalize(core)}`,
+              persistent: true,
+              id: `update-${core}`,
+              ...(entry.link ? { action: { url: entry.link } } : {}),
+            })
+          }
+        }
       } catch {
         /* ignore */
       }

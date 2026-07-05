@@ -116,6 +116,8 @@ pub struct UpdateChecker {
     pub last_core_check: Arc<RwLock<Option<Instant>>>,
     pub last_ui_toast: Arc<RwLock<Option<Instant>>>,
     pub last_core_toast: Arc<RwLock<Option<Instant>>>,
+    pub ui_latest_tag: Arc<RwLock<Option<String>>>,
+    pub core_latest_tag: Arc<RwLock<Option<String>>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

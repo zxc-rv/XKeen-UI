@@ -1,5 +1,5 @@
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { IconAlertCircle, IconCircleCheck, IconX } from '@tabler/icons-react'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { IconAlertCircle, IconBrandGithub, IconCircleCheck, IconX } from '@tabler/icons-react'
 import { AnimatePresence, LazyMotion, domMax, m } from 'framer-motion'
 import { useAppActions, useToasts } from '../../lib/store'
 import type { ToastMessage } from '../../lib/types'
@@ -24,12 +24,24 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
         {isError ? <IconAlertCircle className="size-4.5" /> : <IconCircleCheck className="size-4.5" />}
         <AlertTitle className="pb-1">{alert.title}</AlertTitle>
         {alert.body && <AlertDescription>{alert.body}</AlertDescription>}
-        <button
-          onClick={() => dispatch({ type: 'REMOVE_TOAST', id: alert.id })}
-          className="absolute top-2 right-2 rounded-md p-1 opacity-70 hover:opacity-100"
-        >
-          <IconX size={18} />
-        </button>
+        <AlertAction className="flex items-center gap-1">
+          {alert.action && (
+            <a
+              href={alert.action.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md p-1 opacity-70 hover:opacity-100"
+            >
+              <IconBrandGithub size={18} />
+            </a>
+          )}
+          <button
+            onClick={() => dispatch({ type: 'REMOVE_TOAST', id: alert.id })}
+            className="rounded-md p-1 opacity-70 hover:opacity-100"
+          >
+            <IconX size={18} />
+          </button>
+        </AlertAction>
       </Alert>
     </m.div>
   )
