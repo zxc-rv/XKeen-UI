@@ -2,7 +2,6 @@ import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn, copyText } from '@/lib/utils'
 import { IconCheck, IconCopy } from '@tabler/icons-react'
 
@@ -21,10 +20,10 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
 }
 
-function TooltipTrigger({ asChild, children, render, ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger> & { asChild?: boolean }) {
+function TooltipTrigger({ children, render, ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
   return (
-    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" render={getRenderProp(asChild, children, render)} {...props}>
-      {getRenderChildren(asChild, children)}
+    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" render={render} {...props}>
+      {children}
     </TooltipPrimitive.Trigger>
   )
 }

@@ -3,7 +3,6 @@ import { useRender } from '@base-ui/react/use-render'
 import { cva, type VariantProps } from 'class-variance-authority'
 import * as React from 'react'
 
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 
@@ -49,20 +48,19 @@ function Item({
   children,
   variant = 'default',
   size = 'default',
-  asChild = false,
   render,
   ...props
-}: useRender.ComponentProps<'div'> & VariantProps<typeof itemVariants> & { asChild?: boolean }) {
+}: useRender.ComponentProps<'div'> & VariantProps<typeof itemVariants>) {
   return useRender({
     defaultTagName: 'div',
-    render: getRenderProp(asChild, children, render),
+    render,
     props: mergeProps<'div'>(
       {
         'data-slot': 'item',
         'data-variant': variant,
         'data-size': size,
         className: cn(itemVariants({ variant, size, className })),
-        children: getRenderChildren(asChild, children),
+        children,
       } as React.ComponentProps<'div'>,
       props
     ),

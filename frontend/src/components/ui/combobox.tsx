@@ -125,15 +125,13 @@ function ComboboxInput({
             <InputGroupButton
               size="icon-xs"
               variant="ghost"
-              asChild
+              render={<ComboboxTrigger />}
               data-slot="input-group-button"
               className={cn(
                 'cursor-default! bg-transparent! group-has-data-[slot=combobox-clear]/input-group:hidden hover:bg-transparent! hover:text-inherit! data-pressed:bg-transparent dark:hover:bg-transparent!'
               )}
               disabled={disabled}
-            >
-              <ComboboxTrigger />
-            </InputGroupButton>
+            />
           )}
           {showClear && <ComboboxClear disabled={disabled} />}
         </InputGroupAddon>

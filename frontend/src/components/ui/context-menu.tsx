@@ -1,7 +1,6 @@
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
 import * as React from 'react'
 
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 import { IconCheck, IconChevronRight } from '@tabler/icons-react'
 
@@ -11,19 +10,18 @@ function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimit
 
 function ContextMenuTrigger({
   className,
-  asChild,
   children,
   render,
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.Trigger> & { asChild?: boolean }) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.Trigger>) {
   return (
     <ContextMenuPrimitive.Trigger
       data-slot="context-menu-trigger"
-      render={getRenderProp(asChild, children, render)}
+      render={render}
       className={cn('select-none', className)}
       {...props}
     >
-      {getRenderChildren(asChild, children)}
+      {children}
     </ContextMenuPrimitive.Trigger>
   )
 }

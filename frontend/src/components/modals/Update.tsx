@@ -206,7 +206,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
               Обновление {coreLabel}
             </DialogTitle>
 
-            <DialogDescription className="flex w-full items-center justify-between" asChild>
+            <DialogDescription className="flex w-full items-center justify-between" render={
               <div>
                 Выберите версию для установки
                 <span className="flex items-center gap-1.5">
@@ -228,7 +228,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                   )}
                 </span>
               </div>
-            </DialogDescription>
+            } />
           </DialogHeader>
 
           <ScrollArea

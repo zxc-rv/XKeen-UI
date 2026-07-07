@@ -128,17 +128,17 @@ export function StatusBar({
               <>
                 {isRunning && (
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger render={
                       <Button variant="outline" size="icon" onClick={restartService} disabled={isPending}>
                         {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh />}
                       </Button>
-                    </TooltipTrigger>
+                    } />
                     <TooltipContent>Перезапустить</TooltipContent>
                   </Tooltip>
                 )}
                 {!isRunning && (
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger render={
                       <Button
                         variant="outline"
                         size="icon"
@@ -148,13 +148,13 @@ export function StatusBar({
                       >
                         {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled />}
                       </Button>
-                    </TooltipTrigger>
+                    } />
                     <TooltipContent>Запустить</TooltipContent>
                   </Tooltip>
                 )}
                 {isRunning && (
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger render={
                       <Button
                         variant="outline"
                         size="icon"
@@ -164,7 +164,7 @@ export function StatusBar({
                       >
                         {isPending ? <Spinner className="text-muted-foreground" /> : <IconPlayerStopFilled />}
                       </Button>
-                    </TooltipTrigger>
+                    } />
                     <TooltipContent>Остановить</TooltipContent>
                   </Tooltip>
                 )}
@@ -193,7 +193,7 @@ export function StatusBar({
             <Skeleton className="h-9 w-35.75" />
           ) : (
             <Tooltip>
-              <TooltipTrigger asChild>
+              <TooltipTrigger render={
                 <Button variant="outline" onClick={onOpenCoreManage}>
                   <IconCpu data-icon="inline-start" className="size-4.5" />
                   <span className="text-[13px]">{capitalize(currentCore)}</span>
@@ -207,7 +207,7 @@ export function StatusBar({
                     </span>
                   )}
                 </Button>
-              </TooltipTrigger>
+              } />
               <TooltipContent>Управление ядром</TooltipContent>
             </Tooltip>
           )}
@@ -215,7 +215,7 @@ export function StatusBar({
             <Skeleton className="h-9 w-18.75" />
           ) : (
             <Tooltip>
-              <TooltipTrigger asChild>
+              <TooltipTrigger render={
                 <Button
                   variant="outline"
                   onClick={() => onOpenUpdate('self')}
@@ -228,7 +228,7 @@ export function StatusBar({
                   <IconBox data-icon="inline-start" className="size-4.5" />
                   {version}
                 </Button>
-              </TooltipTrigger>
+              } />
               <TooltipContent>{isOutdatedUI ? 'Доступно обновление' : 'Версия XKeen UI'}</TooltipContent>
             </Tooltip>
           )}
@@ -236,11 +236,7 @@ export function StatusBar({
             <Skeleton className="size-9" />
           ) : (
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={onOpenSettings}>
-                  <IconSettings className="size-4.5" />
-                </Button>
-              </TooltipTrigger>
+              <TooltipTrigger render={<Button variant="outline" size="icon" onClick={onOpenSettings}><IconSettings className="size-4.5" /></Button>} />
               <TooltipContent>Настройки</TooltipContent>
             </Tooltip>
           )}
@@ -249,11 +245,7 @@ export function StatusBar({
               <Skeleton className="size-9" />
             ) : (
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" onClick={onLogout}>
-                    <IconLogout className="size-4.5" />
-                  </Button>
-                </TooltipTrigger>
+                <TooltipTrigger render={<Button variant="outline" size="icon" onClick={onLogout}><IconLogout className="size-4.5" /></Button>} />
                 <TooltipContent>Выйти</TooltipContent>
               </Tooltip>
             ))}

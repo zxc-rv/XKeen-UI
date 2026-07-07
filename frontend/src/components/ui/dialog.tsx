@@ -2,7 +2,6 @@ import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 import { IconX } from '@tabler/icons-react'
 
@@ -11,14 +10,13 @@ function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>)
 }
 
 function DialogTrigger({
-  asChild,
   children,
   render,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Trigger> & { asChild?: boolean }) {
+}: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
   return (
-    <DialogPrimitive.Trigger data-slot="dialog-trigger" render={getRenderProp(asChild, children, render)} {...props}>
-      {getRenderChildren(asChild, children)}
+    <DialogPrimitive.Trigger data-slot="dialog-trigger" render={render} {...props}>
+      {children}
     </DialogPrimitive.Trigger>
   )
 }
@@ -27,10 +25,10 @@ function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
 }
 
-function DialogClose({ asChild, children, render, ...props }: React.ComponentProps<typeof DialogPrimitive.Close> & { asChild?: boolean }) {
+function DialogClose({ children, render, ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) {
   return (
-    <DialogPrimitive.Close data-slot="dialog-close" render={getRenderProp(asChild, children, render)} {...props}>
-      {getRenderChildren(asChild, children)}
+    <DialogPrimitive.Close data-slot="dialog-close" render={render} {...props}>
+      {children}
     </DialogPrimitive.Close>
   )
 }
@@ -120,19 +118,18 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
 
 function DialogDescription({
   className,
-  asChild,
   children,
   render,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Description> & { asChild?: boolean }) {
+}: React.ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      render={getRenderProp(asChild, children, render)}
+      render={render}
       className={cn('text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3', className)}
       {...props}
     >
-      {getRenderChildren(asChild, children)}
+      {children}
     </DialogPrimitive.Description>
   )
 }

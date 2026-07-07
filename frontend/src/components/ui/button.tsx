@@ -1,7 +1,6 @@
 import { Button as ButtonPrimitive } from '@base-ui/react/button'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
@@ -43,24 +42,19 @@ function Button({
   children,
   variant = 'default',
   size = 'default',
-  asChild = false,
   render,
   ...props
-}: ButtonPrimitive.Props &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-    render?: ButtonPrimitive.Props['render']
-  }) {
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   return (
     <ButtonPrimitive
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      render={getRenderProp(asChild, children, render)}
+      render={render}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     >
-      {getRenderChildren(asChild, children)}
+      {children}
     </ButtonPrimitive>
   )
 }

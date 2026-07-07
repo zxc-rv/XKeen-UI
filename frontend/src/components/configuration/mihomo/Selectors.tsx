@@ -226,9 +226,7 @@ const ProxyCard = memo(function ProxyCard({
         )}
         {chain.length > 0 ? (
           <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="truncate text-[13px] font-medium">{proxyName}</span>
-            </TooltipTrigger>
+            <TooltipTrigger render={<span className="truncate text-[13px] font-medium">{proxyName}</span>} />
             <TooltipContent side="top" className="p-2">
               <div className="flex flex-wrap items-center gap-1">
                 {chain.map((item, i) => (
@@ -260,7 +258,7 @@ const ProxyCard = memo(function ProxyCard({
 
         {canTest && (
           <Tooltip>
-            <TooltipTrigger asChild>
+            <TooltipTrigger render={
               <span
                 className={cn(
                   'shrink-0 cursor-pointer text-xs font-medium tabular-nums transition-opacity',
@@ -280,7 +278,7 @@ const ProxyCard = memo(function ProxyCard({
                   <IconBoltFilled size={13} className="text-foreground" />
                 )}
               </span>
-            </TooltipTrigger>
+            } />
             {proxy.history.length > 0 && (
               <TooltipContent side="top" className="p-2">
                 <div className="flex min-w-35 flex-col gap-1">
@@ -351,7 +349,7 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
           )}
           {i === 0 && fixedProxyName === item.name && onClearFixed && (
             <Tooltip>
-              <TooltipTrigger asChild>
+              <TooltipTrigger render={
                 <button
                   type="button"
                   className="flex size-4 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:text-purple-300 disabled:opacity-50"
@@ -361,7 +359,7 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
                 >
                   {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconLock size={17} />}
                 </button>
-              </TooltipTrigger>
+              } />
               <TooltipContent>Снять фиксацию</TooltipContent>
             </Tooltip>
           )}

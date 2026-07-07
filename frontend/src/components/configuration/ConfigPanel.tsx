@@ -171,9 +171,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   if (!withContextMenu)
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex">{tabsTrigger}</span>
-        </TooltipTrigger>
+        <TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />
         <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
       </Tooltip>
     )
@@ -183,11 +181,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
       <ContextMenu>
         <ContextMenuTrigger className="contents">
           <Tooltip>
-            <PopoverTrigger asChild>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">{tabsTrigger}</span>
-              </TooltipTrigger>
-            </PopoverTrigger>
+            <PopoverTrigger render={<TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />} />
             <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
           </Tooltip>
         </ContextMenuTrigger>
@@ -669,7 +663,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
                   Пров. прокси
                 </Button>
                 <Tooltip>
-                  <TooltipTrigger asChild>
+                  <TooltipTrigger render={
                     <Button
                       variant="outline"
                       size="icon"
@@ -680,7 +674,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
                     >
                       {allSelectorsCollapsed ? <IconChevronDown /> : <IconChevronUp />}
                     </Button>
-                  </TooltipTrigger>
+                  } />
                   <TooltipContent>{allSelectorsCollapsed ? 'Развернуть все' : 'Свернуть все'}</TooltipContent>
                 </Tooltip>
               </div>
@@ -821,7 +815,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
                 ) : (
                   <>
                     <Tooltip>
-                      <TooltipTrigger asChild>
+                      <TooltipTrigger render={
                         <Button
                           size="default"
                           disabled={!canApply}
@@ -830,26 +824,22 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
                         >
                           <IconRefresh data-icon="inline-start" /> Применить
                         </Button>
-                      </TooltipTrigger>
+                      } />
                       <TooltipContent>Сохранить и перезапустить</TooltipContent>
                     </Tooltip>
                     <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
                       <IconDeviceFloppy data-icon="inline-start" /> Сохранить
                     </Button>
                     <Tooltip>
-                      <TooltipTrigger asChild>
+                      <TooltipTrigger render={
                         <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
                           <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
                         </Button>
-                      </TooltipTrigger>
+                      } />
                       <TooltipContent>Форматировать файл</TooltipContent>
                     </Tooltip>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline">
-                          <IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span>
-                        </Button>
-                      </DropdownMenuTrigger>
+                      <DropdownMenuTrigger render={<Button variant="outline"><IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span></Button>} />
                       <DropdownMenuContent align="end" className="min-w-57">
                         <DropdownMenuGroup>
                           <DropdownMenuLabel>Утилиты</DropdownMenuLabel>

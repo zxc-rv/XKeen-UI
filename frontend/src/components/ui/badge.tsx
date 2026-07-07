@@ -3,7 +3,6 @@ import { useRender } from '@base-ui/react/use-render'
 import { cva, type VariantProps } from 'class-variance-authority'
 import type * as React from 'react'
 
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 
 const badgeVariants = cva(
@@ -34,19 +33,18 @@ function Badge({
   className,
   children,
   variant = 'default',
-  asChild = false,
   render,
   ...props
-}: useRender.ComponentProps<'span'> & VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+}: useRender.ComponentProps<'span'> & VariantProps<typeof badgeVariants>) {
   return useRender({
     defaultTagName: 'span',
-    render: getRenderProp(asChild, children, render),
+    render,
     props: mergeProps<'span'>(
       {
         'data-slot': 'badge',
         'data-variant': variant,
         className: cn(badgeVariants({ variant }), className),
-        children: getRenderChildren(asChild, children),
+        children,
       } as React.ComponentProps<'span'>,
       props
     ),

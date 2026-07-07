@@ -171,11 +171,11 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                 <div className="border-border bg-muted/30 flex w-full shrink-0 items-center justify-between border-b px-3 py-1">
                   <Badge className="bg-blue-500/10! px-2 pt-2.25 pb-2.5 text-[10px] tracking-wider text-blue-400">{result.protocol}</Badge>
                   <Tooltip>
-                    <TooltipTrigger asChild>
+                    <TooltipTrigger render={
                       <Button variant="ghost" size="icon-sm" onClick={copy}>
                         {copied ? <IconCheck className="text-green-500" /> : <IconCopy className="size-4.5" />}
                       </Button>
-                    </TooltipTrigger>
+                    } />
                     <TooltipContent side="left">Скопировать</TooltipContent>
                   </Tooltip>
                 </div>

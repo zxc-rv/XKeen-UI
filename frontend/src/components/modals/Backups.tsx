@@ -296,11 +296,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
                               Восстановить
                             </Button>
                             <DropdownMenu modal={false}>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="px-2" disabled={isRestoreDisabled || contents.length <= 1}>
-                                  <IconChevronDown />
-                                </Button>
-                              </DropdownMenuTrigger>
+                              <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="px-2" disabled={isRestoreDisabled || contents.length <= 1}><IconChevronDown /></Button>} />
                               <DropdownMenuContent align="end" className="min-w-40">
                                 {contents.map((content) => (
                                   <DropdownMenuItem
@@ -400,9 +396,7 @@ function ContentBadge({ content, files }: { content: BackupContent; files: strin
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex cursor-default select-none">{badge}</span>
-      </TooltipTrigger>
+      <TooltipTrigger render={<span className="inline-flex cursor-default select-none">{badge}</span>} />
       <TooltipContent sideOffset={6} className="max-w-80 px-3 py-2">
         <div className="space-y-1">
           <div className="text-[11px] font-medium opacity-70">{CONTENT_LABELS[content]}</div>

@@ -485,20 +485,20 @@ const RuleCard = memo(
             <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
               {rule.ruleTag && <span className="truncate text-sm">{rule.ruleTag}</span>}
               <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => {
-                        setEditingName(true)
-                        setNameValue(rule.ruleTag ?? '')
-                      }}
-                      className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 transition-colors"
-                    >
-                      <IconPencil size={16} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Редактировать название</TooltipContent>
-                </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger render={
+                      <button
+                        onClick={() => {
+                          setEditingName(true)
+                          setNameValue(rule.ruleTag ?? '')
+                        }}
+                        className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 transition-colors"
+                      >
+                        <IconPencil size={16} />
+                      </button>
+                    } />
+                    <TooltipContent>Редактировать название</TooltipContent>
+                  </Tooltip>
               </TooltipProvider>
             </div>
           )}

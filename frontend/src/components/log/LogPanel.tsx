@@ -350,19 +350,15 @@ export function LogPanel() {
               </Select>
               <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}>
-                      <IconTrash />
-                    </Button>
-                  </TooltipTrigger>
+                  <TooltipTrigger render={<Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}><IconTrash /></Button>} />
                   <TooltipContent>Очистить лог</TooltipContent>
                 </Tooltip>
                 <Tooltip>
-                  <TooltipTrigger asChild>
+                  <TooltipTrigger render={
                     <Button variant="outline" size="icon" onClick={toggleFullscreen}>
                       {isFullscreen ? <IconMinimize /> : <IconMaximize />}
                     </Button>
-                  </TooltipTrigger>
+                  } />
                   <TooltipContent>{isFullscreen ? 'Свернуть' : 'Развернуть'}</TooltipContent>
                 </Tooltip>
               </div>

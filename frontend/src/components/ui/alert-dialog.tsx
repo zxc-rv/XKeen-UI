@@ -2,7 +2,6 @@ import { AlertDialog as AlertDialogPrimitive } from '@base-ui/react/alert-dialog
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 
 function AlertDialog({ ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
@@ -10,14 +9,13 @@ function AlertDialog({ ...props }: React.ComponentProps<typeof AlertDialogPrimit
 }
 
 function AlertDialogTrigger({
-  asChild,
   children,
   render,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Trigger> & { asChild?: boolean }) {
+}: React.ComponentProps<typeof AlertDialogPrimitive.Trigger>) {
   return (
-    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" render={getRenderProp(asChild, children, render)} {...props}>
-      {getRenderChildren(asChild, children)}
+    <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" render={render} {...props}>
+      {children}
     </AlertDialogPrimitive.Trigger>
   )
 }

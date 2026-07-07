@@ -324,11 +324,7 @@ function AuthSettingsField({
               <FieldDescription className="text-[13px]">Сбросить старый пароль и установить новый</FieldDescription>
             </FieldContent>
             <Popover open={resetOpen} onOpenChange={setResetOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  Сбросить
-                </Button>
-              </PopoverTrigger>
+              <PopoverTrigger render={<Button variant="destructive" size="sm">Сбросить</Button>} />
               <PopoverContent>
                 <PopoverHeader>
                   <PopoverTitle>Вас перекинет на страницу установки пароля. Продолжить?</PopoverTitle>

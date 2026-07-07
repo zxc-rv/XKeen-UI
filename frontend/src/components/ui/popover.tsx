@@ -1,17 +1,16 @@
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover'
 import * as React from 'react'
 
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 
 function Popover({ ...props }: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
 }
 
-function PopoverTrigger({ asChild, children, render, ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger> & { asChild?: boolean }) {
+function PopoverTrigger({ children, render, ...props }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
   return (
-    <PopoverPrimitive.Trigger data-slot="popover-trigger" render={getRenderProp(asChild, children, render)} {...props}>
-      {getRenderChildren(asChild, children)}
+    <PopoverPrimitive.Trigger data-slot="popover-trigger" render={render} {...props}>
+      {children}
     </PopoverPrimitive.Trigger>
   )
 }
@@ -47,11 +46,7 @@ function PopoverContent({
   )
 }
 
-function PopoverAnchor({ asChild, children, ...props }: React.ComponentProps<'div'> & { asChild?: boolean }) {
-  if (asChild && React.isValidElement<{ 'data-slot'?: string }>(children)) {
-    return React.cloneElement(children, { 'data-slot': 'popover-anchor' })
-  }
-
+function PopoverAnchor({ children, ...props }: React.ComponentProps<'div'>) {
   return (
     <div data-slot="popover-anchor" {...props}>
       {children}

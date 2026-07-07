@@ -480,7 +480,7 @@ const ConnectionRow = memo(function ConnectionRow({
     <TableRow className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => onSelect(conn)}>
       <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger render={
             <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
               {first && (
                 <button
@@ -506,13 +506,13 @@ const ConnectionRow = memo(function ConnectionRow({
                 </>
               )}
             </div>
-          </TooltipTrigger>
+          } />
           <ChainTooltip chains={reversedChains} />
         </Tooltip>
       </TableCell>
       <TableCell className="max-w-72 text-[13px] md:max-w-48">
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger render={
             <button
               type="button"
               className="flex w-fit max-w-full cursor-copy items-center overflow-hidden text-left hover:text-blue-400"
@@ -524,7 +524,7 @@ const ConnectionRow = memo(function ConnectionRow({
               <span className="truncate">{host}</span>
               {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
             </button>
-          </TooltipTrigger>
+          } />
           <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
             {hostLabel}
           </TooltipContent>
@@ -548,7 +548,7 @@ const ConnectionRow = memo(function ConnectionRow({
       </TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger render={
             <button
               type="button"
               className="block w-fit max-w-full cursor-copy truncate text-left hover:text-blue-400"
@@ -559,7 +559,7 @@ const ConnectionRow = memo(function ConnectionRow({
             >
               {source}
             </button>
-          </TooltipTrigger>
+          } />
           <TooltipContent side="top" className="text-[13px]" copyTextValue={sourceCopy}>
             {sourceCopy}
           </TooltipContent>
@@ -610,7 +610,7 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
     <TableRow className="hover:bg-muted/50 h-9.75 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
       <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger render={
             <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
               {first && (
                 <span className="flex shrink-0 items-center gap-1">
@@ -628,18 +628,18 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
                 </>
               )}
             </div>
-          </TooltipTrigger>
+          } />
           <ChainTooltip chains={reversedChains} />
         </Tooltip>
       </TableCell>
       <TableCell className="max-w-72 text-[13px] md:max-w-48">
         <Tooltip>
-          <TooltipTrigger asChild>
+          <TooltipTrigger render={
             <span className="flex w-fit max-w-full items-center overflow-hidden">
               <span className="truncate">{host}</span>
               {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
             </span>
-          </TooltipTrigger>
+          } />
           <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
             {hostLabel}
           </TooltipContent>
@@ -648,9 +648,7 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
       <TableCell className="text-muted-foreground text-[13px]">{protocol}</TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="block w-fit max-w-full truncate">{source}</span>
-          </TooltipTrigger>
+          <TooltipTrigger render={<span className="block w-fit max-w-full truncate">{source}</span>} />
           <TooltipContent side="top" className="text-[13px]" copyTextValue={sourceCopy}>
             {sourceCopy}
           </TooltipContent>

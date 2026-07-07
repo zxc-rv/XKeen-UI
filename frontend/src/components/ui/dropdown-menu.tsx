@@ -1,7 +1,6 @@
 import { Menu as DropdownMenuPrimitive } from '@base-ui/react/menu'
 import * as React from 'react'
 
-import { getRenderChildren, getRenderProp } from '@/components/ui/primitive-render'
 import { cn } from '@/lib/utils'
 import { IconCheck, IconChevronRight } from '@tabler/icons-react'
 
@@ -14,14 +13,13 @@ function DropdownMenuPortal({ ...props }: React.ComponentProps<typeof DropdownMe
 }
 
 function DropdownMenuTrigger({
-  asChild,
   children,
   render,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger> & { asChild?: boolean }) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>) {
   return (
-    <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" render={getRenderProp(asChild, children, render)} {...props}>
-      {getRenderChildren(asChild, children)}
+    <DropdownMenuPrimitive.Trigger data-slot="dropdown-menu-trigger" render={render} {...props}>
+      {children}
     </DropdownMenuPrimitive.Trigger>
   )
 }
