@@ -319,8 +319,9 @@ const editorTheme = (isMobile: boolean, isDarkTheme: boolean) =>
       '.cm-panels': {
         backgroundColor: 'var(--cm-panel-bg)',
         color: 'var(--cm-fg)',
+        zIndex: 1,
       },
-      '.cm-tooltip': { backgroundColor: 'var(--cm-panel-bg)', color: 'var(--cm-fg)', border: '1px solid var(--cm-border)' },
+      '.cm-tooltip': { backgroundColor: 'var(--cm-panel-bg)', color: 'var(--cm-fg)', border: '1px solid var(--cm-border)', zIndex: 40 },
       '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--cm-selection)' },
     },
     { dark: isDarkTheme }
