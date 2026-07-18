@@ -45,7 +45,7 @@ tokio = { version = "1", features = [
   "io-util",
   "net",
 ] }
-tokio-tungstenite = "0.29"
+tokio-tungstenite = "0.30"
 tower-http = { version = "0.7", features = ["fs", "cors", "set-header"] }
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
