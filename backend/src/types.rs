@@ -173,6 +173,9 @@ pub struct ClashApiSettings {
     pub ping_url: String,
     pub ping_timeout: u32,
     pub show_source_name: bool,
+    pub hide_unavailable_proxies: bool,
+    pub hide_unavailable_proxies_counter: u32,
+    pub proxy_sort_order: String,
 }
 
 impl Default for ClashApiSettings {
@@ -181,6 +184,9 @@ impl Default for ClashApiSettings {
             ping_url: "https://www.gstatic.com/generate_204".into(),
             ping_timeout: 5000,
             show_source_name: false,
+            hide_unavailable_proxies: false,
+            hide_unavailable_proxies_counter: 3,
+            proxy_sort_order: "default".into(),
         }
     }
 }

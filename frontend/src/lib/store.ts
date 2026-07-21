@@ -29,6 +29,9 @@ const initialSettings: AppSettings = {
   pingTestUrl: DEFAULT_PING_TEST_URL,
   pingTestTimeout: DEFAULT_PING_TEST_TIMEOUT,
   showSourceName: false,
+  hideUnavailableProxies: false,
+  hideUnavailableProxiesCounter: 3,
+  proxySortOrder: 'default',
   timezone: 0,
   authEnabled: false,
 }

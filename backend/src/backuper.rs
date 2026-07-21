@@ -71,6 +71,12 @@ pub struct BackupReq {
     contents: Option<Vec<String>>,
 }
 
+#[derive(Deserialize)]
+pub struct BackupRenameReq {
+    name: String,
+    new_name: String,
+}
+
 async fn run_blocking<T: Serialize>(
     task: tokio::task::JoinHandle<Result<Option<T>, String>>, err_msg: &str,
 ) -> impl IntoResponse {
@@ -116,6 +122,14 @@ pub async fn delete_backup(Json(req): Json<BackupReq>) -> impl IntoResponse {
     run_blocking(
         tokio::task::spawn_blocking(move || delete_backup_sync(&req.name).map(|_| None::<()>)),
         "Не удалось удалить бэкап",
+    )
+    .await
+}
+
+pub async fn patch_backup(Json(req): Json<BackupRenameReq>) -> impl IntoResponse {
+    run_blocking(
+        tokio::task::spawn_blocking(move || rename_backup_sync(&req.name, &req.new_name).map(|_| None::<()>)),
+        "Не удалось переименовать бэкап",
     )
     .await
 }
@@ -274,6 +288,26 @@ fn delete_backup_sync(name: &str) -> Result<(), String> {
     let backup_path = resolve_backup_path(name)?;
     fs::remove_file(&backup_path).map_err(io_error)?;
     log("INFO", format!("Бэкап конфигураций удалён: {}", backup_path.display()));
+    Ok(())
+}
+
+fn rename_backup_sync(name: &str, new_name: &str) -> Result<(), String> {
+    let backup_path = resolve_backup_path(name)?;
+    let new_name = new_name.trim();
+    if new_name.is_empty()
+        || new_name.contains('/')
+        || new_name.contains('\\')
+        || new_name.contains("..")
+        || !is_backup_name(Some(new_name))
+    {
+        return Err("некорректное имя файла".into());
+    }
+    let new_path = Path::new(BACKUP_DIR).join(new_name);
+    if new_path.exists() {
+        return Err("файл с таким именем уже существует".into());
+    }
+    fs::rename(&backup_path, &new_path).map_err(io_error)?;
+    log("INFO", format!("Бэкап конфигураций переименован: {} -> {}", backup_path.display(), new_path.display()));
     Ok(())
 }
 

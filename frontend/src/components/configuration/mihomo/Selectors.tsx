@@ -15,6 +15,7 @@ import {
   IconPlugX,
 } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
@@ -56,6 +57,7 @@ const NO_DELAY_TYPES = new Set(['reject', 'reject-drop', 'dns', 'pass', 'relay']
 const SELECTOR_TYPES = new Set(['Selector', 'Fallback', 'URLTest', 'LoadBalance'])
 const AUTO_POLICY_TYPES = new Set(['Fallback', 'URLTest', 'LoadBalance'])
 const COLLAPSE_SELECTORS_KEY = 'collapseSelectors'
+const NO_SORT_TYPES = new Set(['Dns', 'Compatible', 'Direct', 'Reject', 'RejectDrop', 'Pass', 'Fallback', 'URLTest', 'LoadBalance', 'Selector'])
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
 
 interface SelectorsStore {
@@ -117,6 +119,49 @@ function getProxyTransport(proxy?: Pick<ProxyInfo, 'udp' | 'xudp'>): string | nu
   if (!proxy) return null
   if (proxy.xudp) return 'XUDP'
   return proxy.udp ? 'UDP' : 'TCP'
+}
+
+function hasNConsecutiveTimeouts(proxy: ProxyInfo | undefined, n: number): boolean {
+  if (!proxy || n < 1) return false
+  if (proxy.history.length < n) return false
+  return proxy.history.slice(-n).every((entry) => entry.delay === 0)
+}
+
+function sortProxyNames(
+  proxyNames: string[],
+  order: string,
+  proxies: Record<string, ProxyInfo | undefined>
+): string[] {
+  if (order === 'default') return proxyNames
+  const sortable: { name: string; index: number; delay: number | null }[] = []
+  const nonSortable: { name: string; index: number }[] = []
+  proxyNames.forEach((name, index) => {
+    const proxy = proxies[name]
+    if (proxy && NO_SORT_TYPES.has(proxy.type)) {
+      nonSortable.push({ name, index })
+    } else {
+      sortable.push({ name, index, delay: proxy ? getLastDelay(proxy) : null })
+    }
+  })
+  if (order === 'name') {
+    sortable.sort((a, b) => a.name.localeCompare(b.name))
+  } else {
+    sortable.sort((a, b) => {
+      if (a.delay === null && b.delay === null) return 0
+      if (a.delay === null) return 1
+      if (b.delay === null) return -1
+      return a.delay - b.delay
+    })
+  }
+  const result = new Array(proxyNames.length)
+  for (const item of nonSortable) result[item.index] = item.name
+  let sortIdx = 0
+  for (let i = 0; i < result.length; i++) {
+    if (result[i] === undefined) {
+      result[i] = sortable[sortIdx++].name
+    }
+  }
+  return result
 }
 
 function getChainData(proxies: Record<string, ProxyInfo | undefined>, startName?: string): string {
@@ -549,6 +594,22 @@ const SelectorRow = memo(function SelectorRow({
   const selectedDelay = selectedProxy ? getLastDelay(selectedProxy) : null
   const showSelectedDelay = !!selectedProxy && selectedDelay !== null && selectedDelay > 0
 
+  const hideUnavailable = useSettings((s) => s.hideUnavailableProxies)
+  const hideCounter = useSettings((s) => s.hideUnavailableProxiesCounter)
+  const sortOrder = useSettings((s) => s.proxySortOrder)
+  const allProxiesMap = useProxiesStore((s) => s.proxies as Record<string, ProxyInfo | undefined>)
+
+  const filteredSortedProxies = useMemo(() => {
+    let result = allProxies
+    if (hideUnavailable) {
+      result = result.filter((name) => !hasNConsecutiveTimeouts(allProxiesMap[name], hideCounter))
+    }
+    if (sortOrder !== 'default') {
+      result = sortProxyNames(result, sortOrder, allProxiesMap)
+    }
+    return result
+  }, [allProxies, hideUnavailable, hideCounter, sortOrder, allProxiesMap])
+
   return (
     <div className="border-border bg-input-background rounded-xl border p-4">
       <div className="mb-2.5 flex flex-col gap-2">
@@ -595,7 +656,7 @@ const SelectorRow = memo(function SelectorRow({
 
         <SelectorStatusRow
           selectorName={selectorName}
-          label={`${selector.type} (${allProxies.length})`}
+          label={`${selector.type} (${filteredSortedProxies.length}${allProxies.length !== filteredSortedProxies.length ? `/${allProxies.length}` : ''})`}
           fixedProxyName={autoPolicy ? selector.fixed : undefined}
           onClearFixed={autoPolicy && selector.fixed ? () => onClearFixed(selectorName) : undefined}
         />
@@ -610,7 +671,7 @@ const SelectorRow = memo(function SelectorRow({
         >
           <div className="min-h-0 overflow-hidden">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {allProxies.map((proxyName) => (
+              {filteredSortedProxies.map((proxyName) => (
                 <ProxyCard
                   key={proxyName}
                   proxyName={proxyName}
@@ -635,7 +696,7 @@ const SelectorRow = memo(function SelectorRow({
             <SelectorCombobox
               key={selectorName}
               selectorName={selectorName}
-              options={allProxies}
+              options={filteredSortedProxies}
               autoPolicy={autoPolicy}
               lockSelection={lockSelection}
               onSelect={onSelect}

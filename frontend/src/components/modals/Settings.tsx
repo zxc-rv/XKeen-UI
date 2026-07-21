@@ -9,11 +9,11 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { IconAlertCircle, IconSettings, IconX } from '@tabler/icons-react'
+import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
-import type { AppSettings, ThemeMode } from '../../lib/types'
+import type { AppSettings, ProxySortOrder, ThemeMode } from '../../lib/types'
 
 type BooleanSettingKey = {
   [K in keyof AppSettings]: AppSettings[K] extends boolean ? K : never
@@ -219,20 +219,18 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
   const [url, setUrl] = useState(pingUrl)
   const [timeout, setTimeout] = useState(String(pingTimeout))
 
-  const trimmedUrl = url.trim()
-  const parsedTimeout = Number(timeout)
-  const isTimeoutValid = Number.isInteger(parsedTimeout) && parsedTimeout > 0
-  const isDirty = trimmedUrl !== pingUrl || parsedTimeout !== pingTimeout
-
   const save = useCallback(async () => {
-    if (!trimmedUrl) return showToast('URL пинг-теста пустой', 'error')
-    if (!isTimeoutValid) return showToast('Таймаут должен быть целым числом больше 0', 'error')
-    const ok = await onSave(trimmedUrl, parsedTimeout)
+    const tUrl = url.trim()
+    const tTimeout = Number(timeout)
+    if (!tUrl) return showToast('URL пинг-теста пустой', 'error')
+    if (!(Number.isInteger(tTimeout) && tTimeout > 0)) return showToast('Таймаут должен быть целым числом больше 0', 'error')
+    if (tUrl === pingUrl && tTimeout === pingTimeout) return
+    const ok = await onSave(tUrl, tTimeout)
     if (ok) {
-      setUrl(trimmedUrl)
-      setTimeout(String(parsedTimeout))
+      setUrl(tUrl)
+      setTimeout(String(tTimeout))
     }
-  }, [isTimeoutValid, onSave, parsedTimeout, showToast, trimmedUrl])
+  }, [onSave, pingUrl, pingTimeout, showToast, timeout, url])
 
   return (
     <FieldGroup className="gap-0!">
@@ -247,6 +245,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void save()}
+            onBlur={() => void save()}
             placeholder="https://www.gstatic.com/generate_204"
           />
         </InputGroup>
@@ -270,6 +269,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
             value={timeout}
             onChange={(e) => setTimeout(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void save()}
+            onBlur={() => void save()}
             placeholder="5000"
           />
           <InputGroupAddon align="inline-end" className="text-muted-foreground px-2 text-xs">
@@ -277,12 +277,6 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
           </InputGroupAddon>
         </InputGroup>
       </Field>
-
-      <div className="flex justify-end pt-2">
-        <Button size="sm" variant="outline" onClick={() => void save()} disabled={!isDirty || !trimmedUrl || !isTimeoutValid}>
-          Сохранить
-        </Button>
-      </div>
     </FieldGroup>
   )
 })
@@ -443,6 +437,38 @@ export function SettingsModal() {
     [dispatch, saveSetting]
   )
 
+  const toggleHideUnavailable = useCallback(
+    async (value: boolean) => {
+      const ok = await saveSetting('clash_api', { hide_unavailable_proxies: value })
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { hideUnavailableProxies: value } })
+    },
+    [dispatch, saveSetting]
+  )
+
+  const setProxySortOrder = useCallback(
+    async (value: string) => {
+      const ok = await saveSetting('clash_api', { proxy_sort_order: value })
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { proxySortOrder: value as ProxySortOrder } })
+    },
+    [dispatch, saveSetting]
+  )
+
+  const setHideCounter = useCallback(
+    async (value: number) => {
+      const v = Math.max(1, Math.min(10, value))
+      if (v === settings.hideUnavailableProxiesCounter) return
+      const ok = await saveSetting('clash_api', { hide_unavailable_proxies_counter: v })
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { hideUnavailableProxiesCounter: v } })
+    },
+    [dispatch, saveSetting, settings.hideUnavailableProxiesCounter]
+  )
+
+  const sortOrderOptions: { value: ProxySortOrder; label: string }[] = [
+    { value: 'default', label: 'По-умолчанию' },
+    { value: 'name', label: 'По названию' },
+    { value: 'ping', label: 'По пингу' },
+  ]
+
   return (
     <Dialog open={modals.showSettingsModal} onOpenChange={(open) => !open && close()}>
       <DialogContent className="flex h-[79dvh]! max-w-xl! flex-col overflow-hidden md:h-142!">
@@ -538,21 +564,90 @@ export function SettingsModal() {
               </TabsContent>
 
               <TabsContent value="clash-api">
+                <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Селекторы</p>
+                <FieldGroup className="gap-0!">
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="hide-unavailable">Скрывать недоступные прокси</FieldLabel>
+                      <FieldDescription className="text-[13px]">
+                        Скрывать прокси из селекторов при наличии нескольких таймаутов подряд в истории проверок
+                      </FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      id="hide-unavailable"
+                      checked={settings.hideUnavailableProxies}
+                      onCheckedChange={toggleHideUnavailable}
+                      aria-label="Скрывать недоступные прокси"
+                    />
+                  </Field>
+                  <Separator className="my-0" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="hide-counter">Количество таймаутов</FieldLabel>
+                      <FieldDescription className="text-[13px]">Количество таймаутов подряд для скрытия прокси (1–10)</FieldDescription>
+                    </FieldContent>
+                    <InputGroup className="w-15">
+                      <InputGroupInput
+                        id="hide-counter"
+                        readOnly
+                        className="text-sm"
+                        value={settings.hideUnavailableProxiesCounter}
+                      />
+                      <InputGroupAddon align="inline-end" className="flex flex-col gap-0">
+                        <InputGroupButton
+                          aria-label="Увеличить"
+                          className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+                          onClick={() => void setHideCounter(settings.hideUnavailableProxiesCounter + 1)}
+                        >
+                          <IconChevronUp />
+                        </InputGroupButton>
+                        <InputGroupButton
+                          aria-label="Уменьшить"
+                          className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+                          onClick={() => void setHideCounter(settings.hideUnavailableProxiesCounter - 1)}
+                        >
+                          <IconChevronDown />
+                        </InputGroupButton>
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </Field>
+                  <Separator className="my-0" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="proxy-sort">Сортировка</FieldLabel>
+                      <FieldDescription className="text-[13px]">Порядок отображения прокси в списке. Не влияет на fallback логику</FieldDescription>
+                    </FieldContent>
+                    <Select value={settings.proxySortOrder} items={Object.fromEntries(sortOrderOptions.map((o) => [o.value, o.label]))} onValueChange={setProxySortOrder}>
+                      <SelectTrigger id="proxy-sort" className="w-39 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {sortOrderOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value} className="text-sm">
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Separator className="my-0" />
+                  <PingTestSettingsField
+                    key={`${settings.pingTestUrl}\x00${settings.pingTestTimeout}`}
+                    pingUrl={settings.pingTestUrl}
+                    pingTimeout={settings.pingTestTimeout}
+                    onSave={savePingTestSettings}
+                    showToast={showToast}
+                  />
+                </FieldGroup>
+                <Separator className="my-2" />
                 <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Соединения</p>
                 <FieldGroup className="gap-0!">
                   {clashApiSettings.map((item) => (
                     <SwitchSettingField key={item.id} item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
                   ))}
                 </FieldGroup>
-                <Separator className="my-2" />
-                <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Пинг тест</p>
-                <PingTestSettingsField
-                  key={`${settings.pingTestUrl}\x00${settings.pingTestTimeout}`}
-                  pingUrl={settings.pingTestUrl}
-                  pingTimeout={settings.pingTestTimeout}
-                  onSave={savePingTestSettings}
-                  showToast={showToast}
-                />
               </TabsContent>
 
               <TabsContent value="updates">

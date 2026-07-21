@@ -22,7 +22,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { apiCall } from '@/lib/api'
 import { useAppContext } from '@/lib/store'
-import { IconAlertTriangle, IconBox, IconBoxOff, IconChevronDown, IconPlus, IconRestore, IconTrash } from '@tabler/icons-react'
+import { IconAlertTriangle, IconBox, IconBoxOff, IconChevronDown, IconPencil, IconPlus, IconRestore, IconTrash } from '@tabler/icons-react'
 import { useCallback, useEffect, useState } from 'react'
 
 type BackupContent = 'xkeen' | 'xkeen-ui' | 'xray' | 'mihomo'
@@ -73,6 +73,13 @@ const CONTENT_VARIANTS: Record<BackupContent, 'sky' | 'emerald' | 'amber' | 'ros
   mihomo: 'amber',
 }
 
+const BACKUP_SUFFIX = 'xkeen-ui.tar'
+
+function stripBackupSuffix(name: string) {
+  const suffix = `_${BACKUP_SUFFIX}`
+  return name.endsWith(suffix) ? name.slice(0, -suffix.length) : name
+}
+
 const CONTENT_ORDER: BackupContent[] = ['xkeen', 'xkeen-ui', 'xray', 'mihomo']
 const MAX_BACKUPS_TO_KEEP = 5
 const KEEP_LATEST_BACKUPS_KEY = 'backups:keepLatest'
@@ -86,11 +93,14 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
   const [keepLatestBackups, setKeepLatestBackups] = useState(() => localStorage.getItem(KEEP_LATEST_BACKUPS_KEY) === 'true')
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null)
   const [dialogAction, setDialogAction] = useState<ConfirmAction | null>(null)
+  const [renamingName, setRenamingName] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const fetchBackups = useCallback(async () => {
     const result = await apiCall<BackupsResponse>('GET', 'backup')
     if (!result.success) throw new Error(result.error ?? 'Не удалось загрузить бэкапы')
-    return Array.isArray(result.backups) ? result.backups : []
+    const items = Array.isArray(result.backups) ? result.backups : []
+    return items.sort((a, b) => parseCreatedAt(b.created_at).localeCompare(parseCreatedAt(a.created_at)))
   }, [])
 
   const loadBackups = useCallback(
@@ -125,6 +135,43 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
   useEffect(() => {
     if (confirmAction) setDialogAction(confirmAction)
   }, [confirmAction])
+
+  const startRename = useCallback((name: string) => {
+    setRenamingName(name)
+    setRenameValue(stripBackupSuffix(name))
+  }, [])
+
+  const cancelRename = useCallback(() => {
+    setRenamingName(null)
+    setRenameValue('')
+  }, [])
+
+  const submitRename = useCallback(
+    async (oldName: string) => {
+      const newName = renameValue.trim()
+      if (!newName || newName === stripBackupSuffix(oldName)) {
+        cancelRename()
+        return
+      }
+      const newFullName = `${newName}_${BACKUP_SUFFIX}`
+      setPendingAction(`rename:${oldName}`)
+      try {
+        const result = await apiCall<BackupActionResponse>('PATCH', 'backup', { name: oldName, new_name: newFullName })
+        if (!result.success) {
+          showToast(result.error ?? 'Не удалось переименовать бэкап', 'error')
+          return
+        }
+        setBackups((prev) => prev.map((b) => (b.name === oldName ? { ...b, name: newFullName } : b)))
+        showToast('Бэкап переименован')
+        cancelRename()
+      } catch (error: any) {
+        showToast(error.message ?? 'Не удалось переименовать бэкап', 'error')
+      } finally {
+        setPendingAction(null)
+      }
+    },
+    [cancelRename, renameValue, showToast]
+  )
 
   const createBackup = useCallback(async () => {
     setPendingAction('create')
@@ -267,7 +314,45 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
                     return (
                       <Card key={backup.name} size="sm">
                         <CardHeader className="border-b">
-                          <CardTitle className="text-sm break-all sm:text-base">{backup.name}</CardTitle>
+                          {renamingName === backup.name ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                autoFocus
+                                className="bg-input-background flex h-8 min-w-0 flex-1 rounded-md border px-2 text-sm col-span-full"
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') void submitRename(backup.name)
+                                  if (e.key === 'Escape') cancelRename()
+                                }}
+                                onBlur={() => void submitRename(backup.name)}
+                                disabled={pendingAction !== null}
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <CardTitle className="text-sm break-all sm:text-base">{stripBackupSuffix(backup.name)}</CardTitle>
+                              {renamingName !== backup.name && (
+                                <TooltipProvider delayDuration={400}>
+                                  <Tooltip>
+                                    <TooltipTrigger render={
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="text-muted-foreground hover:text-foreground -ml-1 size-6"
+                                        onClick={() => startRename(backup.name)}
+                                        disabled={pendingAction !== null}
+                                        aria-label={`Переименовать ${backup.name}`}
+                                      >
+                                        <IconPencil className="size-3.5" />
+                                      </Button>
+                                    } />
+                                    <TooltipContent>Переименовать</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                            </div>
+                          )}
                           <CardAction>
                             <Badge variant="outline">{formatBytes(backup.size)}</Badge>
                           </CardAction>
@@ -427,9 +512,16 @@ function KeepLatestBackupsToggle({
   return (
     <div className="flex items-center gap-2">
       <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={(value) => onCheckedChange(value === true)} />
-      <Label htmlFor={id} className="text-muted-foreground cursor-pointer text-xs font-normal">
-        Оставлять {MAX_BACKUPS_TO_KEEP} бэкапов
-      </Label>
+      <TooltipProvider delayDuration={400}>
+        <Tooltip>
+          <TooltipTrigger render={
+            <Label htmlFor={id} className="text-muted-foreground cursor-pointer text-xs font-normal">
+              Оставлять {MAX_BACKUPS_TO_KEEP} бэкапов
+            </Label>
+          } />
+          <TooltipContent>При создании бэкапа удалять все<br /> старые бэкапы, кроме {MAX_BACKUPS_TO_KEEP} последних</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   )
 }
@@ -451,13 +543,13 @@ async function deleteBackupRequest(name: string) {
   if (!result.success) throw new Error(result.error ?? 'Не удалось удалить бэкап')
 }
 
-function getNewestBackups(backups: BackupItem[]) {
-  return [...backups].sort((a, b) => getBackupSortKey(b).localeCompare(getBackupSortKey(a)))
+function parseCreatedAt(dateStr: string): string {
+  const m = dateStr.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2}:\d{2})$/)
+  return m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}` : dateStr
 }
 
-function getBackupSortKey(backup: BackupItem) {
-  const match = backup.name.match(/^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})(?:_(\d+))?_/)
-  return match ? `${match[1]}_${(Number(match[2]) || 1).toString().padStart(4, '0')}` : backup.name
+function getNewestBackups(backups: BackupItem[]) {
+  return [...backups].sort((a, b) => parseCreatedAt(b.created_at).localeCompare(parseCreatedAt(a.created_at)))
 }
 
 function formatBytes(bytes: number) {

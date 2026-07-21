@@ -10,6 +10,8 @@ export interface Config {
   isDirty: boolean
 }
 
+export type ProxySortOrder = 'default' | 'name' | 'ping'
+
 export interface AppSettings {
   theme: ThemeMode
   autoApply: boolean
@@ -22,6 +24,9 @@ export interface AppSettings {
   pingTestUrl: string
   pingTestTimeout: number
   showSourceName: boolean
+  hideUnavailableProxies: boolean
+  hideUnavailableProxiesCounter: number
+  proxySortOrder: ProxySortOrder
   timezone: number
   authEnabled: boolean
 }

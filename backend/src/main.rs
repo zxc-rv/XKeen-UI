@@ -430,6 +430,7 @@ async fn main() {
             get(backuper::get_backups)
                 .put(backuper::put_backup)
                 .post(backuper::post_backup)
+                .patch(backuper::patch_backup)
                 .delete(backuper::delete_backup),
         )
         .route(
