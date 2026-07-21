@@ -3,7 +3,7 @@ use crate::types::{APP_CONFIG, ApiResponse, AppState, MIHOMO_CONF, XKEEN_CONF, X
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
@@ -11,6 +11,20 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 use tar::{Archive, Builder};
+
+fn mtime_string(time: Result<SystemTime, std::io::Error>, tz: i32) -> String {
+    let secs = time
+        .ok()
+        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    match FixedOffset::east_opt(tz * 3600) {
+        Some(offset) => DateTime::from_timestamp(secs, 0)
+            .map(|dt| dt.with_timezone(&offset).format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_default(),
+        None => String::new(),
+    }
+}
 
 const BACKUP_DIR: &str = "/opt/backups";
 const BACKUP_SUFFIX: &str = "xkeen-ui.tar";
@@ -29,7 +43,7 @@ struct BackupData {
 #[derive(Serialize, Clone)]
 struct BackupItem {
     name: String,
-    created_at: String,
+    mtime: String,
     size: u64,
     content: BackupContentFiles,
 }
@@ -181,13 +195,12 @@ fn list_backups_sync(tz: i32) -> Result<Vec<BackupItem>, String> {
 
         backups.push(BackupItem {
             name: name.to_string(),
-            created_at: format_backup_date(name, metadata.modified().ok(), tz),
+            mtime: mtime_string(metadata.modified(), tz),
             size: metadata.len(),
             content,
         });
     }
 
-    backups.sort_by(|a, b| b.name.cmp(&a.name));
     Ok(backups)
 }
 
@@ -227,7 +240,7 @@ fn create_backup_sync(tz: i32) -> Result<BackupItem, String> {
 
     Ok(BackupItem {
         name: name.clone(),
-        created_at: format_backup_date(&name, metadata.modified().ok(), tz),
+        mtime: mtime_string(metadata.modified(), tz),
         size: metadata.len(),
         content,
     })
@@ -598,18 +611,6 @@ fn next_backup_name(tz: i32) -> String {
         index += 1;
     }
     name
-}
-
-fn format_backup_date(name: &str, modified: Option<SystemTime>, tz: i32) -> String {
-    let stamp: String = name.chars().take(19).collect();
-    if let Ok(parsed) = NaiveDateTime::parse_from_str(&stamp, "%Y-%m-%d_%H-%M-%S") {
-        return parsed.format("%d.%m.%Y %H:%M:%S").to_string();
-    }
-    modified
-        .map(DateTime::<Utc>::from)
-        .map(|v| v.with_timezone(&backup_offset(tz)))
-        .map(|v| v.format("%d.%m.%Y %H:%M:%S").to_string())
-        .unwrap_or_else(|| name.to_string())
 }
 
 fn io_error(error: io::Error) -> String {

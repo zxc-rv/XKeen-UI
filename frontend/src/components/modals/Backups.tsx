@@ -29,7 +29,7 @@ type BackupContent = 'xkeen' | 'xkeen-ui' | 'xray' | 'mihomo'
 
 interface BackupItem {
   name: string
-  created_at: string
+  mtime: string
   size: number
   content?: Partial<Record<BackupContent, string[]>>
 }
@@ -100,7 +100,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
     const result = await apiCall<BackupsResponse>('GET', 'backup')
     if (!result.success) throw new Error(result.error ?? 'Не удалось загрузить бэкапы')
     const items = Array.isArray(result.backups) ? result.backups : []
-    return items.sort((a, b) => parseCreatedAt(b.created_at).localeCompare(parseCreatedAt(a.created_at)))
+    return items.sort((a, b) => b.mtime.localeCompare(a.mtime))
   }, [])
 
   const loadBackups = useCallback(
@@ -356,7 +356,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
                           <CardAction>
                             <Badge variant="outline">{formatBytes(backup.size)}</Badge>
                           </CardAction>
-                          <CardDescription className="text-xs">{backup.created_at}</CardDescription>
+                          <CardDescription className="text-xs">{backup.mtime}</CardDescription>
                         </CardHeader>
 
                         <CardContent className="flex flex-wrap gap-1">
@@ -543,13 +543,8 @@ async function deleteBackupRequest(name: string) {
   if (!result.success) throw new Error(result.error ?? 'Не удалось удалить бэкап')
 }
 
-function parseCreatedAt(dateStr: string): string {
-  const m = dateStr.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2}:\d{2})$/)
-  return m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}` : dateStr
-}
-
 function getNewestBackups(backups: BackupItem[]) {
-  return [...backups].sort((a, b) => parseCreatedAt(b.created_at).localeCompare(parseCreatedAt(a.created_at)))
+  return [...backups].sort((a, b) => b.mtime.localeCompare(a.mtime))
 }
 
 function formatBytes(bytes: number) {
