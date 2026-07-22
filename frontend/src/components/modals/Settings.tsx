@@ -237,7 +237,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
       <Field className="px-0 py-3">
         <FieldContent>
           <FieldLabel htmlFor="ping-test-url">URL пинга</FieldLabel>
-          <FieldDescription className="text-[13px]">Адрес для проверки задержки через Clash API</FieldDescription>
+          <FieldDescription className="text-[13px]">Адрес для ручного пинг-теста через Clash API</FieldDescription>
         </FieldContent>
         <InputGroup>
           <InputGroupInput
@@ -256,7 +256,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
       <Field className="px-0 py-3">
         <FieldContent>
           <FieldLabel htmlFor="ping-test-timeout">Таймаут</FieldLabel>
-          <FieldDescription className="text-[13px]">В миллисекундах, используется для delay-теста прокси</FieldDescription>
+          <FieldDescription className="text-[13px]">В мс, используется для ручного пинг-теста подключений</FieldDescription>
         </FieldContent>
         <InputGroup className="max-w-40">
           <InputGroupInput
@@ -568,23 +568,23 @@ export function SettingsModal() {
                 <FieldGroup className="gap-0!">
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
-                      <FieldLabel htmlFor="hide-unavailable">Скрывать недоступные прокси</FieldLabel>
+                      <FieldLabel htmlFor="hide-unavailable">Скрывать недоступные подключения</FieldLabel>
                       <FieldDescription className="text-[13px]">
-                        Скрывать прокси из селекторов при наличии нескольких таймаутов подряд в истории проверок
+                        Скрывать подключения из селекторов при наличии нескольких таймаутов подряд в истории проверок
                       </FieldDescription>
                     </FieldContent>
                     <Switch
                       id="hide-unavailable"
                       checked={settings.hideUnavailableProxies}
                       onCheckedChange={toggleHideUnavailable}
-                      aria-label="Скрывать недоступные прокси"
+                      aria-label="Скрывать недоступные подключения"
                     />
                   </Field>
                   <Separator className="my-0" />
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
-                      <FieldLabel htmlFor="hide-counter">Количество таймаутов</FieldLabel>
-                      <FieldDescription className="text-[13px]">Количество таймаутов подряд для скрытия прокси (1–10)</FieldDescription>
+                      <FieldLabel htmlFor="hide-counter">Порог таймаутов</FieldLabel>
+                      <FieldDescription className="text-[13px]">Порог таймаутов подряд для скрытия подключений (1–10)</FieldDescription>
                     </FieldContent>
                     <InputGroup className="w-15">
                       <InputGroupInput
@@ -615,7 +615,7 @@ export function SettingsModal() {
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
                       <FieldLabel htmlFor="proxy-sort">Сортировка</FieldLabel>
-                      <FieldDescription className="text-[13px]">Порядок отображения прокси в списке. Не влияет на fallback логику</FieldDescription>
+                      <FieldDescription className="text-[13px]">Порядок отображения подключений в списке. Не влияет на fallback логику</FieldDescription>
                     </FieldContent>
                     <Select value={settings.proxySortOrder} items={Object.fromEntries(sortOrderOptions.map((o) => [o.value, o.label]))} onValueChange={setProxySortOrder}>
                       <SelectTrigger id="proxy-sort" className="w-39 text-sm">
