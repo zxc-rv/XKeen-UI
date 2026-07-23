@@ -5,19 +5,20 @@ use std::time::Instant;
 use tokio::sync::{Mutex, broadcast};
 use tokio::task::AbortHandle;
 
-pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 pub const APP_CONFIG: &str = "/opt/etc/xkeen/xkeen-ui.json";
 pub const APP_CONFIG_LEGACY: &str = "/opt/share/www/XKeen-UI/config.json";
-pub const XRAY_CONF: &str = "/opt/etc/xray/configs";
-pub const XRAY_ASSET: &str = "/opt/etc/xray/dat";
-pub const MIHOMO_CONF: &str = "/opt/etc/mihomo";
-pub const XKEEN_CONF: &str = "/opt/etc/xkeen";
-pub const DEFAULT_ERROR_LOG: &str = "/opt/var/log/xray/error.log";
 pub const DEFAULT_ACCESS_LOG: &str = "/opt/var/log/xray/access.log";
-pub const XKEEN_UI_LOG: &str = "/opt/var/log/xkeen-ui.log";
+pub const DEFAULT_ERROR_LOG: &str = "/opt/var/log/xray/error.log";
+pub const MIHOMO_CONF_DIR: &str = "/opt/etc/mihomo";
+pub const S24XRAY: &str = "/opt/etc/init.d/S24xray";
 pub const S99XKEEN: &str = "/opt/etc/init.d/S99xkeen";
 pub const S99XKEEN_UI: &str = "/opt/etc/init.d/S99xkeen-ui";
-pub const S24XRAY: &str = "/opt/etc/init.d/S24xray";
+pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
+pub const XKEEN_CONF_DIR: &str = "/opt/etc/xkeen";
+pub const XKEEN_CONF: &str = "/opt/etc/xkeen/xkeen.json";
+pub const XKEEN_UI_LOG: &str = "/opt/var/log/xkeen-ui.log";
+pub const XRAY_ASSET_DIR: &str = "/opt/etc/xray/dat";
+pub const XRAY_CONF_DIR: &str = "/opt/etc/xray/configs";
 
 pub type GeoCache = std::collections::HashMap<String, (std::time::SystemTime, bool, bool)>;
 
@@ -47,7 +48,7 @@ fn normalize_xray_log_path(path: Option<&str>, fallback: &str) -> String {
 
 fn resolve_xray_log_paths() -> XrayLogPaths {
     let mut paths = XrayLogPaths::default();
-    let Ok(entries) = std::fs::read_dir(XRAY_CONF) else {
+    let Ok(entries) = std::fs::read_dir(XRAY_CONF_DIR) else {
         return paths;
     };
 
@@ -106,6 +107,7 @@ pub struct AppState {
     pub log_watcher: Arc<Mutex<Option<AbortHandle>>>,
     pub app_config_lock: Arc<Mutex<()>>,
     pub debug: bool,
+    pub rci_token: Option<String>,
 }
 
 #[derive(Clone, Default)]

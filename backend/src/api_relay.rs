@@ -13,7 +13,7 @@ use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::{Error as TError, Message as TMessage};
 use tokio_tungstenite::{client_async, connect_async};
 
-use crate::types::{ApiResponse, AppState, MIHOMO_CONF};
+use crate::types::{ApiResponse, AppState, MIHOMO_CONF_DIR};
 
 #[derive(Clone)]
 enum ClashTarget {
@@ -35,13 +35,14 @@ pub struct ClashWsQuery {
 }
 
 pub async fn get_device_list(State(state): State<AppState>) -> impl IntoResponse {
-    let response = match state
+    let mut req = state
         .http_client
         .get("http://127.0.0.1:79/rci/show/device-list")
-        .timeout(Duration::from_secs(5))
-        .send()
-        .await
-    {
+        .timeout(Duration::from_secs(5));
+    if let Some(ref token) = state.rci_token {
+        req = req.header("X-Ndma-Tkn", token);
+    }
+    let response = match req.send().await {
         Ok(response) => response,
         Err(e) => return Json(serde_json::json!({ "success": false, "error": e.to_string() })),
     };
@@ -308,7 +309,7 @@ fn sanitize_unix_name(raw: &str) -> Option<String> {
     if name.is_empty() {
         return None;
     }
-    Some(format!("{}/{}", MIHOMO_CONF, name))
+    Some(format!("{}/{}", MIHOMO_CONF_DIR, name))
 }
 
 fn build_url(scheme: &str, host: &str, port: &str, path: &str, query: Option<&str>) -> String {

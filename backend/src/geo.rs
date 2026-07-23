@@ -201,7 +201,7 @@ pub fn list_geo_files(cache_arc: Arc<RwLock<crate::types::GeoCache>>) -> Result<
     let mut ip_files = Vec::new();
     let mut new_cache_entries = Vec::new();
 
-    for entry in std::fs::read_dir(XRAY_ASSET).map_err(|e| e.to_string())?.flatten() {
+    for entry in std::fs::read_dir(XRAY_ASSET_DIR).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
         if !entry.file_type().map_or(false, |ft| ft.is_file()) {
             continue;
@@ -332,7 +332,7 @@ async fn geo_query_handler(
             data: None,
         });
     };
-    let base = Path::new(XRAY_ASSET);
+    let base = Path::new(XRAY_ASSET_DIR);
     let Some(path) = Path::new(filename)
         .file_name()
         .map(|n| base.join(n))

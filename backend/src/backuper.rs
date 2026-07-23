@@ -1,5 +1,5 @@
 use crate::logger::log;
-use crate::types::{APP_CONFIG, ApiResponse, AppState, MIHOMO_CONF, XKEEN_CONF, XRAY_CONF};
+use crate::types::{APP_CONFIG, ApiResponse, AppState, MIHOMO_CONF_DIR, XKEEN_CONF_DIR, XRAY_CONF_DIR};
 use axum::Json;
 use axum::extract::State;
 use axum::response::IntoResponse;
@@ -334,9 +334,9 @@ fn is_tar_file(path: &Path) -> bool {
 
 fn collect_backup_files() -> io::Result<Vec<(PathBuf, String)>> {
     let mut files = Vec::new();
-    files.extend(collect_dir_files(XKEEN_CONF, &["lst", "json"])?);
-    files.extend(collect_dir_files(XRAY_CONF, &["json"])?);
-    files.extend(collect_dir_files(MIHOMO_CONF, &["yaml", "yml"])?);
+    files.extend(collect_dir_files(XKEEN_CONF_DIR, &["lst", "json"])?);
+    files.extend(collect_dir_files(XRAY_CONF_DIR, &["json"])?);
+    files.extend(collect_dir_files(MIHOMO_CONF_DIR, &["yaml", "yml"])?);
     files.sort_by(|a, b| a.1.cmp(&b.1));
     Ok(files)
 }
@@ -477,13 +477,13 @@ fn detect_content_key(relative: &str) -> Option<&'static str> {
             .filter(|name| !name.contains('/') && matches_file_name(name, exts))
     };
 
-    if check_prefix(XKEEN_CONF, &["lst", "json"]).is_some() {
+    if check_prefix(XKEEN_CONF_DIR, &["lst", "json"]).is_some() {
         return Some("xkeen");
     }
-    if check_prefix(XRAY_CONF, &["json"]).is_some() {
+    if check_prefix(XRAY_CONF_DIR, &["json"]).is_some() {
         return Some("xray");
     }
-    if check_prefix(MIHOMO_CONF, &["yaml", "yml"]).is_some() {
+    if check_prefix(MIHOMO_CONF_DIR, &["yaml", "yml"]).is_some() {
         return Some("mihomo");
     }
 
@@ -566,9 +566,9 @@ fn content_label(content: &str) -> &'static str {
 
 fn content_file_name(key: &str, relative: &str) -> String {
     match key {
-        "xkeen" => strip_content_prefix(relative, XKEEN_CONF),
-        "xray" => strip_content_prefix(relative, XRAY_CONF),
-        "mihomo" => strip_content_prefix(relative, MIHOMO_CONF),
+        "xkeen" => strip_content_prefix(relative, XKEEN_CONF_DIR),
+        "xray" => strip_content_prefix(relative, XRAY_CONF_DIR),
+        "mihomo" => strip_content_prefix(relative, MIHOMO_CONF_DIR),
         "xkeen-ui" => Path::new(relative)
             .file_name()
             .and_then(|v| v.to_str())

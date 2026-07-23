@@ -92,9 +92,9 @@ pub async fn get_configs(
     let core_paths = {
         let settings = state.settings.read().unwrap();
         let default_path = if is_mihomo {
-            MIHOMO_CONF.to_string()
+            MIHOMO_CONF_DIR.to_string()
         } else {
-            XRAY_CONF.to_string()
+            XRAY_CONF_DIR.to_string()
         };
         let mut paths = vec![default_path];
         let extra = if is_mihomo {
@@ -109,7 +109,7 @@ pub async fn get_configs(
     let mut core_configs = collect_configs(&core_paths, is_mihomo).await;
     let mut lst_configs = Vec::new();
 
-    if let Ok(mut entries) = tokio::fs::read_dir(XKEEN_CONF).await {
+    if let Ok(mut entries) = tokio::fs::read_dir(XKEEN_CONF_DIR).await {
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -132,14 +132,14 @@ pub async fn get_configs(
 
 fn get_allowed_prefixes(state: &AppState, is_lst: bool) -> Vec<String> {
     if is_lst {
-        return vec![XKEEN_CONF.to_string()];
+        return vec![XKEEN_CONF_DIR.to_string()];
     }
     let settings = state.settings.read().unwrap();
     let core = state.core.read().unwrap();
     let default_path = if core.name == "mihomo" {
-        MIHOMO_CONF.to_string()
+        MIHOMO_CONF_DIR.to_string()
     } else {
-        XRAY_CONF.to_string()
+        XRAY_CONF_DIR.to_string()
     };
     let extra = if core.name == "mihomo" {
         settings.append_config_paths.mihomo.clone()
@@ -167,7 +167,7 @@ fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
     if file.contains("..") {
         return Err("Invalid path");
     }
-    let is_xkeen = file.ends_with(".lst") || (file.ends_with(".json") && file.starts_with(XKEEN_CONF));
+    let is_xkeen = file.ends_with(".lst") || (file.ends_with(".json") && file.starts_with(XKEEN_CONF_DIR));
     let prefixes = get_allowed_prefixes(state, is_xkeen);
     if !is_path_allowed(file, &prefixes) {
         return Err("Path not allowed");
@@ -202,7 +202,7 @@ pub async fn put_config(
                 content: content.clone(),
             });
         } else if core_type == "xray" {
-            if let Ok(mut entries) = tokio::fs::read_dir(XRAY_CONF).await {
+            if let Ok(mut entries) = tokio::fs::read_dir(XRAY_CONF_DIR).await {
                 let mut found_current = false;
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     let path = entry.path();
@@ -378,13 +378,13 @@ async fn validate_core(core: &str, files: &[ConfigReq]) -> Result<(), String> {
         "mihomo" => {
             let mut cmd = tokio::process::Command::new("mihomo");
             cmd.args(["-t", "-f"]).arg(temp_dir.join("config.yaml"));
-            cmd.env("CLASH_HOME_DIR", MIHOMO_CONF);
+            cmd.env("CLASH_HOME_DIR", MIHOMO_CONF_DIR);
             cmd
         }
         _ => {
             let mut cmd = tokio::process::Command::new("xray");
             cmd.args(["-test", "-confdir"]).arg(&temp_dir);
-            cmd.env("XRAY_LOCATION_ASSET", XRAY_ASSET);
+            cmd.env("XRAY_LOCATION_ASSET", XRAY_ASSET_DIR);
             cmd
         }
     };

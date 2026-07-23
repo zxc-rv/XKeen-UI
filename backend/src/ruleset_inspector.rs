@@ -7,14 +7,14 @@ use std::time::SystemTime;
 use tokio::process::Command;
 use yaml_rust2::{Yaml, YamlLoader};
 
-use crate::types::{ApiResponse, AppState, MIHOMO_CONF};
+use crate::types::{ApiResponse, AppState, MIHOMO_CONF_DIR};
 
-const MIHOMO_CONFIG_PATH: &str = "/opt/etc/mihomo/config.yaml";
+const MIHOMO_CONF_DIRIG_PATH: &str = "/opt/etc/mihomo/config.yaml";
 
 static MIHOMO_YAML_CACHE: LazyLock<RwLock<Option<(SystemTime, Arc<Vec<Yaml>>)>>> = LazyLock::new(|| RwLock::new(None));
 
 async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
-    let mtime = tokio::fs::metadata(MIHOMO_CONFIG_PATH)
+    let mtime = tokio::fs::metadata(MIHOMO_CONF_DIRIG_PATH)
         .await
         .map_err(|e| format!("Ошибка чтения конфига: {e}"))?
         .modified()
@@ -30,7 +30,7 @@ async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
         return Ok(cached);
     }
 
-    let content = tokio::fs::read_to_string(MIHOMO_CONFIG_PATH)
+    let content = tokio::fs::read_to_string(MIHOMO_CONF_DIRIG_PATH)
         .await
         .map_err(|e| format!("Ошибка чтения конфига: {e}"))?;
     let docs = YamlLoader::load_from_str(&content).map_err(|e| format!("Ошибка парсинга YAML: {e}"))?;
@@ -84,7 +84,7 @@ pub async fn get_ruleset_content(State(_state): State<AppState>, Query(params): 
     let final_path = match path {
         Some(p) => resolve_provider_path(p),
         None => match url {
-            Some(u) => format!("{}/rules/{:x}", MIHOMO_CONF, md5::compute(u)),
+            Some(u) => format!("{}/rules/{:x}", MIHOMO_CONF_DIR, md5::compute(u)),
             None => return error_response("В провайдере нет ни path, ни url".into()),
         },
     };
@@ -156,7 +156,7 @@ fn resolve_provider_path(path: &str) -> String {
     if path.starts_with('/') {
         path.to_string()
     } else {
-        format!("{}/{}", MIHOMO_CONF, path.trim_start_matches("./"))
+        format!("{}/{}", MIHOMO_CONF_DIR, path.trim_start_matches("./"))
     }
 }
 

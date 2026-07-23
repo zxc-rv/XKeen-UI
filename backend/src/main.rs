@@ -14,6 +14,7 @@ mod version;
 mod websocket;
 use crate::logger::{log, ts};
 use crate::types::*;
+use axum::http::StatusCode;
 use axum::routing::{any, get, post};
 use axum::{Router, middleware};
 
@@ -235,11 +236,22 @@ fn fatal_signal_message(sig: i32) -> &'static [u8] {
 #[tokio::main]
 async fn main() {
     if std::env::args().any(|arg| arg == "-v" || arg == "-V" || arg == "--version") {
-        let router_info = std::process::Command::new("curl")
-            .args(["-sf", "http://127.0.0.1:79/rci/show/version"])
-            .output()
+        let xkeen_config_path = XKEEN_CONF;
+        let rci_token = std::fs::read_to_string(&xkeen_config_path)
             .ok()
-            .and_then(|out| serde_json::from_slice::<serde_json::Value>(&out.stdout).ok());
+            .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+            .and_then(|json| json.get("xkeen")?.get("rci_token")?.as_str().map(String::from));
+
+        let mut router_req = reqwest::blocking::Client::builder()
+            .user_agent("XKeen-UI")
+            .build()
+            .unwrap()
+            .get("http://127.0.0.1:79/rci/show/version");
+        if let Some(ref token) = rci_token {
+            router_req = router_req.header("X-Ndma-Tkn", token);
+        }
+
+        let router_info = router_req.send().ok().and_then(|resp| resp.json::<serde_json::Value>().ok());
 
         let device = router_info
             .as_ref()
@@ -393,6 +405,12 @@ async fn main() {
     let (log_tx, _) = broadcast::channel::<String>(16);
     let log_tx_arc = Arc::new(log_tx);
 
+    let xkeen_config_path = XKEEN_CONF;
+    let rci_token = std::fs::read_to_string(&xkeen_config_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+        .and_then(|json| json.get("xkeen")?.get("rci_token")?.as_str().map(String::from));
+
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(init_file.as_deref()))),
         settings: Arc::new(RwLock::new(load_settings())),
@@ -409,8 +427,26 @@ async fn main() {
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),
         app_config_lock: Arc::new(tokio::sync::Mutex::new(())),
         debug: cli.debug,
+        rci_token,
     };
     version::start_update_checker(state.clone());
+
+    if let Some(ref _token) = state.rci_token {
+        log("INFO", "RCI токен авторизации найден".into());
+    } else {
+        match state
+            .http_client
+            .get("http://127.0.0.1:79/rci/show/version")
+            .timeout(std::time::Duration::from_secs(5))
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status() == StatusCode::FORBIDDEN => {
+                log("ERROR", "Ошибка доступа к RCI. Некоторый функционал может быть недоступен.".into());
+            }
+            _ => {}
+        }
+    }
 
     let secure_api = Router::new()
         .route(
@@ -496,13 +532,13 @@ fn detect_core(init_file: Option<&str>) -> CoreInfo {
     if content.contains("name_client=\"mihomo\"") {
         CoreInfo {
             name: "mihomo".into(),
-            conf_dir: MIHOMO_CONF.into(),
+            conf_dir: MIHOMO_CONF_DIR.into(),
             is_json: false,
         }
     } else {
         CoreInfo {
             name: "xray".into(),
-            conf_dir: XRAY_CONF.into(),
+            conf_dir: XRAY_CONF_DIR.into(),
             is_json: true,
         }
     }
@@ -513,8 +549,8 @@ fn load_settings() -> AppSettings {
         Ok(c) => (c, APP_CONFIG),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             if let Ok(c) = std::fs::read_to_string(APP_CONFIG_LEGACY) {
-                if let Err(e) = std::fs::create_dir_all(XKEEN_CONF) {
-                    log("WARN", format!("Не удалось создать {}: {}", XKEEN_CONF, e));
+                if let Err(e) = std::fs::create_dir_all(XKEEN_CONF_DIR) {
+                    log("WARN", format!("Не удалось создать {}: {}", XKEEN_CONF_DIR, e));
                 }
                 if std::fs::rename(APP_CONFIG_LEGACY, APP_CONFIG).is_ok() {
                     log(

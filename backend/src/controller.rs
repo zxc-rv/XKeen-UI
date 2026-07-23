@@ -96,12 +96,12 @@ fn get_core_info(name: &str) -> CoreInfo {
     match name {
         "mihomo" => CoreInfo {
             name: "mihomo".into(),
-            conf_dir: MIHOMO_CONF.into(),
+            conf_dir: MIHOMO_CONF_DIR.into(),
             is_json: false,
         },
         _ => CoreInfo {
             name: "xray".into(),
-            conf_dir: XRAY_CONF.into(),
+            conf_dir: XRAY_CONF_DIR.into(),
             is_json: true,
         },
     }
@@ -129,10 +129,10 @@ pub async fn soft_restart(core: &str) -> Result<(), String> {
     let mut cmd = Command::new(core);
     match core {
         "mihomo" => {
-            cmd.env("CLASH_HOME_DIR", MIHOMO_CONF);
+            cmd.env("CLASH_HOME_DIR", MIHOMO_CONF_DIR);
         }
         _ => {
-            cmd.envs([("XRAY_LOCATION_CONFDIR", XRAY_CONF), ("XRAY_LOCATION_ASSET", XRAY_ASSET)]);
+            cmd.envs([("XRAY_LOCATION_CONFDIR", XRAY_CONF_DIR), ("XRAY_LOCATION_ASSET", XRAY_ASSET_DIR)]);
         }
     }
 
@@ -245,8 +245,8 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
 
 async fn check_core_config(core: &str) -> Result<(), String> {
     if core == "xray" {
-        fs::create_dir_all(XRAY_CONF).await.ok();
-        let has_json = std::fs::read_dir(XRAY_CONF)
+        fs::create_dir_all(XRAY_CONF_DIR).await.ok();
+        let has_json = std::fs::read_dir(XRAY_CONF_DIR)
             .map(|dir| {
                 dir.flatten()
                     .any(|e| e.path().extension().map_or(false, |x| x == "json"))
