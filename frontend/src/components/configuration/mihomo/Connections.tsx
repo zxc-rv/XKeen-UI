@@ -11,6 +11,7 @@ import {
   IconArrowUp,
   IconCircleArrowRightFilled,
   IconFilter,
+  IconLetterCase,
   IconLoader2,
   IconPlugX,
   IconTrash,
@@ -892,6 +893,8 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onFilterChange,
   onClearFilter,
   onCloseAll,
+  caseSensitive,
+  onToggleCaseSensitive,
 }: {
   filter: string
   activeTab: 'active' | 'closed'
@@ -899,6 +902,8 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onFilterChange: (v: string) => void
   onClearFilter: () => void
   onCloseAll: () => void
+  caseSensitive: boolean
+  onToggleCaseSensitive: () => void
 }) {
   return (
     <div className="border-border flex shrink-0 items-center gap-2 border-b p-3">
@@ -909,12 +914,18 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
         <InputGroupAddon>
           <IconFilter />
         </InputGroupAddon>
-        <InputGroupAddon align="inline-end">
+        <InputGroupAddon align="inline-end" className="gap-0">
           {filter && (
             <InputGroupButton className="text-muted-foreground hover:text-destructive" onClick={onClearFilter}>
               <IconX size={13} />
             </InputGroupButton>
           )}
+          <Tooltip>
+            <TooltipTrigger render={<InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
+              <IconLetterCase size={16} />
+            </InputGroupButton>} />
+            <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
+          </Tooltip>
         </InputGroupAddon>
       </InputGroup>
 
@@ -980,6 +991,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onClose,
   onApplyFilter,
   showSourceName,
+  caseSensitive,
 }: {
   filter: string
   sortColumn: SortColumn
@@ -988,6 +1000,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onClose: (id: string, e: React.MouseEvent) => void
   onApplyFilter: (value: string) => void
   showSourceName: boolean
+  caseSensitive: boolean
 }) {
   const connected = useWsConnected()
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
@@ -999,20 +1012,21 @@ const ConnectionsBody = memo(function ConnectionsBody({
       let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
 
       if (query) {
+        const match = (v: string) => (caseSensitive ? v.includes(query) : v.toLowerCase().includes(query.toLowerCase()))
         result = result.filter((conn) => {
           const hostLabel = getConnectionHostLabel(conn)
           const sourceLabel = getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
           return (
-            conn.chains.some((c) => c.includes(query)) ||
-            hostLabel.includes(query) ||
-            conn.metadata.host.includes(query) ||
-            conn.metadata.destinationIP.includes(query) ||
-            conn.metadata.network.includes(query) ||
-            getConnectionProtocol(conn).includes(query) ||
-            sourceLabel.includes(query) ||
-            conn.metadata.sourceIP.includes(query) ||
-            conn.rule.includes(query) ||
-            conn.rulePayload.includes(query)
+            conn.chains.some((c) => match(c)) ||
+            match(hostLabel) ||
+            match(conn.metadata.host) ||
+            match(conn.metadata.destinationIP) ||
+            match(conn.metadata.network) ||
+            match(getConnectionProtocol(conn)) ||
+            match(sourceLabel) ||
+            match(conn.metadata.sourceIP) ||
+            match(conn.rule) ||
+            match(conn.rulePayload)
           )
         })
       }
@@ -1059,12 +1073,14 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   sortDirection,
   onSelect,
   showSourceName,
+  caseSensitive,
 }: {
   filter: string
   sortColumn: SortColumn
   sortDirection: SortDirection
   onSelect: (conn: Connection) => void
   showSourceName: boolean
+  caseSensitive: boolean
 }) {
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const filteredConns = useConnectionsStore(
@@ -1073,20 +1089,21 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
       const query = filter.trim()
       let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
       if (query) {
+        const match = (v: string) => (caseSensitive ? v.includes(query) : v.toLowerCase().includes(query.toLowerCase()))
         result = result.filter((conn) => {
           const hostLabel = getConnectionHostLabel(conn)
           const sourceLabel = getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
           return (
-            conn.chains.some((c) => c.includes(query)) ||
-            hostLabel.includes(query) ||
-            conn.metadata.host.includes(query) ||
-            conn.metadata.destinationIP.includes(query) ||
-            conn.metadata.network.includes(query) ||
-            getConnectionProtocol(conn).includes(query) ||
-            sourceLabel.includes(query) ||
-            conn.metadata.sourceIP.includes(query) ||
-            conn.rule.includes(query) ||
-            conn.rulePayload.includes(query)
+            conn.chains.some((c) => match(c)) ||
+            match(hostLabel) ||
+            match(conn.metadata.host) ||
+            match(conn.metadata.destinationIP) ||
+            match(conn.metadata.network) ||
+            match(getConnectionProtocol(conn)) ||
+            match(sourceLabel) ||
+            match(conn.metadata.sourceIP) ||
+            match(conn.rule) ||
+            match(conn.rulePayload)
           )
         })
       }
@@ -1126,6 +1143,14 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const [dialogOpen, setDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active')
   const dialogCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [caseSensitive, setCaseSensitive] = useState(() => localStorage.getItem('conn_filter_cs') === 'true')
+  const toggleCaseSensitive = useCallback(() => {
+    setCaseSensitive((prev) => {
+      const next = !prev
+      localStorage.setItem('conn_filter_cs', String(next))
+      return next
+    })
+  }, [])
   const showSourceName = useSettings((s) => s.showSourceName)
   const sourceNameRefreshTick = useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const unresolvedSourceIPs = useConnectionsStore(useShallow((s) => collectRefreshableSourceIPs(s, showSourceName)))
@@ -1217,6 +1242,8 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           onFilterChange={setFilter}
           onClearFilter={clearFilter}
           onCloseAll={closeAll}
+          caseSensitive={caseSensitive}
+          onToggleCaseSensitive={toggleCaseSensitive}
         />
         <div className="flex-1 scrollbar-thin overflow-auto">
           <Table className="min-w-240 md:min-w-190">
@@ -1230,6 +1257,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onClose={handleCloseConnection}
                 onApplyFilter={handleApplyFilter}
                 showSourceName={showSourceName}
+                caseSensitive={caseSensitive}
               />
             ) : (
               <ClosedConnectionsBody
@@ -1238,6 +1266,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 sortDirection={sortDirection}
                 onSelect={handleSelectConnection}
                 showSourceName={showSourceName}
+                caseSensitive={caseSensitive}
               />
             )}
           </Table>
