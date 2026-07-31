@@ -14,7 +14,6 @@ import {
   IconLetterCase,
   IconLoader2,
   IconPlugX,
-  IconTrash,
   IconX,
 } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -877,8 +876,8 @@ const CloseAllBtn = memo(function CloseAllBtn({ onCloseAll }: { onCloseAll: () =
       onClick={onCloseAll}
       disabled={totalCount === 0}
     >
-      <IconTrash className="md:hidden" />
-      <IconTrash data-icon="inline-start" className="hidden md:block" />
+      <IconPlugX className="md:hidden" />
+      <IconPlugX data-icon="inline-start" className="hidden md:block" />
       <span className="hidden md:inline">Закрыть все</span>
     </Button>
   )
