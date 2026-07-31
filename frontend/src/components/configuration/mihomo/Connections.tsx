@@ -572,14 +572,19 @@ const ConnectionRow = memo(function ConnectionRow({
         <TimeAgoCell isoString={conn.start} />
       </TableCell>
       <TableCell>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
-          onClick={(e) => onClose(conn.id, e)}
-        >
-          <IconX className="size-3.5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
+              onClick={(e) => onClose(conn.id, e)}
+            >
+              <IconX className="size-3.5" />
+            </Button>
+          } />
+          <TooltipContent>Закрыть соединение</TooltipContent>
+        </Tooltip>
       </TableCell>
     </TableRow>
   )
@@ -1232,7 +1237,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   )
 
   return (
-    <TooltipProvider delayDuration={700} skipDelayDuration={0}>
+    <TooltipProvider delayDuration={500} skipDelayDuration={0}>
       <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
         <ConnectionsHeader
           filter={filter}

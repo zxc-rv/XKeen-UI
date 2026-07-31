@@ -324,7 +324,7 @@ const ProxyCard = memo(function ProxyCard({
                 )}
               </span>
             } />
-            {proxy.history.length > 0 && (
+            {proxy.history.length > 0 ? (
               <TooltipContent side="top" className="p-2">
                 <div className="flex min-w-35 flex-col gap-1">
                   {proxy.history.map((entry, i) => (
@@ -339,6 +339,8 @@ const ProxyCard = memo(function ProxyCard({
                   ))}
                 </div>
               </TooltipContent>
+            ) : (
+              <TooltipContent>Замерить отклик</TooltipContent>
             )}
           </Tooltip>
         )}
@@ -445,26 +447,31 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
         <span className="truncate">{proxyName}</span>
       </div>
       {canTest && (
-        <button
-          type="button"
-          data-slot="proxy-delay-test"
-          className={cn(
-            'ml-auto flex h-5 min-w-8 shrink-0 cursor-pointer items-center justify-center bg-transparent px-1.5 text-xs font-medium tabular-nums outline-hidden',
-            showDelay ? delayColorImportant(delay) : 'text-foreground!'
-          )}
-          style={showDelay ? undefined : { color: '#fff' }}
-          onMouseDown={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-          }}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            if (!isTestingSingle) void onTestSingle(proxyName)
-          }}
-        >
-          {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBoltFilled className="size-3.5" />}
-        </button>
+        <Tooltip>
+          <TooltipTrigger render={
+            <button
+              type="button"
+              data-slot="proxy-delay-test"
+              className={cn(
+                'ml-auto flex h-5 min-w-8 shrink-0 cursor-pointer items-center justify-center bg-transparent px-1.5 text-xs font-medium tabular-nums outline-hidden',
+                showDelay ? delayColorImportant(delay) : 'text-foreground!'
+              )}
+              style={showDelay ? undefined : { color: '#fff' }}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                if (!isTestingSingle) void onTestSingle(proxyName)
+              }}
+            >
+              {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBoltFilled className="size-3.5" />}
+            </button>
+          } />
+          <TooltipContent>Замерить отклик</TooltipContent>
+        </Tooltip>
       )}
     </div>
   )
@@ -636,21 +643,26 @@ const SelectorRow = memo(function SelectorRow({
             >
               {collapsed ? <IconChevronDown size={13} /> : <IconChevronUp size={13} />}
             </Button>
-            <Button
-              variant="outline"
-              size={showSelectedDelay ? 'sm' : 'icon-sm'}
-              className={cn(showSelectedDelay && 'px-2 text-xs font-medium tabular-nums', showSelectedDelay && delayColor(selectedDelay))}
-              onClick={() => onTestAll(selectorName)}
-              disabled={isTesting}
-            >
-              {isTesting ? (
-                <IconLoader2 size={13} className="animate-spin" />
-              ) : showSelectedDelay ? (
-                selectedDelay
-              ) : (
-                <IconBoltFilled size={13} />
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  variant="outline"
+                  size={showSelectedDelay ? 'sm' : 'icon-sm'}
+                  className={cn(showSelectedDelay && 'px-2 text-xs font-medium tabular-nums', showSelectedDelay && delayColor(selectedDelay))}
+                  onClick={() => onTestAll(selectorName)}
+                  disabled={isTesting}
+                >
+                  {isTesting ? (
+                    <IconLoader2 size={13} className="animate-spin" />
+                  ) : showSelectedDelay ? (
+                    selectedDelay
+                  ) : (
+                    <IconBoltFilled size={13} />
+                  )}
+                </Button>
+              } />
+              <TooltipContent>Замерить отклик</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -936,7 +948,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
   }
 
   return (
-    <TooltipProvider delayDuration={700}>
+    <TooltipProvider delayDuration={500}>
       <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
         {selectorNames.map((name) => (
           <SelectorRow
