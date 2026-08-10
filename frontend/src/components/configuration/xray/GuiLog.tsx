@@ -53,10 +53,10 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
   const { showToast, dispatch } = useAppActions()
   const { serviceStatus, currentCore } = useCoreRuntimeState()
   const autoApply = useSettings((s) => s.autoApply)
+  const savedContent = configs[activeConfigIndex]?.savedContent ?? ''
   const [cfg, setCfg] = useState<LogConfig>(() => {
-    const content = configs[activeConfigIndex]?.content ?? ''
     return (
-      parseLogConfig(content) ?? {
+      parseLogConfig(savedContent) ?? {
         access: '',
         error: '',
         loglevel: 'warning',
@@ -65,12 +65,19 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
     )
   })
 
-  const [prevIndex, setPrevIndex] = useState(activeConfigIndex)
-  if (prevIndex !== activeConfigIndex) {
-    setPrevIndex(activeConfigIndex)
-    const content = configs[activeConfigIndex]?.content ?? ''
-    const parsed = parseLogConfig(content)
-    if (parsed) setCfg(parsed)
+  // Re-sync on tab change and when configs reload (e.g. router switch).
+  const [prevSyncKey, setPrevSyncKey] = useState(() => `${activeConfigIndex}:${savedContent}`)
+  const syncKey = `${activeConfigIndex}:${savedContent}`
+  if (prevSyncKey !== syncKey) {
+    setPrevSyncKey(syncKey)
+    setCfg(
+      parseLogConfig(savedContent) ?? {
+        access: '',
+        error: '',
+        loglevel: 'warning',
+        dnsLog: false,
+      }
+    )
   }
 
   const syncToEditor = useCallback(

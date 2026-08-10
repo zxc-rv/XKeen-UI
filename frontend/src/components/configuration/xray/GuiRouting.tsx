@@ -146,14 +146,16 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     })
   }
 
+  const savedContent = configs[activeConfigIndex]?.savedContent ?? ''
+
   useEffect(() => {
-    const content = configs[activeConfigIndex]?.content ?? editorRef.current?.getValue() ?? ''
+    const content = savedContent || editorRef.current?.getValue() || ''
     const parsed = parseRules(content)
     rulesRef.current = parsed
     setRules(parsed)
     loadAvailable()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeConfigIndex])
+  }, [activeConfigIndex, savedContent])
 
   useEffect(() => {
     configsRef.current = configs

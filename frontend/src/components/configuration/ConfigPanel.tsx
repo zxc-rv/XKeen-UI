@@ -456,6 +456,19 @@ export function ConfigPanel({
     }
   }, [activeConfigIndex, configFilenamesKey, loadConfigIntoEditor, editorRef])
 
+  // Same filenames across routers (config.yaml, ip_exclude, …) do not change
+  // activeConfigIndex / configFilenamesKey — reload editor after switch completes.
+  useEffect(() => {
+    if (isRouterSwitching) {
+      viewStatesRef.current = {}
+      return
+    }
+    const config = configsRef.current[activeIndexRef.current]
+    if (editorRef.current && config) {
+      loadConfigIntoEditor(config)
+    }
+  }, [activeRouterId, isRouterSwitching, loadConfigIntoEditor, editorRef])
+
   const handleEditorReady = useCallback(() => {
     setIsEditorMounted(true)
     const config = configsRef.current[activeIndexRef.current]
@@ -879,10 +892,10 @@ export function ConfigPanel({
               <div className="bg-background/25 pointer-events-none absolute inset-0 z-20" aria-hidden />
             )}
             {isEditorMounted && activeConfig && isRoutingGui && (
-              <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+              <GuiRouting editorRef={editorRef} configs={editorConfigs} activeConfigIndex={activeConfigIndex} />
             )}
             {isEditorMounted && activeConfig && isLogGui && (
-              <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+              <GuiLog editorRef={editorRef} configs={editorConfigs} activeConfigIndex={activeConfigIndex} />
             )}
 
             {isMihomo && (
