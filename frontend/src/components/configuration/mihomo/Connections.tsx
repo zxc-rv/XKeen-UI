@@ -1181,6 +1181,9 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const unresolvedSourceIPs = useConnectionsStore(useShallow((s) => collectRefreshableSourceIPs(s, showSourceName)))
 
   useEffect(() => {
+    // Don't carry closed connections / counts across routers — subscribeConnections
+    // would otherwise move the previous router's active list into closedMap.
+    useConnectionsStore.setState({ map: new Map(), closedMap: new Map() })
     resetSourceNameCache()
   }, [activeRouterId])
 
