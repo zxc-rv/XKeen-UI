@@ -38,7 +38,7 @@ import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
-import { runMassTask, summarizeFanOut, targetLabel } from '../../lib/routers-actions'
+import { applyRoutersFromConfigs, runMassTask, summarizeFanOut, targetLabel } from '../../lib/routers-actions'
 import { LOCAL_ROUTER_ID, isRoutersConfigFile } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
@@ -317,10 +317,7 @@ export function ConfigPanel({
   )
 
   const [activeConfigFile, setActiveConfigFile] = useState<string>(() => localStorage.getItem('lastSelectedTab') ?? '')
-  const editorConfigs = useMemo(
-    () => configs.filter((c) => !isRoutersConfigFile(c.file)),
-    [configs]
-  )
+  const editorConfigs = configs
   const activeConfigIndex = useMemo(() => {
     if (!editorConfigs.length) return 0
     const idx = editorConfigs.findIndex((c) => c.file === activeConfigFile)
@@ -553,6 +550,7 @@ export function ConfigPanel({
       const storeIndex = storeIndexByFile(cfg.file)
       if (storeIndex >= 0) dispatch({ type: 'SAVE_CONFIG', index: storeIndex, content })
       saveViewState(cfg.file, false)
+      if (localOk && isRoutersConfigFile(cfg.file)) applyRoutersFromConfigs([{ file: cfg.file, content }])
     }
 
     const summary = summarizeFanOut(results)
@@ -658,6 +656,7 @@ export function ConfigPanel({
       const storeIndex = storeIndexByFile(cfg.file)
       if (storeIndex >= 0) dispatch({ type: 'SAVE_CONFIG', index: storeIndex, content })
       saveViewState(cfg.file, false)
+      if (localOk && isRoutersConfigFile(cfg.file)) applyRoutersFromConfigs([{ file: cfg.file, content }])
     }
 
     const summary = summarizeFanOut(results)
