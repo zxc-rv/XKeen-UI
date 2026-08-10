@@ -536,6 +536,36 @@ export function ConfigPanel({
     configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
   }, [configActionsRef, switchTab])
 
+  async function executeSave(targets: string[], cfg: Config, content: string) {
+    const results = await runMassTask(targets, async (_id, baseUrl) => {
+      const result = await apiCall<{ success: boolean; error?: string }>(
+        'PUT',
+        'configs',
+        { file: cfg.file, content },
+        { baseUrl }
+      )
+      if (!result.success) throw new Error(result.error || 'ошибка сохранения')
+    })
+
+    const localOk = results.find((r) => r.id === LOCAL_ROUTER_ID)?.ok
+    if (targets.includes(LOCAL_ROUTER_ID) ? localOk : results.some((r) => r.id === activeRouterId && r.ok)) {
+      editorRef.current?.setSavedContent(content)
+      const storeIndex = storeIndexByFile(cfg.file)
+      if (storeIndex >= 0) dispatch({ type: 'SAVE_CONFIG', index: storeIndex, content })
+      saveViewState(cfg.file, false)
+    }
+
+    const summary = summarizeFanOut(results)
+    const fileName = cfg.file.split('/').pop()
+    showToast(
+      {
+        title: summary.fail === 0 ? `Файл "${fileName}" сохранен` : 'Сохранение завершено с ошибками',
+        body: summary.body,
+      },
+      summary.fail === 0 ? 'success' : 'error'
+    )
+  }
+
   async function saveCurrentConfig(force = false) {
     const cfg = configsRef.current[activeIndexRef.current]
     if (!cfg || !editorRef.current) return
@@ -547,22 +577,25 @@ export function ConfigPanel({
       dispatch({ type: 'SHOW_MODAL', modal: 'showCommentsWarningModal', show: true })
       return
     }
-    // Local tab always saves to fork host; remote tab uses active base via apiCall default.
-    const result = await apiCall<{ success: boolean; error?: string }>(
-      'PUT',
-      'configs',
-      { file: cfg.file, content },
-      isLocalRouter ? { baseUrl: null } : undefined
-    )
-    if (result.success) {
-      editorRef.current.setSavedContent(content)
-      const storeIndex = storeIndexByFile(cfg.file)
-      if (storeIndex >= 0) dispatch({ type: 'SAVE_CONFIG', index: storeIndex, content })
-      saveViewState(cfg.file, false)
-      showToast(`Файл "${cfg.file.split('/').pop()}" сохранен`)
-    } else {
-      showToast(`Ошибка сохранения: ${result.error}`, 'error')
+
+    if (!isLocalRouter) {
+      await executeSave([activeRouterId], cfg, content)
+      return
     }
+
+    const targets = applyTargets.length > 0 ? applyTargets : [LOCAL_ROUTER_ID]
+    const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
+    if (hasRemote) {
+      setMassConfirm({
+        title: 'Массовое сохранение',
+        description: 'Конфиг будет сохранён на выбранных роутерах:',
+        targets: targets.map(targetLabel),
+        action: () => void executeSave(targets, cfg, content),
+      })
+      return
+    }
+
+    await executeSave(targets, cfg, content)
   }
 
   function buildApplyUrl(file: string, core: string) {
