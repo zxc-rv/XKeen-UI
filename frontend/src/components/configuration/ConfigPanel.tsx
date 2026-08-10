@@ -822,59 +822,57 @@ export function ConfigPanel({
                   </Tooltip>
                 </div>
               )}
+
+              {(!isMihomo || currentPanel === 'config') && (
+                <div className="scrollbar-none overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] md:ml-auto [&::-webkit-scrollbar]:hidden">
+                  {isConfigsLoading ? (
+                    <div className="flex gap-2">
+                      {[525, 310].map((w) => (
+                        <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
+                      ))}
+                    </div>
+                  ) : (
+                    <Tabs
+                      value={activeConfig?.file || ''}
+                      onValueChange={(value) => {
+                        const index = editorConfigs.findIndex((c) => c.file === value)
+                        if (index >= 0) switchTab(index)
+                      }}
+                      className="flex-row!"
+                    >
+                      {coreConfigs.length > 0 && (
+                        <TabsList className="shrink-0">
+                          {coreConfigs.map((config) => (
+                            <ConfigTab
+                              key={config.file}
+                              config={config}
+                              currentCore={currentCore}
+                              showToast={showToast}
+                              onRefreshConfigs={refreshConfigsAndEditor}
+                              withContextMenu
+                            />
+                          ))}
+                        </TabsList>
+                      )}
+                      {xkeenConfigs.length > 0 && (
+                        <TabsList className="shrink-0">
+                          {xkeenConfigs.map((config) => (
+                            <ConfigTab
+                              key={config.file}
+                              config={config}
+                              currentCore={currentCore}
+                              showToast={showToast}
+                              onRefreshConfigs={refreshConfigsAndEditor}
+                            />
+                          ))}
+                        </TabsList>
+                      )}
+                    </Tabs>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-
-          {(!isMihomo || currentPanel === 'config') && (
-            <div className={cn(tabBarSectionClass, 'bg-muted/20 py-2')}>
-              <div className="scrollbar-none overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                {isConfigsLoading ? (
-                  <div className="flex gap-2">
-                    {[525, 310].map((w) => (
-                      <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
-                    ))}
-                  </div>
-                ) : (
-                  <Tabs
-                    value={activeConfig?.file || ''}
-                    onValueChange={(value) => {
-                      const index = editorConfigs.findIndex((c) => c.file === value)
-                      if (index >= 0) switchTab(index)
-                    }}
-                    className="flex-row!"
-                  >
-                    {coreConfigs.length > 0 && (
-                      <TabsList className="shrink-0">
-                        {coreConfigs.map((config) => (
-                          <ConfigTab
-                            key={config.file}
-                            config={config}
-                            currentCore={currentCore}
-                            showToast={showToast}
-                            onRefreshConfigs={refreshConfigsAndEditor}
-                            withContextMenu
-                          />
-                        ))}
-                      </TabsList>
-                    )}
-                    {xkeenConfigs.length > 0 && (
-                      <TabsList className="shrink-0">
-                        {xkeenConfigs.map((config) => (
-                          <ConfigTab
-                            key={config.file}
-                            config={config}
-                            currentCore={currentCore}
-                            showToast={showToast}
-                            onRefreshConfigs={refreshConfigsAndEditor}
-                          />
-                        ))}
-                      </TabsList>
-                    )}
-                  </Tabs>
-                )}
-              </div>
-            </div>
-          )}
 
           <div className="relative min-h-175! md:min-h-0 md:flex-1">
             {isRouterSwitching && (
