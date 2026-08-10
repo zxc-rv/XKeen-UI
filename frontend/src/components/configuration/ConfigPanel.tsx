@@ -317,12 +317,11 @@ export function ConfigPanel({
   )
 
   const [activeConfigFile, setActiveConfigFile] = useState<string>(() => localStorage.getItem('lastSelectedTab') ?? '')
-  const editorConfigs = configs
   const activeConfigIndex = useMemo(() => {
-    if (!editorConfigs.length) return 0
-    const idx = editorConfigs.findIndex((c) => c.file === activeConfigFile)
+    if (!configs.length) return 0
+    const idx = configs.findIndex((c) => c.file === activeConfigFile)
     return idx >= 0 ? idx : 0
-  }, [editorConfigs, activeConfigFile])
+  }, [configs, activeConfigFile])
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
 
   const [isEditorMounted, setIsEditorMounted] = useState(false)
@@ -342,13 +341,13 @@ export function ConfigPanel({
     action: () => void
   } | null>(null)
 
-  const configsRef = useRef(editorConfigs)
+  const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
   const viewStatesRef = useRef<Record<string, any>>({})
 
   useEffect(() => {
-    configsRef.current = editorConfigs
-  }, [editorConfigs])
+    configsRef.current = configs
+  }, [configs])
   useEffect(() => {
     activeIndexRef.current = activeConfigIndex
   }, [activeConfigIndex])
@@ -380,7 +379,7 @@ export function ConfigPanel({
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [saveViewState])
 
-  const configFilenamesKey = editorConfigs.map((c) => c.file).join(',')
+  const configFilenamesKey = configs.map((c) => c.file).join(',')
   const storeIndexByFile = useCallback((file: string) => configs.findIndex((c) => c.file === file), [configs])
 
   useEffect(() => {
@@ -415,7 +414,7 @@ export function ConfigPanel({
     [activeClashApiPort, clashApiSecret, activeClashApiUnix, mode]
   )
 
-  const activeConfig = editorConfigs[activeConfigIndex]
+  const activeConfig = configs[activeConfigIndex]
   const fileLanguage = activeConfig ? getFileLanguage(activeConfig.file) : null
   const isJsonOrYaml = fileLanguage === 'json' || fileLanguage === 'yaml'
   const canSave = !!(activeConfig?.isDirty && validationState?.isValid)
@@ -774,8 +773,8 @@ export function ConfigPanel({
 
   const isAnyGui = isRoutingGui || isLogGui
 
-  const coreConfigs = editorConfigs.filter((c) => !c.file.startsWith('/opt/etc/xkeen'))
-  const xkeenConfigs = editorConfigs.filter((c) => c.file.startsWith('/opt/etc/xkeen'))
+  const coreConfigs = configs.filter((c) => !c.file.startsWith('/opt/etc/xkeen'))
+  const xkeenConfigs = configs.filter((c) => c.file.startsWith('/opt/etc/xkeen'))
 
   const isMihomo = currentCore === 'mihomo'
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
@@ -880,7 +879,7 @@ export function ConfigPanel({
                     <Tabs
                       value={activeConfig?.file || ''}
                       onValueChange={(value) => {
-                        const index = editorConfigs.findIndex((c) => c.file === value)
+                        const index = configs.findIndex((c) => c.file === value)
                         if (index >= 0) switchTab(index)
                       }}
                       className="flex-row!"
@@ -924,10 +923,10 @@ export function ConfigPanel({
               <div className="bg-background/25 pointer-events-none absolute inset-0 z-20" aria-hidden />
             )}
             {isEditorMounted && activeConfig && isRoutingGui && (
-              <GuiRouting editorRef={editorRef} configs={editorConfigs} activeConfigIndex={activeConfigIndex} />
+              <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
             )}
             {isEditorMounted && activeConfig && isLogGui && (
-              <GuiLog editorRef={editorRef} configs={editorConfigs} activeConfigIndex={activeConfigIndex} />
+              <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
             )}
 
             {isMihomo && (
