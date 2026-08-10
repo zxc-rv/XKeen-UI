@@ -21,6 +21,7 @@ import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { apiCall, clashFetch } from '../../../lib/api'
 import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useSettings, useWsConnected } from '../../../lib/store'
+import { useRoutersStore } from '../../../lib/routers-store'
 interface ConnectionMetadata {
   network: string
   type: string
@@ -92,6 +93,7 @@ const sourceNameCache = new Map<string, string | null>()
 const sourceNameRetryAt = new Map<string, number>()
 let sourceNameRetryTimer: ReturnType<typeof setTimeout> | null = null
 let sourceNameRequest: Promise<void> | null = null
+let sourceNameEpoch = 0
 const useSourceNameStore = create<{ version: number }>(() => ({ version: 0 }))
 
 function trimMap<K, V>(map: Map<K, V>, cap: number) {
@@ -100,6 +102,18 @@ function trimMap<K, V>(map: Map<K, V>, cap: number) {
     if (firstKey === undefined) break
     map.delete(firstKey)
   }
+}
+
+function resetSourceNameCache() {
+  sourceNameEpoch++
+  sourceNameCache.clear()
+  sourceNameRetryAt.clear()
+  if (sourceNameRetryTimer) {
+    clearTimeout(sourceNameRetryTimer)
+    sourceNameRetryTimer = null
+  }
+  sourceNameRequest = null
+  bumpSourceNameVersion()
 }
 const MAX_CLOSED_CONNECTIONS = 1000
 
@@ -233,11 +247,15 @@ async function refreshSourceNames(sourceIps: string[]) {
     return refreshSourceNames(sourceIps)
   }
 
+  const epoch = sourceNameEpoch
+  const baseUrl = useRoutersStore.getState().getActiveBaseUrl()
+
   sourceNameRequest = (async () => {
     let changed = false
     try {
       const retryAt = Date.now() + SOURCE_NAME_MISS_RETRY_MS
-      const data = await apiCall<DeviceListResponse>('GET', 'device-list')
+      const data = await apiCall<DeviceListResponse>('GET', 'device-list', undefined, { baseUrl })
+      if (epoch !== sourceNameEpoch) return
       if (!data.success) {
         changed = cacheSourceNameMisses(missingIps, retryAt)
         return
@@ -260,13 +278,15 @@ async function refreshSourceNames(sourceIps: string[]) {
 
       changed = cacheSourceNameMisses(Array.from(missingSet), retryAt) || changed
     } catch {
+      if (epoch !== sourceNameEpoch) return
       changed = cacheSourceNameMisses(missingIps, Date.now() + SOURCE_NAME_MISS_RETRY_MS) || changed
     } finally {
+      if (epoch !== sourceNameEpoch) return
       scheduleSourceNameRetry()
       if (changed) bumpSourceNameVersion()
     }
   })().finally(() => {
-    sourceNameRequest = null
+    if (epoch === sourceNameEpoch) sourceNameRequest = null
   })
 
   await sourceNameRequest
@@ -1140,6 +1160,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
 export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }: Props) {
+  const activeRouterId = useRoutersStore((s) => s.activeId)
   const [filter, setFilter] = useState('')
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
@@ -1158,6 +1179,10 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const showSourceName = useSettings((s) => s.showSourceName)
   const sourceNameRefreshTick = useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const unresolvedSourceIPs = useConnectionsStore(useShallow((s) => collectRefreshableSourceIPs(s, showSourceName)))
+
+  useEffect(() => {
+    resetSourceNameCache()
+  }, [activeRouterId])
 
   const clearDialogCloseTimer = useCallback(() => {
     if (!dialogCloseTimerRef.current) return
