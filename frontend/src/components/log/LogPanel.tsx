@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -7,7 +8,7 @@ import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, Icon
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { tabBarSectionClass } from '../routers/RouterTabsBar'
-import { LOCAL_ROUTER_ID, findRouter, routerBaseUrl } from '../../lib/routers'
+import { LOCAL_ROUTER_ID, findRouter, routerBaseUrl, routerId } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { useSettings } from '../../lib/store'
 import { cn } from '../../lib/utils'
@@ -23,12 +24,18 @@ export function LogPanel() {
   const timezone = useSettings((s) => s.timezone)
   const activeId = useRoutersStore((s) => s.activeId)
   const routers = useRoutersStore((s) => s.routers)
+  const applyTargets = useRoutersStore((s) => s.applyTargets)
+  const setApplyTargets = useRoutersStore((s) => s.setApplyTargets)
+  const isLocalRouter = activeId === LOCAL_ROUTER_ID
   const activeBaseUrl =
     activeId === LOCAL_ROUTER_ID ? null : (() => {
       const r = findRouter(routers, activeId)
       return r ? routerBaseUrl(r.host, r.port) : null
     })()
   const [panelTab, setPanelTab] = useState<'journal' | 'routers'>('journal')
+  const allRouterIds = [LOCAL_ROUTER_ID, ...routers.map(routerId)]
+  const allRoutersSelected = allRouterIds.length > 0 && allRouterIds.every((id) => applyTargets.includes(id))
+  const showSelectAllRouters = panelTab === 'routers' && isLocalRouter && routers.length > 0
   const [filter, setFilter] = useState('')
   const [currentFile, setCurrentFile] = useState('error.log')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -330,75 +337,85 @@ export function LogPanel() {
                   </TabsTrigger>
                 </TabsList>
                 {panelTab === 'journal' && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <div className="relative flex min-w-30 flex-1 items-center sm:flex-none">
-                    <InputGroup className="w-40">
-                      <InputGroupInput
-                        placeholder="Фильтр"
-                        className="right-2"
-                        value={filter}
-                        onChange={(e) => handleFilterChange(e.target.value)}
-                      />
-                      <InputGroupAddon>
-                        <IconFilter />
-                      </InputGroupAddon>
-                      <InputGroupAddon align="inline-end">
-                        {filter && (
-                          <InputGroupButton
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => {
-                              if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
-                              setFilter('')
-                              ws.applyFilter('')
-                            }}
-                            className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
-                          >
-                            <IconX className="size-3.25" />
-                          </InputGroupButton>
-                        )}
-                      </InputGroupAddon>
-                    </InputGroup>
-                  </div>
-                  <Select value={currentFile} onValueChange={switchFile}>
-                    <SelectTrigger popper className="md:w-33">
-                      <SelectValue />
-                    </SelectTrigger>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="relative flex min-w-30 flex-1 items-center sm:flex-none">
+                      <InputGroup className="w-40">
+                        <InputGroupInput
+                          placeholder="Фильтр"
+                          className="right-2"
+                          value={filter}
+                          onChange={(e) => handleFilterChange(e.target.value)}
+                        />
+                        <InputGroupAddon>
+                          <IconFilter />
+                        </InputGroupAddon>
+                        <InputGroupAddon align="inline-end">
+                          {filter && (
+                            <InputGroupButton
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => {
+                                if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
+                                setFilter('')
+                                ws.applyFilter('')
+                              }}
+                              className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                            >
+                              <IconX className="size-3.25" />
+                            </InputGroupButton>
+                          )}
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </div>
+                    <Select value={currentFile} onValueChange={switchFile}>
+                      <SelectTrigger popper className="md:w-33">
+                        <SelectValue />
+                      </SelectTrigger>
 
-                    <SelectContent position="popper">
-                      <SelectGroup>
-                        {LOG_FILES.map((f) => (
-                          <SelectItem key={f} value={f} className="text-sm">
-                            {f}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                  <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}>
-                            <IconTrash />
-                          </Button>
-                        }
-                      />
-                      <TooltipContent>Очистить лог</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button variant="outline" size="icon" onClick={toggleFullscreen}>
-                            {isFullscreen ? <IconMinimize /> : <IconMaximize />}
-                          </Button>
-                        }
-                      />
-                      <TooltipContent>{isFullscreen ? 'Свернуть' : 'Развернуть'}</TooltipContent>
-                    </Tooltip>
+                      <SelectContent position="popper">
+                        <SelectGroup>
+                          {LOG_FILES.map((f) => (
+                            <SelectItem key={f} value={f} className="text-sm">
+                              {f}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}>
+                              <IconTrash />
+                            </Button>
+                          }
+                        />
+                        <TooltipContent>Очистить лог</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button variant="outline" size="icon" onClick={toggleFullscreen}>
+                              {isFullscreen ? <IconMinimize /> : <IconMaximize />}
+                            </Button>
+                          }
+                        />
+                        <TooltipContent>{isFullscreen ? 'Свернуть' : 'Развернуть'}</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                {showSelectAllRouters && (
+                  <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={allRoutersSelected}
+                      onCheckedChange={(checked) => setApplyTargets(checked === true ? allRouterIds : [])}
+                      aria-label="Выбрать все"
+                    />
+                    Выбрать все
+                  </label>
+                )}
               </div>
             </div>
 
