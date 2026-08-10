@@ -8,7 +8,7 @@ import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
-import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID } from './lib/routers'
+import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID, routerId } from './lib/routers'
 import { RouterTabsCard } from './components/routers/RouterTabsBar'
 import { applyRoutersFromConfigs, refreshAllOnline } from './lib/routers-actions'
 import { useRoutersStore } from './lib/routers-store'
@@ -268,11 +268,15 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     init()
   }, [checkStatus, loadConfigs, dispatch, showToast, checkVersion])
 
+  // Ping immediately when routers.lst appears (first mount often has an empty list).
+  const onlineTargetsKey = useRoutersStore((s) =>
+    [LOCAL_ROUTER_ID, ...s.routers.map(routerId)].join('|')
+  )
   useEffect(() => {
     void refreshAllOnline()
     const timer = setInterval(() => void refreshAllOnline(), ONLINE_PING_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [])
+  }, [onlineTargetsKey])
 
   const switchRouter = useCallback(
     async (id: string) => {
