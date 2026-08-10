@@ -8,6 +8,10 @@ import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
+import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID } from './lib/routers'
+import { RouterTabsCard } from './components/routers/RouterTabsBar'
+import { applyRoutersFromConfigs, refreshAllOnline } from './lib/routers-actions'
+import { useRoutersStore } from './lib/routers-store'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
 import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config, type ThemeMode } from './lib/types'
@@ -117,8 +121,9 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     getActiveIndex: () => 0,
   })
 
-  const checkStatus = useCallback(async () => {
-    const data = await apiCall<any>('GET', 'control')
+  const checkStatus = useCallback(async (baseUrl?: string | null) => {
+    const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
+    const data = await apiCall<any>('GET', 'control', undefined, { baseUrl: resolvedBase })
     if (!data.success) return null
     const currentCore = data.currentCore || 'xray'
     dispatch({
@@ -132,12 +137,16 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   }, [dispatch])
 
   const loadConfigs = useCallback(
-    async (core?: string, skipProxies = false, silent = false): Promise<Config[]> => {
+    async (core?: string, skipProxies = false, silent = false, baseUrl?: string | null): Promise<Config[]> => {
       if (!silent) dispatch({ type: 'SET_CONFIGS_LOADING', loading: true })
+      const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
       try {
-        const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs')
+        const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs', undefined, {
+          baseUrl: resolvedBase,
+        })
         if (result.success && result.configs) {
           const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
+          if (resolvedBase === null) applyRoutersFromConfigs(result.configs)
           dispatch({ type: 'SET_CONFIGS', configs })
           const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
           const { port, secret, unix } = yamlConfig
@@ -146,8 +155,8 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
           const appState = getAppState()
           const activeCores = core ?? appState.currentCore
-          if ((port || unix) && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus === 'running') {
-            fetchClashProxies(port ?? '', secret, false, unix)
+          if ((port || unix) && activeCores === 'mihomo' && !skipProxies) {
+            fetchClashProxies(port ?? '', secret, silent, unix, resolvedBase)
           }
           return configs
         } else {
@@ -164,16 +173,17 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   )
 
   const checkVersion = useCallback(
-    async (showUpdateToast = false) => {
+    async (showUpdateToast = false, baseUrl?: string | null) => {
       try {
-        const data = await apiCall<any>('GET', 'version')
+        const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
+        const data = await apiCall<any>('GET', 'version', undefined, { baseUrl: resolvedBase })
         if (!data.success) return
 
         const ui = data['xkeen-ui']
         if (!ui) return
 
         let isOutdatedCore = false
-        const coreVersions: Record<string, string> = {}
+        const coreVersions: Record<string, string> = { xray: '', mihomo: '' }
         for (const core of ['mihomo', 'xray']) {
           if (data[core]?.version) {
             coreVersions[core] = data[core].version
@@ -188,15 +198,13 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           isOutdatedCore,
         })
 
-        if (Object.keys(coreVersions).length > 0) {
-          const appState = getAppState()
-          dispatch({
-            type: 'SET_CORE_INFO',
-            currentCore: appState.currentCore,
-            coreVersions: { ...appState.coreVersions, ...coreVersions },
-            availableCores: appState.availableCores,
-          })
-        }
+        const appState = getAppState()
+        dispatch({
+          type: 'SET_CORE_INFO',
+          currentCore: appState.currentCore,
+          coreVersions,
+          availableCores: appState.availableCores,
+        })
 
         if (!showUpdateToast) return
         if (ui.show_toast) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true, id: 'update-ui', ...(ui.link && { action: { url: ui.link } }) })
@@ -249,8 +257,8 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     const init = async () => {
       try {
         await loadSettings()
-        const currentCore = await checkStatus()
-        if (currentCore) loadConfigs(currentCore)
+        const currentCore = await checkStatus(null)
+        await loadConfigs(currentCore ?? undefined, false, false, null)
         checkVersion(true)
       } catch {
         showToast('Ошибка инициализации', 'error')
@@ -259,6 +267,39 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
 
     init()
   }, [checkStatus, loadConfigs, dispatch, showToast, checkVersion])
+
+  useEffect(() => {
+    void refreshAllOnline()
+    const timer = setInterval(() => void refreshAllOnline(), ONLINE_PING_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [])
+
+  const switchRouter = useCallback(
+    async (id: string) => {
+      const { activeId, setActiveId, setSwitching } = useRoutersStore.getState()
+      if (id === activeId) return
+
+      const dirty = getAppState().configs.some((c) => c.isDirty)
+      if (dirty && !confirm('Несохранённые изменения будут потеряны. Переключить роутер?')) return
+
+      setSwitching(true)
+      setActiveId(id)
+
+      try {
+        const remoteBase = id === LOCAL_ROUTER_ID ? null : useRoutersStore.getState().getBaseUrlForId(id)
+        const currentCore = await checkStatus(remoteBase)
+        if (currentCore) await loadConfigs(currentCore, false, true, remoteBase)
+        else dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+        await checkVersion(false, remoteBase)
+      } catch (e: any) {
+        dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+        showToast(e?.message || 'Не удалось подключиться к роутеру', 'error')
+      } finally {
+        useRoutersStore.getState().setSwitching(false)
+      }
+    },
+    [checkStatus, checkVersion, dispatch, loadConfigs, showToast]
+  )
 
   const switchCore = useCallback(
     async (core: string) => {
@@ -445,6 +486,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             }}
             onLogout={logout}
           />
+          <RouterTabsCard onSwitch={switchRouter} />
           <ConfigPanel
             editorRef={editorRef}
             configActionsRef={configActionsRef}
