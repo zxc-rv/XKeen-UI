@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
+import { getActiveBaseUrl } from '../../lib/routers-store'
 import { useAppContext, useModalContext } from '../../lib/store'
 import type { AppSettings, ProxySortOrder, ThemeMode } from '../../lib/types'
 
@@ -293,10 +294,12 @@ function AuthSettingsField({
   const [resetOpen, setResetOpen] = useState(false)
 
   const resetPassword = useCallback(async () => {
-    const res = await fetch('/api/auth/reset', { method: 'POST' })
+    const base = getActiveBaseUrl()
+    const res = await fetch(`${base ? `${base}/api` : '/api'}/auth/reset`, { method: 'POST' })
     const data = await res.json()
-    if (data.success) window.location.reload()
-    else showToast(data.error ?? 'Ошибка', 'error')
+    if (!data.success) return showToast(data.error ?? 'Ошибка', 'error')
+    if (base) showToast('Пароль сброшен — откройте панель роутера для установки нового')
+    else window.location.reload()
   }, [showToast])
 
   return (
