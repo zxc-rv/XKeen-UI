@@ -1,54 +1,18 @@
 import { apiCall, fanOutRouters, type FanOutResult } from './api'
-import {
-  LOCAL_ROUTER_ID,
-  ROUTERS_FILE,
-  type RemoteRouter,
-  isRoutersConfigFile,
-  parseRoutersLst,
-  routerId,
-  routerLabel,
-  serializeRoutersLst,
-} from './routers'
+import { LOCAL_ROUTER_ID, type RemoteRouter, routerId, routerLabel } from './routers'
 import { getBaseUrlForId, useRoutersStore } from './routers-store'
 
 export async function persistRouters(routers: RemoteRouter[]): Promise<{ success: boolean; error?: string }> {
-  const content = serializeRoutersLst(routers)
-  const put = await apiCall<{ success: boolean; error?: string }>(
-    'PUT',
-    'configs',
-    { file: ROUTERS_FILE, content },
-    { baseUrl: null }
-  )
-  if (put.success) return put
-
-  const created = await apiCall<{ success: boolean; error?: string }>(
-    'POST',
-    'configs',
-    { file: ROUTERS_FILE, content },
-    { baseUrl: null }
-  )
-  if (created.success || created.error === 'File already exists') {
-    return apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: ROUTERS_FILE, content }, { baseUrl: null })
-  }
-  return created
+  return apiCall<{ success: boolean; error?: string }>('PATCH', 'settings', { plugins: { routers } }, { baseUrl: null })
 }
 
-export async function ensureRoutersFile(routers: RemoteRouter[]): Promise<void> {
+export async function saveRouters(routers: RemoteRouter[]): Promise<void> {
   const result = await persistRouters(routers)
-  if (!result.success) throw new Error(result.error || 'Не удалось сохранить routers.lst')
+  if (!result.success) throw new Error(result.error || 'Не удалось сохранить список роутеров')
   useRoutersStore.getState().setRouters(routers)
 }
 
-function findRoutersConfig(configs: { file: string; content: string }[]) {
-  return configs.find((c) => isRoutersConfigFile(c.file))
-}
-
-/** Apply routers from config list; never clears store when file is missing. */
-export function applyRoutersFromConfigs(configs: { file: string; content: string }[]): RemoteRouter[] {
-  const file = findRoutersConfig(configs)
-  if (!file) return useRoutersStore.getState().routers
-
-  const routers = parseRoutersLst(file.content)
+export function applyRoutersFromSettings(routers: RemoteRouter[]): RemoteRouter[] {
   useRoutersStore.getState().setRouters(routers)
   return routers
 }

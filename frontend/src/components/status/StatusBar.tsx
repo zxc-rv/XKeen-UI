@@ -56,6 +56,7 @@ export function StatusBar({
   const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
   const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI, isOutdatedCore, settings } = state
   const authEnabled = settings.authEnabled
+  const multiRouter = settings.multiRouter
 
   const isRouterSwitching = useRoutersStore((s) => s.isSwitching)
   const isRunning = serviceStatus === 'running'
@@ -120,7 +121,7 @@ export function StatusBar({
     <TooltipProvider delayDuration={500}>
       <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
         <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
-          <RouterSelect onSwitch={onSwitchRouter} disabled={routerSelectDisabled} />
+          {multiRouter && <RouterSelect onSwitch={onSwitchRouter} disabled={routerSelectDisabled} />}
           <div className={badgeClasses}>
             <StatusWaveform status={serviceStatus} />
             {statusLabel}

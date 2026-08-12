@@ -22,6 +22,7 @@ const MAX_LINES = 1000
 
 export function LogPanel() {
   const timezone = useSettings((s) => s.timezone)
+  const multiRouter = useSettings((s) => s.multiRouter)
   const activeId = useRoutersStore((s) => s.activeId)
   const routers = useRoutersStore((s) => s.routers)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
@@ -33,9 +34,12 @@ export function LogPanel() {
       return r ? routerBaseUrl(r.host, r.port) : null
     })()
   const [panelTab, setPanelTab] = useState<'journal' | 'routers'>('journal')
+  useEffect(() => {
+    if (!multiRouter && panelTab === 'routers') setPanelTab('journal')
+  }, [multiRouter, panelTab])
   const allRouterIds = [LOCAL_ROUTER_ID, ...routers.map(routerId)]
   const allRoutersSelected = allRouterIds.length > 0 && allRouterIds.every((id) => applyTargets.includes(id))
-  const showSelectAllRouters = panelTab === 'routers' && isLocalRouter && routers.length > 0
+  const showSelectAllRouters = multiRouter && panelTab === 'routers' && isLocalRouter && routers.length > 0
   const [filter, setFilter] = useState('')
   const [currentFile, setCurrentFile] = useState('error.log')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -332,9 +336,11 @@ export function LogPanel() {
                   <TabsTrigger value="journal" className="p-0 text-lg font-semibold">
                     Журнал
                   </TabsTrigger>
-                  <TabsTrigger value="routers" className="p-0 text-lg font-semibold">
-                    Роутеры
-                  </TabsTrigger>
+                  {multiRouter && (
+                    <TabsTrigger value="routers" className="p-0 text-lg font-semibold">
+                      Роутеры
+                    </TabsTrigger>
+                  )}
                 </TabsList>
                 {panelTab === 'journal' && (
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -454,9 +460,11 @@ export function LogPanel() {
             </TabsContent>
 
             <TabsContent value="routers" className="relative mt-0 min-h-0 flex-1">
-              <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
-                <RoutersListPanel />
-              </div>
+              {multiRouter && (
+                <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
+                  <RoutersListPanel />
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>

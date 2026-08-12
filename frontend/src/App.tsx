@@ -9,7 +9,7 @@ import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
 import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID, routerId } from './lib/routers'
-import { applyRoutersFromConfigs, refreshAllOnline } from './lib/routers-actions'
+import { applyRoutersFromSettings, refreshAllOnline } from './lib/routers-actions'
 import { useRoutersStore } from './lib/routers-store'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
 import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
@@ -55,6 +55,7 @@ function settingsFromApi(data: any) {
     proxySortOrder: data.clash_api?.proxy_sort_order ?? 'default',
     timezone: data.log.timezone,
     authEnabled: !!data.auth?.enabled,
+    multiRouter: data.plugins?.multi_router ?? false,
   }
 }
 
@@ -134,6 +135,7 @@ const ModalManager = memo(function ModalManager({
 
 function AppContent({ onLogout }: { onLogout: () => void }) {
   const { dispatch, showToast } = useAppActions()
+  const multiRouter = useSettings((s) => s.multiRouter)
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
     switchTab: () => { },
@@ -165,7 +167,6 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
         })
         if (result.success && result.configs) {
           const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
-          if (resolvedBase === null) applyRoutersFromConfigs(result.configs)
           dispatch({ type: 'SET_CONFIGS', configs })
           const yamlConfig = configs.find((c: any) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
           const { port, secret, unix } = yamlConfig
@@ -251,7 +252,12 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     async (baseUrl?: string | null) => {
       const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
       const data = await apiCall<any>('GET', 'settings', undefined, { baseUrl: resolvedBase })
-      if (data.success) dispatch({ type: 'SET_SETTINGS', settings: settingsFromApi(data) })
+      if (data.success) {
+        dispatch({ type: 'SET_SETTINGS', settings: settingsFromApi(data) })
+        if (resolvedBase === null && Array.isArray(data.plugins?.routers)) {
+          applyRoutersFromSettings(data.plugins.routers)
+        }
+      }
     },
     [dispatch]
   )
@@ -271,15 +277,32 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     init()
   }, [checkStatus, loadConfigs, loadSettings, dispatch, showToast, checkVersion])
 
-  // Ping immediately when routers.lst appears (first mount often has an empty list).
+  useEffect(() => {
+    if (multiRouter) return
+    const { activeId, setActiveId } = useRoutersStore.getState()
+    if (activeId === LOCAL_ROUTER_ID) return
+    setActiveId(LOCAL_ROUTER_ID)
+    void (async () => {
+      try {
+        const currentCore = await checkStatus(null)
+        await loadConfigs(currentCore ?? undefined, false, true, null)
+        await loadSettings(null)
+      } catch {
+        dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+      }
+    })()
+  }, [multiRouter, checkStatus, loadConfigs, loadSettings, dispatch])
+
+  // Ping remote routers when the plugin is enabled.
   const onlineTargetsKey = useRoutersStore((s) =>
     [LOCAL_ROUTER_ID, ...s.routers.map(routerId)].join('|')
   )
   useEffect(() => {
+    if (!multiRouter) return
     void refreshAllOnline()
     const timer = setInterval(() => void refreshAllOnline(), ONLINE_PING_INTERVAL_MS)
     return () => clearInterval(timer)
-  }, [onlineTargetsKey])
+  }, [onlineTargetsKey, multiRouter])
 
   const switchRouter = useCallback(
     async (id: string) => {

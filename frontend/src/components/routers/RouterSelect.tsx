@@ -11,7 +11,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { IconPlus } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
-import { ensureRoutersFile } from '../../lib/routers-actions'
+import { saveRouters } from '../../lib/routers-actions'
 import {
   DEFAULT_ROUTER_PORT,
   LOCAL_ROUTER_ID,
@@ -65,7 +65,7 @@ export function RouterSelect({
     setSaving(true)
     try {
       const list = [...routers, next]
-      await ensureRoutersFile(list)
+      await saveRouters(list)
       setAddOpen(false)
       setHost('')
       setPort(String(DEFAULT_ROUTER_PORT))

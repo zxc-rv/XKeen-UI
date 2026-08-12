@@ -38,8 +38,8 @@ import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
-import { applyRoutersFromConfigs, runMassTask, summarizeFanOut, targetLabel } from '../../lib/routers-actions'
-import { LOCAL_ROUTER_ID, isRoutersConfigFile } from '../../lib/routers'
+import { runMassTask, summarizeFanOut, targetLabel } from '../../lib/routers-actions'
+import { LOCAL_ROUTER_ID } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
@@ -289,11 +289,16 @@ export function ConfigPanel({
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
   const guiLog = useSettings((s) => s.guiLog)
+  const multiRouter = useSettings((s) => s.multiRouter)
   const activeRouterId = useRoutersStore((s) => s.activeId)
   const isRouterSwitching = useRoutersStore((s) => s.isSwitching)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
   const routers = useRoutersStore((s) => s.routers)
   const isLocalRouter = activeRouterId === LOCAL_ROUTER_ID
+  const getMassTargets = () => {
+    if (!multiRouter) return [LOCAL_ROUTER_ID]
+    return applyTargets.length > 0 ? applyTargets : [LOCAL_ROUTER_ID]
+  }
   const activeBaseUrl =
     activeRouterId === LOCAL_ROUTER_ID
       ? null
@@ -549,7 +554,6 @@ export function ConfigPanel({
       const storeIndex = storeIndexByFile(cfg.file)
       if (storeIndex >= 0) dispatch({ type: 'SAVE_CONFIG', index: storeIndex, content })
       saveViewState(cfg.file, false)
-      if (localOk && isRoutersConfigFile(cfg.file)) applyRoutersFromConfigs([{ file: cfg.file, content }])
     }
 
     const summary = summarizeFanOut(results)
@@ -575,12 +579,12 @@ export function ConfigPanel({
       return
     }
 
-    if (!isLocalRouter) {
+    if (!isLocalRouter && multiRouter) {
       await executeSave([activeRouterId], cfg, content)
       return
     }
 
-    const targets = applyTargets.length > 0 ? applyTargets : [LOCAL_ROUTER_ID]
+    const targets = getMassTargets()
     const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
     if (hasRemote) {
       setMassConfirm({
@@ -605,7 +609,6 @@ export function ConfigPanel({
   }
 
   function restartActionFor(cfg: Config, content: string) {
-    if (isRoutersConfigFile(cfg.file)) return null
     const lang = getFileLanguage(cfg.file)
     const isXkeen = cfg.file.startsWith('/opt/etc/xkeen')
     return !isXkeen && (lang === 'json' || lang === 'yaml') && !hasCriticalChanges(cfg.savedContent, content, lang)
@@ -655,7 +658,6 @@ export function ConfigPanel({
       const storeIndex = storeIndexByFile(cfg.file)
       if (storeIndex >= 0) dispatch({ type: 'SAVE_CONFIG', index: storeIndex, content })
       saveViewState(cfg.file, false)
-      if (localOk && isRoutersConfigFile(cfg.file)) applyRoutersFromConfigs([{ file: cfg.file, content }])
     }
 
     const summary = summarizeFanOut(results)
@@ -688,12 +690,12 @@ export function ConfigPanel({
       return
     }
 
-    if (!isLocalRouter) {
+    if (!isLocalRouter && multiRouter) {
       await executeApply([activeRouterId], cfg, content)
       return
     }
 
-    const targets = applyTargets.length > 0 ? applyTargets : [LOCAL_ROUTER_ID]
+    const targets = getMassTargets()
     const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
     if (hasRemote) {
       setMassConfirm({
@@ -724,11 +726,11 @@ export function ConfigPanel({
   }
 
   function quickBackup() {
-    if (!isLocalRouter) {
+    if (!isLocalRouter && multiRouter) {
       void executeQuickBackup([activeRouterId])
       return
     }
-    const targets = applyTargets.length > 0 ? applyTargets : [LOCAL_ROUTER_ID]
+    const targets = getMassTargets()
     const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
     if (hasRemote) {
       setMassConfirm({

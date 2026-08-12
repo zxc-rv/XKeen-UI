@@ -34,6 +34,7 @@ const initialSettings: AppSettings = {
   proxySortOrder: 'default',
   timezone: 0,
   authEnabled: false,
+  multiRouter: false,
 }
 
 const initialState: AppState = {
