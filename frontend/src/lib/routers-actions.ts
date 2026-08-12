@@ -68,6 +68,9 @@ export async function runMassTask(
 export function summarizeFanOut(results: FanOutResult[]): { ok: number; fail: number; body: string } {
   const ok = results.filter((r) => r.ok).length
   const fail = results.length - ok
+  if (results.length <= 1) {
+    return { ok, fail, body: fail ? results[0]?.error || 'ошибка' : '' }
+  }
   const lines = results.map((r) => `${targetLabel(r.id)}: ${r.ok ? 'OK' : r.error || 'ошибка'}`)
   return { ok, fail, body: lines.join('; ') }
 }

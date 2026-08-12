@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
+import { getActiveBaseUrl } from './routers-store'
 import { getStoredTheme } from './theme'
 import {
   DEFAULT_PING_TEST_TIMEOUT,
@@ -496,7 +497,7 @@ export function syncClashApiPort(delayMs = 0): void {
 
   dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
   if ((port || unix) && currentCore === 'mihomo' && useStore.getState().serviceStatus === 'running') {
-    const fetchFn = () => fetchClashProxies(port ?? '', secret, true, unix)
+    const fetchFn = () => fetchClashProxies(port ?? '', secret, true, unix, getActiveBaseUrl())
     if (delayMs > 0) setTimeout(fetchFn, delayMs)
     else fetchFn()
   }

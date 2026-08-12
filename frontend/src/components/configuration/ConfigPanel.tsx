@@ -309,15 +309,14 @@ export function ConfigPanel({
 
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending'
-  const isStopped = serviceStatus === 'stopped' && !isRouterSwitching
-  const activeClashApiPort = isRunning || isRouterSwitching ? clashApiPort : null
-  const activeClashApiUnix = isRunning || isRouterSwitching ? clashApiUnix : null
+  const activeClashApiPort = isRunning ? clashApiPort : null
+  const activeClashApiUnix = isRunning ? clashApiUnix : null
 
   useConnectionsSync(
-    isRouterSwitching || currentCore !== 'mihomo' ? null : clashApiPort,
+    isRouterSwitching || currentCore !== 'mihomo' ? null : activeClashApiPort,
     clashApiSecret,
     isRouterSwitching ? 'stopped' : serviceStatus,
-    clashApiUnix,
+    activeClashApiUnix,
     activeBaseUrl
   )
 
@@ -338,7 +337,7 @@ export function ConfigPanel({
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
-  const currentPanel = isStopped ? 'config' : activePanel
+  const currentPanel = isRunning ? activePanel : 'config'
   const [massConfirm, setMassConfirm] = useState<{
     title: string
     description: string
@@ -558,13 +557,20 @@ export function ConfigPanel({
 
     const summary = summarizeFanOut(results)
     const fileName = cfg.file.split('/').pop()
-    showToast(
-      {
-        title: summary.fail === 0 ? `Файл "${fileName}" сохранен` : 'Сохранение завершено с ошибками',
-        body: summary.body,
-      },
-      summary.fail === 0 ? 'success' : 'error'
-    )
+    if (results.length <= 1) {
+      showToast(
+        summary.fail === 0 ? `Файл "${fileName}" сохранен` : `Ошибка сохранения: ${summary.body}`,
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    } else {
+      showToast(
+        {
+          title: summary.fail === 0 ? `Файл "${fileName}" сохранен` : 'Сохранение завершено с ошибками',
+          body: summary.body,
+        },
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    }
   }
 
   async function saveCurrentConfig(force = false) {
@@ -661,13 +667,20 @@ export function ConfigPanel({
     }
 
     const summary = summarizeFanOut(results)
-    showToast(
-      {
-        title: summary.fail === 0 ? 'Изменения применены' : 'Применение завершено с ошибками',
-        body: summary.body,
-      },
-      summary.fail === 0 ? 'success' : 'error'
-    )
+    if (results.length <= 1) {
+      showToast(
+        summary.fail === 0 ? 'Изменения применены' : `Ошибка: ${summary.body}`,
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    } else {
+      showToast(
+        {
+          title: summary.fail === 0 ? 'Изменения применены' : 'Применение завершено с ошибками',
+          body: summary.body,
+        },
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    }
 
     if (isLocalRouter || targets.includes(activeRouterId)) {
       const activeOk = results.find((r) => r.id === activeRouterId)?.ok
@@ -716,13 +729,20 @@ export function ConfigPanel({
       if (!result.success) throw new Error(result.error || 'ошибка бэкапа')
     })
     const summary = summarizeFanOut(results)
-    showToast(
-      {
-        title: summary.fail === 0 ? 'Быстрый бэкап создан' : 'Бэкап завершён с ошибками',
-        body: summary.body,
-      },
-      summary.fail === 0 ? 'success' : 'error'
-    )
+    if (results.length <= 1) {
+      showToast(
+        summary.fail === 0 ? 'Быстрый бэкап создан' : `Ошибка: ${summary.body}`,
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    } else {
+      showToast(
+        {
+          title: summary.fail === 0 ? 'Быстрый бэкап создан' : 'Бэкап завершён с ошибками',
+          body: summary.body,
+        },
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    }
   }
 
   function quickBackup() {
@@ -806,10 +826,10 @@ export function ConfigPanel({
                       className="w-max flex-row!"
                     >
                       <TabsList variant="line" className="mb-0 w-max shrink-0 gap-3 p-0 whitespace-nowrap">
-                        <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={isStopped}>
+                        <TabsTrigger value="selectors" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
                           Селекторы
                         </TabsTrigger>
-                        <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={isStopped}>
+                        <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
                           Соединения
                         </TabsTrigger>
                         <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">

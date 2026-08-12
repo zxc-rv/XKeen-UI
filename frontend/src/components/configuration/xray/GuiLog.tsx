@@ -53,10 +53,11 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
   const { showToast, dispatch } = useAppActions()
   const { serviceStatus, currentCore } = useCoreRuntimeState()
   const autoApply = useSettings((s) => s.autoApply)
+  const content = configs[activeConfigIndex]?.content ?? ''
   const savedContent = configs[activeConfigIndex]?.savedContent ?? ''
   const [cfg, setCfg] = useState<LogConfig>(() => {
     return (
-      parseLogConfig(savedContent) ?? {
+      parseLogConfig(content) ?? {
         access: '',
         error: '',
         loglevel: 'warning',
@@ -71,7 +72,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
   if (prevSyncKey !== syncKey) {
     setPrevSyncKey(syncKey)
     setCfg(
-      parseLogConfig(savedContent) ?? {
+      parseLogConfig(content) ?? {
         access: '',
         error: '',
         loglevel: 'warning',

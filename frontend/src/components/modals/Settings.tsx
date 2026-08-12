@@ -367,7 +367,7 @@ export function SettingsModal() {
       try {
         const body: Record<string, unknown> = {}
         if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins'].includes(section)) body[section] = key ? { [key]: value } : value
-        const result = await apiCall<any>('PATCH', 'settings', body)
+        const result = await apiCall<any>('PATCH', 'settings', body, section === 'plugins' ? { baseUrl: null } : undefined)
         if (!result.success) {
           showToast('Ошибка: ' + result.error, 'error')
           return false

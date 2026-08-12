@@ -146,11 +146,11 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     })
   }
 
+  const content = configs[activeConfigIndex]?.content ?? ''
   const savedContent = configs[activeConfigIndex]?.savedContent ?? ''
 
   useEffect(() => {
-    const content = savedContent || editorRef.current?.getValue() || ''
-    const parsed = parseRules(content)
+    const parsed = parseRules(content || editorRef.current?.getValue() || '')
     rulesRef.current = parsed
     setRules(parsed)
     loadAvailable()

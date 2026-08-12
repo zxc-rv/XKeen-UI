@@ -38,7 +38,7 @@ function useThemeMode(theme: ThemeMode) {
   }, [theme])
 }
 
-function settingsFromApi(data: any) {
+function settingsFromApi(data: any, includePlugin = true) {
   return {
     autoApply: data.gui.auto_apply,
     guiRouting: data.gui.routing,
@@ -55,7 +55,7 @@ function settingsFromApi(data: any) {
     proxySortOrder: data.clash_api?.proxy_sort_order ?? 'default',
     timezone: data.log.timezone,
     authEnabled: !!data.auth?.enabled,
-    multiRouter: data.plugins?.multi_router ?? false,
+    ...(includePlugin ? { multiRouter: data.plugins?.multi_router ?? false } : {}),
   }
 }
 
@@ -175,7 +175,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
           const appState = getAppState()
           const activeCores = core ?? appState.currentCore
-          if ((port || unix) && activeCores === 'mihomo' && !skipProxies) {
+          if ((port || unix) && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus === 'running') {
             fetchClashProxies(port ?? '', secret, silent, unix, resolvedBase)
           }
           return configs
@@ -253,8 +253,9 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
       const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
       const data = await apiCall<any>('GET', 'settings', undefined, { baseUrl: resolvedBase })
       if (data.success) {
-        dispatch({ type: 'SET_SETTINGS', settings: settingsFromApi(data) })
-        if (resolvedBase === null && Array.isArray(data.plugins?.routers)) {
+        const isLocal = resolvedBase === null
+        dispatch({ type: 'SET_SETTINGS', settings: settingsFromApi(data, isLocal) })
+        if (isLocal && Array.isArray(data.plugins?.routers)) {
           applyRoutersFromSettings(data.plugins.routers)
         }
       }
@@ -508,16 +509,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-3">
           <StatusBar
             onOpenCoreManage={() => openModal('showCoreManageModal')}
-            onOpenSettings={() => {
-              void (async () => {
-                try {
-                  await loadSettings()
-                } catch {
-                  showToast('Не удалось загрузить настройки', 'error')
-                }
-                openModal('showSettingsModal')
-              })()
-            }}
+            onOpenSettings={() => openModal('showSettingsModal')}
             onRefreshStatus={() => void checkStatus()}
             onOpenUpdate={(core: string) => {
               dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
