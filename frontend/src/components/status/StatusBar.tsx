@@ -6,8 +6,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect } from 'react'
 import { apiCall, capitalize } from '../../lib/api'
+import { useRoutersStore } from '../../lib/routers-store'
 import { syncClashApiPort, useAppContext } from '../../lib/store'
 import { cn } from '../../lib/utils'
+import { RouterSelect } from '../routers/RouterSelect'
 import type { ServiceStatus } from '../../lib/types'
 
 function StatusWaveform({ status }: { status: ServiceStatus }) {
@@ -42,19 +44,23 @@ export function StatusBar({
   onRefreshStatus,
   onOpenUpdate,
   onLogout,
+  onSwitchRouter,
 }: {
   onOpenCoreManage: () => void
   onOpenSettings: () => void
   onRefreshStatus: () => void
   onOpenUpdate: (core: string) => void
   onLogout: () => void
+  onSwitchRouter: (id: string) => void
 }) {
   const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
   const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI, isOutdatedCore, settings } = state
   const authEnabled = settings.authEnabled
 
+  const isRouterSwitching = useRoutersStore((s) => s.isSwitching)
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending' || serviceStatus === 'loading'
+  const routerSelectDisabled = isPending || isRouterSwitching
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -114,6 +120,7 @@ export function StatusBar({
     <TooltipProvider delayDuration={500}>
       <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
         <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
+          <RouterSelect onSwitch={onSwitchRouter} disabled={routerSelectDisabled} />
           <div className={badgeClasses}>
             <StatusWaveform status={serviceStatus} />
             {statusLabel}

@@ -77,7 +77,7 @@ export function RoutersListPanel() {
               <IconRouter className="text-muted-foreground size-5" />
             </EmptyMedia>
             <EmptyTitle className="text-ring text-[13px] font-normal tracking-normal">
-              Нет удалённых роутеров — добавьте через «+» над редактором
+              Нет удалённых роутеров — добавьте через «+» в строке состояния
             </EmptyTitle>
           </Empty>
         ) : (

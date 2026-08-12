@@ -9,7 +9,6 @@ import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
 import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID, routerId } from './lib/routers'
-import { RouterTabsCard } from './components/routers/RouterTabsBar'
 import { applyRoutersFromConfigs, refreshAllOnline } from './lib/routers-actions'
 import { useRoutersStore } from './lib/routers-store'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
@@ -502,8 +501,8 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
               openModal('showUpdateModal')
             }}
             onLogout={logout}
+            onSwitchRouter={switchRouter}
           />
-          <RouterTabsCard onSwitch={switchRouter} />
           <ConfigPanel
             editorRef={editorRef}
             configActionsRef={configActionsRef}
