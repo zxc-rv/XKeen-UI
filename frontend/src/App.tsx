@@ -480,9 +480,9 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   )
 
   return (
-    <div className="bg-muted dark:bg-background flex min-h-dvh flex-col md:h-dvh md:max-h-dvh md:overflow-hidden">
-      <main className="flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-3">
+    <div className="bg-muted dark:bg-background flex min-h-dvh flex-col">
+      <main className="flex flex-1 flex-col">
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-3">
           <StatusBar
             onOpenCoreManage={() => openModal('showCoreManageModal')}
             onOpenSettings={() => {
@@ -562,14 +562,7 @@ export default function App() {
           <Toast />
         </motion.div>
       ) : (
-        <motion.div
-          key="app"
-          className="md:h-dvh md:max-h-dvh md:overflow-hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-        >
+        <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
           <AppContent onLogout={handleLogout} />
         </motion.div>
       )}
