@@ -1,6 +1,6 @@
 use axum::body::{Body, to_bytes};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, Query, State};
+use axum::extract::{MatchedPath, Query, State};
 use axum::http::{HeaderMap, HeaderName, Request, StatusCode};
 use axum::response::{IntoResponse, Json, Response};
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
@@ -63,7 +63,15 @@ pub async fn get_device_list(State(state): State<AppState>) -> impl IntoResponse
     }
 }
 
-pub async fn proxy_http(State(state): State<AppState>, Path(path): Path<String>, req: Request<Body>) -> Response {
+fn raw_relay_path(matched_path: &str, request_path: &str) -> String {
+    let prefix_len = matched_path.split("{*").next().unwrap_or("").len();
+    request_path[prefix_len.min(request_path.len())..]
+        .trim_start_matches('/')
+        .to_string()
+}
+
+pub async fn proxy_http(State(state): State<AppState>, matched_path: MatchedPath, req: Request<Body>) -> Response {
+    let path = raw_relay_path(matched_path.as_str(), req.uri().path());
     let (parts, body) = req.into_parts();
     let port_override = header_value(&parts.headers, "x-clash-port");
     let secret_override = header_value(&parts.headers, "x-clash-secret");
@@ -102,8 +110,9 @@ pub async fn proxy_http(State(state): State<AppState>, Path(path): Path<String>,
 }
 
 pub async fn proxy_ws(
-    Path(path): Path<String>, Query(q): Query<ClashWsQuery>, ws: WebSocketUpgrade,
+    matched_path: MatchedPath, Query(q): Query<ClashWsQuery>, ws: WebSocketUpgrade, req: Request<Body>,
 ) -> impl IntoResponse {
+    let path = raw_relay_path(matched_path.as_str(), req.uri().path());
     let target = match resolve_clash_target(q.port, q.secret, q.unix).await {
         Ok(t) => t,
         Err(e) => return make_error(StatusCode::BAD_REQUEST, e),
