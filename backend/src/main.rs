@@ -432,7 +432,7 @@ async fn main() {
     version::start_update_checker(state.clone());
 
     if let Some(ref _token) = state.rci_token {
-        log("INFO", "RCI токен авторизации найден".into());
+        log("INFO", "RCI токен успешно загружен".into());
     } else {
         match state
             .http_client
