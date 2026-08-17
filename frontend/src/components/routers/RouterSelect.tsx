@@ -23,11 +23,13 @@ import { useRoutersStore } from '../../lib/routers-store'
 import { showToast } from '../../lib/store'
 import { RouterOnlineDot } from './RouterTabsBar'
 
+const itemClassName = 'min-w-0 [&>div]:min-w-0 [&>div]:w-0 [&>div]:flex-1 [&>div]:overflow-hidden'
+
 function RouterOptionLabel({ id, label }: { id: string; label: string }) {
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
       <RouterOnlineDot id={id} />
-      <span className="truncate">{label}</span>
+      <div className="min-w-0 flex-1 truncate">{label}</div>
     </span>
   )
 }
@@ -86,20 +88,20 @@ export function RouterSelect({
         disabled={disabled}
         onValueChange={(v) => !disabled && onSwitch(v)}
       >
-        <SelectTrigger size="sm" popper className="min-w-32 max-w-44">
+        <SelectTrigger popper className="h-9 w-56 shrink-0 overflow-hidden">
           <RouterOnlineDot id={activeId} />
-          <SelectValue />
+          <SelectValue className="min-w-0 flex-1 truncate" />
         </SelectTrigger>
-        <SelectContent position="popper" className="p-0">
+        <SelectContent position="popper" className="w-(--anchor-width) max-w-(--anchor-width) p-0">
           <div className="max-h-48 overflow-y-auto p-1">
             <SelectGroup className="p-0">
-              <SelectItem value={LOCAL_ROUTER_ID}>
+              <SelectItem value={LOCAL_ROUTER_ID} className={itemClassName}>
                 <RouterOptionLabel id={LOCAL_ROUTER_ID} label="Этот роутер" />
               </SelectItem>
               {routers.map((r) => {
                 const id = routerId(r)
                 return (
-                  <SelectItem key={id} value={id}>
+                  <SelectItem key={id} value={id} className={itemClassName}>
                     <RouterOptionLabel id={id} label={routerLabel(r)} />
                   </SelectItem>
                 )
