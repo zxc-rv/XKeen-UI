@@ -50,6 +50,10 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
 
     *state.settings.write().unwrap() = settings;
 
+    if let Err(e) = tokio::fs::create_dir_all(XKEEN_CONF_DIR).await {
+        return Json(serde_json::json!({"success": false, "error": e.to_string()}));
+    }
+
     let serialized = serde_json::to_string_pretty(&file_json).unwrap();
     let tmp = format!("{}.tmp", APP_CONFIG);
     match tokio::fs::write(&tmp, &serialized).await {
