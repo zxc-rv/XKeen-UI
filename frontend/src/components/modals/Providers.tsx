@@ -2,10 +2,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { IconDatabase, IconEye, IconRefresh, IconStack2 } from '@tabler/icons-react'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { IconDatabase, IconEye, IconFilter, IconLetterCase, IconRefresh, IconStack2, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall, clashFetch } from '../../lib/api'
 import { fetchClashProxies, useAppActions } from '../../lib/store'
@@ -167,12 +169,18 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   const viewContentCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [proxyProviders, setProxyProviders] = useState<ProxyProvider[]>([])
   const [ruleProviders, setRuleProviders] = useState<RuleProvider[]>([])
+  const [filter, setFilter] = useState('')
+  const [caseSensitive, setCaseSensitive] = useState(false)
   const title = kind === 'proxies' ? 'Провайдеры прокси' : 'Провайдеры правил'
 
   const clearViewContentCloseTimer = useCallback(() => {
     if (!viewContentCloseTimerRef.current) return
     clearTimeout(viewContentCloseTimerRef.current)
     viewContentCloseTimerRef.current = null
+  }, [])
+
+  const toggleCaseSensitive = useCallback(() => {
+    setCaseSensitive((prev) => !prev)
   }, [])
 
   useEffect(() => clearViewContentCloseTimer, [clearViewContentCloseTimer])
@@ -241,6 +249,37 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
     () => rows.filter((provider) => normalizeVehicleType(provider.vehicleType) === 'HTTP').map((provider) => provider.name),
     [rows]
   )
+
+  const filteredProxyProviders = useMemo(() => {
+    const query = filter.trim()
+    if (!query) return proxyProviders
+    const q = caseSensitive ? query : query.toLowerCase()
+    const match = (value?: string) => {
+      const text = value ?? ''
+      return caseSensitive ? text.includes(query) : text.toLowerCase().includes(q)
+    }
+    return proxyProviders.filter(
+      (provider) => match(provider.name) || match(formatVehicleType(provider.vehicleType)) || match(provider.type)
+    )
+  }, [proxyProviders, filter, caseSensitive])
+
+  const filteredRuleProviders = useMemo(() => {
+    const query = filter.trim()
+    if (!query) return ruleProviders
+    const q = caseSensitive ? query : query.toLowerCase()
+    const match = (value?: string) => {
+      const text = value ?? ''
+      return caseSensitive ? text.includes(query) : text.toLowerCase().includes(q)
+    }
+    return ruleProviders.filter(
+      (provider) =>
+        match(provider.name) ||
+        match(formatVehicleType(provider.vehicleType)) ||
+        match(provider.type) ||
+        match(provider.format) ||
+        match(provider.behavior)
+    )
+  }, [ruleProviders, filter, caseSensitive])
 
   async function updateProvider(name: string, vehicleType?: string) {
     if (normalizeVehicleType(vehicleType) !== 'HTTP') return
@@ -312,7 +351,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   }
 
   return (
-    <>
+    <TooltipProvider delayDuration={500} skipDelayDuration={0}>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,850px)]">
           <div className="flex max-h-[88dvh] flex-col gap-4 overflow-hidden md:max-h-[55dvh]">
@@ -326,6 +365,32 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                 {title}
               </DialogTitle>
             </DialogHeader>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <InputGroup>
+                <InputGroupInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Фильтр" />
+                <InputGroupAddon>
+                  <IconFilter />
+                </InputGroupAddon>
+                <InputGroupAddon align="inline-end" className="gap-0">
+                  {filter && (
+                    <InputGroupButton className="text-muted-foreground hover:text-destructive" onClick={() => setFilter('')}>
+                      <IconX size={13} />
+                    </InputGroupButton>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={toggleCaseSensitive}>
+                          <IconLetterCase size={16} />
+                        </InputGroupButton>
+                      }
+                    />
+                    <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
+                  </Tooltip>
+                </InputGroupAddon>
+              </InputGroup>
+            </div>
 
             <div className="border-border bg-input-background min-h-0 flex-1 scrollbar-thin overflow-auto rounded-xl border">
               {loading ? (
@@ -370,55 +435,63 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {proxyProviders.map((provider) => {
-                      const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
-                      const traffic = getTrafficSummary(provider.subscriptionInfo)
-                      return (
-                        <TableRow key={provider.name}>
-                          <TableCell className="max-w-72">
-                            <div className="flex items-center gap-2">
-                              <div className="truncate font-medium">{provider.name}</div>
-                              <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
-                                {provider.proxies?.length ?? 0}
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="ghost"
-                              className={cn(
-                                'rounded-full border-none px-2 text-xs',
-                                isHttp
-                                  ? 'bg-green-500/10! text-green-400!'
-                                  : normalizeVehicleType(provider.vehicleType) === 'FILE'
-                                    ? 'bg-orange-500/10! text-orange-400!'
-                                    : 'bg-blue-500/10! text-blue-400!'
-                              )}
-                            >
-                              {formatVehicleType(provider.vehicleType)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="min-w-42 font-medium tabular-nums">{traffic.total}</TableCell>
-                          <TableCell className="tabular-nums">{traffic.expire}</TableCell>
-                          <TableCell className="tabular-nums" title={provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}>
-                            {formatRelativeTime(provider.updatedAt)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {isHttp ? (
-                              <Button
+                    {filteredProxyProviders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
+                          Нет совпадений
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredProxyProviders.map((provider) => {
+                        const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
+                        const traffic = getTrafficSummary(provider.subscriptionInfo)
+                        return (
+                          <TableRow key={provider.name}>
+                            <TableCell className="max-w-72">
+                              <div className="flex items-center gap-2">
+                                <div className="truncate font-medium">{provider.name}</div>
+                                <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
+                                  {provider.proxies?.length ?? 0}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
                                 variant="ghost"
-                                size="icon-xs"
-                                className="hover:bg-transparent! hover:text-blue-400"
-                                onClick={() => updateProvider(provider.name, provider.vehicleType)}
-                                disabled={!!updatingName}
+                                className={cn(
+                                  'rounded-full border-none px-2 text-xs',
+                                  isHttp
+                                    ? 'bg-green-500/10! text-green-400!'
+                                    : normalizeVehicleType(provider.vehicleType) === 'FILE'
+                                      ? 'bg-orange-500/10! text-orange-400!'
+                                      : 'bg-blue-500/10! text-blue-400!'
+                                )}
                               >
-                                {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
-                              </Button>
-                            ) : null}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
+                                {formatVehicleType(provider.vehicleType)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="min-w-42 font-medium tabular-nums">{traffic.total}</TableCell>
+                            <TableCell className="tabular-nums">{traffic.expire}</TableCell>
+                            <TableCell className="tabular-nums" title={provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}>
+                              {formatRelativeTime(provider.updatedAt)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {isHttp ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="hover:bg-transparent! hover:text-blue-400"
+                                  onClick={() => updateProvider(provider.name, provider.vehicleType)}
+                                  disabled={!!updatingName}
+                                >
+                                  {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                                </Button>
+                              ) : null}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
                   </TableBody>
                 </Table>
               ) : (
@@ -444,66 +517,74 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {ruleProviders.map((provider, index) => {
-                      const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
-                      const hasFormat = !!provider.format?.trim()
-                      const showUpdatedAt = normalizeVehicleType(provider.vehicleType) !== 'INLINE'
-                      return (
-                        <TableRow key={provider.name}>
-                          <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
-                          <TableCell className="max-w-84">
-                            <div className="flex items-center gap-2">
-                              <div className="truncate font-medium">{provider.name}</div>
-                              <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
-                                {provider.ruleCount ?? 0}
+                    {filteredRuleProviders.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
+                          Нет совпадений
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredRuleProviders.map((provider, index) => {
+                        const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
+                        const hasFormat = !!provider.format?.trim()
+                        const showUpdatedAt = normalizeVehicleType(provider.vehicleType) !== 'INLINE'
+                        return (
+                          <TableRow key={provider.name}>
+                            <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
+                            <TableCell className="max-w-84">
+                              <div className="flex items-center gap-2">
+                                <div className="truncate font-medium">{provider.name}</div>
+                                <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
+                                  {provider.ruleCount ?? 0}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {hasFormat ? (
+                                <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
+                                  {FORMAT_LABELS[provider.format ?? ''] ?? provider.format}
+                                </Badge>
+                              ) : null}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="ghost" className="rounded-full border-none bg-emerald-500/10! px-2 text-xs text-emerald-400!">
+                                {provider.behavior ?? ''}
                               </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {hasFormat ? (
-                              <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
-                                {FORMAT_LABELS[provider.format ?? ''] ?? provider.format}
-                              </Badge>
-                            ) : null}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="ghost" className="rounded-full border-none bg-emerald-500/10! px-2 text-xs text-emerald-400!">
-                              {provider.behavior ?? ''}
-                            </Badge>
-                          </TableCell>
-                          <TableCell
-                            className="tabular-nums"
-                            title={showUpdatedAt && provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}
-                          >
-                            {showUpdatedAt ? formatRelativeTime(provider.updatedAt) : ''}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-0.5">
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                className="hover:bg-transparent! hover:text-blue-400"
-                                onClick={() => viewProviderContent(provider)}
-                                disabled={!!viewingName || !!updatingName}
-                              >
-                                {viewingName === provider.name ? <Spinner className="size-4" /> : <IconEye className="size-4" />}
-                              </Button>
-                              {isHttp ? (
+                            </TableCell>
+                            <TableCell
+                              className="tabular-nums"
+                              title={showUpdatedAt && provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}
+                            >
+                              {showUpdatedAt ? formatRelativeTime(provider.updatedAt) : ''}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-0.5">
                                 <Button
                                   variant="ghost"
                                   size="icon-xs"
                                   className="hover:bg-transparent! hover:text-blue-400"
-                                  onClick={() => updateProvider(provider.name, provider.vehicleType)}
-                                  disabled={!!updatingName}
+                                  onClick={() => viewProviderContent(provider)}
+                                  disabled={!!viewingName || !!updatingName}
                                 >
-                                  {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                                  {viewingName === provider.name ? <Spinner className="size-4" /> : <IconEye className="size-4" />}
                                 </Button>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
+                                {isHttp ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="hover:bg-transparent! hover:text-blue-400"
+                                    onClick={() => updateProvider(provider.name, provider.vehicleType)}
+                                    disabled={!!updatingName}
+                                  >
+                                    {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
                   </TableBody>
                 </Table>
               )}
@@ -534,6 +615,6 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
           </div>
         </DialogContent>
       </Dialog>
-    </>
+    </TooltipProvider>
   )
 }
