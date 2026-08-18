@@ -2,6 +2,7 @@ export const LOCAL_ROUTER_ID = 'local'
 export const DEFAULT_ROUTER_PORT = 1000
 export const ONLINE_PING_INTERVAL_MS = 30_000
 export const REMOTE_FETCH_TIMEOUT_MS = 12_000
+export const UPDATE_REQUEST_TIMEOUT_MS = 120_000
 
 export interface RemoteRouter {
   host: string
