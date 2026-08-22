@@ -36,7 +36,7 @@ export function parseClashApiCredentials(yamlContent: string): { port: string | 
   const unixMatch = yamlContent.match(/^external-controller-unix:\s*(?:(["'])(.*?)\1|([^#\n]+?))(?:\s+#.*)?$/m)
   const unixPath = unixMatch ? (unixMatch[2] ?? unixMatch[3])?.trim() || null : null
   const unix = unixPath ? unixPath.split(/[\\/]/).pop() || null : null
-  const port = yamlContent.match(/^external-controller:\s*['"']?[\w.-]+:(\d+)/m)?.[1] ?? null
+  const port = yamlContent.match(/^external-controller:\s*['"']?(?:0\.0\.0\.0|127\.0\.0\.1):(6553[0-5]|655[0-2]\d|65[0-4]\d{2}|6[0-4]\d{3}|[1-5]\d{4}|[0-9]{1,4})\b/m)?.[1] ?? null
   const secretMatch = yamlContent.match(/^secret:\s*(?:(["'])(.*?)\1|([^#\n]+?))(?:\s+#.*)?$/m)
   const secret = secretMatch ? (secretMatch[2] ?? secretMatch[3])?.trim() || null : null
   return { port, secret, unix }
