@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
+import { getActiveBaseUrl } from './routers-store'
 import { getStoredTheme } from './theme'
 import {
   DEFAULT_PING_TEST_TIMEOUT,
@@ -34,6 +35,7 @@ const initialSettings: AppSettings = {
   proxySortOrder: 'default',
   timezone: 0,
   authEnabled: false,
+  multiRouter: false,
 }
 
 const initialState: AppState = {
@@ -300,14 +302,15 @@ export function useConnectionsSync(
   clashApiPort: string | null,
   clashApiSecret?: string | null,
   serviceStatus?: string,
-  clashApiUnix?: string | null
+  clashApiUnix?: string | null,
+  baseUrl?: string | null
 ) {
   const dispatch = useStore((s) => s.dispatch)
 
   useEffect(() => {
     if ((!clashApiPort && !clashApiUnix) || serviceStatus !== 'running') return
 
-    const wsUrl = clashWsUrl(clashApiPort ?? '', 'connections', clashApiSecret, clashApiUnix)
+    const wsUrl = clashWsUrl(clashApiPort ?? '', 'connections', clashApiSecret, clashApiUnix, baseUrl)
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let isActive = true
@@ -377,7 +380,7 @@ export function useConnectionsSync(
       document.removeEventListener('visibilitychange', onVisibilityChange)
       if (touchHandler) document.removeEventListener('touchstart', touchHandler)
     }
-  }, [clashApiPort, clashApiSecret, clashApiUnix, dispatch, serviceStatus])
+  }, [clashApiPort, clashApiSecret, clashApiUnix, dispatch, serviceStatus, baseUrl])
 }
 
 // ─── Shared proxies store ───────────────────────────────────────────────────────
@@ -439,12 +442,22 @@ async function preloadIcons(urls: string[]) {
   }
 }
 
-export async function fetchClashProxies(port: string, secret?: string | null, silent = false, unix?: string | null): Promise<void> {
+export async function fetchClashProxies(
+  port: string,
+  secret?: string | null,
+  silent = false,
+  unix?: string | null,
+  baseUrl?: string | null
+): Promise<void> {
   if (!silent) useProxiesStore.setState({ loading: true, error: false })
   try {
     const [proxiesData, providersData] = await Promise.all([
-      clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix }),
-      clashFetch<{ providers?: Record<string, { proxies?: unknown[] }> }>(port, 'providers/proxies', { secret, unix }).catch(() => ({ providers: undefined })),
+      clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix, baseUrl }),
+      clashFetch<{ providers?: Record<string, { proxies?: unknown[] }> }>(port, 'providers/proxies', {
+        secret,
+        unix,
+        baseUrl,
+      }).catch(() => ({ providers: undefined })),
     ])
 
     if (proxiesData.proxies) {
@@ -484,7 +497,7 @@ export function syncClashApiPort(delayMs = 0): void {
 
   dispatch({ type: 'SET_DASHBOARD_PORT', port, secret, unix } as any)
   if ((port || unix) && currentCore === 'mihomo' && useStore.getState().serviceStatus === 'running') {
-    const fetchFn = () => fetchClashProxies(port ?? '', secret, true, unix)
+    const fetchFn = () => fetchClashProxies(port ?? '', secret, true, unix, getActiveBaseUrl())
     if (delayMs > 0) setTimeout(fetchFn, delayMs)
     else fetchFn()
   }

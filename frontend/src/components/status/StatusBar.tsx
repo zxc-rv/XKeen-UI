@@ -6,8 +6,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect } from 'react'
 import { apiCall, capitalize } from '../../lib/api'
+import { useRoutersStore } from '../../lib/routers-store'
 import { syncClashApiPort, useAppContext } from '../../lib/store'
 import { cn } from '../../lib/utils'
+import { RouterSelect } from '../routers/RouterSelect'
 import type { ServiceStatus } from '../../lib/types'
 
 function StatusWaveform({ status }: { status: ServiceStatus }) {
@@ -42,19 +44,24 @@ export function StatusBar({
   onRefreshStatus,
   onOpenUpdate,
   onLogout,
+  onSwitchRouter,
 }: {
   onOpenCoreManage: () => void
   onOpenSettings: () => void
   onRefreshStatus: () => void
   onOpenUpdate: (core: string) => void
   onLogout: () => void
+  onSwitchRouter: (id: string) => void
 }) {
   const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
   const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI, isOutdatedCore, settings } = state
   const authEnabled = settings.authEnabled
+  const multiRouter = settings.multiRouter
 
+  const isRouterSwitching = useRoutersStore((s) => s.isSwitching)
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending' || serviceStatus === 'loading'
+  const routerSelectDisabled = isPending || isRouterSwitching
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -171,6 +178,7 @@ export function StatusBar({
               </>
             )}
           </div>
+          {multiRouter && <RouterSelect onSwitch={onSwitchRouter} disabled={routerSelectDisabled} />}
         </div>
 
         <div className="order-1 flex items-center justify-center md:absolute md:left-1/2 md:order-2 md:-translate-x-1/2">

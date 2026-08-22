@@ -208,6 +208,21 @@ pub struct AppendConfigPaths {
     pub mihomo: Vec<String>,
 }
 
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct RemoteRouter {
+    pub host: String,
+    pub port: u16,
+    pub name: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct PluginsSettings {
+    pub multi_router: bool,
+    pub routers: Vec<RemoteRouter>,
+}
+
 #[derive(Clone, Serialize, Default)]
 pub struct AppSettings {
     pub gui: GuiSettings,
@@ -216,6 +231,7 @@ pub struct AppSettings {
     pub clash_api: ClashApiSettings,
     pub append_config_paths: AppendConfigPaths,
     pub auth: AuthSettings,
+    pub plugins: PluginsSettings,
 }
 
 impl<'de> Deserialize<'de> for AppSettings {
@@ -237,6 +253,8 @@ impl<'de> Deserialize<'de> for AppSettings {
             append_config_paths: AppendConfigPaths,
             #[serde(default)]
             auth: AuthSettings,
+            #[serde(default)]
+            plugins: PluginsSettings,
             #[serde(rename = "timezoneOffset")]
             legacy_tz: Option<i32>,
         }
@@ -251,6 +269,7 @@ impl<'de> Deserialize<'de> for AppSettings {
             clash_api: raw.clash_api,
             append_config_paths: raw.append_config_paths,
             auth: raw.auth,
+            plugins: raw.plugins,
         })
     }
 }
@@ -269,6 +288,18 @@ impl AppSettings {
                 }
             })
             .collect();
+    }
+
+    pub fn validate_plugins(&self) -> Result<(), String> {
+        for router in &self.plugins.routers {
+            if router.host.trim().is_empty() {
+                return Err("Хост роутера не может быть пустым".into());
+            }
+            if router.port == 0 {
+                return Err("Неверный порт роутера".into());
+            }
+        }
+        Ok(())
     }
 }
 

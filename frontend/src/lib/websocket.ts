@@ -1,6 +1,28 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { getActiveBaseUrl } from './routers-store'
 
-export function clashWsUrl(port: string, path: string, secret?: string | null, unix?: string | null) {
+function toWsOrigin(baseUrl: string | null | undefined): string {
+  if (!baseUrl) {
+    const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${location.host}`
+  }
+  try {
+    const url = new URL(baseUrl)
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+    return url.origin
+  } catch {
+    const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
+    return `${protocol}://${location.host}`
+  }
+}
+
+export function clashWsUrl(
+  port: string,
+  path: string,
+  secret?: string | null,
+  unix?: string | null,
+  baseUrl?: string | null
+) {
   const normalizedPath = path.replace(/^\/+/, '')
   const params = new URLSearchParams()
   const useUnix = !!unix
@@ -8,8 +30,15 @@ export function clashWsUrl(port: string, path: string, secret?: string | null, u
   if (!useUnix && secret) params.set('secret', secret)
   if (useUnix && unix) params.set('unix', unix)
   const qs = params.toString()
-  const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-  return `${protocol}://${location.host}/clash-ws/${normalizedPath}${qs ? `?${qs}` : ''}`
+  const resolved = baseUrl === undefined ? getActiveBaseUrl() : baseUrl
+  const origin = toWsOrigin(resolved)
+  return `${origin}/clash-ws/${normalizedPath}${qs ? `?${qs}` : ''}`
+}
+
+export function logWsUrl(file: string, baseUrl?: string | null) {
+  const resolved = baseUrl === undefined ? getActiveBaseUrl() : baseUrl
+  const origin = toWsOrigin(resolved)
+  return `${origin}/ws?file=${encodeURIComponent(file)}`
 }
 
 type WsMessageHandler = (data: WsMessage) => void
@@ -21,12 +50,14 @@ export interface WsMessage {
   error?: string
 }
 
-export function useWebSocket(onMessage: WsMessageHandler) {
+export function useWebSocket(onMessage: WsMessageHandler, baseUrl?: string | null) {
   const wsRef = useRef<WebSocket | null>(null)
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const currentFileRef = useRef('error.log')
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const connectRef = useRef<() => void>(() => {})
+  const baseUrlRef = useRef(baseUrl)
+  baseUrlRef.current = baseUrl
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -34,7 +65,7 @@ export function useWebSocket(onMessage: WsMessageHandler) {
     }
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current)
 
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?file=${currentFileRef.current}`)
+    const ws = new WebSocket(logWsUrl(currentFileRef.current, baseUrlRef.current))
     wsRef.current = ws
 
     ws.onopen = () => {
@@ -75,7 +106,7 @@ export function useWebSocket(onMessage: WsMessageHandler) {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current)
       wsRef.current?.close()
     }
-  }, [connect])
+  }, [connect, baseUrl])
 
   const send = useCallback((data: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
