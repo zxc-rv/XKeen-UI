@@ -49,7 +49,7 @@ tokio-tungstenite = "0.30"
 tower-http = { version = "0.7", features = ["fs", "cors", "set-header"] }
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
-yaml-rust2 = { version = "0.11", default-features = false }
+yaml-rust2 = { version = "0.12", default-features = false }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [profile.release]
