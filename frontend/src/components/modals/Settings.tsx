@@ -12,6 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
+import { LOCAL_ROUTER_ID } from '../../lib/routers'
+import { getActiveBaseUrl, useRoutersStore } from '../../lib/routers-store'
 import { useAppContext, useModalContext } from '../../lib/store'
 import type { AppSettings, ProxySortOrder, ThemeMode } from '../../lib/types'
 
@@ -84,6 +86,16 @@ const clashApiSettings: ToggleSetting[] = [
     path: 'clash_api.show_source_name',
     title: 'Показывать имя источника',
     description: 'Отображать имя клиента Keenetic вместо IP-адреса. Требуется актуальная версия KeeneticOS',
+  },
+]
+
+const pluginSettings: ToggleSetting[] = [
+  {
+    id: 'multi-router',
+    key: 'multiRouter',
+    path: 'plugins.multi_router',
+    title: 'Несколько роутеров',
+    description: 'Переключение между роутерами и массовое сохранение или применение конфигов',
   },
 ]
 
@@ -293,10 +305,12 @@ function AuthSettingsField({
   const [resetOpen, setResetOpen] = useState(false)
 
   const resetPassword = useCallback(async () => {
-    const res = await fetch('/api/auth/reset', { method: 'POST' })
+    const base = getActiveBaseUrl()
+    const res = await fetch(`${base ? `${base}/api` : '/api'}/auth/reset`, { method: 'POST' })
     const data = await res.json()
-    if (data.success) window.location.reload()
-    else showToast(data.error ?? 'Ошибка', 'error')
+    if (!data.success) return showToast(data.error ?? 'Ошибка', 'error')
+    if (base) showToast('Пароль сброшен — откройте панель роутера для установки нового')
+    else window.location.reload()
   }, [showToast])
 
   return (
@@ -352,8 +366,8 @@ export function SettingsModal() {
       const [section, key] = path.split('.')
       try {
         const body: Record<string, unknown> = {}
-        if (['gui', 'updater', 'log', 'auth', 'clash_api'].includes(section)) body[section] = key ? { [key]: value } : value
-        const result = await apiCall<any>('PATCH', 'settings', body)
+        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins'].includes(section)) body[section] = key ? { [key]: value } : value
+        const result = await apiCall<any>('PATCH', 'settings', body, section === 'plugins' ? { baseUrl: null } : undefined)
         if (!result.success) {
           showToast('Ошибка: ' + result.error, 'error')
           return false
@@ -370,7 +384,12 @@ export function SettingsModal() {
   const toggleSetting = useCallback(
     async (item: ToggleSetting, value: boolean) => {
       const ok = await saveSetting(item.path, value)
-      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { [item.key]: value } as Partial<AppSettings> })
+      if (!ok) return
+      dispatch({ type: 'SET_SETTINGS', settings: { [item.key]: value } as Partial<AppSettings> })
+      if (item.key === 'multiRouter' && !value) {
+        const { activeId, setActiveId } = useRoutersStore.getState()
+        if (activeId !== LOCAL_ROUTER_ID) setActiveId(LOCAL_ROUTER_ID)
+      }
     },
     [dispatch, saveSetting]
   )
@@ -488,6 +507,7 @@ export function SettingsModal() {
               <TabsTrigger value="gui">Режим GUI</TabsTrigger>
               <TabsTrigger value="clash-api">Clash API</TabsTrigger>
               <TabsTrigger value="updates">Обновления</TabsTrigger>
+              <TabsTrigger value="plugins">Плагины</TabsTrigger>
             </TabsList>
           </div>
 
@@ -659,6 +679,17 @@ export function SettingsModal() {
                     </Fragment>
                   ))}
                   <ProxySettingsField githubProxies={settings.githubProxies} onAddProxy={addProxy} onRemoveProxy={removeProxy} />
+                </FieldGroup>
+              </TabsContent>
+
+              <TabsContent value="plugins">
+                <FieldGroup className="gap-0!">
+                  {pluginSettings.map((item, index) => (
+                    <Fragment key={item.id}>
+                      <SwitchSettingField item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
+                      {index < pluginSettings.length - 1 && <Separator className="my-0" />}
+                    </Fragment>
+                  ))}
                 </FieldGroup>
               </TabsContent>
             </div>

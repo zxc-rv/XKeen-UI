@@ -29,6 +29,7 @@ export interface AppSettings {
   proxySortOrder: ProxySortOrder
   timezone: number
   authEnabled: boolean
+  multiRouter: boolean
 }
 
 export type ServiceStatus = 'loading' | 'running' | 'stopped' | 'pending'

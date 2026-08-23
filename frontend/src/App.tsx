@@ -8,6 +8,9 @@ import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
+import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID, routerId } from './lib/routers'
+import { applyRoutersFromSettings, refreshAllOnline } from './lib/routers-actions'
+import { useRoutersStore } from './lib/routers-store'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
 import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config, type ThemeMode } from './lib/types'
@@ -33,6 +36,27 @@ function useThemeMode(theme: ThemeMode) {
     media.addEventListener('change', syncTheme)
     return () => media.removeEventListener('change', syncTheme)
   }, [theme])
+}
+
+function settingsFromApi(data: any, includePlugin = true) {
+  return {
+    autoApply: data.gui.auto_apply,
+    guiRouting: data.gui.routing,
+    guiLog: data.gui.log,
+    autoCheckUI: data.updater.auto_check_ui ?? true,
+    autoCheckCore: data.updater.auto_check_core ?? true,
+    backupCore: data.updater.backup_core,
+    githubProxies: data.updater.github_proxy || [],
+    pingTestUrl: data.clash_api?.ping_url ?? DEFAULT_PING_TEST_URL,
+    pingTestTimeout: data.clash_api?.ping_timeout ?? DEFAULT_PING_TEST_TIMEOUT,
+    showSourceName: data.clash_api?.show_source_name ?? false,
+    hideUnavailableProxies: data.clash_api?.hide_unavailable_proxies ?? false,
+    hideUnavailableProxiesCounter: data.clash_api?.hide_unavailable_proxies_counter ?? 3,
+    proxySortOrder: data.clash_api?.proxy_sort_order ?? 'default',
+    timezone: data.log.timezone,
+    authEnabled: !!data.auth?.enabled,
+    ...(includePlugin ? { multiRouter: data.plugins?.multi_router ?? false } : {}),
+  }
 }
 
 interface ModalManagerProps {
@@ -111,14 +135,16 @@ const ModalManager = memo(function ModalManager({
 
 function AppContent({ onLogout }: { onLogout: () => void }) {
   const { dispatch, showToast } = useAppActions()
+  const multiRouter = useSettings((s) => s.multiRouter)
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
     switchTab: () => { },
     getActiveIndex: () => 0,
   })
 
-  const checkStatus = useCallback(async () => {
-    const data = await apiCall<any>('GET', 'control')
+  const checkStatus = useCallback(async (baseUrl?: string | null) => {
+    const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
+    const data = await apiCall<any>('GET', 'control', undefined, { baseUrl: resolvedBase })
     if (!data.success) return null
     const currentCore = data.currentCore || 'xray'
     dispatch({
@@ -132,10 +158,13 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   }, [dispatch])
 
   const loadConfigs = useCallback(
-    async (core?: string, skipProxies = false, silent = false): Promise<Config[]> => {
+    async (core?: string, skipProxies = false, silent = false, baseUrl?: string | null): Promise<Config[]> => {
       if (!silent) dispatch({ type: 'SET_CONFIGS_LOADING', loading: true })
+      const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
       try {
-        const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs')
+        const result = await apiCall<any>('GET', core ? `configs?core=${core}` : 'configs', undefined, {
+          baseUrl: resolvedBase,
+        })
         if (result.success && result.configs) {
           const configs: Config[] = result.configs.map((c: any) => ({ ...c, savedContent: c.content, isDirty: false }))
           dispatch({ type: 'SET_CONFIGS', configs })
@@ -147,7 +176,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           const appState = getAppState()
           const activeCores = core ?? appState.currentCore
           if ((port || unix) && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus === 'running') {
-            fetchClashProxies(port ?? '', secret, false, unix)
+            fetchClashProxies(port ?? '', secret, silent, unix, resolvedBase)
           }
           return configs
         } else {
@@ -164,16 +193,17 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   )
 
   const checkVersion = useCallback(
-    async (showUpdateToast = false) => {
+    async (showUpdateToast = false, baseUrl?: string | null) => {
       try {
-        const data = await apiCall<any>('GET', 'version')
+        const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
+        const data = await apiCall<any>('GET', 'version', undefined, { baseUrl: resolvedBase })
         if (!data.success) return
 
         const ui = data['xkeen-ui']
         if (!ui) return
 
         let isOutdatedCore = false
-        const coreVersions: Record<string, string> = {}
+        const coreVersions: Record<string, string> = { xray: '', mihomo: '' }
         for (const core of ['mihomo', 'xray']) {
           if (data[core]?.version) {
             coreVersions[core] = data[core].version
@@ -188,15 +218,13 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           isOutdatedCore,
         })
 
-        if (Object.keys(coreVersions).length > 0) {
-          const appState = getAppState()
-          dispatch({
-            type: 'SET_CORE_INFO',
-            currentCore: appState.currentCore,
-            coreVersions: { ...appState.coreVersions, ...coreVersions },
-            availableCores: appState.availableCores,
-          })
-        }
+        const appState = getAppState()
+        dispatch({
+          type: 'SET_CORE_INFO',
+          currentCore: appState.currentCore,
+          coreVersions,
+          availableCores: appState.availableCores,
+        })
 
         if (!showUpdateToast) return
         if (ui.show_toast) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true, id: 'update-ui', ...(ui.link && { action: { url: ui.link } }) })
@@ -220,37 +248,27 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     [dispatch, showToast]
   )
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      const data = await apiCall<any>('GET', 'settings')
-      if (data.success)
-        dispatch({
-          type: 'SET_SETTINGS',
-          settings: {
-            autoApply: data.gui.auto_apply,
-            guiRouting: data.gui.routing,
-            guiLog: data.gui.log,
-            autoCheckUI: data.updater.auto_check_ui ?? true,
-            autoCheckCore: data.updater.auto_check_core ?? true,
-            backupCore: data.updater.backup_core,
-            githubProxies: data.updater.github_proxy || [],
-            pingTestUrl: data.clash_api?.ping_url ?? DEFAULT_PING_TEST_URL,
-            pingTestTimeout: data.clash_api?.ping_timeout ?? DEFAULT_PING_TEST_TIMEOUT,
-            showSourceName: data.clash_api?.show_source_name ?? false,
-            hideUnavailableProxies: data.clash_api?.hide_unavailable_proxies ?? false,
-            hideUnavailableProxiesCounter: data.clash_api?.hide_unavailable_proxies_counter ?? 3,
-            proxySortOrder: data.clash_api?.proxy_sort_order ?? 'default',
-            timezone: data.log.timezone,
-            authEnabled: !!data.auth?.enabled,
-          },
-        })
-    }
+  const loadSettings = useCallback(
+    async (baseUrl?: string | null) => {
+      const resolvedBase = baseUrl === undefined ? useRoutersStore.getState().getActiveBaseUrl() : baseUrl
+      const data = await apiCall<any>('GET', 'settings', undefined, { baseUrl: resolvedBase })
+      if (data.success) {
+        const isLocal = resolvedBase === null
+        dispatch({ type: 'SET_SETTINGS', settings: settingsFromApi(data, isLocal) })
+        if (isLocal && Array.isArray(data.plugins?.routers)) {
+          applyRoutersFromSettings(data.plugins.routers)
+        }
+      }
+    },
+    [dispatch]
+  )
 
+  useEffect(() => {
     const init = async () => {
       try {
-        await loadSettings()
-        const currentCore = await checkStatus()
-        if (currentCore) loadConfigs(currentCore)
+        await loadSettings(null)
+        const currentCore = await checkStatus(null)
+        await loadConfigs(currentCore ?? undefined, false, false, null)
         checkVersion(true)
       } catch {
         showToast('Ошибка инициализации', 'error')
@@ -258,7 +276,61 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     }
 
     init()
-  }, [checkStatus, loadConfigs, dispatch, showToast, checkVersion])
+  }, [checkStatus, loadConfigs, loadSettings, dispatch, showToast, checkVersion])
+
+  useEffect(() => {
+    if (multiRouter) return
+    const { activeId, setActiveId } = useRoutersStore.getState()
+    if (activeId === LOCAL_ROUTER_ID) return
+    setActiveId(LOCAL_ROUTER_ID)
+    void (async () => {
+      try {
+        const currentCore = await checkStatus(null)
+        await loadConfigs(currentCore ?? undefined, false, true, null)
+        await loadSettings(null)
+      } catch {
+        dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+      }
+    })()
+  }, [multiRouter, checkStatus, loadConfigs, loadSettings, dispatch])
+
+  // Ping remote routers when the plugin is enabled.
+  const onlineTargetsKey = useRoutersStore((s) =>
+    [LOCAL_ROUTER_ID, ...s.routers.map(routerId)].join('|')
+  )
+  useEffect(() => {
+    if (!multiRouter) return
+    void refreshAllOnline()
+    const timer = setInterval(() => void refreshAllOnline(), ONLINE_PING_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [onlineTargetsKey, multiRouter])
+
+  const switchRouter = useCallback(
+    async (id: string) => {
+      const { activeId, setActiveId, setSwitching } = useRoutersStore.getState()
+      if (id === activeId) return
+
+      const dirty = getAppState().configs.some((c) => c.isDirty)
+      if (dirty && !confirm('Несохранённые изменения будут потеряны. Переключить роутер?')) return
+
+      setSwitching(true)
+      setActiveId(id)
+
+      try {
+        const remoteBase = id === LOCAL_ROUTER_ID ? null : useRoutersStore.getState().getBaseUrlForId(id)
+        const currentCore = await checkStatus(remoteBase)
+        if (currentCore) await loadConfigs(currentCore, false, true, remoteBase)
+        else dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+        await Promise.all([checkVersion(false, remoteBase), loadSettings(remoteBase)])
+      } catch (e: any) {
+        dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+        showToast(e?.message || 'Не удалось подключиться к роутеру', 'error')
+      } finally {
+        useRoutersStore.getState().setSwitching(false)
+      }
+    },
+    [checkStatus, checkVersion, dispatch, loadConfigs, loadSettings, showToast]
+  )
 
   const switchCore = useCallback(
     async (core: string) => {
@@ -444,6 +516,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
               openModal('showUpdateModal')
             }}
             onLogout={logout}
+            onSwitchRouter={switchRouter}
           />
           <ConfigPanel
             editorRef={editorRef}

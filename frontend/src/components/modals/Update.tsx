@@ -11,6 +11,8 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { apiCall, capitalize } from '../../lib/api'
+import { UPDATE_REQUEST_TIMEOUT_MS } from '../../lib/routers'
+import { getActiveBaseUrl, isLocalActive } from '../../lib/routers-store'
 import { useAppContext, useModalContext, useSettings } from '../../lib/store'
 import type { Release } from '../../lib/types'
 import { cn } from '../../lib/utils'
@@ -157,42 +159,47 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
       status: 'pending',
       pendingText: 'Обновление...',
     })
+    const baseUrl = getActiveBaseUrl()
     try {
       const selectedRelease = releases.find((r) => r.version === selectedVersion)
-      const res = await fetch('/api/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await apiCall<{ success?: boolean; error?: string }>(
+        'POST',
+        'update',
+        {
           core: updateModalCore,
           version: selectedVersion,
           backup_core: backupCore,
           ...(selectedVersion === 'Prerelease-Alpha' && { assets: selectedRelease?.assets ?? [] }),
-        }),
-      })
-      const data = await res.json()
+        },
+        { baseUrl, timeoutMs: UPDATE_REQUEST_TIMEOUT_MS },
+      )
       if (data.success) {
         showToast(`Установлен ${coreLabel} ${selectedVersion}`)
         if (updateModalCore === 'self') {
-          setTimeout(() => location.reload(), 100)
-          return
+          if (isLocalActive()) {
+            setTimeout(() => location.reload(), 100)
+            return
+          }
+          await new Promise((r) => setTimeout(r, 2500))
+          onInstalled()
+        } else {
+          onInstalled()
         }
-        onInstalled()
       } else {
         showToast(data.error || 'Ошибка установки', 'error')
       }
     } catch {
       showToast('Ошибка установки', 'error')
     } finally {
-      if (updateModalCore !== 'self') {
-        setInstalling(false)
-        apiCall<any>('GET', 'control')
-          .then((data) => {
-            if (data.success) {
-              dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
-            }
-          })
-          .catch(() => dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' }))
-      }
+      setInstalling(false)
+      if (updateModalCore === 'self' && isLocalActive()) return
+      apiCall<any>('GET', 'control', undefined, { baseUrl: getActiveBaseUrl() })
+        .then((data) => {
+          if (data.success) {
+            dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
+          }
+        })
+        .catch(() => dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' }))
     }
   }
 
