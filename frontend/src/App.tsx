@@ -17,7 +17,7 @@ import { parse as parseJsonc } from 'jsonc-parser'
 const CommentsWarningModal = lazyLoad(() => import('./components/modals/CommentsWarning'), 'CommentsWarningModal')
 const CoreManageModal = lazyLoad(() => import('./components/modals/CoreManagement'), 'CoreManageModal')
 const UpdateModal = lazyLoad(() => import('./components/modals/Update'), 'UpdateModal')
-const ImportModal = lazyLoad(() => import('./components/modals/AddProxy'), 'ImportModal')
+const ImportModal = lazyLoad(() => import('./components/modals/AddOutbound'), 'ImportModal')
 const TemplateModal = lazyLoad(() => import('./components/modals/Templates'), 'TemplateModal')
 const SettingsModal = lazyLoad(() => import('./components/modals/Settings'), 'SettingsModal')
 const GeoScanModal = lazyLoad(() => import('./components/modals/GeoScan'), 'GeoScanModal')

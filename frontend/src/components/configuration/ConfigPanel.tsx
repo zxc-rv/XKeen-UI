@@ -844,7 +844,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
                         <DropdownMenuGroup>
                           <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                           <DropdownMenuItem onClick={onOpenImport}>
-                            <IconLink /> Добавить прокси
+                            <IconLink /> Добавить подключение
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={onOpenTemplate}>
                             <IconFileText /> Шаблоны конфигураций

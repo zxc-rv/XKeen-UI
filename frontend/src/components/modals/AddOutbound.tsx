@@ -98,7 +98,7 @@ interface Props {
 }
 
 export function ImportModal({ onGenerate, onAddToConfig }: Props) {
-  const { showToast } = useAppContext()
+  const { showToast, state } = useAppContext()
   const { modals, dispatch } = useModalContext()
   const [uri, setUri] = useState('')
   const [result, setResult] = useState<{
@@ -157,9 +157,11 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
           {/* Шапка модалки*/}
           <DialogHeader className="shrink-0 pb-1">
             <DialogTitle className="flex items-center gap-2 pb-2">
-              <IconLink size={24} className="text-chart-2" /> Добавить прокси
+              <IconLink size={24} className="text-chart-2" /> Добавить подключение
             </DialogTitle>
-            <DialogDescription>Вставьте ссылку в формате protocol://</DialogDescription>
+            <DialogDescription>
+              Вставьте ссылку в формате protocol://{state.currentCore === 'mihomo' && ' или https://'}
+            </DialogDescription>
           </DialogHeader>
 
           {/* Основная контентная часть */}
