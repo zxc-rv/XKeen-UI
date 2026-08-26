@@ -654,13 +654,13 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
 
             {isMihomo && currentPanel === 'selectors' && (
               <div className="ml-auto flex items-center gap-1.5">
-                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('rules')}>
-                  <IconListDetails data-icon="inline-start" />
-                  Пров. правил
-                </Button>
                 <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('proxies')}>
                   <IconListDetails data-icon="inline-start" />
-                  Пров. прокси
+                  Подписки
+                </Button>
+                <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('rules')}>
+                  <IconListDetails data-icon="inline-start" />
+                  Рулсеты
                 </Button>
                 <Tooltip>
                   <TooltipTrigger render={
