@@ -274,7 +274,6 @@ function convertToMihomoYaml(proxyConfig) {
     const serverName = tls.serverName || reality.serverName
     Object.assign(common, {
       tls: true,
-      tfo: true,
       'client-fingerprint': tls.fingerprint || reality.fingerprint,
       alpn: tls.alpn,
     })
@@ -414,7 +413,7 @@ function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
               'User-Agent': '["ClashMeta/1.19.24; mihomo/1.19.24"]',
               'x-hwid': `["${randomHwid()}"]`,
             },
-            override: { udp: true, tfo: true },
+            override: { udp: true },
           },
         },
         2

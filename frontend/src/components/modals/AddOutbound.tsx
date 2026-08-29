@@ -1,6 +1,5 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -135,7 +134,6 @@ interface SubscriptionForm {
   headerEnable: boolean
   userAgent: string
   hwid: string
-  tfo: boolean
   filterEnable: boolean
   filter: string
   excludeFilter: string
@@ -147,7 +145,7 @@ function generateSubYaml(form: SubscriptionForm): string {
     type: 'http',
     url: form.url,
     interval: form.interval,
-    override: { udp: true, tfo: form.tfo },
+    override: { udp: true },
   }
 
   if (form.hcEnable) {
@@ -189,7 +187,6 @@ function createDefaultForm(url: string, existingConfig: string): SubscriptionFor
     headerEnable: true,
     userAgent: USER_AGENTS[0],
     hwid: randomHwid(),
-    tfo: true,
     filterEnable: false,
     filter: '',
     excludeFilter: '',
@@ -381,14 +378,6 @@ export function ImportModal({ onGenerate, onAddToConfig }: Props) {
                             />
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id="sub-tfo"
-                              checked={subForm.tfo}
-                              onCheckedChange={(v) => updateSubField('tfo', !!v)}
-                            />
-                            <Label htmlFor="sub-tfo" className="text-xs">TCP Fast Open</Label>
-                          </div>
                         </div>
                       </fieldset>
 
