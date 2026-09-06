@@ -57,6 +57,7 @@ const initialState: AppState = {
   showCoreManageModal: false,
   showUpdateModal: false,
   showImportModal: false,
+  showImportAmneziaModal: false,
   showTemplateModal: false,
   showSettingsModal: false,
   showCommentsWarningModal: false,
@@ -151,6 +152,7 @@ type CoreState = Omit<
   | 'showCommentsWarningModal'
   | 'showGeoScanModal'
   | 'showBackupsModal'
+  | 'showImportAmneziaModal'
   | 'updateModalCore'
   | 'pendingSaveAction'
   | 'toasts'
@@ -166,6 +168,7 @@ type ModalState = Pick<
   | 'showCoreManageModal'
   | 'showUpdateModal'
   | 'showImportModal'
+  | 'showImportAmneziaModal'
   | 'showTemplateModal'
   | 'showSettingsModal'
   | 'showCommentsWarningModal'
@@ -263,6 +266,7 @@ export function useModalContext() {
         showCoreManageModal: s.showCoreManageModal,
         showUpdateModal: s.showUpdateModal,
         showImportModal: s.showImportModal,
+        showImportAmneziaModal: s.showImportAmneziaModal,
         showTemplateModal: s.showTemplateModal,
         showSettingsModal: s.showSettingsModal,
         showCommentsWarningModal: s.showCommentsWarningModal,

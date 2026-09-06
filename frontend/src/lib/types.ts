@@ -107,6 +107,7 @@ export interface AppState {
   showCoreManageModal: boolean
   showUpdateModal: boolean
   showImportModal: boolean
+  showImportAmneziaModal: boolean
   showTemplateModal: boolean
   showSettingsModal: boolean
   showCommentsWarningModal: boolean
@@ -142,6 +143,7 @@ export type AppAction =
       | 'showCoreManageModal'
       | 'showUpdateModal'
       | 'showImportModal'
+      | 'showImportAmneziaModal'
       | 'showTemplateModal'
       | 'showSettingsModal'
       | 'showCommentsWarningModal'
