@@ -26,12 +26,12 @@ function AlertDialogPortal({ ...props }: React.ComponentProps<typeof AlertDialog
 
 function AlertDialogOverlay({ className, ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Backdrop>) {
   return (
-      <AlertDialogPrimitive.Backdrop
-        data-slot="alert-dialog-overlay"
-        className={cn(
-          'data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 fixed inset-0 z-50 bg-black/10 duration-200 supports-backdrop-filter:backdrop-blur-xs',
-          className
-        )}
+    <AlertDialogPrimitive.Backdrop
+      data-slot="alert-dialog-overlay"
+      className={cn(
+        'data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 fixed inset-0 z-40 bg-black/10 duration-200 supports-backdrop-filter:backdrop-blur-xs',
+        className
+      )}
       {...props}
     />
   )
