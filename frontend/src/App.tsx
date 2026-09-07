@@ -18,6 +18,7 @@ const CommentsWarningModal = lazyLoad(() => import('./components/modals/Comments
 const CoreManageModal = lazyLoad(() => import('./components/modals/CoreManagement'), 'CoreManageModal')
 const UpdateModal = lazyLoad(() => import('./components/modals/Update'), 'UpdateModal')
 const ImportModal = lazyLoad(() => import('./components/modals/AddOutbound'), 'ImportModal')
+const ImportAmneziaModal = lazyLoad(() => import('./components/modals/AddAmnezia'), 'ImportAmneziaModal')
 const TemplateModal = lazyLoad(() => import('./components/modals/Templates'), 'TemplateModal')
 const SettingsModal = lazyLoad(() => import('./components/modals/Settings'), 'SettingsModal')
 const GeoScanModal = lazyLoad(() => import('./components/modals/GeoScan'), 'GeoScanModal')
@@ -58,6 +59,7 @@ const ModalManager = memo(function ModalManager({
   const mountCoreManage = useLazyMount(modals.showCoreManageModal)
   const mountUpdate = useLazyMount(modals.showUpdateModal)
   const mountImport = useLazyMount(modals.showImportModal)
+  const mountAmneziaImport = useLazyMount(modals.showImportAmneziaModal)
   const mountTemplate = useLazyMount(modals.showTemplateModal)
   const mountSettings = useLazyMount(modals.showSettingsModal)
   const mountGeoScan = useLazyMount(modals.showGeoScanModal)
@@ -88,6 +90,13 @@ const ModalManager = memo(function ModalManager({
       {mountImport && (
         <LazyBoundary>
           <ImportModal onGenerate={onGenerate} onAddToConfig={onAddToConfig} />
+        </LazyBoundary>
+      )}
+      {mountAmneziaImport && (
+        <LazyBoundary>
+          <ImportAmneziaModal
+            onAddToConfig={onAddToConfig}
+          />
         </LazyBoundary>
       )}
       {mountTemplate && (
@@ -449,6 +458,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             editorRef={editorRef}
             configActionsRef={configActionsRef}
             onOpenImport={() => openModal('showImportModal')}
+            onOpenImportAmnezia={() => openModal('showImportAmneziaModal')}
             onOpenTemplate={() => openModal('showTemplateModal')}
             onOpenGeoScan={() => openModal('showGeoScanModal')}
             onOpenBackups={() => openModal('showBackupsModal')}

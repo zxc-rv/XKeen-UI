@@ -26,6 +26,7 @@ import {
   IconExternalLinkFilled,
   IconFilePlus,
   IconFileText,
+  IconFileUpload,
   IconLink,
   IconListDetails,
   IconPencil,
@@ -81,6 +82,7 @@ const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
 
 interface Props {
   onOpenImport: () => void
+  onOpenImportAmnezia: () => void
   onOpenTemplate: () => void
   onOpenGeoScan: () => void
   onOpenBackups: () => void
@@ -112,6 +114,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   const [inputValue, setInputValue] = useState('')
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const isCoreMihomo = currentCore === 'mihomo'
 
   const openDialog = (value: NonNullable<DialogState>) => {
     pendingInputFocusRef.current = value.type !== 'delete'
@@ -121,11 +124,12 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
 
   const closeDialog = () => setPopoverOpen(false)
 
+
   const fileExt = useMemo(() => {
     if (!dialogData || dialogData.type === 'delete') return ''
     if (dialogData.type === 'rename') return dialogData.file.match(/(\.[^.]+)$/)?.[1] ?? ''
-    return dialogData.isLst ? '.lst' : currentCore === 'mihomo' ? '.yaml' : '.json'
-  }, [dialogData, currentCore])
+    return dialogData.isLst ? '.lst' : isCoreMihomo ? '.yaml' : '.json'
+  }, [dialogData, isCoreMihomo])
 
   async function commitDialog() {
     if (!dialogData) return
@@ -272,7 +276,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   )
 }
 
-export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpenBackups, onRefreshConfigs, editorRef, configActionsRef }: Props) {
+export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate, onOpenGeoScan, onOpenBackups, onRefreshConfigs, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
@@ -283,7 +287,9 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
   const activeClashApiPort = isRunning ? clashApiPort : null
   const activeClashApiUnix = isRunning ? clashApiUnix : null
 
-  useConnectionsSync(currentCore === 'mihomo' ? activeClashApiPort : null, clashApiSecret, serviceStatus, activeClashApiUnix)
+  const isCoreMihomo = currentCore === 'mihomo'
+
+  useConnectionsSync(isCoreMihomo ? activeClashApiPort : null, clashApiSecret, serviceStatus, activeClashApiUnix)
 
   const [activeConfigFile, setActiveConfigFile] = useState<string>(() => localStorage.getItem('lastSelectedTab') ?? '')
   const activeConfigIndex = useMemo(() => {
@@ -345,7 +351,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
   const configFilenamesKey = configs.map((c) => c.file).join(',')
 
   useEffect(() => {
-    if (currentCore !== 'mihomo' || (!activeClashApiPort && !activeClashApiUnix)) return
+    if (!isCoreMihomo || (!activeClashApiPort && !activeClashApiUnix)) return
     let cancelled = false
     const timer = setTimeout(() => {
       if (cancelled) return
@@ -359,7 +365,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
       cancelled = true
       clearTimeout(timer)
     }
-  }, [currentCore, activeClashApiPort, clashApiSecret, activeClashApiUnix])
+  }, [isCoreMihomo, activeClashApiPort, clashApiSecret, activeClashApiUnix])
 
   const changeMode = useCallback(
     async (newMode: ClashMode) => {
@@ -517,7 +523,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
 
     let url = 'configs'
     if (!cfg.file.startsWith('/opt/etc/xkeen')) {
-      if (currentCore === 'mihomo') {
+      if (isCoreMihomo) {
         url += '?validate=mihomo'
       } else if (currentCore === 'xray') {
         url += '?validate=xray'
@@ -590,7 +596,7 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
   const coreConfigs = configs.filter((c) => !c.file.startsWith('/opt/etc/xkeen'))
   const xkeenConfigs = configs.filter((c) => c.file.startsWith('/opt/etc/xkeen'))
 
-  const isMihomo = currentCore === 'mihomo' && (!!activeClashApiPort || !!activeClashApiUnix)
+  const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const usefulLinks = [
     { title: 'Инструкция XKeen', url: 'https://github.com/Corvus-Malus/XKeen/' },
@@ -846,6 +852,11 @@ export function ConfigPanel({ onOpenImport, onOpenTemplate, onOpenGeoScan, onOpe
                           <DropdownMenuItem onClick={onOpenImport}>
                             <IconLink /> Добавить подключение
                           </DropdownMenuItem>
+                          {isCoreMihomo && (
+                            <DropdownMenuItem onClick={onOpenImportAmnezia}>
+                              <IconFileUpload /> Импорт AmneziaWG
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={onOpenTemplate}>
                             <IconFileText /> Шаблоны конфигураций
                           </DropdownMenuItem>
