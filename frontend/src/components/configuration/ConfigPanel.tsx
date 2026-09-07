@@ -850,11 +850,11 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                         <DropdownMenuGroup>
                           <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                           <DropdownMenuItem onClick={onOpenImport}>
-                            <IconLink /> Добавить подключение протокола
+                            <IconLink /> Добавить подключение
                           </DropdownMenuItem>
                           {isCoreMihomo && (
                             <DropdownMenuItem onClick={onOpenImportAmnezia}>
-                              <IconFileUpload /> Добавить подключение Amnezia
+                              <IconFileUpload /> Импорт AmneziaWG
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onClick={onOpenTemplate}>

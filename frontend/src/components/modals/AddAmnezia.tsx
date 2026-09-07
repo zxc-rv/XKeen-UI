@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { copyText } from '@/lib/utils'
 import { IconCheck, IconCopy, IconFileUpload, IconPlus, IconX } from '@tabler/icons-react'
@@ -467,7 +468,6 @@ export function ImportAmneziaModal({ onAddToConfig }: Props) {
 
   const [file, setFile] = useState<File | null>(null)
   const [result, setResult] = useState<string>('')
-  const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [detectedVersion, setDetectedVersion] = useState<DetectedAmneziaVersion | null>(null)
@@ -475,7 +475,6 @@ export function ImportAmneziaModal({ onAddToConfig }: Props) {
   function reset() {
     setFile(null)
     setResult('')
-    setError('')
     setCopied(false)
 
     if (inputRef.current) {
@@ -494,7 +493,6 @@ export function ImportAmneziaModal({ onAddToConfig }: Props) {
   }
 
   async function parseFile(selectedFile: File) {
-    setError('')
     setResult('')
     setFile(selectedFile)
 
@@ -509,7 +507,9 @@ export function ImportAmneziaModal({ onAddToConfig }: Props) {
 
       setResult(generated)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось обработать конфигурацию Amnezia')
+      const message = e instanceof Error ? e.message : 'Не удалось обработать конфигурацию Amnezia'
+      showToast({ title: 'Ошибка импорта', body: message }, 'error')
+      setFile(null)
     }
   }
 
@@ -563,14 +563,14 @@ export function ImportAmneziaModal({ onAddToConfig }: Props) {
               Импорт AmneziaWG
             </DialogTitle>
 
-            <DialogDescription>Выберите конфигурацию AmneziaWG (.conf) для преобразования в формат mihomo.</DialogDescription>
+            <DialogDescription>Выберите конфигурацию AmneziaWG (.conf) для преобразования в формат Mihomo</DialogDescription>
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
             {!result && (
-              <div
+              <Empty
                 className={[
-                  'flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-6 transition-colors',
+                  'min-h-48 cursor-pointer border p-6 transition-colors',
                   isDragging ? 'border-primary bg-primary/5' : 'border-border bg-muted/20 hover:bg-muted/40',
                 ].join(' ')}
                 onClick={() => inputRef.current?.click()}
@@ -583,25 +583,17 @@ export function ImportAmneziaModal({ onAddToConfig }: Props) {
               >
                 <input ref={inputRef} type="file" accept=".conf,.cfg,text/plain" className="hidden" onChange={handleFileChange} />
 
-                <IconFileUpload className="text-muted-foreground mb-3 size-10" />
-
-                <div className="text-sm font-medium">Перетащите файл сюда</div>
-
-                <div className="text-muted-foreground mt-1 text-xs">или нажмите для выбора файла</div>
-
-                <div className="text-muted-foreground mt-3 text-[11px]">Поддерживается конфигурация AmneziaWG</div>
-              </div>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <IconFileUpload className="size-6" />
+                  </EmptyMedia>
+                  <EmptyTitle>Перетащите файл .conf сюда</EmptyTitle>
+                  <EmptyDescription>или нажмите для выбора файла</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
 
-            {file && !result && !error && <div className="text-muted-foreground text-center text-xs">Обработка файла «{file.name}»…</div>}
-
-            {error && (
-              <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-3 text-sm">
-                <div className="font-medium">Не удалось импортировать конфигурацию</div>
-
-                <div className="mt-1 text-xs">{error}</div>
-              </div>
-            )}
+            {file && !result && <div className="text-muted-foreground text-center text-xs">Обработка файла «{file.name}»…</div>}
 
             {result && (
               <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
@@ -660,12 +652,6 @@ export function ImportAmneziaModal({ onAddToConfig }: Props) {
                   </Button>
                 </div>
               </div>
-            )}
-
-            {error && (
-              <Button variant="outline" onClick={() => inputRef.current?.click()}>
-                Выбрать другой файл
-              </Button>
             )}
           </div>
         </DialogContent>
