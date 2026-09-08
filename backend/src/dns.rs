@@ -2,9 +2,10 @@ use crate::logger::log;
 use crate::types::*;
 use axum::extract::State;
 use axum::response::{IntoResponse, Json};
+use reqwest::Method;
 use serde::Deserialize;
+use serde_json::json;
 use std::time::Duration;
-use tokio::process::Command;
 
 #[derive(Deserialize)]
 pub struct DnsEnableReq {
@@ -54,55 +55,87 @@ fn get_br0_ip() -> Result<String, String> {
     Err("Не удалось получить IP адрес br0".into())
 }
 
-async fn run_ndmc(command: &str) -> Result<String, String> {
-    let output = Command::new("ndmc")
-        .args(["-c", command])
-        .output()
-        .await
-        .map_err(|e| format!("Ошибка запуска ndmc: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
-    if !output.status.success() || !stderr.is_empty() {
-        return Err(if stderr.is_empty() {
-            format!("ndmc завершился с ошибкой (код {})", output.status)
-        } else {
-            stderr
-        });
+async fn fetch_rci(state: &AppState, endpoint: &str) -> Result<serde_json::Value, String> {
+    let mut req = state
+        .http_client
+        .get(format!("http://127.0.0.1:79/rci/show/{endpoint}"))
+        .timeout(Duration::from_secs(5));
+    if let Some(ref token) = state.rci_token {
+        req = req.header("X-Ndma-Tkn", token);
     }
 
-    Ok(stdout)
+    let response = req.send().await.map_err(|e| format!("Ошибка запроса RCI ({endpoint}): {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("RCI ({endpoint}) вернул {}", response.status()));
+    }
+
+    response.json().await.map_err(|e| format!("Ошибка парсинга RCI ({endpoint}): {e}"))
 }
 
-async fn run_ndmc_step(step: &str, command: &str) -> Result<(), String> {
-    match run_ndmc(command).await {
+async fn fetch_running_config(state: &AppState) -> Result<String, String> {
+    let data = fetch_rci(state, "running-config").await?;
+    let lines = data
+        .get("message")
+        .and_then(|m| m.as_array())
+        .ok_or_else(|| "В ответе RCI отсутствует массив 'message'".to_string())?;
+
+    let config_str = lines
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect::<Vec<&str>>()
+        .join("\n");
+
+    Ok(config_str)
+}
+
+async fn req_rci(
+    state: &AppState,
+    method: Method,
+    path: &str,
+    payload: serde_json::Value,
+) -> Result<(), String> {
+    let mut req = state
+        .http_client
+        .request(method.clone(), format!("http://127.0.0.1:79/rci/{path}"))
+        .json(&payload)
+        .timeout(Duration::from_secs(5));
+        
+    if let Some(ref token) = state.rci_token {
+        req = req.header("X-Ndma-Tkn", token);
+    }
+
+    let response = req.send().await.map_err(|e| format!("Ошибка {method} RCI (/{path}): {e}"))?;
+    
+    let status = response.status();
+    if !status.is_success() {
+        let err = response.text().await.unwrap_or_default();
+        return Err(format!("RCI вернул код {}, ответ: {}", status, err));
+    }
+
+    Ok(())
+}
+
+async fn run_rci_step(
+    state: &AppState,
+    step: &str,
+    method: Method,
+    path: &str,
+    payload: serde_json::Value,
+) -> Result<(), String> {
+    match req_rci(state, method.clone(), path, payload).await {
         Ok(_) => {
-            log("INFO", format!("DNS: '{step}' ({command}) — успешно"));
+            log("INFO", format!("DNS: '{step}' ({method} /{path}) — успешно"));
             Ok(())
         }
         Err(e) => {
-            log("ERROR", format!("DNS: '{step}' ({command}) — ошибка: {e}"));
+            log("ERROR", format!("DNS: '{step}' ({method} /{path}) — ошибка: {e}"));
             Err(format!("{step}: {e}"))
         }
     }
 }
 
 async fn find_ignore_provider_target(state: &AppState) -> Result<String, String> {
-    let mut req = state
-        .http_client
-        .get("http://127.0.0.1:79/rci/show/interface")
-        .timeout(Duration::from_secs(5));
-    if let Some(ref token) = state.rci_token {
-        req = req.header("X-Ndma-Tkn", token);
-    }
-
-    let response = req.send().await.map_err(|e| format!("Ошибка запроса RCI: {e}"))?;
-    if !response.status().is_success() {
-        return Err(format!("RCI вернул {}", response.status()));
-    }
-
-    let data: serde_json::Value = response.json().await.map_err(|e| format!("Ошибка парсинга RCI: {e}"))?;
+    let data = fetch_rci(state, "interface").await?;
     let interfaces = data
         .as_object()
         .ok_or("RCI не вернул список интерфейсов")?;
@@ -175,8 +208,8 @@ fn replace_dns_block(content: &str, new_block: &str) -> String {
     }
 }
 
-pub async fn get_dns(State(_state): State<AppState>) -> impl IntoResponse {
-    match run_ndmc("show running-config").await {
+pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
+    match fetch_running_config(&state).await {
         Ok(output) => Json(DnsResponse {
             success: true,
             error: None,
@@ -219,17 +252,17 @@ pub async fn post_dns(
     };
 
     let steps = [
-        ("Отключение DNS провайдера на интерфейсе", format!("interface {ignore_target} ip no name-servers")),
-        ("Отключение HTTPS DNS-прокси", "no dns-proxy https upstream".to_string()),
-        ("Отключение TLS DNS-прокси", "no dns-proxy tls upstream".to_string()),
-        ("Сброс системных DNS-серверов", "no ip name-server".to_string()),
-        ("Установка name-server на br0", format!("ip name-server {br0_ip}:53")),
-        ("Включение opkg dns-override", "opkg dns-override".to_string()),
-        ("Сохранение конфигурации", "system configuration save".to_string()),
+        ("Отключение DNS провайдера", Method::POST, "interface", json!({"name": ignore_target, "ip": {"no": {"name-servers": true}}})),
+        ("Отключение HTTPS DNS-прокси", Method::DELETE, "dns-proxy/https/upstream", json!({})),
+        ("Отключение TLS DNS-прокси", Method::DELETE, "dns-proxy/tls/upstream", json!({})),
+        ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})),
+        ("Установка name-server на br0", Method::POST, "ip/name-server", json!({"address": br0_ip, "port": 53})),
+        ("Включение opkg dns-override", Method::POST, "opkg/dns-override", json!({})),
+        ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
     ];
 
-    for (step, cmd) in &steps {
-        if let Err(e) = run_ndmc_step(step, cmd).await {
+    for (step, method, path, payload) in steps {
+        if let Err(e) = run_rci_step(&state, step, method, path, payload).await {
             return Json(DnsResponse {
                 success: false,
                 error: Some(e),
@@ -264,15 +297,15 @@ pub async fn post_dns(
     })
 }
 
-pub async fn delete_dns(State(_state): State<AppState>) -> impl IntoResponse {
+pub async fn delete_dns(State(state): State<AppState>) -> impl IntoResponse {
     let steps = [
-        ("Отключение opkg dns-override", "no opkg dns-override"),
-        ("Сброс системных DNS-серверов", "no ip name-server"),
-        ("Сохранение конфигурации", "system configuration save"),
+        ("Отключение opkg dns-override", Method::DELETE, "opkg/dns-override", json!({})),
+        ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})),
+        ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
     ];
 
-    for (step, cmd) in &steps {
-        if let Err(e) = run_ndmc_step(step, cmd).await {
+    for (step, method, path, payload) in steps {
+        if let Err(e) = run_rci_step(&state, step, method, path, payload).await {
             return Json(DnsResponse {
                 success: false,
                 error: Some(e),
