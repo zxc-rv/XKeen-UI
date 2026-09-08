@@ -54,6 +54,7 @@ const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'Connect
 const ProvidersModal = lazyLoad(() => import('../modals/Providers'), 'ProvidersModal')
 const BackupsModal = lazyLoad(() => import('../modals/Backups'), 'BackupsModal')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
+const DnsPanel = lazyLoad(() => import('./mihomo/DnsPanel'), 'DnsPanel')
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
 const BackupsModalContainer = memo(function BackupsModalContainer({
@@ -301,7 +302,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
 
   const [isEditorMounted, setIsEditorMounted] = useState(false)
 
-  const [activePanel, setActivePanel] = useState<'selectors' | 'connections' | 'config'>('selectors')
+  const [activePanel, setActivePanel] = useState<'selectors' | 'connections' | 'config' | 'dns'>('selectors')
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['selectors']))
   const [mode, setMode] = useState<ClashMode>('rule')
   const [allSelectorsCollapsed, setAllSelectorsCollapsed] = useState(false)
@@ -419,6 +420,14 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
       loadConfigIntoEditor(config)
     }
   }, [activeConfigIndex, configFilenamesKey, loadConfigIntoEditor, editorRef])
+
+  const savedContentKey = activeConfig?.savedContent
+  useEffect(() => {
+    const config = configsRef.current[activeConfigIndex]
+    if (editorRef.current && config) {
+      loadConfigIntoEditor(config)
+    }
+  }, [activeConfigIndex, savedContentKey, loadConfigIntoEditor, editorRef])
 
   const handleEditorReady = useCallback(() => {
     setIsEditorMounted(true)
@@ -616,7 +625,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                   <Tabs
                     value={currentPanel}
                     onValueChange={(value) => {
-                      const panel = value as 'config' | 'selectors' | 'connections'
+                      const panel = value as 'config' | 'selectors' | 'connections' | 'dns'
                       setActivePanel(panel)
                       setMountedPanels((prev) => (prev.has(panel) ? prev : new Set([...prev, panel])))
                     }}
@@ -629,8 +638,11 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                       <TabsTrigger value="connections" className="p-0 text-sm font-semibold md:text-lg" disabled={!isRunning}>
                         Соединения
                       </TabsTrigger>
+                      <TabsTrigger value="dns" className="p-0 text-sm font-semibold md:text-lg">
+                        DNS
+                      </TabsTrigger>
                       <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
-                        Конфигурация
+                        YAML
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>
@@ -767,6 +779,13 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                         clashApiSecret={clashApiSecret ?? null}
                         clashApiUnix={activeClashApiUnix ?? null}
                       />
+                    </LazyBoundary>
+                  </div>
+                )}
+                {mountedPanels.has('dns') && (
+                  <div className={cn(currentPanel !== 'dns' && 'hidden')}>
+                    <LazyBoundary>
+                      <DnsPanel />
                     </LazyBoundary>
                   </div>
                 )}
