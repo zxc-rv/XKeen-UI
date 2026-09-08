@@ -259,6 +259,29 @@ function parseNumber(value: string | undefined): number | undefined {
   return result
 }
 
+function parseRange(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed)
+  }
+
+  const splittedRange = trimmed.split('-').map((part) => +part)
+
+  if (splittedRange) {
+    const ceilMin = Math.ceil(splittedRange[0])
+    const floorMax = Math.floor(splittedRange[1])
+
+    return Math.floor(Math.random() * (floorMax - ceilMin + 1)) + ceilMin
+  }
+
+  throw new Error(`Некорректное числовое значение: ${value}`)
+}
+
 function toMihomoKey(key: string): string {
   const map: Record<string, string> = {
     Version: 'version',
@@ -346,7 +369,9 @@ function createAmneziaOptions(
     const mihomoKey = toMihomoKey(key)
 
     if (key === 'RandomTrailers' || key === 'DisableCookies') {
-      options[mihomoKey] = value.toLowerCase() === 'true' || value.toLowerCase() === 'on' || value === '1'
+      const normalized = value.toLowerCase()
+
+      options[mihomoKey] = normalized === 'true' || normalized === 'on' || normalized === '1'
 
       continue
     }
@@ -378,6 +403,10 @@ function indentYaml(yaml: string, spaces: number): string {
     .split('\n')
     .map((line) => (line ? indentation + line : line))
     .join('\n')
+}
+
+function addMtuComment(yaml: string): string {
+  return yaml.replace(/^(\s*)(mtu:\s+\S+)$/gm, '$1# В случае недоступности сети, попробуйте увеличить MTU до 1420 или 1500\n$1$2')
 }
 
 function convertToMihomo(config: AmneziaConfig, fileName: string): string {
@@ -419,10 +448,8 @@ function convertToMihomo(config: AmneziaConfig, fileName: string): string {
       'public-key': peer.PublicKey,
 
       udp: true,
-    }
 
-    if (iface.MTU) {
-      proxy.mtu = parseNumber(iface.MTU)
+      mtu: iface.MTU ? parseNumber(iface.MTU) : 1280,
     }
 
     if (dns.length) {
@@ -440,7 +467,7 @@ function convertToMihomo(config: AmneziaConfig, fileName: string): string {
     }
 
     if (peer.PersistentKeepalive) {
-      proxy['persistent-keepalive'] = parseNumber(peer.PersistentKeepalive)
+      proxy['persistent-keepalive'] = parseRange(peer.PersistentKeepalive)
     }
 
     const amneziaOptions = createAmneziaOptions(iface, config.detectedVersion)
@@ -457,7 +484,13 @@ function convertToMihomo(config: AmneziaConfig, fileName: string): string {
     lineWidth: -1,
   })
 
-  return indentYaml(yaml, 2)
+  const indentedYaml = indentYaml(yaml, 2)
+
+  if (!iface.MTU) {
+    return addMtuComment(indentedYaml)
+  }
+
+  return indentedYaml
 }
 
 export function ImportAmneziaModal({ onAddToConfig }: Props) {
