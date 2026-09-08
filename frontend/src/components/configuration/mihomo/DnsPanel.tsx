@@ -25,23 +25,15 @@ import { apiCall, clashFetch } from '../../../lib/api'
 import { useAppContext } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
 
-interface DnsStatusResponse {
-  success: boolean
-  output: string
-}
-
 interface DnsStatus {
   dnsOverride: boolean
   nameServer: boolean
   ignoreProvider: boolean
 }
 
-function parseDnsStatus(output: string): DnsStatus {
-  return {
-    dnsOverride: output.includes('opkg dns-override'),
-    nameServer: output.includes('ip name-server'),
-    ignoreProvider: output.includes('ip no name-servers'),
-  }
+interface DnsStatusResponse {
+  success: boolean
+  status?: DnsStatus
 }
 
 function StatusIndicator({ active }: { active: boolean }) {
@@ -249,9 +241,8 @@ export const DnsPanel = memo(function DnsPanel() {
   const fetchStatus = useCallback(async () => {
     try {
       const data = await apiCall<DnsStatusResponse>('GET', 'dns')
-      if (data.success) {
-        const status = parseDnsStatus(data.output)
-        setDnsStatus(status)
+      if (data.success && data.status) {
+        setDnsStatus(data.status)
       }
     } catch {
       showToast('Ошибка получения статуса DNS', 'error')
@@ -479,12 +470,15 @@ export const DnsPanel = memo(function DnsPanel() {
                       Передача управления DNS от KeeneticOS к Mihomo
                     </p>
                   </div>
-                  <Switch
-                    id="dns-toggle"
-                    checked={isAllActive}
-                    onCheckedChange={handleToggle}
-                    disabled={isToggling || isLoading}
-                  />
+                  <div className="flex items-center gap-2">
+                    {isToggling && <Spinner className="text-muted-foreground" />}
+                    <Switch
+                      id="dns-toggle"
+                      checked={isAllActive}
+                      onCheckedChange={handleToggle}
+                      disabled={isToggling || isLoading}
+                    />
+                  </div>
                 </div>
               </div>
             )}
