@@ -3,6 +3,7 @@ mod auth;
 mod backuper;
 mod configs;
 mod controller;
+mod dns;
 mod frontend_embedder;
 mod geo;
 mod logger;
@@ -480,6 +481,10 @@ async fn main() {
         .route("/api/geo", get(geo::get_geo))
         .route("/api/geo/site", get(geo::get_geosite))
         .route("/api/geo/ip", get(geo::get_geoip))
+        .route(
+            "/api/dns",
+            get(dns::get_dns).post(dns::post_dns).delete(dns::delete_dns),
+        )
         .route("/api/auth/logout", post(auth::post_logout))
         .route("/api/auth/reset", post(auth::post_auth_reset))
         .route("/clash/{*path}", any(api_relay::proxy_http))
