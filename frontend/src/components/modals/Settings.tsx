@@ -486,7 +486,7 @@ export function SettingsModal() {
             >
               <TabsTrigger value="general">Общие</TabsTrigger>
               <TabsTrigger value="gui">Режим GUI</TabsTrigger>
-              <TabsTrigger value="clash-api">Clash API</TabsTrigger>
+              <TabsTrigger value="clash-api">Mihomo</TabsTrigger>
               <TabsTrigger value="updates">Обновления</TabsTrigger>
             </TabsList>
           </div>
@@ -648,9 +648,10 @@ export function SettingsModal() {
                     <SwitchSettingField key={item.id} item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
                   ))}
                   <Separator className="my-0" />
+                  <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">DNS</p>
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
-                      <FieldLabel htmlFor="auto-dns">Автовключение DNS</FieldLabel>
+                      <FieldLabel htmlFor="auto-dns">Автовключение</FieldLabel>
                       <FieldDescription className="text-[13px]">
                         Автоматически включать управление DNS при старте сервиса
                       </FieldDescription>
@@ -671,7 +672,7 @@ export function SettingsModal() {
                         <SelectGroup>
                           <SelectItem value="disabled" className="text-sm">Выключено</SelectItem>
                           <SelectItem value="enabled" className="text-sm">Включить</SelectItem>
-                          <SelectItem value="with_filter" className="text-sm">Включить с настройкой интернет-фильтра</SelectItem>
+                          <SelectItem value="with_filter" className="text-sm">Включить с автонастройкой</SelectItem>
                         </SelectGroup>
                       </SelectContent>
                     </Select>
