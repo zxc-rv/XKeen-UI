@@ -13,6 +13,7 @@ use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::{Error as TError, Message as TMessage};
 use tokio_tungstenite::{client_async, connect_async};
 
+use crate::logger::log;
 use crate::types::{ApiResponse, AppState, MIHOMO_CONF_DIR};
 
 #[derive(Clone)]
@@ -278,6 +279,15 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
     let status = upstream.status();
     let headers = upstream.headers().clone();
     let bytes = upstream.bytes().await.unwrap_or_default();
+
+    if !status.is_success() {
+        let body_text = String::from_utf8_lossy(&bytes);
+        let detail = serde_json::from_str::<serde_json::Value>(&body_text)
+            .ok()
+            .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(String::from))
+            .unwrap_or_else(|| body_text.trim().to_string());
+        log("ERROR", format!("Ошибка применения: {}", detail));
+    }
 
     let mut response = Response::builder().status(status);
     for (name, value) in headers.iter() {

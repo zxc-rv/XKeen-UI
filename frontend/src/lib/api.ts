@@ -63,12 +63,7 @@ export async function clashFetch<T = unknown>(
       }
       const bodyText = await res.text().catch(() => '')
       const details = extractClashErrorMessage(bodyText)
-      const messageLooksLikeStatus = /^\d{3}\s+/u.test(details)
-      throw new Error(
-        messageLooksLikeStatus
-          ? `Clash request failed: ${details}`
-          : `Clash request failed: ${res.status} ${res.statusText}${details ? ` - ${details}` : ''}`
-      )
+      throw new Error(details || `${res.status} ${res.statusText}`)
     }
 
     if (res.status === 204 || res.headers.get('content-length') === '0') return {} as T

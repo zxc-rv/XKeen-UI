@@ -480,8 +480,9 @@ export const DnsPanel = memo(function DnsPanel() {
       })
       await refreshConfigs()
       showToast('DNS настройки применены')
-    } catch {
-      showToast('Ошибка применения DNS', 'error')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      showToast(`Ошибка применения: ${msg}`, 'error')
     } finally {
       setIsApplying(false)
     }
