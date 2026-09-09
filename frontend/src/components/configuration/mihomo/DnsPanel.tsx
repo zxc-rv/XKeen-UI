@@ -82,6 +82,19 @@ const DEFAULT_DNS_CONFIG: DnsConfig = {
   fallback: 'tls://8.8.4.4\ntls://1.1.1.1',
 }
 
+const MANAGED_DNS_KEYS = new Set([
+  'enable',
+  'listen',
+  'ipv6',
+  'enhanced-mode',
+  'fake-ip-filter-mode',
+  'fake-ip-filter',
+  'default-nameserver',
+  'nameserver-policy',
+  'nameserver',
+  'fallback',
+])
+
 function parseList(text: string): string[] {
   const trimmed = text.trim()
   if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
@@ -98,23 +111,30 @@ function parseList(text: string): string[] {
 }
 
 function parseNameserverPolicy(text: string): Record<string, string[]> {
+  const trimmed = text.trim()
+  if (!trimmed) return {}
+
+  let parsed: unknown
+  try {
+    parsed = jsyaml.load(trimmed, { json: true })
+  } catch {
+    return {}
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+
   const result: Record<string, string[]> = {}
-  const lines = text.split('\n').map((l) => l.trim())
-  let currentKey = ''
-  for (const line of lines) {
-    if (!line) continue
-    if (line.endsWith(':') && !line.startsWith('-')) {
-      currentKey = line.slice(0, -1).trim()
-      if (currentKey) result[currentKey] = []
-    } else if (currentKey && line.startsWith('-')) {
-      const val = line.slice(1).trim()
-      if (val) result[currentKey].push(val)
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (Array.isArray(value)) {
+      result[key] = value.map(String)
+    } else if (value != null) {
+      result[key] = [String(value)]
     }
   }
   return result
 }
 
-function buildDnsYaml(config: DnsConfig): string {
+function buildDnsYaml(config: DnsConfig, extra: Record<string, unknown>): string {
   const lines: string[] = []
   lines.push('dns:')
   lines.push('  enable: true')
@@ -144,8 +164,7 @@ function buildDnsYaml(config: DnsConfig): string {
       if (servers.length === 1) {
         lines.push(`    "${key}": ${servers[0]}`)
       } else if (servers.length > 1) {
-        lines.push(`    "${key}":`)
-        for (const s of servers) lines.push(`      - ${s}`)
+        lines.push(`    "${key}": [${servers.join(', ')}]`)
       }
     }
   }
@@ -162,7 +181,9 @@ function buildDnsYaml(config: DnsConfig): string {
     for (const f of fallbacks) lines.push('    - ' + f)
   }
 
-  lines.push('  fallback-filter: { geoip: false }')
+  const extraWithDefaults: Record<string, unknown> = { 'fallback-filter': { geoip: false }, ...extra }
+  const extraYaml = jsyaml.dump(extraWithDefaults, { indent: 2 }).trimEnd()
+  for (const line of extraYaml.split('\n')) lines.push('  ' + line)
 
   return lines.join('\n')
 }
@@ -225,6 +246,7 @@ export const DnsPanel = memo(function DnsPanel() {
   const [disableOpen, setDisableOpen] = useState(false)
   const [disableClean, setDisableClean] = useState(true)
   const [config, setConfig] = useState<DnsConfig>(DEFAULT_DNS_CONFIG)
+  const [extraDnsConfig, setExtraDnsConfig] = useState<Record<string, unknown>>({})
   const [isApplying, setIsApplying] = useState(false)
 
   const yamlConfig = useMemo(() => configs.find((c: Config) => c.file.endsWith('/config.yaml')), [configs])
@@ -296,11 +318,11 @@ export const DnsPanel = memo(function DnsPanel() {
     if (policy) {
       const entries: string[] = []
       for (const [key, val] of Object.entries(policy)) {
-        entries.push(`${key}:`)
         if (Array.isArray(val)) {
-          for (const item of val) entries.push(`  - ${item}`)
+          if (val.length === 1) entries.push(`${key}: ${val[0]}`)
+          else if (val.length > 1) entries.push(`${key}: [${val.join(', ')}]`)
         } else if (typeof val === 'string') {
-          entries.push(`  - ${val}`)
+          entries.push(`${key}: ${val}`)
         }
       }
       nameserverPolicy = entries.join('\n')
@@ -315,6 +337,12 @@ export const DnsPanel = memo(function DnsPanel() {
       nameserverPolicy,
       fallback,
     })
+
+    const extra: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(dns)) {
+      if (!MANAGED_DNS_KEYS.has(key)) extra[key] = value
+    }
+    setExtraDnsConfig(extra)
   }, [yamlConfig])
 
   const handleToggleDnsOverride = useCallback(async (value: boolean) => {
@@ -402,7 +430,7 @@ export const DnsPanel = memo(function DnsPanel() {
     setClearOptionsOpen(false)
     setIsToggling(true)
     try {
-      const yaml = buildDnsYaml(config)
+      const yaml = buildDnsYaml(config, extraDnsConfig)
       const result = await apiCall<{ success: boolean; error?: string }>('POST', 'dns', {
         dns_config: yaml,
         clear_dns: clearDns,
@@ -426,14 +454,14 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsToggling(false)
     }
-  }, [config, clearDns, addBr0Nameserver, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
+  }, [config, extraDnsConfig, clearDns, addBr0Nameserver, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const handleApply = useCallback(async () => {
     if (!yamlConfig) return
     setIsApplying(true)
     try {
       const content = yamlConfig.savedContent || yamlConfig.content
-      const newDnsBlock = buildDnsYaml(config)
+      const newDnsBlock = buildDnsYaml(config, extraDnsConfig)
       const updated = replaceDnsBlock(content, newDnsBlock)
 
       const saveResult = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', {
@@ -458,7 +486,7 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsApplying(false)
     }
-  }, [config, yamlConfig, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
+  }, [config, extraDnsConfig, yamlConfig, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const updateConfig = useCallback((patch: Partial<DnsConfig>) => {
     setConfig((prev) => ({ ...prev, ...patch }))
@@ -605,7 +633,7 @@ export const DnsPanel = memo(function DnsPanel() {
               )}
 
               <div className="grid gap-2">
-                <DnsSettingLabel tooltip="Основные DNS-резолверы. Поддерживаются: udp:// tcp:// https:// tls:// quic://. По одному на строку.">
+                <DnsSettingLabel tooltip="Основные DNS-резолверы. Поддерживаются: udp:// tcp:// https:// tls:// quic://. По одному на строку.\nДля того чтобы направить запросы через определенное подключение, укажите #PROXY в конец ссылки, где 'PROXY' - название прокси/селектора,  через него. Например: \n tls://1.1.1.1#vless-reality\n Или:\n tls://1.1.1.1#Заблок. сервисы">
                   Nameserver
                 </DnsSettingLabel>
                 <Textarea
@@ -617,13 +645,13 @@ export const DnsPanel = memo(function DnsPanel() {
               </div>
 
               <div className="grid gap-2">
-                <DnsSettingLabel tooltip="Позволяет указать какие резолверы использовать для каких доменов. Поддерживается rule-set: и +. синтаксис.">
+                <DnsSettingLabel tooltip="Позволяет указать какие резолверы использовать для каких доменов. Поддерживается rule-set: и +. синтаксис. Примеры: \nexample.com: tls://1.1.1.1\n+.ru: 77.88.8.8\nrule-set:example: [1.1.1.1, 8.8.8.8]">
                   Nameserver Policy
                 </DnsSettingLabel>
                 <Textarea
                   value={config.nameserverPolicy}
                   onChange={(e) => updateConfig({ nameserverPolicy: e.target.value })}
-                  placeholder={'rule-set:ru:\n  - https://77.88.8.8/dns-query'}
+                  placeholder={'rule-set:category-ru@domain: [77.88.8.8, 195.208.5.1]'}
                   className="min-h-24 font-mono text-xs"
                 />
               </div>

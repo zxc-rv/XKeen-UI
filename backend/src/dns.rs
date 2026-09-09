@@ -182,8 +182,7 @@ fn find_mihomo_config() -> Option<String> {
     None
 }
 
-fn replace_dns_block(content: &str, new_block: &str) -> String {
-    let lines: Vec<&str> = content.lines().collect();
+fn find_dns_block(lines: &[&str]) -> Option<(usize, usize)> {
     let mut dns_start: Option<usize> = None;
     let mut dns_end: Option<usize> = None;
 
@@ -199,27 +198,82 @@ fn replace_dns_block(content: &str, new_block: &str) -> String {
         }
     }
 
-    if let Some(start) = dns_start {
-        let end = dns_end.unwrap_or(lines.len());
-        let mut result = String::new();
-        for line in &lines[..start] {
-            result.push_str(line);
+    dns_start.map(|start| (start, dns_end.unwrap_or(lines.len())))
+}
+
+fn replace_dns_block(content: &str, new_block: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    match find_dns_block(&lines) {
+        Some((start, end)) => {
+            let mut result = String::new();
+            for line in &lines[..start] {
+                result.push_str(line);
+                result.push('\n');
+            }
+            result.push_str(new_block);
             result.push('\n');
+            for line in &lines[end..] {
+                result.push_str(line);
+                result.push('\n');
+            }
+            result
         }
-        result.push_str(new_block);
-        result.push('\n');
-        for line in &lines[end..] {
-            result.push_str(line);
+        None => {
+            let mut result = content.trim_end().to_string();
+            result.push_str("\n\n");
+            result.push_str(new_block);
             result.push('\n');
+            result
         }
-        result
-    } else {
-        let mut result = content.trim_end().to_string();
-        result.push_str("\n\n");
-        result.push_str(new_block);
-        result.push('\n');
-        result
     }
+}
+
+fn enable_dns_block(content: &str, fallback_block: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+
+    let Some((start, end)) = find_dns_block(&lines) else {
+        return replace_dns_block(content, fallback_block);
+    };
+
+    let mut has_enable = false;
+    let mut has_listen = false;
+    let mut inner: Vec<&str> = Vec::with_capacity(end - start - 1);
+
+    for line in &lines[start + 1..end] {
+        if line.trim_start().starts_with("enable:") {
+            inner.push("  enable: true");
+            has_enable = true;
+        } else if line.trim_start().starts_with("listen:") {
+            inner.push("  listen: 0.0.0.0:53");
+            has_listen = true;
+        } else {
+            inner.push(line);
+        }
+    }
+
+    let mut result = String::new();
+    for line in &lines[..start] {
+        result.push_str(line);
+        result.push('\n');
+    }
+    result.push_str(lines[start]);
+    result.push('\n');
+    if !has_enable {
+        result.push_str("  enable: true\n");
+    }
+    if !has_listen {
+        result.push_str("  listen: 0.0.0.0:53\n");
+    }
+    for line in &inner {
+        result.push_str(line);
+        result.push('\n');
+    }
+    for line in &lines[end..] {
+        result.push_str(line);
+        result.push('\n');
+    }
+    result
 }
 
 pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
@@ -282,7 +336,7 @@ pub async fn post_dns(
     if let Some(config_path) = find_mihomo_config() {
         match tokio::fs::read_to_string(&config_path).await {
             Ok(content) => {
-                let new_content = replace_dns_block(&content, &req.dns_config);
+                let new_content = enable_dns_block(&content, &req.dns_config);
                 if let Err(e) = tokio::fs::write(&config_path, &new_content).await {
                     log("ERROR", format!("Ошибка записи config.yaml: {e}"));
                 } else {
