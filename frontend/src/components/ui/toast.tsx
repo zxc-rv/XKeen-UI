@@ -20,7 +20,7 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
       className="max-w-100px w-full"
     >
-      <Alert variant={isError ? 'destructive' : 'default'} className="relative">
+      <Alert variant={isError ? 'destructive' : 'default'} className="relative overflow-hidden">
         {isError ? <IconAlertCircle className="size-4.5" /> : <IconCircleCheck className="size-4.5" />}
         <AlertTitle className="pb-1">{alert.title}</AlertTitle>
         {alert.body && <AlertDescription>{alert.body}</AlertDescription>}
