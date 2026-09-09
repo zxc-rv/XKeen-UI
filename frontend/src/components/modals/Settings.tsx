@@ -13,7 +13,7 @@ import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX } 
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
-import type { AppSettings, ProxySortOrder, ThemeMode } from '../../lib/types'
+import type { AppSettings, AutoDnsMode, ProxySortOrder, ThemeMode } from '../../lib/types'
 
 type BooleanSettingKey = {
   [K in keyof AppSettings]: AppSettings[K] extends boolean ? K : never
@@ -647,6 +647,35 @@ export function SettingsModal() {
                   {clashApiSettings.map((item) => (
                     <SwitchSettingField key={item.id} item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
                   ))}
+                  <Separator className="my-0" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="auto-dns">Автовключение DNS</FieldLabel>
+                      <FieldDescription className="text-[13px]">
+                        Автоматически включать управление DNS при старте сервиса
+                      </FieldDescription>
+                    </FieldContent>
+                    <Select
+                      value={settings.autoDns}
+                      items={{ disabled: 'Выключено', enabled: 'Включить', with_filter: 'Включить с автонастройкой' }}
+                      onValueChange={(v) => {
+                        void saveSetting('clash_api', { auto_dns: v }).then((ok) => {
+                          if (ok) dispatch({ type: 'SET_SETTINGS', settings: { autoDns: v as AutoDnsMode } })
+                        })
+                      }}
+                    >
+                      <SelectTrigger id="auto-dns" className="w-54 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="disabled" className="text-sm">Выключено</SelectItem>
+                          <SelectItem value="enabled" className="text-sm">Включить</SelectItem>
+                          <SelectItem value="with_filter" className="text-sm">Включить с настройкой интернет-фильтра</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
                 </FieldGroup>
               </TabsContent>
 

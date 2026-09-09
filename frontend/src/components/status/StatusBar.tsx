@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect, useState, useCallback } from 'react'
-import { apiCall, capitalize } from '../../lib/api'
-import { syncClashApiPort, useAppContext } from '../../lib/store'
+import { apiCall, capitalize, clashFetch } from '../../lib/api'
+import { buildDnsYaml, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
+import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { ServiceStatus } from '../../lib/types'
 
@@ -66,23 +67,24 @@ export function StatusBar({
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending' || serviceStatus === 'loading'
 
-  const [dnsManagementEnabled, setDnsManagementEnabled] = useState(false)
   const [dnsWarningOpen, setDnsWarningOpen] = useState(false)
 
   const fetchDnsStatus = useCallback(async () => {
     try {
       const data = await apiCall<{ success: boolean; status?: { dnsOverride: boolean; dnsMihomo: boolean } }>('GET', 'dns')
       if (data.success && data.status) {
-        setDnsManagementEnabled(data.status.dnsOverride && data.status.dnsMihomo)
+        const enabled = data.status.dnsOverride && data.status.dnsMihomo
+        return enabled
       }
     } catch {
       // ignore
     }
+    return false
   }, [])
 
   useEffect(() => {
-    fetchDnsStatus()
-  }, [fetchDnsStatus])
+    if (currentCore === 'mihomo') fetchDnsStatus()
+  }, [fetchDnsStatus, currentCore])
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -103,15 +105,26 @@ export function StatusBar({
     setPending('Запуск сервиса...')
     const result = await apiCall<any>('POST', 'control', { action: 'start' })
     showToast(result.success ? 'XKeen запущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
-    dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
-    if (result.success) {
-      syncClashApiPort()
+    if (!result.success) {
+      dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
+      onRefreshStatus()
+      return
     }
+    syncClashApiPort()
+    if (settings.autoDns !== 'disabled' && state.currentCore === 'mihomo') {
+      const yaml = buildDnsYaml(DEFAULT_DNS_CONFIG, {})
+      await apiCall('POST', 'dns', { dns_config: yaml, setup_filter: settings.autoDns === 'with_filter' })
+      const { clashApiPort, clashApiSecret, clashApiUnix } = getAppState()
+      await clashFetch(clashApiPort ?? '', 'configs', { method: 'PUT', secret: clashApiSecret, unix: clashApiUnix, body: {} })
+      bumpDnsRefresh()
+    }
+    dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
     onRefreshStatus()
   }
 
   async function stopService() {
-    if (dnsManagementEnabled) {
+    const enabled = currentCore === 'mihomo' && (await fetchDnsStatus())
+    if (enabled) {
       setDnsWarningOpen(true)
       return
     }
@@ -168,147 +181,147 @@ export function StatusBar({
 
   return (
     <>
-    <TooltipProvider delayDuration={500}>
-      <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
-        <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
-          <div className={badgeClasses}>
-            <StatusWaveform status={serviceStatus} />
-            {statusLabel}
+      <TooltipProvider delayDuration={500}>
+        <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
+          <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
+            <div className={badgeClasses}>
+              <StatusWaveform status={serviceStatus} />
+              {statusLabel}
+            </div>
+            <div className="flex items-center gap-1.5">
+              {isConfigsLoading ? (
+                <>
+                  <Skeleton className="size-9 rounded-lg" />
+                  <Skeleton className="size-9 rounded-lg" />
+                </>
+              ) : (
+                <>
+                  {isRunning && (
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button variant="outline" size="icon" onClick={restartService} disabled={isPending}>
+                          {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh />}
+                        </Button>
+                      } />
+                      <TooltipContent>Перезапустить</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {!isRunning && (
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="text-green-500 hover:border-green-500/50 hover:text-green-400"
+                          onClick={startService}
+                          disabled={isPending}
+                        >
+                          {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled />}
+                        </Button>
+                      } />
+                      <TooltipContent>Запустить</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {isRunning && (
+                    <Tooltip>
+                      <TooltipTrigger render={
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          onClick={stopService}
+                          disabled={isPending}
+                        >
+                          {isPending ? <Spinner className="text-muted-foreground" /> : <IconPlayerStopFilled />}
+                        </Button>
+                      } />
+                      <TooltipContent>Остановить</TooltipContent>
+                    </Tooltip>
+                  )}
+                </>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            {isConfigsLoading ? (
-              <>
-                <Skeleton className="size-9 rounded-lg" />
-                <Skeleton className="size-9 rounded-lg" />
-              </>
-            ) : (
-              <>
-                {isRunning && (
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <Button variant="outline" size="icon" onClick={restartService} disabled={isPending}>
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconRefresh />}
-                      </Button>
-                    } />
-                    <TooltipContent>Перезапустить</TooltipContent>
-                  </Tooltip>
-                )}
-                {!isRunning && (
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="text-green-500 hover:border-green-500/50 hover:text-green-400"
-                        onClick={startService}
-                        disabled={isPending}
-                      >
-                        {isPending ? <Spinner className="text-muted-foreground size-4" /> : <IconPlayerPlayFilled />}
-                      </Button>
-                    } />
-                    <TooltipContent>Запустить</TooltipContent>
-                  </Tooltip>
-                )}
-                {isRunning && (
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        onClick={stopService}
-                        disabled={isPending}
-                      >
-                        {isPending ? <Spinner className="text-muted-foreground" /> : <IconPlayerStopFilled />}
-                      </Button>
-                    } />
-                    <TooltipContent>Остановить</TooltipContent>
-                  </Tooltip>
-                )}
-              </>
-            )}
-          </div>
-        </div>
 
-        <div className="order-1 flex items-center justify-center md:absolute md:left-1/2 md:order-2 md:-translate-x-1/2">
-          <a
-            href="https://github.com/zxc-rv/XKeen-UI"
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-md transition-opacity hover:opacity-85"
-          >
-            <span
-              className="text-[28px] font-semibold bg-linear-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-transparent"
+          <div className="order-1 flex items-center justify-center md:absolute md:left-1/2 md:order-2 md:-translate-x-1/2">
+            <a
+              href="https://github.com/zxc-rv/XKeen-UI"
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md transition-opacity hover:opacity-85"
             >
-              XKeen UI
-            </span>
-          </a>
-        </div>
+              <span
+                className="text-[28px] font-semibold bg-linear-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-transparent"
+              >
+                XKeen UI
+              </span>
+            </a>
+          </div>
 
-        <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
-          {isConfigsLoading || !version ? (
-            <Skeleton className="h-9 w-35.75" />
-          ) : (
-            <Tooltip>
-              <TooltipTrigger render={
-                <Button variant="outline" onClick={onOpenCoreManage}>
-                  <IconCpu data-icon="inline-start" className="size-4.5" />
-                  <span className="text-[13px]">{capitalize(currentCore)}</span>
-                  {coreVersions[currentCore] && (
-                    <span className="text-muted-foreground/60 mt-0.5 text-xs">{coreVersions[currentCore]}</span>
-                  )}
-                  {isOutdatedCore && (
-                    <span className="relative mb-3 -ml-0.75 flex">
-                      <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
-                      <span className="relative inline-flex size-1.75 rounded-full bg-blue-500" />
-                    </span>
-                  )}
-                </Button>
-              } />
-              <TooltipContent>Управление ядром</TooltipContent>
-            </Tooltip>
-          )}
-          {isConfigsLoading || !version ? (
-            <Skeleton className="h-9 w-18.75" />
-          ) : (
-            <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  variant="outline"
-                  onClick={() => onOpenUpdate('self')}
-                  className={cn(
-                    'relative overflow-hidden text-xs tracking-wider',
-                    isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
-                  )}
-                >
-                  {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}
-                  <IconBox data-icon="inline-start" className="size-4.5" />
-                  {version}
-                </Button>
-              } />
-              <TooltipContent>{isOutdatedUI ? 'Доступно обновление' : 'Версия XKeen UI'}</TooltipContent>
-            </Tooltip>
-          )}
-          {isConfigsLoading || !version ? (
-            <Skeleton className="size-9" />
-          ) : (
-            <Tooltip>
-              <TooltipTrigger render={<Button variant="outline" size="icon" onClick={onOpenSettings}><IconSettings className="size-4.5" /></Button>} />
-              <TooltipContent>Настройки</TooltipContent>
-            </Tooltip>
-          )}
-          {authEnabled &&
-            (isConfigsLoading || !version ? (
+          <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
+            {isConfigsLoading || !version ? (
+              <Skeleton className="h-9 w-35.75" />
+            ) : (
+              <Tooltip>
+                <TooltipTrigger render={
+                  <Button variant="outline" onClick={onOpenCoreManage}>
+                    <IconCpu data-icon="inline-start" className="size-4.5" />
+                    <span className="text-[13px]">{capitalize(currentCore)}</span>
+                    {coreVersions[currentCore] && (
+                      <span className="text-muted-foreground/60 mt-0.5 text-xs">{coreVersions[currentCore]}</span>
+                    )}
+                    {isOutdatedCore && (
+                      <span className="relative mb-3 -ml-0.75 flex">
+                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex size-1.75 rounded-full bg-blue-500" />
+                      </span>
+                    )}
+                  </Button>
+                } />
+                <TooltipContent>Управление ядром</TooltipContent>
+              </Tooltip>
+            )}
+            {isConfigsLoading || !version ? (
+              <Skeleton className="h-9 w-18.75" />
+            ) : (
+              <Tooltip>
+                <TooltipTrigger render={
+                  <Button
+                    variant="outline"
+                    onClick={() => onOpenUpdate('self')}
+                    className={cn(
+                      'relative overflow-hidden text-xs tracking-wider',
+                      isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
+                    )}
+                  >
+                    {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}
+                    <IconBox data-icon="inline-start" className="size-4.5" />
+                    {version}
+                  </Button>
+                } />
+                <TooltipContent>{isOutdatedUI ? 'Доступно обновление' : 'Версия XKeen UI'}</TooltipContent>
+              </Tooltip>
+            )}
+            {isConfigsLoading || !version ? (
               <Skeleton className="size-9" />
             ) : (
               <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="icon" onClick={onLogout}><IconLogout className="size-4.5" /></Button>} />
-                <TooltipContent>Выйти</TooltipContent>
+                <TooltipTrigger render={<Button variant="outline" size="icon" onClick={onOpenSettings}><IconSettings className="size-4.5" /></Button>} />
+                <TooltipContent>Настройки</TooltipContent>
               </Tooltip>
-            ))}
+            )}
+            {authEnabled &&
+              (isConfigsLoading || !version ? (
+                <Skeleton className="size-9" />
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger render={<Button variant="outline" size="icon" onClick={onLogout}><IconLogout className="size-4.5" /></Button>} />
+                  <TooltipContent>Выйти</TooltipContent>
+                </Tooltip>
+              ))}
+          </div>
         </div>
-      </div>
-    </TooltipProvider>
+      </TooltipProvider>
       <AlertDialog open={dnsWarningOpen} onOpenChange={setDnsWarningOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

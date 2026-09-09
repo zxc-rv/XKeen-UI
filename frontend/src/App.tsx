@@ -249,6 +249,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             hideUnavailableProxies: data.clash_api?.hide_unavailable_proxies ?? false,
             hideUnavailableProxiesCounter: data.clash_api?.hide_unavailable_proxies_counter ?? 3,
             proxySortOrder: data.clash_api?.proxy_sort_order ?? 'default',
+            autoDns: data.clash_api?.auto_dns ?? 'disabled',
             timezone: data.log.timezone,
             authEnabled: !!data.auth?.enabled,
           },

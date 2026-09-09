@@ -32,6 +32,7 @@ const initialSettings: AppSettings = {
   hideUnavailableProxies: false,
   hideUnavailableProxiesCounter: 3,
   proxySortOrder: 'default',
+  autoDns: 'disabled',
   timezone: 0,
   authEnabled: false,
 }
@@ -492,6 +493,14 @@ export function syncClashApiPort(delayMs = 0): void {
     if (delayMs > 0) setTimeout(fetchFn, delayMs)
     else fetchFn()
   }
+}
+
+// ─── Сигнал рефетча DNS-статуса (дёргается после старта/стопа сервиса) ─────────
+
+export const useDnsRefreshStore = create<{ token: number }>(() => ({ token: 0 }))
+
+export function bumpDnsRefresh(): void {
+  useDnsRefreshStore.setState((s) => ({ token: s.token + 1 }))
 }
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────

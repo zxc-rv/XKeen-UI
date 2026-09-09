@@ -22,7 +22,7 @@ import { IconAlertCircle, IconCircleCheckFilled, IconCircleXFilled, IconDeviceFl
 import * as jsyaml from 'js-yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { apiCall, clashFetch } from '../../../lib/api'
-import { useAppContext } from '../../../lib/store'
+import { useAppContext, useDnsRefreshStore } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
 
 interface DnsStatus {
@@ -72,7 +72,7 @@ interface DnsConfig {
   fallback: string
 }
 
-const DEFAULT_DNS_CONFIG: DnsConfig = {
+export const DEFAULT_DNS_CONFIG: DnsConfig = {
   enhancedMode: 'redir-host',
   fakeIpFilterMode: 'blacklist',
   fakeIpFilter: '+.lan',
@@ -134,7 +134,7 @@ function parseNameserverPolicy(text: string): Record<string, string[]> {
   return result
 }
 
-function buildDnsYaml(config: DnsConfig, extra: Record<string, unknown>): string {
+export function buildDnsYaml(config: DnsConfig, extra: Record<string, unknown>): string {
   const lines: string[] = []
   lines.push('dns:')
   lines.push('  enable: true')
@@ -236,6 +236,7 @@ function setDnsEnableFalse(content: string): string {
 export const DnsPanel = memo(function DnsPanel() {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, clashApiPort, clashApiSecret, clashApiUnix } = state
+  const dnsRefreshToken = useDnsRefreshStore((s) => s.token)
 
   const [dnsStatus, setDnsStatus] = useState<DnsStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -267,6 +268,7 @@ export const DnsPanel = memo(function DnsPanel() {
   )
 
   const fetchStatus = useCallback(async () => {
+    setIsLoading(true)
     try {
       const data = await apiCall<DnsStatusResponse>('GET', 'dns')
       if (data.success && data.status) {
@@ -281,7 +283,7 @@ export const DnsPanel = memo(function DnsPanel() {
 
   useEffect(() => {
     fetchStatus()
-  }, [fetchStatus])
+  }, [fetchStatus, dnsRefreshToken])
 
   useEffect(() => {
     if (!yamlConfig) return
@@ -422,7 +424,7 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsToggling(false)
     }
-  }, [fetchStatus, showToast, yamlConfig, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs, setupFilter])
+  }, [fetchStatus, showToast, yamlConfig, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const handleConfirmEnable = useCallback(async () => {
     setEnableDialogOpen(false)
@@ -710,18 +712,18 @@ export const DnsPanel = memo(function DnsPanel() {
       <AlertDialog open={enableDialogOpen} onOpenChange={setEnableDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Настройка интернет-фильтра</AlertDialogTitle>
+            <AlertDialogTitle>Включить управление DNS?</AlertDialogTitle>
             <AlertDialogDescription>
-              Включить управление DNS от KeeneticOS к Mihomo.
+              Передача управление DNS от KeeneticOS к Mihomo
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 py-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Выполнить настройку интернет-фильтра?</Label>
+              <Label className="text-sm">Автонастройка интернет-фильтра</Label>
               <Switch checked={setupFilter} onCheckedChange={setSetupFilter} />
             </div>
             <p className="text-muted-foreground text-xs">
-              Будет выполнена очистка DoU, DoT и DoH резолверов и добавлен br0 адрес для перенаправления запросов в Mihomo
+              Будет выполнена очистка DoU, DoT и DoH резолверов и добавлен IPv4 адрес br0 интерфейса для перенаправления запросов в Mihomo
             </p>
           </div>
           <AlertDialogFooter>

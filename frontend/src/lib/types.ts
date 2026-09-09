@@ -12,6 +12,8 @@ export interface Config {
 
 export type ProxySortOrder = 'default' | 'name' | 'ping'
 
+export type AutoDnsMode = 'disabled' | 'enabled' | 'with_filter'
+
 export interface AppSettings {
   theme: ThemeMode
   autoApply: boolean
@@ -27,6 +29,7 @@ export interface AppSettings {
   hideUnavailableProxies: boolean
   hideUnavailableProxiesCounter: number
   proxySortOrder: ProxySortOrder
+  autoDns: AutoDnsMode
   timezone: number
   authEnabled: boolean
 }
