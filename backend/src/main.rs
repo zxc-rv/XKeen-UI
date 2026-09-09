@@ -16,7 +16,7 @@ mod websocket;
 use crate::logger::{log, ts};
 use crate::types::*;
 use axum::http::StatusCode;
-use axum::routing::{any, get, post};
+use axum::routing::{any, get, patch, post};
 use axum::{Router, middleware};
 
 use clap::builder::styling::{AnsiColor, Styles};
@@ -485,6 +485,8 @@ async fn main() {
             "/api/dns",
             get(dns::get_dns).post(dns::post_dns).delete(dns::delete_dns),
         )
+        .route("/api/dns/override", patch(dns::patch_dns_override))
+        .route("/api/dns/mihomo", patch(dns::patch_dns_mihomo))
         .route("/api/auth/logout", post(auth::post_logout))
         .route("/api/auth/reset", post(auth::post_auth_reset))
         .route("/clash/{*path}", any(api_relay::proxy_http))

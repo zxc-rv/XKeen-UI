@@ -642,7 +642,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                         DNS
                       </TabsTrigger>
                       <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
-                        YAML
+                        Конфигурация
                       </TabsTrigger>
                     </TabsList>
                   </Tabs>

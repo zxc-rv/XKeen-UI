@@ -10,21 +10,58 @@ use std::time::Duration;
 #[derive(Deserialize)]
 pub struct DnsEnableReq {
     pub dns_config: String,
+    #[serde(default = "default_true")]
+    pub clear_dns: bool,
+    #[serde(default = "default_true")]
+    pub add_br0_nameserver: bool,
+}
+
+#[derive(Deserialize)]
+pub struct DnsDeleteReq {
+    #[serde(default)]
+    pub clean: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DnsStatusFields {
     pub dns_override: bool,
-    pub name_server: bool,
-    pub ignore_provider: bool,
+    pub dns_mihomo: bool,
+    pub provider_ignored: bool,
+}
+
+fn check_dns_mihomo() -> bool {
+    if let Some(config_path) = find_mihomo_config() {
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Ok(yaml) = yaml_rust2::YamlLoader::load_from_str(&content) {
+                if let Some(doc) = yaml.first() {
+                    if let Some(dns) = doc["dns"].as_hash() {
+                        let enable = dns
+                            .get(&yaml_rust2::Yaml::String("enable".into()))
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        let listen = dns
+                            .get(&yaml_rust2::Yaml::String("listen".into()))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        return enable && listen == "0.0.0.0:53";
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 fn parse_dns_status(output: &str) -> DnsStatusFields {
     DnsStatusFields {
         dns_override: output.contains("opkg dns-override"),
-        name_server: output.contains("ip name-server"),
-        ignore_provider: output.contains("ip no name-servers"),
+        dns_mihomo: check_dns_mihomo(),
+        provider_ignored: output.contains("ip no name-servers"),
     }
 }
 
@@ -134,29 +171,6 @@ async fn run_rci_step(
     }
 }
 
-async fn find_ignore_provider_target(state: &AppState) -> Result<String, String> {
-    let data = fetch_rci(state, "interface").await?;
-    let interfaces = data
-        .as_object()
-        .ok_or("RCI не вернул список интерфейсов")?;
-
-    let isp = interfaces
-        .values()
-        .find(|v| v.get("interface-name").and_then(|n| n.as_str()) == Some("ISP"))
-        .ok_or("Интерфейс ISP не найден")?;
-
-    if isp.get("global").and_then(|v| v.as_bool()).unwrap_or(false) {
-        return Ok("ISP".to_string());
-    }
-
-    isp.get("usedby")
-        .and_then(|v| v.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|v| v.as_str())
-        .map(String::from)
-        .ok_or("ISP не глобальный, а usedby пуст — не удалось определить интерфейс".to_string())
-}
-
 fn find_mihomo_config() -> Option<String> {
     let dir = std::fs::read_dir(MIHOMO_CONF_DIR).ok()?;
     for entry in dir.flatten() {
@@ -239,30 +253,24 @@ pub async fn post_dns(
         }
     };
 
-    let ignore_target = match find_ignore_provider_target(&state).await {
-        Ok(target) => target,
-        Err(e) => {
-            log("ERROR", format!("DNS: не удалось определить интерфейс для отключения провайдерских DNS: {e}"));
-            return Json(DnsResponse {
-                success: false,
-                error: Some(e),
-                status: None,
-            });
-        }
-    };
-
-    let steps = [
-        ("Отключение DNS провайдера", Method::POST, "interface", json!({"name": ignore_target, "ip": {"no": {"name-servers": true}}})),
-        ("Отключение HTTPS DNS-прокси", Method::DELETE, "dns-proxy/https/upstream", json!({})),
-        ("Отключение TLS DNS-прокси", Method::DELETE, "dns-proxy/tls/upstream", json!({})),
-        ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})),
-        ("Установка name-server на br0", Method::POST, "ip/name-server", json!({"address": br0_ip, "port": 53})),
+    let mut steps: Vec<(&str, Method, &str, serde_json::Value)> = vec![
         ("Включение opkg dns-override", Method::POST, "opkg/dns-override", json!({})),
         ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
     ];
 
-    for (step, method, path, payload) in steps {
-        if let Err(e) = run_rci_step(&state, step, method, path, payload).await {
+    if req.clear_dns {
+        steps.insert(0, ("Отключение HTTPS DNS-прокси", Method::DELETE, "dns-proxy/https/upstream", json!({})));
+        steps.insert(1, ("Отключение TLS DNS-прокси", Method::DELETE, "dns-proxy/tls/upstream", json!({})));
+        steps.insert(2, ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})));
+    }
+
+    if req.add_br0_nameserver {
+        let insert_idx = if req.clear_dns { 3 } else { 0 };
+        steps.insert(insert_idx, ("Установка name-server на br0", Method::POST, "ip/name-server", json!({"address": br0_ip, "port": 53})));
+    }
+
+    for (step, method, path, payload) in &steps {
+        if let Err(e) = run_rci_step(&state, step, method.clone(), path, payload.clone()).await {
             return Json(DnsResponse {
                 success: false,
                 error: Some(e),
@@ -297,15 +305,22 @@ pub async fn post_dns(
     })
 }
 
-pub async fn delete_dns(State(state): State<AppState>) -> impl IntoResponse {
-    let steps = [
+pub async fn delete_dns(
+    State(state): State<AppState>,
+    Json(req): Json<DnsDeleteReq>,
+) -> impl IntoResponse {
+    let mut steps: Vec<(&str, Method, &str, serde_json::Value)> = vec![
         ("Отключение opkg dns-override", Method::DELETE, "opkg/dns-override", json!({})),
-        ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})),
         ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
     ];
 
-    for (step, method, path, payload) in steps {
-        if let Err(e) = run_rci_step(&state, step, method, path, payload).await {
+    if req.clean {
+        steps.insert(1, ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})));
+        steps.insert(2, ("Установка name-server на 77.88.8.8", Method::POST, "ip/name-server", json!({"address": "77.88.8.8", "port": 53})));
+    }
+
+    for (step, method, path, payload) in &steps {
+        if let Err(e) = run_rci_step(&state, step, method.clone(), path, payload.clone()).await {
             return Json(DnsResponse {
                 success: false,
                 error: Some(e),
@@ -314,10 +329,157 @@ pub async fn delete_dns(State(state): State<AppState>) -> impl IntoResponse {
         }
     }
 
-    log("INFO", "Управление DNS отключено. Не забудьте настроить DNS в KeeneticOS".into());
+    if let Some(config_path) = find_mihomo_config() {
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            let new_content = set_dns_enable_false(&content);
+            if let Err(e) = std::fs::write(&config_path, &new_content) {
+                log("ERROR", format!("Ошибка записи config.yaml: {e}"));
+            } else {
+                log("INFO", format!("dns.enable выключен в {config_path}"));
+            }
+        }
+    }
+
+    log("INFO", "Управление DNS отключено".into());
     Json(DnsResponse {
         success: true,
         error: None,
         status: None,
     })
+}
+
+fn set_dns_enable_false(content: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut result = Vec::with_capacity(lines.len());
+    let mut in_dns = false;
+
+    for line in &lines {
+        if line.starts_with("dns:") || line.starts_with("dns :") {
+            in_dns = true;
+            result.push(*line);
+            continue;
+        }
+        if in_dns && !line.starts_with(' ') && !line.starts_with('\t') && !line.is_empty() {
+            in_dns = false;
+        }
+        if in_dns && line.trim() == "enable: true" {
+            result.push("  enable: false");
+            continue;
+        }
+        result.push(*line);
+    }
+
+    result.join("\n")
+}
+
+pub async fn patch_dns_override(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let is_active = {
+        match fetch_running_config(&state).await {
+            Ok(output) => output.contains("opkg dns-override"),
+            Err(e) => {
+                return Json(DnsResponse {
+                    success: false,
+                    error: Some(e),
+                    status: None,
+                });
+            }
+        }
+    };
+
+    let (step, method, path, payload) = if is_active {
+        ("Отключение opkg dns-override", Method::DELETE, "opkg/dns-override", json!({}))
+    } else {
+        ("Включение opkg dns-override", Method::POST, "opkg/dns-override", json!({}))
+    };
+
+    if let Err(e) = run_rci_step(&state, step, method, path, payload).await {
+        return Json(DnsResponse {
+            success: false,
+            error: Some(e),
+            status: None,
+        });
+    }
+
+    let _ = run_rci_step(&state, "Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})).await;
+
+    log("INFO", format!("DNS Override: {}", if is_active { "выключен" } else { "включен" }));
+    Json(DnsResponse {
+        success: true,
+        error: None,
+        status: None,
+    })
+}
+
+pub async fn patch_dns_mihomo(
+    _state: State<AppState>,
+) -> impl IntoResponse {
+    let config_path = match find_mihomo_config() {
+        Some(p) => p,
+        None => {
+            return Json(DnsResponse {
+                success: false,
+                error: Some("config.yaml не найден".into()),
+                status: None,
+            });
+        }
+    };
+
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            return Json(DnsResponse {
+                success: false,
+                error: Some(format!("Ошибка чтения config.yaml: {e}")),
+                status: None,
+            });
+        }
+    };
+
+    let is_active = check_dns_mihomo();
+    let new_content = if is_active {
+        set_dns_enable_false(&content)
+    } else {
+        set_dns_enable_true(&content)
+    };
+
+    if let Err(e) = std::fs::write(&config_path, &new_content) {
+        return Json(DnsResponse {
+            success: false,
+            error: Some(format!("Ошибка записи config.yaml: {e}")),
+            status: None,
+        });
+    }
+
+    log("INFO", format!("DNS Mihomo: {}", if is_active { "выключен" } else { "включен" }));
+    Json(DnsResponse {
+        success: true,
+        error: None,
+        status: None,
+    })
+}
+
+fn set_dns_enable_true(content: &str) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut result = Vec::with_capacity(lines.len());
+    let mut in_dns = false;
+
+    for line in &lines {
+        if line.starts_with("dns:") || line.starts_with("dns :") {
+            in_dns = true;
+            result.push(*line);
+            continue;
+        }
+        if in_dns && !line.starts_with(' ') && !line.starts_with('\t') && !line.is_empty() {
+            in_dns = false;
+        }
+        if in_dns && line.trim() == "enable: false" {
+            result.push("  enable: true");
+            continue;
+        }
+        result.push(*line);
+    }
+
+    result.join("\n")
 }

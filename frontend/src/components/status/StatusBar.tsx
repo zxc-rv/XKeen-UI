@@ -3,8 +3,20 @@ import { ShineBorder } from '@/components/ui/shine-border'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { apiCall, capitalize } from '../../lib/api'
 import { syncClashApiPort, useAppContext } from '../../lib/store'
 import { cn } from '../../lib/utils'
@@ -56,6 +68,26 @@ export function StatusBar({
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending' || serviceStatus === 'loading'
 
+  const [dnsManagementEnabled, setDnsManagementEnabled] = useState(false)
+  const [dnsWarningOpen, setDnsWarningOpen] = useState(false)
+  const [dnsDisableOpen, setDnsDisableOpen] = useState(false)
+  const [dnsClean, setDnsClean] = useState(true)
+
+  const fetchDnsStatus = useCallback(async () => {
+    try {
+      const data = await apiCall<{ success: boolean; status?: { dnsOverride: boolean; dnsMihomo: boolean } }>('GET', 'dns')
+      if (data.success && data.status) {
+        setDnsManagementEnabled(data.status.dnsOverride && data.status.dnsMihomo)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchDnsStatus()
+  }, [fetchDnsStatus])
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (state.serviceStatus !== 'pending') onRefreshStatus()
@@ -83,9 +115,38 @@ export function StatusBar({
   }
 
   async function stopService() {
+    if (dnsManagementEnabled) {
+      setDnsWarningOpen(true)
+      return
+    }
     setPending('Остановка сервиса...')
     const result = await apiCall<any>('POST', 'control', { action: 'stop' })
     showToast(result.success ? 'XKeen остановлен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
+    onRefreshStatus()
+  }
+
+  async function forceStopService() {
+    setPending('Остановка сервиса...')
+    const result = await apiCall<any>('POST', 'control', { action: 'stop' })
+    showToast(result.success ? 'XKeen остановлен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
+    onRefreshStatus()
+  }
+
+  async function disableDnsAndStop() {
+    setDnsDisableOpen(false)
+    setPending('Отключение DNS и остановка...')
+    try {
+      const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', { clean: dnsClean })
+      if (result.success) {
+        showToast('Управление DNS отключено')
+      } else {
+        showToast(`Ошибка DNS: ${result.error}`, 'error')
+      }
+    } catch {
+      showToast('Ошибка отключения DNS', 'error')
+    }
+    const stopResult = await apiCall<any>('POST', 'control', { action: 'stop' })
+    showToast(stopResult.success ? 'XKeen остановлен' : `${stopResult.output || stopResult.error}`, stopResult.success ? 'success' : 'error')
     onRefreshStatus()
   }
 
@@ -111,6 +172,7 @@ export function StatusBar({
   )
 
   return (
+    <>
     <TooltipProvider delayDuration={500}>
       <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-3 rounded-xl border p-3 sm:p-4 md:flex-row md:items-center">
         <div className="order-2 flex flex-wrap items-center justify-center gap-1.5 md:order-1 md:justify-start">
@@ -252,5 +314,49 @@ export function StatusBar({
         </div>
       </div>
     </TooltipProvider>
+      <AlertDialog open={dnsWarningOpen} onOpenChange={setDnsWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Внимание</AlertDialogTitle>
+            <AlertDialogDescription>
+              Включено управление DNS, при остановке сервиса пропадет доступ в интернет.
+              Хотите отключить?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDnsWarningOpen(false)}>Отмена</AlertDialogCancel>
+            <AlertDialogAction variant="outline" onClick={() => { setDnsWarningOpen(false); forceStopService() }}>
+              Нет
+            </AlertDialogAction>
+            <AlertDialogAction onClick={() => { setDnsWarningOpen(false); setDnsDisableOpen(true) }}>
+              Да
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={dnsDisableOpen} onOpenChange={setDnsDisableOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Отключить управление DNS?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Будет отключен Mihomo DNS и opkg dns-override.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Очистить настройки DNS в KeeneticOS</Label>
+              <Switch checked={dnsClean} onCheckedChange={setDnsClean} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDnsDisableOpen(false)}>Отмена</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={disableDnsAndStop}>
+              Отключить и остановить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

@@ -8,7 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -18,7 +18,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconCircleCheckFilled, IconCircleXFilled, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons-react'
+import { IconAlertCircle, IconCircleCheckFilled, IconCircleXFilled, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { apiCall, clashFetch } from '../../../lib/api'
@@ -27,8 +27,8 @@ import type { Config } from '../../../lib/types'
 
 interface DnsStatus {
   dnsOverride: boolean
-  nameServer: boolean
-  ignoreProvider: boolean
+  dnsMihomo: boolean
+  providerIgnored: boolean
 }
 
 interface DnsStatusResponse {
@@ -219,8 +219,11 @@ export const DnsPanel = memo(function DnsPanel() {
   const [dnsStatus, setDnsStatus] = useState<DnsStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [confirmDisableOpen, setConfirmDisableOpen] = useState(false)
+  const [clearOptionsOpen, setClearOptionsOpen] = useState(false)
+  const [clearDns, setClearDns] = useState(true)
+  const [addBr0Nameserver, setAddBr0Nameserver] = useState(true)
+  const [disableOpen, setDisableOpen] = useState(false)
+  const [disableClean, setDisableClean] = useState(true)
   const [config, setConfig] = useState<DnsConfig>(DEFAULT_DNS_CONFIG)
   const [isApplying, setIsApplying] = useState(false)
 
@@ -234,7 +237,12 @@ export const DnsPanel = memo(function DnsPanel() {
   }, [dispatch])
 
   const isAllActive = useMemo(
-    () => !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.nameServer && dnsStatus.ignoreProvider,
+    () => !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.dnsMihomo,
+    [dnsStatus]
+  )
+
+  const showMihomoSettings = useMemo(
+    () => !!dnsStatus && dnsStatus.dnsMihomo,
     [dnsStatus]
   )
 
@@ -309,16 +317,51 @@ export const DnsPanel = memo(function DnsPanel() {
     })
   }, [yamlConfig])
 
-  const handleToggle = useCallback((value: boolean) => {
+  const handleToggleDnsOverride = useCallback(async (value: boolean) => {
+    setIsToggling(true)
+    try {
+      const result = await apiCall<{ success: boolean; error?: string }>('PATCH', 'dns/override')
+      if (result.success) {
+        await fetchStatus()
+        showToast(value ? 'DNS Override включен' : 'DNS Override отключен')
+      } else {
+        showToast(`Ошибка: ${result.error}`, 'error')
+      }
+    } catch {
+      showToast('Ошибка переключения DNS Override', 'error')
+    } finally {
+      setIsToggling(false)
+    }
+  }, [fetchStatus, showToast])
+
+  const handleToggleDnsMihomo = useCallback(async (value: boolean) => {
+    setIsToggling(true)
+    try {
+      const result = await apiCall<{ success: boolean; error?: string }>('PATCH', 'dns/mihomo')
+      if (result.success) {
+        await fetchStatus()
+        await refreshConfigs()
+        showToast(value ? 'DNS Mihomo включен' : 'DNS Mihomo отключен')
+      } else {
+        showToast(`Ошибка: ${result.error}`, 'error')
+      }
+    } catch {
+      showToast('Ошибка переключения DNS Mihomo', 'error')
+    } finally {
+      setIsToggling(false)
+    }
+  }, [fetchStatus, showToast, refreshConfigs])
+
+  const handleToggleEnable = useCallback((value: boolean) => {
     if (value) {
-      setConfirmOpen(true)
+      setClearOptionsOpen(true)
       return
     }
-    setConfirmDisableOpen(true)
+    setDisableOpen(true)
   }, [])
 
   const handleConfirmDisable = useCallback(async () => {
-    setConfirmDisableOpen(false)
+    setDisableOpen(false)
     setIsToggling(true)
     try {
       if (yamlConfig) {
@@ -341,7 +384,7 @@ export const DnsPanel = memo(function DnsPanel() {
         await refreshConfigs()
       }
 
-      const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns')
+      const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', { clean: disableClean })
       if (result.success) {
         showToast('Управление DNS отключено')
         await fetchStatus()
@@ -353,14 +396,18 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsToggling(false)
     }
-  }, [fetchStatus, showToast, yamlConfig, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
+  }, [fetchStatus, showToast, yamlConfig, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs, disableClean])
 
-  const handleConfirmEnable = useCallback(async () => {
-    setConfirmOpen(false)
+  const handleApplyClearOptions = useCallback(async () => {
+    setClearOptionsOpen(false)
     setIsToggling(true)
     try {
       const yaml = buildDnsYaml(config)
-      const result = await apiCall<{ success: boolean; error?: string }>('POST', 'dns', { dns_config: yaml })
+      const result = await apiCall<{ success: boolean; error?: string }>('POST', 'dns', {
+        dns_config: yaml,
+        clear_dns: clearDns,
+        add_br0_nameserver: addBr0Nameserver,
+      })
       if (result.success) {
         await clashFetch(clashApiPort ?? '', 'configs', {
           method: 'PUT',
@@ -379,7 +426,7 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsToggling(false)
     }
-  }, [config, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
+  }, [config, clearDns, addBr0Nameserver, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const handleApply = useCallback(async () => {
     if (!yamlConfig) return
@@ -424,7 +471,15 @@ export const DnsPanel = memo(function DnsPanel() {
           <CardHeader>
             <CardTitle className="text-sm">Статус DNS</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-3">
+            {!isLoading && dnsStatus && !dnsStatus.providerIgnored && (
+              <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
+                <IconAlertCircle className="size-4.5" />
+                <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
+                  Игнорирование DNS провайдера не определено. Могут возникнуть утечки.
+                </AlertDescription>
+              </Alert>
+            )}
             {isLoading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner /> Загрузка...
@@ -434,29 +489,24 @@ export const DnsPanel = memo(function DnsPanel() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm">
                     <StatusIndicator active={dnsStatus?.dnsOverride ?? false} />
-                    DNS-Override
+                    DNS Override
                   </div>
-                  <Badge variant={dnsStatus?.dnsOverride ? 'emerald' : 'outline'} className="text-xs">
-                    {dnsStatus?.dnsOverride ? 'Активно' : 'Неактивно'}
-                  </Badge>
+                  <Switch
+                    checked={dnsStatus?.dnsOverride ?? false}
+                    onCheckedChange={handleToggleDnsOverride}
+                    disabled={isToggling || isLoading}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm">
-                    <StatusIndicator active={dnsStatus?.nameServer ?? false} />
-                    Наличие IP роутера в резолверах
+                    <StatusIndicator active={dnsStatus?.dnsMihomo ?? false} />
+                    DNS Mihomo
                   </div>
-                  <Badge variant={dnsStatus?.nameServer ? 'emerald' : 'outline'} className="text-xs">
-                    {dnsStatus?.nameServer ? 'Настроено' : 'Не настроено'}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm">
-                    <StatusIndicator active={dnsStatus?.ignoreProvider ?? false} />
-                    Игнорирование DNS провайдера
-                  </div>
-                  <Badge variant={dnsStatus?.ignoreProvider ? 'emerald' : 'outline'} className="text-xs">
-                    {dnsStatus?.ignoreProvider ? 'Активно' : 'Неактивно'}
-                  </Badge>
+                  <Switch
+                    checked={dnsStatus?.dnsMihomo ?? false}
+                    onCheckedChange={handleToggleDnsMihomo}
+                    disabled={isToggling || isLoading}
+                  />
                 </div>
 
                 <Separator />
@@ -475,7 +525,7 @@ export const DnsPanel = memo(function DnsPanel() {
                     <Switch
                       id="dns-toggle"
                       checked={isAllActive}
-                      onCheckedChange={handleToggle}
+                      onCheckedChange={handleToggleEnable}
                       disabled={isToggling || isLoading}
                     />
                   </div>
@@ -485,7 +535,7 @@ export const DnsPanel = memo(function DnsPanel() {
           </CardContent>
         </Card>
 
-        {isAllActive && (
+        {showMihomoSettings && (
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Mihomo DNS</CardTitle>
@@ -615,41 +665,50 @@ export const DnsPanel = memo(function DnsPanel() {
         )}
       </div>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Включить управление DNS?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <ul className="mt-2 list-inside list-disc text-sm">
-                Включение управления DNS сделает следующее:
-                <li>Очистит настройки интернет-фильтра</li>
-                <li>Включит игнорирование DNS провайдера</li>
-                <li>Включит opkg dns-override</li>
-                <li>Добавит br0 адрес для переадресации в Mihomo</li>
-                <li>Добавит/отредактирует DNS настройки в config.yaml</li>
-              </ul>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmOpen(false)}>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmEnable}>Продолжить</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={confirmDisableOpen} onOpenChange={setConfirmDisableOpen}>
+      <AlertDialog open={disableOpen} onOpenChange={setDisableOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Отключить управление DNS?</AlertDialogTitle>
             <AlertDialogDescription>
-              Будет отключен Mihomo DNS и opkg dns-override. После этого потребуется добавить резолверы в интернет-фильтры KeeneticOS.
+              Будет отключен Mihomo DNS и opkg dns-override.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Очистить настройки DNS в KeeneticOS</Label>
+              <Switch checked={disableClean} onCheckedChange={setDisableClean} />
+            </div>
+          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmDisableOpen(false)}>Отмена</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setDisableOpen(false)}>Отмена</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={handleConfirmDisable}>
               Отключить
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={clearOptionsOpen} onOpenChange={setClearOptionsOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Очистка DNS настроек</AlertDialogTitle>
+            <AlertDialogDescription>
+              Выберите, какие настройки необходимо очистить перед включением управления DNS.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col gap-3 py-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Очистить настройки DNS в KeeneticOS</Label>
+              <Switch checked={clearDns} onCheckedChange={setClearDns} />
+            </div>
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Добавить br0 адрес в резолверы KeeneticOS</Label>
+              <Switch checked={addBr0Nameserver} onCheckedChange={setAddBr0Nameserver} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setClearOptionsOpen(false)}>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleApplyClearOptions}>Продолжить</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
