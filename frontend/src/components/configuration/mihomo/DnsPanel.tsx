@@ -240,11 +240,9 @@ export const DnsPanel = memo(function DnsPanel() {
   const [dnsStatus, setDnsStatus] = useState<DnsStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState(false)
-  const [clearOptionsOpen, setClearOptionsOpen] = useState(false)
-  const [clearDns, setClearDns] = useState(true)
-  const [addBr0Nameserver, setAddBr0Nameserver] = useState(true)
+  const [enableDialogOpen, setEnableDialogOpen] = useState(false)
+  const [setupFilter, setSetupFilter] = useState(true)
   const [disableOpen, setDisableOpen] = useState(false)
-  const [disableClean, setDisableClean] = useState(true)
   const [config, setConfig] = useState<DnsConfig>(DEFAULT_DNS_CONFIG)
   const [extraDnsConfig, setExtraDnsConfig] = useState<Record<string, unknown>>({})
   const [isApplying, setIsApplying] = useState(false)
@@ -382,7 +380,7 @@ export const DnsPanel = memo(function DnsPanel() {
 
   const handleToggleEnable = useCallback((value: boolean) => {
     if (value) {
-      setClearOptionsOpen(true)
+      setEnableDialogOpen(true)
       return
     }
     setDisableOpen(true)
@@ -412,7 +410,7 @@ export const DnsPanel = memo(function DnsPanel() {
         await refreshConfigs()
       }
 
-      const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', { clean: disableClean })
+      const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', {})
       if (result.success) {
         showToast('Управление DNS отключено')
         await fetchStatus()
@@ -424,17 +422,16 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsToggling(false)
     }
-  }, [fetchStatus, showToast, yamlConfig, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs, disableClean])
+  }, [fetchStatus, showToast, yamlConfig, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs, setupFilter])
 
-  const handleApplyClearOptions = useCallback(async () => {
-    setClearOptionsOpen(false)
+  const handleConfirmEnable = useCallback(async () => {
+    setEnableDialogOpen(false)
     setIsToggling(true)
     try {
       const yaml = buildDnsYaml(config, extraDnsConfig)
       const result = await apiCall<{ success: boolean; error?: string }>('POST', 'dns', {
         dns_config: yaml,
-        clear_dns: clearDns,
-        add_br0_nameserver: addBr0Nameserver,
+        setup_filter: setupFilter,
       })
       if (result.success) {
         await clashFetch(clashApiPort ?? '', 'configs', {
@@ -454,7 +451,7 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsToggling(false)
     }
-  }, [config, extraDnsConfig, clearDns, addBr0Nameserver, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
+  }, [config, extraDnsConfig, setupFilter, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const handleApply = useCallback(async () => {
     if (!yamlConfig) return
@@ -633,7 +630,7 @@ export const DnsPanel = memo(function DnsPanel() {
               )}
 
               <div className="grid gap-2">
-                <DnsSettingLabel tooltip="Основные DNS-резолверы. Поддерживаются: udp:// tcp:// https:// tls:// quic://. По одному на строку.\nДля того чтобы направить запросы через определенное подключение, укажите #PROXY в конец ссылки, где 'PROXY' - название прокси/селектора,  через него. Например: \n tls://1.1.1.1#vless-reality\n Или:\n tls://1.1.1.1#Заблок. сервисы">
+                <DnsSettingLabel tooltip="Основные DNS-резолверы. Поддерживаются: udp:// tcp:// https:// tls:// quic://. По одному на строку.\nДля того чтобы направить запросы через определенное подключение, укажите #PROXY в конец ссылки, где 'PROXY' - название прокси/селектора. Примеры: \n tls://1.1.1.1#vless-reality\n Или:\n tls://1.1.1.1#Заблок. сервисы">
                   Nameserver
                 </DnsSettingLabel>
                 <Textarea
@@ -698,15 +695,9 @@ export const DnsPanel = memo(function DnsPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>Отключить управление DNS?</AlertDialogTitle>
             <AlertDialogDescription>
-              Будет отключен Mihomo DNS и opkg dns-override.
+              Будет отключен Mihomo DNS, dns-override и при необходимости перенастроен интернет-фильтр.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex flex-col gap-3 py-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Очистить настройки DNS в KeeneticOS</Label>
-              <Switch checked={disableClean} onCheckedChange={setDisableClean} />
-            </div>
-          </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDisableOpen(false)}>Отмена</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={handleConfirmDisable}>
@@ -716,27 +707,26 @@ export const DnsPanel = memo(function DnsPanel() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={clearOptionsOpen} onOpenChange={setClearOptionsOpen}>
+      <AlertDialog open={enableDialogOpen} onOpenChange={setEnableDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Очистка DNS настроек</AlertDialogTitle>
+            <AlertDialogTitle>Настройка интернет-фильтра</AlertDialogTitle>
             <AlertDialogDescription>
-              Выберите, какие настройки необходимо очистить перед включением управления DNS.
+              Включить управление DNS от KeeneticOS к Mihomo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 py-2">
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Очистить настройки DNS в KeeneticOS</Label>
-              <Switch checked={clearDns} onCheckedChange={setClearDns} />
+              <Label className="text-sm">Выполнить настройку интернет-фильтра?</Label>
+              <Switch checked={setupFilter} onCheckedChange={setSetupFilter} />
             </div>
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Добавить br0 адрес в резолверы KeeneticOS</Label>
-              <Switch checked={addBr0Nameserver} onCheckedChange={setAddBr0Nameserver} />
-            </div>
+            <p className="text-muted-foreground text-xs">
+              Будет выполнена очистка DoU, DoT и DoH резолверов и добавлен br0 адрес для перенаправления запросов в Mihomo
+            </p>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setClearOptionsOpen(false)}>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={handleApplyClearOptions}>Продолжить</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setEnableDialogOpen(false)}>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmEnable}>Продолжить</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

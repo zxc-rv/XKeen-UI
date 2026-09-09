@@ -11,16 +11,11 @@ use std::time::Duration;
 pub struct DnsEnableReq {
     pub dns_config: String,
     #[serde(default = "default_true")]
-    pub clear_dns: bool,
-    #[serde(default = "default_true")]
-    pub add_br0_nameserver: bool,
+    pub setup_filter: bool,
 }
 
 #[derive(Deserialize)]
-pub struct DnsDeleteReq {
-    #[serde(default)]
-    pub clean: bool,
-}
+pub struct DnsDeleteReq {}
 
 fn default_true() -> bool {
     true
@@ -312,15 +307,11 @@ pub async fn post_dns(
         ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
     ];
 
-    if req.clear_dns {
+    if req.setup_filter {
         steps.insert(0, ("Отключение HTTPS DNS-прокси", Method::DELETE, "dns-proxy/https/upstream", json!({})));
         steps.insert(1, ("Отключение TLS DNS-прокси", Method::DELETE, "dns-proxy/tls/upstream", json!({})));
         steps.insert(2, ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})));
-    }
-
-    if req.add_br0_nameserver {
-        let insert_idx = if req.clear_dns { 3 } else { 0 };
-        steps.insert(insert_idx, ("Установка name-server на br0", Method::POST, "ip/name-server", json!({"address": br0_ip, "port": 53})));
+        steps.insert(3, ("Установка name-server на br0", Method::POST, "ip/name-server", json!({"address": br0_ip, "port": 53})));
     }
 
     for (step, method, path, payload) in &steps {
@@ -361,14 +352,22 @@ pub async fn post_dns(
 
 pub async fn delete_dns(
     State(state): State<AppState>,
-    Json(req): Json<DnsDeleteReq>,
+    Json(_req): Json<DnsDeleteReq>,
 ) -> impl IntoResponse {
     let mut steps: Vec<(&str, Method, &str, serde_json::Value)> = vec![
         ("Отключение opkg dns-override", Method::DELETE, "opkg/dns-override", json!({})),
         ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
     ];
 
-    if req.clean {
+    let has_br0 = match fetch_running_config(&state).await {
+        Ok(output) => {
+            let br0_ip = get_br0_ip().unwrap_or_default();
+            output.contains(&format!("ip name-server {br0_ip}"))
+        }
+        Err(_) => false,
+    };
+
+    if has_br0 {
         steps.insert(1, ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})));
         steps.insert(2, ("Установка name-server на 77.88.8.8", Method::POST, "ip/name-server", json!({"address": "77.88.8.8", "port": 53})));
     }

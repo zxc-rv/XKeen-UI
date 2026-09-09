@@ -13,8 +13,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect, useState, useCallback } from 'react'
 import { apiCall, capitalize } from '../../lib/api'
@@ -70,8 +68,6 @@ export function StatusBar({
 
   const [dnsManagementEnabled, setDnsManagementEnabled] = useState(false)
   const [dnsWarningOpen, setDnsWarningOpen] = useState(false)
-  const [dnsDisableOpen, setDnsDisableOpen] = useState(false)
-  const [dnsClean, setDnsClean] = useState(true)
 
   const fetchDnsStatus = useCallback(async () => {
     try {
@@ -133,10 +129,9 @@ export function StatusBar({
   }
 
   async function disableDnsAndStop() {
-    setDnsDisableOpen(false)
     setPending('Отключение DNS и остановка...')
     try {
-      const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', { clean: dnsClean })
+      const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', {})
       if (result.success) {
         showToast('Управление DNS отключено')
       } else {
@@ -320,39 +315,16 @@ export function StatusBar({
             <AlertDialogTitle>Внимание</AlertDialogTitle>
             <AlertDialogDescription>
               Включено управление DNS, при остановке сервиса пропадет доступ в интернет.
-              Хотите отключить?
+              Отключить управление?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDnsWarningOpen(false)}>Отмена</AlertDialogCancel>
             <AlertDialogAction variant="outline" onClick={() => { setDnsWarningOpen(false); forceStopService() }}>
-              Нет
+              Не отключать
             </AlertDialogAction>
-            <AlertDialogAction onClick={() => { setDnsWarningOpen(false); setDnsDisableOpen(true) }}>
-              Да
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={dnsDisableOpen} onOpenChange={setDnsDisableOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Отключить управление DNS?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Будет отключен Mihomo DNS и opkg dns-override.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="flex flex-col gap-3 py-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">Очистить настройки DNS в KeeneticOS</Label>
-              <Switch checked={dnsClean} onCheckedChange={setDnsClean} />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDnsDisableOpen(false)}>Отмена</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={disableDnsAndStop}>
-              Отключить и остановить
+            <AlertDialogAction onClick={() => { setDnsWarningOpen(false); disableDnsAndStop() }}>
+              Отключить
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
