@@ -51,7 +51,7 @@ pub async fn get_device_list(State(state): State<AppState>) -> impl IntoResponse
     if !response.status().is_success() {
         return Json(serde_json::json!({
             "success": false,
-            "error": format!("RCI вернул {}", response.status()),
+            "error": format!("Ошибка RCI: {}", response.status()),
         }));
     }
 
@@ -286,7 +286,11 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
             .ok()
             .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(String::from))
             .unwrap_or_else(|| body_text.trim().to_string());
-        log("ERROR", format!("Ошибка применения: {}", detail));
+
+        let skip = detail.contains("Timeout") || detail.contains("An error occurred in the delay test");
+        if !skip {
+            log("ERROR", format!("Ошибка Mihomo: {}", detail));
+        }
     }
 
     let mut response = Response::builder().status(status);
