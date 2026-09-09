@@ -18,7 +18,8 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconAlertCircle, IconCircleCheckFilled, IconCircleXFilled, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons-react'
+import { Badge } from '@/components/ui/badge'
+import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { apiCall, clashFetch } from '../../../lib/api'
@@ -34,14 +35,6 @@ interface DnsStatus {
 interface DnsStatusResponse {
   success: boolean
   status?: DnsStatus
-}
-
-function StatusIndicator({ active }: { active: boolean }) {
-  return active ? (
-    <IconCircleCheckFilled size={16} className="text-emerald-400" />
-  ) : (
-    <IconCircleXFilled size={16} className="text-red-400" />
-  )
 }
 
 function DnsSettingLabel({ children, tooltip }: { children: string; tooltip: string }) {
@@ -345,41 +338,6 @@ export const DnsPanel = memo(function DnsPanel() {
     setExtraDnsConfig(extra)
   }, [yamlConfig])
 
-  const handleToggleDnsOverride = useCallback(async (value: boolean) => {
-    setIsToggling(true)
-    try {
-      const result = await apiCall<{ success: boolean; error?: string }>('PATCH', 'dns/override')
-      if (result.success) {
-        await fetchStatus()
-        showToast(value ? 'DNS Override включен' : 'DNS Override отключен')
-      } else {
-        showToast(`Ошибка: ${result.error}`, 'error')
-      }
-    } catch {
-      showToast('Ошибка переключения DNS Override', 'error')
-    } finally {
-      setIsToggling(false)
-    }
-  }, [fetchStatus, showToast])
-
-  const handleToggleDnsMihomo = useCallback(async (value: boolean) => {
-    setIsToggling(true)
-    try {
-      const result = await apiCall<{ success: boolean; error?: string }>('PATCH', 'dns/mihomo')
-      if (result.success) {
-        await fetchStatus()
-        await refreshConfigs()
-        showToast(value ? 'DNS Mihomo включен' : 'DNS Mihomo отключен')
-      } else {
-        showToast(`Ошибка: ${result.error}`, 'error')
-      }
-    } catch {
-      showToast('Ошибка переключения DNS Mihomo', 'error')
-    } finally {
-      setIsToggling(false)
-    }
-  }, [fetchStatus, showToast, refreshConfigs])
-
   const handleToggleEnable = useCallback((value: boolean) => {
     if (value) {
       setEnableDialogOpen(true)
@@ -515,26 +473,16 @@ export const DnsPanel = memo(function DnsPanel() {
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm">
-                    <StatusIndicator active={dnsStatus?.dnsOverride ?? false} />
-                    DNS Override
-                  </div>
-                  <Switch
-                    checked={dnsStatus?.dnsOverride ?? false}
-                    onCheckedChange={handleToggleDnsOverride}
-                    disabled={isToggling || isLoading}
-                  />
+                  <Label className="text-sm">DNS Override</Label>
+                  <Badge variant={dnsStatus?.dnsOverride ? 'emerald' : 'rose'}>
+                    {dnsStatus?.dnsOverride ? 'Активно' : 'Неактивно'}
+                  </Badge>
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm">
-                    <StatusIndicator active={dnsStatus?.dnsMihomo ?? false} />
-                    DNS Mihomo
-                  </div>
-                  <Switch
-                    checked={dnsStatus?.dnsMihomo ?? false}
-                    onCheckedChange={handleToggleDnsMihomo}
-                    disabled={isToggling || isLoading}
-                  />
+                  <Label className="text-sm">DNS Mihomo</Label>
+                  <Badge variant={dnsStatus?.dnsMihomo ? 'emerald' : 'rose'}>
+                    {dnsStatus?.dnsMihomo ? 'Активно' : 'Неактивно'}
+                  </Badge>
                 </div>
 
                 <Separator />
