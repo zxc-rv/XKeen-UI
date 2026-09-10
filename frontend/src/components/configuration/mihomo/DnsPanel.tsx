@@ -69,11 +69,11 @@ interface DnsConfig {
 export const DEFAULT_DNS_CONFIG: DnsConfig = {
   enhancedMode: 'redir-host',
   fakeIpFilterMode: 'blacklist',
-  fakeIpFilter: '+.lan',
+  fakeIpFilter: '+.local',
   bootstrap: '77.88.8.8',
   nameserver: 'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query',
   nameserverPolicy: '',
-  fallback: 'tls://8.8.4.4\ntls://1.1.1.1',
+  fallback: 'tls://77.88.8.1\ntls://77.88.8.8',
 }
 
 const DEFAULT_DNS_LISTEN = '0.0.0.0:53'
@@ -158,7 +158,6 @@ export function patchDnsConfig(content: string, config: DnsConfig): string {
 
   doc.setIn(['dns', 'enable'], true)
   doc.setIn(['dns', 'listen'], DEFAULT_DNS_LISTEN)
-  doc.setIn(['dns', 'ipv6'], true)
   doc.setIn(['dns', 'enhanced-mode'], config.enhancedMode)
 
   if (config.enhancedMode === 'fake-ip') {
