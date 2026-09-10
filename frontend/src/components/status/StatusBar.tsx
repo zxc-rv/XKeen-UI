@@ -16,7 +16,7 @@ import {
 import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect, useState, useCallback } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
-import { buildDnsYaml, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
+import { patchDnsConfig, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
 import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { ServiceStatus } from '../../lib/types'
@@ -45,6 +45,22 @@ function StatusWaveform({ status }: { status: ServiceStatus }) {
       )}
     </svg>
   )
+}
+
+async function applyAutoDns(setupFilter: boolean) {
+  const configsResult = await apiCall<{ success: boolean; configs?: { file: string; content: string }[] }>('GET', 'configs')
+  const yamlConfig = configsResult.success ? configsResult.configs?.find((c) => c.file.endsWith('/config.yaml')) : undefined
+  if (!yamlConfig) return
+  const configContent = patchDnsConfig(yamlConfig.content, DEFAULT_DNS_CONFIG)
+  await apiCall('POST', 'dns', { config_content: configContent, setup_filter: setupFilter })
+}
+
+async function persistDnsEnabled(enabled: boolean) {
+  const configsResult = await apiCall<{ success: boolean; configs?: { file: string; content: string }[] }>('GET', 'configs')
+  const yamlConfig = configsResult.success ? configsResult.configs?.find((c) => c.file.endsWith('/config.yaml')) : undefined
+  if (!yamlConfig) return
+  const updated = setDnsEnabled(yamlConfig.content, enabled)
+  await apiCall('PUT', 'configs', { file: yamlConfig.file, content: updated })
 }
 
 export function StatusBar({
@@ -112,8 +128,7 @@ export function StatusBar({
     }
     syncClashApiPort()
     if (settings.autoDns !== 'disabled' && state.currentCore === 'mihomo') {
-      const yaml = buildDnsYaml(DEFAULT_DNS_CONFIG, {})
-      await apiCall('POST', 'dns', { dns_config: yaml, setup_filter: settings.autoDns === 'with_filter' })
+      await applyAutoDns(settings.autoDns === 'with_filter')
       const { clashApiPort, clashApiSecret, clashApiUnix } = getAppState()
       await clashFetch(clashApiPort ?? '', 'configs', { method: 'PUT', secret: clashApiSecret, unix: clashApiUnix, body: {} })
       bumpDnsRefresh()
@@ -144,6 +159,7 @@ export function StatusBar({
   async function disableDnsAndStop() {
     setPending('Отключение DNS и остановка...')
     try {
+      await persistDnsEnabled(false)
       const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', {})
       if (result.success) {
         showToast('Управление DNS отключено')

@@ -21,6 +21,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
+import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { apiCall, clashFetch } from '../../../lib/api'
 import { useAppContext, useDnsRefreshStore } from '../../../lib/store'
@@ -75,18 +76,12 @@ export const DEFAULT_DNS_CONFIG: DnsConfig = {
   fallback: 'tls://8.8.4.4\ntls://1.1.1.1',
 }
 
-const MANAGED_DNS_KEYS = new Set([
-  'enable',
-  'listen',
-  'ipv6',
-  'enhanced-mode',
-  'fake-ip-filter-mode',
-  'fake-ip-filter',
-  'default-nameserver',
-  'nameserver-policy',
-  'nameserver',
-  'fallback',
-])
+const DEFAULT_DNS_LISTEN = '0.0.0.0:53'
+const YAML_LINE_WIDTH = 200
+
+function trimFlowSeqPadding(text: string): string {
+  return text.replace(/\[[ \t]+/g, '[').replace(/[ \t]+\]/g, ']')
+}
 
 function parseList(text: string): string[] {
   const trimmed = text.trim()
@@ -127,103 +122,73 @@ function parseNameserverPolicy(text: string): Record<string, string[]> {
   return result
 }
 
-export function buildDnsYaml(config: DnsConfig, extra: Record<string, unknown>): string {
-  const lines: string[] = []
-  lines.push('dns:')
-  lines.push('  enable: true')
-  lines.push('  listen: 0.0.0.0:53')
-  lines.push('  ipv6: true')
-  lines.push('  enhanced-mode: ' + config.enhancedMode)
+function getCommentBefore(doc: Document, path: string[]): string | undefined {
+  const existing = doc.getIn(path, true)
+  return isNode(existing) ? (existing.commentBefore ?? undefined) : undefined
+}
+
+function buildPolicyNode(doc: Document, text: string): YAMLMap {
+  const policy = parseNameserverPolicy(text)
+  const map = new YAMLMap()
+  for (const [key, servers] of Object.entries(policy)) {
+    if (servers.length === 1) {
+      map.set(key, servers[0])
+    } else if (servers.length > 1) {
+      const seq = doc.createNode(servers)
+      if (isSeq(seq)) seq.flow = true
+      map.set(key, seq)
+    }
+  }
+  return map
+}
+
+function setOrDeleteList(doc: Document, path: string[], items: string[]) {
+  if (!items.length) {
+    doc.deleteIn(path)
+    return
+  }
+  const commentBefore = getCommentBefore(doc, path)
+  const seq = doc.createNode(items)
+  if (commentBefore !== undefined) seq.commentBefore = commentBefore
+  doc.setIn(path, seq)
+}
+
+export function patchDnsConfig(content: string, config: DnsConfig): string {
+  const doc = parseDocument(content)
+
+  doc.setIn(['dns', 'enable'], true)
+  doc.setIn(['dns', 'listen'], DEFAULT_DNS_LISTEN)
+  doc.setIn(['dns', 'ipv6'], true)
+  doc.setIn(['dns', 'enhanced-mode'], config.enhancedMode)
 
   if (config.enhancedMode === 'fake-ip') {
-    lines.push('  fake-ip-filter-mode: ' + config.fakeIpFilterMode)
-    const filters = parseList(config.fakeIpFilter)
-    if (filters.length) {
-      lines.push('  fake-ip-filter:')
-      for (const f of filters) lines.push('    - ' + f)
-    }
-  }
-
-  const bootstrap = parseList(config.bootstrap)
-  if (bootstrap.length) {
-    lines.push('  default-nameserver:')
-    for (const b of bootstrap) lines.push('    - ' + b)
-  }
-
-  const policy = parseNameserverPolicy(config.nameserverPolicy)
-  if (Object.keys(policy).length) {
-    lines.push('  nameserver-policy:')
-    for (const [key, servers] of Object.entries(policy)) {
-      if (servers.length === 1) {
-        lines.push(`    "${key}": ${servers[0]}`)
-      } else if (servers.length > 1) {
-        lines.push(`    "${key}": [${servers.join(', ')}]`)
-      }
-    }
-  }
-
-  const nameservers = parseList(config.nameserver)
-  if (nameservers.length) {
-    lines.push('  nameserver:')
-    for (const n of nameservers) lines.push('    - ' + n)
-  }
-
-  const fallbacks = parseList(config.fallback)
-  if (fallbacks.length) {
-    lines.push('  fallback:')
-    for (const f of fallbacks) lines.push('    - ' + f)
-  }
-
-  const extraWithDefaults: Record<string, unknown> = { 'fallback-filter': { geoip: false }, ...extra }
-  const extraYaml = jsyaml.dump(extraWithDefaults, { indent: 2 }).trimEnd()
-  for (const line of extraYaml.split('\n')) lines.push('  ' + line)
-
-  return lines.join('\n')
-}
-
-function replaceDnsBlock(content: string, newBlock: string): string {
-  const lines = content.split('\n')
-  let dnsStart = -1
-  let dnsEnd = lines.length
-
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('dns:') || lines[i].startsWith('dns :')) {
-      dnsStart = i
-      continue
-    }
-    if (dnsStart >= 0 && !lines[i].startsWith(' ') && !lines[i].startsWith('\t') && lines[i].trim() !== '') {
-      dnsEnd = i
-      break
-    }
-  }
-
-  if (dnsStart >= 0) {
-    lines.splice(dnsStart, dnsEnd - dnsStart, newBlock)
+    doc.setIn(['dns', 'fake-ip-filter-mode'], config.fakeIpFilterMode)
+    setOrDeleteList(doc, ['dns', 'fake-ip-filter'], parseList(config.fakeIpFilter))
   } else {
-    lines.push('')
-    lines.push(newBlock)
+    doc.deleteIn(['dns', 'fake-ip-filter-mode'])
+    doc.deleteIn(['dns', 'fake-ip-filter'])
   }
 
-  return lines.join('\n')
+  setOrDeleteList(doc, ['dns', 'default-nameserver'], parseList(config.bootstrap))
+
+  const policyCommentBefore = getCommentBefore(doc, ['dns', 'nameserver-policy'])
+  const policyNode = buildPolicyNode(doc, config.nameserverPolicy)
+  if (policyCommentBefore !== undefined) policyNode.commentBefore = policyCommentBefore
+  if (policyNode.items.length) doc.setIn(['dns', 'nameserver-policy'], policyNode)
+  else doc.deleteIn(['dns', 'nameserver-policy'])
+
+  setOrDeleteList(doc, ['dns', 'nameserver'], parseList(config.nameserver))
+  setOrDeleteList(doc, ['dns', 'fallback'], parseList(config.fallback))
+
+  if (!doc.hasIn(['dns', 'fallback-filter'])) doc.setIn(['dns', 'fallback-filter'], { geoip: false })
+
+  return trimFlowSeqPadding(doc.toString({ lineWidth: YAML_LINE_WIDTH }))
 }
 
-function setDnsEnableFalse(content: string): string {
-  const lines = content.split('\n')
-  let inDns = false
-  for (let i = 0; i < lines.length; i++) {
-    if (/^dns\s*:/.test(lines[i])) {
-      inDns = true
-      continue
-    }
-    if (inDns && /^\S/.test(lines[i]) && lines[i].trim() !== '') {
-      break
-    }
-    if (inDns && /^\s+enable:\s*true\s*$/.test(lines[i])) {
-      lines[i] = lines[i].replace('enable: true', 'enable: false')
-      break
-    }
-  }
-  return lines.join('\n')
+export function setDnsEnabled(content: string, enabled: boolean): string {
+  const doc = parseDocument(content)
+  doc.setIn(['dns', 'enable'], enabled)
+  return trimFlowSeqPadding(doc.toString({ lineWidth: YAML_LINE_WIDTH }))
 }
 
 export const DnsPanel = memo(function DnsPanel() {
@@ -238,7 +203,6 @@ export const DnsPanel = memo(function DnsPanel() {
   const [setupFilter, setSetupFilter] = useState(true)
   const [disableOpen, setDisableOpen] = useState(false)
   const [config, setConfig] = useState<DnsConfig>(DEFAULT_DNS_CONFIG)
-  const [extraDnsConfig, setExtraDnsConfig] = useState<Record<string, unknown>>({})
   const [isApplying, setIsApplying] = useState(false)
 
   const yamlConfig = useMemo(() => configs.find((c: Config) => c.file.endsWith('/config.yaml')), [configs])
@@ -330,12 +294,6 @@ export const DnsPanel = memo(function DnsPanel() {
       nameserverPolicy,
       fallback,
     })
-
-    const extra: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(dns)) {
-      if (!MANAGED_DNS_KEYS.has(key)) extra[key] = value
-    }
-    setExtraDnsConfig(extra)
   }, [yamlConfig])
 
   const handleToggleEnable = useCallback((value: boolean) => {
@@ -352,7 +310,7 @@ export const DnsPanel = memo(function DnsPanel() {
     try {
       if (yamlConfig) {
         const content = yamlConfig.savedContent || yamlConfig.content
-        const updated = setDnsEnableFalse(content)
+        const updated = setDnsEnabled(content, false)
         const saveResult = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', {
           file: yamlConfig.file,
           content: updated,
@@ -385,12 +343,17 @@ export const DnsPanel = memo(function DnsPanel() {
   }, [fetchStatus, showToast, yamlConfig, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const handleConfirmEnable = useCallback(async () => {
+    if (!yamlConfig) {
+      showToast('Конфигурация ещё не загружена', 'error')
+      return
+    }
     setEnableDialogOpen(false)
     setIsToggling(true)
     try {
-      const yaml = buildDnsYaml(config, extraDnsConfig)
+      const content = yamlConfig.savedContent || yamlConfig.content
+      const configContent = patchDnsConfig(content, config)
       const result = await apiCall<{ success: boolean; error?: string }>('POST', 'dns', {
-        dns_config: yaml,
+        config_content: configContent,
         setup_filter: setupFilter,
       })
       if (result.success) {
@@ -411,15 +374,14 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsToggling(false)
     }
-  }, [config, extraDnsConfig, setupFilter, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
+  }, [config, yamlConfig, setupFilter, fetchStatus, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const handleApply = useCallback(async () => {
     if (!yamlConfig) return
     setIsApplying(true)
     try {
       const content = yamlConfig.savedContent || yamlConfig.content
-      const newDnsBlock = buildDnsYaml(config, extraDnsConfig)
-      const updated = replaceDnsBlock(content, newDnsBlock)
+      const updated = patchDnsConfig(content, config)
 
       const saveResult = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', {
         file: yamlConfig.file,
@@ -444,7 +406,7 @@ export const DnsPanel = memo(function DnsPanel() {
     } finally {
       setIsApplying(false)
     }
-  }, [config, extraDnsConfig, yamlConfig, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
+  }, [config, yamlConfig, showToast, clashApiPort, clashApiSecret, clashApiUnix, refreshConfigs])
 
   const updateConfig = useCallback((patch: Partial<DnsConfig>) => {
     setConfig((prev) => ({ ...prev, ...patch }))

@@ -9,7 +9,7 @@ use std::time::Duration;
 
 #[derive(Deserialize)]
 pub struct DnsEnableReq {
-    pub dns_config: String,
+    pub config_content: String,
     #[serde(default = "default_true")]
     pub setup_filter: bool,
 }
@@ -177,100 +177,6 @@ fn find_mihomo_config() -> Option<String> {
     None
 }
 
-fn find_dns_block(lines: &[&str]) -> Option<(usize, usize)> {
-    let mut dns_start: Option<usize> = None;
-    let mut dns_end: Option<usize> = None;
-
-    for (i, line) in lines.iter().enumerate() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("dns:") && (line.starts_with("dns:") || line.starts_with(' ')) {
-            if line.starts_with("dns:") || line.chars().take_while(|&c| c == ' ').count() == 0 {
-                dns_start = Some(i);
-            }
-        } else if dns_start.is_some() && !line.starts_with(' ') && !line.is_empty() && !line.starts_with('#') {
-            dns_end = Some(i);
-            break;
-        }
-    }
-
-    dns_start.map(|start| (start, dns_end.unwrap_or(lines.len())))
-}
-
-fn replace_dns_block(content: &str, new_block: &str) -> String {
-    let lines: Vec<&str> = content.lines().collect();
-
-    match find_dns_block(&lines) {
-        Some((start, end)) => {
-            let mut result = String::new();
-            for line in &lines[..start] {
-                result.push_str(line);
-                result.push('\n');
-            }
-            result.push_str(new_block);
-            result.push('\n');
-            for line in &lines[end..] {
-                result.push_str(line);
-                result.push('\n');
-            }
-            result
-        }
-        None => {
-            let mut result = content.trim_end().to_string();
-            result.push_str("\n\n");
-            result.push_str(new_block);
-            result.push('\n');
-            result
-        }
-    }
-}
-
-fn enable_dns_block(content: &str, fallback_block: &str) -> String {
-    let lines: Vec<&str> = content.lines().collect();
-
-    let Some((start, end)) = find_dns_block(&lines) else {
-        return replace_dns_block(content, fallback_block);
-    };
-
-    let mut has_enable = false;
-    let mut has_listen = false;
-    let mut inner: Vec<&str> = Vec::with_capacity(end - start - 1);
-
-    for line in &lines[start + 1..end] {
-        if line.trim_start().starts_with("enable:") {
-            inner.push("  enable: true");
-            has_enable = true;
-        } else if line.trim_start().starts_with("listen:") {
-            inner.push("  listen: 0.0.0.0:53");
-            has_listen = true;
-        } else {
-            inner.push(line);
-        }
-    }
-
-    let mut result = String::new();
-    for line in &lines[..start] {
-        result.push_str(line);
-        result.push('\n');
-    }
-    result.push_str(lines[start]);
-    result.push('\n');
-    if !has_enable {
-        result.push_str("  enable: true\n");
-    }
-    if !has_listen {
-        result.push_str("  listen: 0.0.0.0:53\n");
-    }
-    for line in &inner {
-        result.push_str(line);
-        result.push('\n');
-    }
-    for line in &lines[end..] {
-        result.push_str(line);
-        result.push('\n');
-    }
-    result
-}
-
 pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
     match fetch_running_config(&state).await {
         Ok(output) => Json(DnsResponse {
@@ -325,21 +231,13 @@ pub async fn post_dns(
     }
 
     if let Some(config_path) = find_mihomo_config() {
-        match tokio::fs::read_to_string(&config_path).await {
-            Ok(content) => {
-                let new_content = enable_dns_block(&content, &req.dns_config);
-                if let Err(e) = tokio::fs::write(&config_path, &new_content).await {
-                    log("ERROR", format!("Ошибка записи config.yaml: {e}"));
-                } else {
-                    log("INFO", format!("DNS блок обновлён в {config_path}"));
-                }
-            }
-            Err(e) => {
-                log("ERROR", format!("Ошибка чтения config.yaml: {e}"));
-            }
+        if let Err(e) = tokio::fs::write(&config_path, &req.config_content).await {
+            log("ERROR", format!("Ошибка записи config.yaml: {e}"));
+        } else {
+            log("INFO", format!("config.yaml обновлён в {config_path}"));
         }
     } else {
-        log("ERROR", "config.yaml не найден, блок dns не записан".into());
+        log("ERROR", "config.yaml не найден, конфигурация не записана".into());
     }
 
     log("INFO", format!("Управление DNS включено, name-server: {br0_ip}"));
@@ -382,45 +280,10 @@ pub async fn delete_dns(
         }
     }
 
-    if let Some(config_path) = find_mihomo_config() {
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            let new_content = set_dns_enable_false(&content);
-            if let Err(e) = std::fs::write(&config_path, &new_content) {
-                log("ERROR", format!("Ошибка записи config.yaml: {e}"));
-            } else {
-                log("INFO", format!("dns.enable выключен в {config_path}"));
-            }
-        }
-    }
-
     log("INFO", "Управление DNS отключено".into());
     Json(DnsResponse {
         success: true,
         error: None,
         status: None,
     })
-}
-
-fn set_dns_enable_false(content: &str) -> String {
-    let lines: Vec<&str> = content.lines().collect();
-    let mut result = Vec::with_capacity(lines.len());
-    let mut in_dns = false;
-
-    for line in &lines {
-        if line.starts_with("dns:") || line.starts_with("dns :") {
-            in_dns = true;
-            result.push(*line);
-            continue;
-        }
-        if in_dns && !line.starts_with(' ') && !line.starts_with('\t') && !line.is_empty() {
-            in_dns = false;
-        }
-        if in_dns && line.trim() == "enable: true" {
-            result.push("  enable: false");
-            continue;
-        }
-        result.push(*line);
-    }
-
-    result.join("\n")
 }
