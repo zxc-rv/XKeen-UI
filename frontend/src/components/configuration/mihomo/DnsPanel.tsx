@@ -490,7 +490,7 @@ export const DnsPanel = memo(function DnsPanel() {
                 </DnsSettingLabel>
                 <Select
                   value={config.enhancedMode}
-                  items={{ 'fake-ip': 'fake-ip', 'redir-host': 'redir-host' }}
+                  items={{ 'redir-host': 'redir-host', 'fake-ip': 'fake-ip' }}
                   onValueChange={(v) => updateConfig({ enhancedMode: v })}
                 >
                   <SelectTrigger className="w-full">
@@ -498,8 +498,8 @@ export const DnsPanel = memo(function DnsPanel() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="fake-ip">fake-ip</SelectItem>
                       <SelectItem value="redir-host">redir-host</SelectItem>
+                      <SelectItem value="fake-ip">fake-ip</SelectItem>
                     </SelectGroup>
                   </SelectContent>
                 </Select>
@@ -541,7 +541,7 @@ export const DnsPanel = memo(function DnsPanel() {
                       value={config.fakeIpFilter}
                       onChange={(e) => updateConfig({ fakeIpFilter: e.target.value })}
                       placeholder={'+.local'}
-                      className="min-h-15 tracking-wide"
+                      className="min-h-15 tracking-wide text-sm!"
                     />
                   </div>
                 </>
@@ -555,7 +555,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.nameserver}
                   onChange={(e) => updateConfig({ nameserver: e.target.value })}
                   placeholder={'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query'}
-                  className="min-h-15 tracking-wide"
+                  className="min-h-15 tracking-wide text-sm!"
                 />
               </div>
 
@@ -567,7 +567,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.nameserverPolicy}
                   onChange={(e) => updateConfig({ nameserverPolicy: e.target.value })}
                   placeholder={'rule-set:category-ru@domain: [77.88.8.8, 195.208.5.1]'}
-                  className="min-h-15 tracking-wide"
+                  className="min-h-15 tracking-wide text-sm!"
                 />
               </div>
 
@@ -579,7 +579,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.fallback}
                   onChange={(e) => updateConfig({ fallback: e.target.value })}
                   placeholder={'tls://8.8.4.4\ntls://1.1.1.1'}
-                  className="min-h-10 tracking-wide"
+                  className="min-h-15 tracking-wide text-sm!"
                 />
               </div>
 
@@ -591,7 +591,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.bootstrap}
                   onChange={(e) => updateConfig({ bootstrap: e.target.value })}
                   placeholder={'77.88.8.8\n77.8.8.1'}
-                  className="min-h-15 tracking-wide"
+                  className="min-h-15 tracking-wide text-sm!"
                 />
               </div>
 
