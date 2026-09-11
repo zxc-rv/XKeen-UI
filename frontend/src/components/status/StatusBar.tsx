@@ -16,7 +16,7 @@ import {
 import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect, useState, useCallback } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
-import { patchDnsConfig, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
+import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
 import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh, setDnsStatus, setDnsStatusLoading, useDnsStatusStore } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { ServiceStatus } from '../../lib/types'
@@ -51,7 +51,7 @@ async function applyAutoDns(setupFilter: boolean) {
   const configsResult = await apiCall<{ success: boolean; configs?: { file: string; content: string }[] }>('GET', 'configs')
   const yamlConfig = configsResult.success ? configsResult.configs?.find((c) => c.file.endsWith('/config.yaml')) : undefined
   if (!yamlConfig) return
-  const configContent = patchDnsConfig(yamlConfig.content, DEFAULT_DNS_CONFIG)
+  const configContent = ensureDnsEnabled(yamlConfig.content, DEFAULT_DNS_CONFIG)
   await apiCall('POST', 'dns', { config_content: configContent, setup_filter: setupFilter })
 }
 

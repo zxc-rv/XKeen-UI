@@ -186,6 +186,19 @@ export function setDnsEnabled(content: string, enabled: boolean): string {
   return trimFlowSeqPadding(doc.toString({ lineWidth: YAML_LINE_WIDTH }))
 }
 
+export function ensureDnsEnabled(content: string, config: DnsConfig): string {
+  const doc = parseDocument(content)
+  const hasDns = doc.hasIn(['dns'])
+
+  if (!hasDns) {
+    return patchDnsConfig(content, config)
+  }
+
+  doc.setIn(['dns', 'enable'], true)
+  doc.setIn(['dns', 'listen'], DEFAULT_DNS_LISTEN)
+  return trimFlowSeqPadding(doc.toString({ lineWidth: YAML_LINE_WIDTH }))
+}
+
 export const DnsPanel = memo(function DnsPanel() {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, clashApiPort, clashApiSecret, clashApiUnix } = state
@@ -347,7 +360,7 @@ export const DnsPanel = memo(function DnsPanel() {
     setIsToggling(true)
     try {
       const content = yamlConfig.savedContent || yamlConfig.content
-      const configContent = patchDnsConfig(content, config)
+      const configContent = ensureDnsEnabled(content, config)
       const result = await apiCall<{ success: boolean; error?: string }>('POST', 'dns', {
         config_content: configContent,
         setup_filter: setupFilter,
