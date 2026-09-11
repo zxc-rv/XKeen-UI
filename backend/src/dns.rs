@@ -228,6 +228,9 @@ pub async fn post_dns(
                 status: None,
             });
         }
+        if step.contains("dns-override") {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
     }
 
     if let Some(config_path) = find_mihomo_config() {
@@ -277,6 +280,9 @@ pub async fn delete_dns(
                 error: Some(e),
                 status: None,
             });
+        }
+        if step.contains("dns-override") {
+            tokio::time::sleep(Duration::from_millis(500)).await;
         }
     }
 
