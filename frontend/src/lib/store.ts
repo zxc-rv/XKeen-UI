@@ -495,12 +495,36 @@ export function syncClashApiPort(delayMs = 0): void {
   }
 }
 
-// ─── Сигнал рефетча DNS-статуса (дёргается после старта/стопа сервиса) ─────────
+// ─── Глобальный кеш DNS-статуса ──────────────────────────────────────────────
 
-export const useDnsRefreshStore = create<{ token: number }>(() => ({ token: 0 }))
+export interface DnsStatus {
+  dnsOverride: boolean
+  dnsMihomo: boolean
+  providerIgnored: boolean
+}
+
+interface DnsStatusStore {
+  status: DnsStatus | null
+  loading: boolean
+  token: number
+}
+
+export const useDnsStatusStore = create<DnsStatusStore>(() => ({
+  status: null,
+  loading: false,
+  token: 0,
+}))
+
+export function setDnsStatus(status: DnsStatus | null): void {
+  useDnsStatusStore.setState({ status, loading: false })
+}
+
+export function setDnsStatusLoading(loading: boolean): void {
+  useDnsStatusStore.setState({ loading })
+}
 
 export function bumpDnsRefresh(): void {
-  useDnsRefreshStore.setState((s) => ({ token: s.token + 1 }))
+  useDnsStatusStore.setState((s) => ({ token: s.token + 1 }))
 }
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────

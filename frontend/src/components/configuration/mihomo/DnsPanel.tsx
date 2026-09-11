@@ -24,14 +24,10 @@ import * as jsyaml from 'js-yaml'
 import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { apiCall, clashFetch } from '../../../lib/api'
-import { useAppContext, useDnsRefreshStore } from '../../../lib/store'
+import { useAppContext, useDnsStatusStore, setDnsStatus, setDnsStatusLoading } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
 
-interface DnsStatus {
-  dnsOverride: boolean
-  dnsMihomo: boolean
-  providerIgnored: boolean
-}
+import type { DnsStatus } from '../../../lib/store'
 
 interface DnsStatusResponse {
   success: boolean
@@ -193,10 +189,10 @@ export function setDnsEnabled(content: string, enabled: boolean): string {
 export const DnsPanel = memo(function DnsPanel() {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, clashApiPort, clashApiSecret, clashApiUnix } = state
-  const dnsRefreshToken = useDnsRefreshStore((s) => s.token)
+  const dnsRefreshToken = useDnsStatusStore((s) => s.token)
+  const dnsStatus = useDnsStatusStore((s) => s.status)
+  const isLoading = useDnsStatusStore((s) => s.loading)
 
-  const [dnsStatus, setDnsStatus] = useState<DnsStatus | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState(false)
   const [enableDialogOpen, setEnableDialogOpen] = useState(false)
   const [setupFilter, setSetupFilter] = useState(true)
@@ -224,7 +220,7 @@ export const DnsPanel = memo(function DnsPanel() {
   )
 
   const fetchStatus = useCallback(async () => {
-    setIsLoading(true)
+    setDnsStatusLoading(true)
     try {
       const data = await apiCall<DnsStatusResponse>('GET', 'dns')
       if (data.success && data.status) {
@@ -233,11 +229,12 @@ export const DnsPanel = memo(function DnsPanel() {
     } catch {
       showToast('Ошибка получения статуса DNS', 'error')
     } finally {
-      setIsLoading(false)
+      setDnsStatusLoading(false)
     }
   }, [showToast])
 
   useEffect(() => {
+    if (dnsRefreshToken === 0) return
     fetchStatus()
   }, [fetchStatus, dnsRefreshToken])
 

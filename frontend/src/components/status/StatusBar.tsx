@@ -17,7 +17,7 @@ import { IconBox, IconCpu, IconLogout, IconPlayerPlayFilled, IconPlayerStopFille
 import { useEffect, useState, useCallback } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
 import { patchDnsConfig, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
-import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh } from '../../lib/store'
+import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh, setDnsStatus, setDnsStatusLoading, useDnsStatusStore } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { ServiceStatus } from '../../lib/types'
 
@@ -87,10 +87,11 @@ export function StatusBar({
 
   const fetchDnsStatus = useCallback(async () => {
     try {
-      const data = await apiCall<{ success: boolean; status?: { dnsOverride: boolean; dnsMihomo: boolean } }>('GET', 'dns')
+      setDnsStatusLoading(true)
+      const data = await apiCall<{ success: boolean; status?: { dnsOverride: boolean; dnsMihomo: boolean; providerIgnored: boolean } }>('GET', 'dns')
       if (data.success && data.status) {
-        const enabled = data.status.dnsOverride && data.status.dnsMihomo
-        return enabled
+        setDnsStatus(data.status)
+        return data.status.dnsOverride && data.status.dnsMihomo
       }
     } catch {
       // ignore
@@ -138,7 +139,8 @@ export function StatusBar({
   }
 
   async function stopService() {
-    const enabled = currentCore === 'mihomo' && (await fetchDnsStatus())
+    const cached = useDnsStatusStore.getState().status
+    const enabled = currentCore === 'mihomo' && !!cached && cached.dnsOverride && cached.dnsMihomo
     if (enabled) {
       setDnsWarningOpen(true)
       return
