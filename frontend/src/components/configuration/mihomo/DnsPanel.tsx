@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
@@ -424,11 +424,9 @@ export const DnsPanel = memo(function DnsPanel() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex flex-col gap-4 p-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Статус DNS</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
+        <fieldset className="border-border rounded-lg border px-4 pb-4 pt-1.5">
+          <legend className="text-sm font-medium px-1">Статус DNS</legend>
+          <div className="flex flex-col gap-3 pt-1">
             {!isLoading && dnsStatus && !dnsStatus.providerIgnored && (
               <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
                 <IconAlertCircle className="size-4.5" />
@@ -479,15 +477,13 @@ export const DnsPanel = memo(function DnsPanel() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </fieldset>
 
         {showMihomoSettings && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Mihomo DNS</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+          <fieldset className="border-border rounded-lg border px-4 pb-4 pt-1.5">
+            <legend className="text-sm font-medium px-1">Mihomo DNS</legend>
+            <div className="flex flex-col gap-4 pt-1">
               <div className="grid gap-2">
                 <DnsSettingLabel tooltip="Redir-host - реальные IP в ответах. Медленнее, лучше совместимость, рекомендуется \nFake-ip - поддельные IP в ответах. Быстрее, не совместимо с исключениями/политиками XKeen, для продвинутых пользователей">
                   Enhanced Mode
@@ -544,8 +540,8 @@ export const DnsPanel = memo(function DnsPanel() {
                     <Textarea
                       value={config.fakeIpFilter}
                       onChange={(e) => updateConfig({ fakeIpFilter: e.target.value })}
-                      placeholder={'+.lan'}
-                      className="min-h-20 font-mono text-xs"
+                      placeholder={'+.local'}
+                      className="min-h-15 tracking-wide"
                     />
                   </div>
                 </>
@@ -559,7 +555,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.nameserver}
                   onChange={(e) => updateConfig({ nameserver: e.target.value })}
                   placeholder={'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query'}
-                  className="min-h-20 font-mono text-xs"
+                  className="min-h-15 tracking-wide"
                 />
               </div>
 
@@ -571,7 +567,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.nameserverPolicy}
                   onChange={(e) => updateConfig({ nameserverPolicy: e.target.value })}
                   placeholder={'rule-set:category-ru@domain: [77.88.8.8, 195.208.5.1]'}
-                  className="min-h-24 font-mono text-xs"
+                  className="min-h-15 tracking-wide"
                 />
               </div>
 
@@ -583,7 +579,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.fallback}
                   onChange={(e) => updateConfig({ fallback: e.target.value })}
                   placeholder={'tls://8.8.4.4\ntls://1.1.1.1'}
-                  className="min-h-20 font-mono text-xs"
+                  className="min-h-10 tracking-wide"
                 />
               </div>
 
@@ -595,7 +591,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.bootstrap}
                   onChange={(e) => updateConfig({ bootstrap: e.target.value })}
                   placeholder={'77.88.8.8\n77.8.8.1'}
-                  className="min-h-16 font-mono text-xs"
+                  className="min-h-15 tracking-wide"
                 />
               </div>
 
@@ -607,8 +603,8 @@ export const DnsPanel = memo(function DnsPanel() {
                 {isApplying ? <Spinner /> : <IconDeviceFloppy data-icon="inline-start" />}
                 Применить
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </fieldset>
         )}
       </div>
 
