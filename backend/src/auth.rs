@@ -1,5 +1,3 @@
-use argon2::password_hash::SaltString;
-use argon2::password_hash::rand_core::OsRng;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::Json;
 use axum::extract::{ConnectInfo, Request, State};
@@ -298,9 +296,8 @@ pub async fn auth_middleware(state: AppState, request: Request, next: Next) -> R
 }
 
 fn hash_password(password: &str) -> String {
-    let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .unwrap()
         .to_string()
 }

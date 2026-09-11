@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-argon2 = { version = "0.5", features = ["std"] }
+argon2 = { version = "0.6" }
 axum = { version = "0.8", features = ["ws"] }
 chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
@@ -49,7 +49,7 @@ tokio-tungstenite = "0.30"
 tower-http = { version = "0.7", features = ["fs", "cors", "set-header"] }
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
-yaml-rust2 = { version = "0.12", default-features = false }
+yaml-rust2 = { version = "0.13", default-features = false }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [profile.release]
