@@ -653,26 +653,26 @@ export function SettingsModal() {
                     <FieldContent>
                       <FieldLabel htmlFor="auto-dns">Автовключение</FieldLabel>
                       <FieldDescription className="text-[13px]">
-                        Автоматически включать управление DNS при старте сервиса
+                        Автоматически включать управление DNS при ручном старте сервиса
                       </FieldDescription>
                     </FieldContent>
                     <Select
                       value={settings.autoDns}
-                      items={{ disabled: 'Выключено', enabled: 'Включить', with_filter: 'Включить с автонастройкой' }}
+                      items={{ disabled: 'Выкл', enabled: 'Вкл', with_filter: 'Вкл с автонастройкой' }}
                       onValueChange={(v) => {
                         void saveSetting('clash_api', { auto_dns: v }).then((ok) => {
                           if (ok) dispatch({ type: 'SET_SETTINGS', settings: { autoDns: v as AutoDnsMode } })
                         })
                       }}
                     >
-                      <SelectTrigger id="auto-dns" className="w-54 text-sm">
+                      <SelectTrigger id="auto-dns" className="w-51 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="disabled" className="text-sm">Выключено</SelectItem>
-                          <SelectItem value="enabled" className="text-sm">Включить</SelectItem>
-                          <SelectItem value="with_filter" className="text-sm">Включить с автонастройкой</SelectItem>
+                          <SelectItem value="disabled" className="text-sm">Выкл</SelectItem>
+                          <SelectItem value="enabled" className="text-sm">Вкл</SelectItem>
+                          <SelectItem value="with_filter" className="text-sm">Вкл с автонастройкой</SelectItem>
                         </SelectGroup>
                       </SelectContent>
                     </Select>
