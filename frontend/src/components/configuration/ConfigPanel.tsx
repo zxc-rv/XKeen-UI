@@ -39,10 +39,14 @@ import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
+import { runMassTask, summarizeFanOut, targetLabel } from '../../lib/routers-actions'
+import { LOCAL_ROUTER_ID } from '../../lib/routers'
+import { useRoutersStore } from '../../lib/routers-store'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
 import { cn } from '../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
+import { MassConfirmDialog } from '../routers/MassConfirmDialog'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -282,6 +286,12 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
   const guiLog = useSettings((s) => s.guiLog)
+  const multiRouter = useSettings((s) => s.multiRouter)
+  const applyTargets = useRoutersStore((s) => s.applyTargets)
+  const getMassTargets = () => {
+    if (!multiRouter) return [LOCAL_ROUTER_ID]
+    return applyTargets.length > 0 ? applyTargets : [LOCAL_ROUTER_ID]
+  }
 
   const isRunning = serviceStatus === 'running'
   const isPending = serviceStatus === 'pending'
@@ -310,6 +320,12 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
   const currentPanel = isRunning ? activePanel : 'config'
+  const [massConfirm, setMassConfirm] = useState<{
+    title: string
+    description: string
+    targets: string[]
+    action: () => void
+  } | null>(null)
 
   const configsRef = useRef(configs)
   const activeIndexRef = useRef(activeConfigIndex)
@@ -494,6 +510,42 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
   }, [configActionsRef, switchTab])
 
+  async function executeSave(targets: string[], cfg: Config, content: string) {
+    const results = await runMassTask(targets, async (_id, baseUrl) => {
+      const result = await apiCall<{ success: boolean; error?: string }>(
+        'PUT',
+        'configs',
+        { file: cfg.file, content },
+        { baseUrl }
+      )
+      if (!result.success) throw new Error(result.error || 'ошибка сохранения')
+    })
+
+    const localOk = results.find((r) => r.id === LOCAL_ROUTER_ID)?.ok
+    if (targets.includes(LOCAL_ROUTER_ID) ? localOk : results.some((r) => r.ok)) {
+      editorRef.current?.setSavedContent(content)
+      dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
+      saveViewState(cfg.file, false)
+    }
+
+    const summary = summarizeFanOut(results)
+    const fileName = cfg.file.split('/').pop()
+    if (results.length <= 1) {
+      showToast(
+        summary.fail === 0 ? `Файл "${fileName}" сохранен` : `Ошибка сохранения: ${summary.body}`,
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    } else {
+      showToast(
+        {
+          title: summary.fail === 0 ? `Файл "${fileName}" сохранен` : 'Сохранение завершено с ошибками',
+          body: summary.body,
+        },
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    }
+  }
+
   async function saveCurrentConfig(force = false) {
     const cfg = configsRef.current[activeIndexRef.current]
     if (!cfg || !editorRef.current) return
@@ -505,14 +557,105 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
       dispatch({ type: 'SHOW_MODAL', modal: 'showCommentsWarningModal', show: true })
       return
     }
-    const result = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: cfg.file, content })
-    if (result.success) {
-      editorRef.current.setSavedContent(content)
+
+    const targets = getMassTargets()
+    const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
+    if (hasRemote) {
+      setMassConfirm({
+        title: 'Массовое сохранение',
+        description: 'Конфиг будет сохранён на выбранных роутерах:',
+        targets: targets.map(targetLabel),
+        action: () => void executeSave(targets, cfg, content),
+      })
+      return
+    }
+
+    await executeSave(targets, cfg, content)
+  }
+
+  function buildApplyUrl(file: string, core: string) {
+    let url = 'configs'
+    if (!file.startsWith('/opt/etc/xkeen')) {
+      if (core === 'mihomo') url += '?validate=mihomo'
+      else if (core === 'xray') url += '?validate=xray'
+    }
+    return url
+  }
+
+  function restartActionFor(cfg: Config, content: string) {
+    const lang = getFileLanguage(cfg.file)
+    const isXkeen = cfg.file.startsWith('/opt/etc/xkeen')
+    return !isXkeen && (lang === 'json' || lang === 'yaml') && !hasCriticalChanges(cfg.savedContent, content, lang)
+      ? 'softRestart'
+      : 'hardRestart'
+  }
+
+  async function applyToHost(baseUrl: string | null, cfg: Config, content: string) {
+    let core = currentCore
+    if (baseUrl) {
+      try {
+        const ctrl = await apiCall<{ success?: boolean; currentCore?: string }>('GET', 'control', undefined, { baseUrl })
+        if (ctrl?.currentCore) core = ctrl.currentCore
+      } catch {
+        /* keep local core */
+      }
+    }
+
+    const saveResult = await apiCall<{ success: boolean; error?: string }>(
+      'PUT',
+      buildApplyUrl(cfg.file, core),
+      { file: cfg.file, content },
+      { baseUrl }
+    )
+    if (!saveResult.success) {
+      throw new Error(
+        saveResult.error === 'Validation failed'
+          ? `валидация ${capitalize(core)}`
+          : saveResult.error || 'ошибка сохранения'
+      )
+    }
+    const action = restartActionFor(cfg, content)
+    const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', { action, core }, { baseUrl })
+    if (!r?.success) throw new Error(r?.error || 'ошибка перезапуска')
+  }
+
+  async function executeApply(targets: string[], cfg: Config, content: string) {
+    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Применение...' })
+    const results = await runMassTask(targets, async (_id, baseUrl) => {
+      await applyToHost(baseUrl, cfg, content)
+    })
+
+    const localOk = results.find((r) => r.id === LOCAL_ROUTER_ID)?.ok
+    if (targets.includes(LOCAL_ROUTER_ID) ? localOk : results.some((r) => r.ok)) {
+      editorRef.current?.setSavedContent(content)
       dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
       saveViewState(cfg.file, false)
-      showToast(`Файл "${cfg.file.split('/').pop()}" сохранен`)
+    }
+
+    const summary = summarizeFanOut(results)
+    if (results.length <= 1) {
+      showToast(
+        summary.fail === 0 ? 'Изменения применены' : `Ошибка: ${summary.body}`,
+        summary.fail === 0 ? 'success' : 'error'
+      )
     } else {
-      showToast(`Ошибка сохранения: ${result.error}`, 'error')
+      showToast(
+        {
+          title: summary.fail === 0 ? 'Изменения применены' : 'Применение завершено с ошибками',
+          body: summary.body,
+        },
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    }
+
+    if (targets.includes(LOCAL_ROUTER_ID)) {
+      dispatch({
+        type: 'SET_SERVICE_STATUS',
+        status: localOk === false ? 'stopped' : isRunning || localOk ? 'running' : 'stopped',
+      })
+      if (localOk !== false) syncClashApiPort(200)
+    } else {
+      dispatch({ type: 'SET_SERVICE_STATUS', status: isRunning ? 'running' : 'stopped' })
     }
   }
 
@@ -528,47 +671,56 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
       return
     }
 
-    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Применение...' })
-
-    let url = 'configs'
-    if (!cfg.file.startsWith('/opt/etc/xkeen')) {
-      if (isCoreMihomo) {
-        url += '?validate=mihomo'
-      } else if (currentCore === 'xray') {
-        url += '?validate=xray'
-      }
+    const targets = getMassTargets()
+    const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
+    if (hasRemote) {
+      setMassConfirm({
+        title: 'Массовое применение',
+        description: 'Конфиг будет сохранён и применён на выбранных роутерах:',
+        targets: targets.map(targetLabel),
+        action: () => void executeApply(targets, cfg, content),
+      })
+      return
     }
 
-    const saveResult = await apiCall<{ success: boolean; error?: string }>('PUT', url, { file: cfg.file, content })
-    if (!saveResult.success) {
-      dispatch({ type: 'SET_SERVICE_STATUS', status: isRunning ? 'running' : 'stopped' })
-      return showToast(
-        saveResult.error === 'Validation failed'
-          ? `Ошибка валидации ${capitalize(currentCore)}: проверьте журнал`
-          : `Ошибка сохранения: ${saveResult.error}`,
-        'error'
+    await executeApply(targets, cfg, content)
+  }
+
+  async function executeQuickBackup(targets: string[]) {
+    const results = await runMassTask(targets, async (_id, baseUrl) => {
+      const result = await apiCall<{ success: boolean; error?: string }>('PUT', 'backup', undefined, { baseUrl })
+      if (!result.success) throw new Error(result.error || 'ошибка бэкапа')
+    })
+    const summary = summarizeFanOut(results)
+    if (results.length <= 1) {
+      showToast(
+        summary.fail === 0 ? 'Быстрый бэкап создан' : `Ошибка: ${summary.body}`,
+        summary.fail === 0 ? 'success' : 'error'
+      )
+    } else {
+      showToast(
+        {
+          title: summary.fail === 0 ? 'Быстрый бэкап создан' : 'Бэкап завершён с ошибками',
+          body: summary.body,
+        },
+        summary.fail === 0 ? 'success' : 'error'
       )
     }
+  }
 
-    editorRef.current.setSavedContent(content)
-    dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
-    saveViewState(cfg.file, false)
-    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Перезапуск...' })
-    const lang = getFileLanguage(cfg.file)
-    const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', {
-      action:
-        !xkeenConfigs.some((c) => c.file === cfg.file) &&
-          (lang === 'json' || lang === 'yaml') &&
-          !hasCriticalChanges(cfg.savedContent, content, lang)
-          ? 'softRestart'
-          : 'hardRestart',
-      core: currentCore,
-    })
-    showToast(r?.success ? 'Изменения применены' : `Ошибка: ${r?.error}`, r?.success ? 'success' : 'error')
-    dispatch({ type: 'SET_SERVICE_STATUS', status: r?.success ? 'running' : 'stopped' })
-    if (r?.success) {
-      syncClashApiPort(200)
+  function quickBackup() {
+    const targets = getMassTargets()
+    const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
+    if (hasRemote) {
+      setMassConfirm({
+        title: 'Быстрый бэкап',
+        description: 'Бэкап конфигураций будет создан на выбранных роутерах:',
+        targets: targets.map(targetLabel),
+        action: () => void executeQuickBackup(targets),
+      })
+      return
     }
+    void executeQuickBackup(targets)
   }
 
   function isGuiActive(cfg: Config) {
@@ -882,6 +1034,9 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                           <DropdownMenuItem onClick={onOpenBackups}>
                             <IconBox /> Бэкапы конфигураций
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={quickBackup}>
+                            <IconBox /> Быстрый бэкап
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={onOpenGeoScan}>
                             <IconSearch /> Скан геофайлов
                           </DropdownMenuItem>
@@ -931,6 +1086,16 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
           </LazyBoundary>
         )}
         <BackupsModalContainer onRefreshConfigs={refreshConfigsAndEditor} />
+        {massConfirm && (
+          <MassConfirmDialog
+            open={!!massConfirm}
+            onOpenChange={(open) => !open && setMassConfirm(null)}
+            title={massConfirm.title}
+            description={massConfirm.description}
+            targets={massConfirm.targets}
+            onConfirm={massConfirm.action}
+          />
+        )}
       </>
     </TooltipProvider>
   )

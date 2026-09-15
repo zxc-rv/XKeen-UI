@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Json};
 pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
     Json(
-        serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log, "clash_api": s.clash_api, "auth": { "enabled": s.auth.enabled } }),
+        serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log, "clash_api": s.clash_api, "auth": { "enabled": s.auth.enabled }, "plugins": s.plugins }),
     )
 }
 
@@ -45,6 +45,9 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
     }
     if settings.clash_api.ping_timeout == 0 {
         return Json(serde_json::json!({"success": false, "error": "Таймаут пинг-теста должен быть больше 0"}));
+    }
+    if let Err(e) = settings.validate_plugins() {
+        return Json(serde_json::json!({"success": false, "error": e}));
     }
     settings.normalize_proxies();
 
