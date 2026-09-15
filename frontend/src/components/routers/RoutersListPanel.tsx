@@ -1,14 +1,13 @@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Button } from '@/components/ui/button'
-import { IconCheck, IconLoader2, IconPlus, IconRouter, IconTrash, IconX } from '@tabler/icons-react'
+import { IconCheck, IconLoader2, IconRouter, IconTrash, IconX } from '@tabler/icons-react'
 import { useState } from 'react'
 import { persistRouters, targetLabel } from '../../lib/routers-actions'
 import { LOCAL_ROUTER_ID, routerId, routerLabel } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { showToast } from '../../lib/store'
 import { cn } from '../../lib/utils'
-import { AddRouterDialog } from './AddRouterDialog'
 import { RouterOnlineDot } from './MassConfirmDialog'
 
 function CommandStatusBadge({ id }: { id: string }) {
@@ -42,7 +41,6 @@ export function RoutersListPanel() {
   const toggleApplyTarget = useRoutersStore((s) => s.toggleApplyTarget)
 
   const [saving, setSaving] = useState(false)
-  const [addOpen, setAddOpen] = useState(false)
 
   async function removeRouter(id: string) {
     const list = routers.filter((r) => routerId(r) !== id)
@@ -69,67 +67,58 @@ export function RoutersListPanel() {
   ]
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-end gap-2 px-3 pt-2">
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
-          <IconPlus className="size-4" />
-          Добавить
-        </Button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 pt-2">
-        {rows.length <= 1 && routers.length === 0 ? (
-          <Empty className="h-full gap-1 py-6">
-            <EmptyMedia variant="icon" className="size-8.5">
-              <IconRouter className="text-muted-foreground size-5" />
-            </EmptyMedia>
-            <EmptyTitle className="text-ring text-[13px] font-normal tracking-normal">
-              Нет удалённых роутеров — нажмите «Добавить»
-            </EmptyTitle>
-          </Empty>
-        ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {rows.map((row) => {
-              const checked = applyTargets.includes(row.id)
-              return (
-                <div
-                  key={row.id}
-                  className={cn(
-                    'border-border grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-x-2 rounded-lg border px-2.5 py-1.5',
-                    checked ? 'bg-muted/40' : 'bg-muted/10'
-                  )}
-                >
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={() => toggleApplyTarget(row.id)}
-                    aria-label={`Выбрать ${row.title}`}
-                  />
-                  <RouterOnlineDot id={row.id} />
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{row.title}</div>
-                    <div className="text-muted-foreground truncate text-[11px]">{row.subtitle}</div>
-                  </div>
-                  <CommandStatusBadge id={row.id} />
-                  {row.id !== LOCAL_ROUTER_ID ? (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive shrink-0"
-                      disabled={saving}
-                      onClick={() => removeRouter(row.id)}
-                      aria-label="Удалить"
-                    >
-                      <IconTrash className="size-4" />
-                    </Button>
-                  ) : (
-                    <span className="size-8 shrink-0" aria-hidden />
-                  )}
+    <div className="h-full min-h-0 overflow-y-auto p-3">
+      {rows.length <= 1 && routers.length === 0 ? (
+        <Empty className="h-full gap-1 py-6">
+          <EmptyMedia variant="icon" className="size-8.5">
+            <IconRouter className="text-muted-foreground size-5" />
+          </EmptyMedia>
+          <EmptyTitle className="text-ring text-[13px] font-normal tracking-normal">
+            Нет удалённых роутеров — нажмите «Добавить»
+          </EmptyTitle>
+        </Empty>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((row) => {
+            const checked = applyTargets.includes(row.id)
+            return (
+              <div
+                key={row.id}
+                className={cn(
+                  'border-border grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-x-2 rounded-lg border px-2.5 py-1.5',
+                  checked ? 'bg-muted/40' : 'bg-muted/10'
+                )}
+              >
+                <Checkbox
+                  checked={checked}
+                  onCheckedChange={() => toggleApplyTarget(row.id)}
+                  aria-label={`Выбрать ${row.title}`}
+                />
+                <RouterOnlineDot id={row.id} />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{row.title}</div>
+                  <div className="text-muted-foreground truncate text-[11px]">{row.subtitle}</div>
                 </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-      <AddRouterDialog open={addOpen} onOpenChange={setAddOpen} />
+                <CommandStatusBadge id={row.id} />
+                {row.id !== LOCAL_ROUTER_ID ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive shrink-0"
+                    disabled={saving}
+                    onClick={() => removeRouter(row.id)}
+                    aria-label="Удалить"
+                  >
+                    <IconTrash className="size-4" />
+                  </Button>
+                ) : (
+                  <span className="size-8 shrink-0" aria-hidden />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

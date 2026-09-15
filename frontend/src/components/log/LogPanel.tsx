@@ -4,7 +4,7 @@ import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconTrash, IconX } from '@tabler/icons-react'
+import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { LOCAL_ROUTER_ID, routerId } from '../../lib/routers'
@@ -13,6 +13,7 @@ import { useSettings } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { WsMessage } from '../../lib/websocket'
 import { useWebSocket } from '../../lib/websocket'
+import { AddRouterDialog } from '../routers/AddRouterDialog'
 import { RoutersListPanel } from '../routers/RoutersListPanel'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
@@ -26,12 +27,14 @@ export function LogPanel() {
   const applyTargets = useRoutersStore((s) => s.applyTargets)
   const setApplyTargets = useRoutersStore((s) => s.setApplyTargets)
   const [panelTab, setPanelTab] = useState<'journal' | 'routers'>('journal')
+  const [addRouterOpen, setAddRouterOpen] = useState(false)
   useEffect(() => {
     if (!multiRouter && panelTab === 'routers') setPanelTab('journal')
   }, [multiRouter, panelTab])
   const allRouterIds = [LOCAL_ROUTER_ID, ...routers.map(routerId)]
   const allRoutersSelected = allRouterIds.length > 0 && allRouterIds.every((id) => applyTargets.includes(id))
   const showSelectAllRouters = multiRouter && panelTab === 'routers' && routers.length > 0
+  const showRoutersToolbar = multiRouter && panelTab === 'routers'
   const [filter, setFilter] = useState('')
   const [currentFile, setCurrentFile] = useState('error.log')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -405,15 +408,29 @@ export function LogPanel() {
                   </div>
                 </div>
               )}
-              {showSelectAllRouters && (
-                <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={allRoutersSelected}
-                    onCheckedChange={(checked) => setApplyTargets(checked === true ? allRouterIds : [])}
-                    aria-label="Выбрать все"
-                  />
-                  Выбрать все
-                </label>
+              {showRoutersToolbar && (
+                <div className="flex items-center gap-3">
+                  {showSelectAllRouters && (
+                    <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={allRoutersSelected}
+                        onCheckedChange={(checked) => setApplyTargets(checked === true ? allRouterIds : [])}
+                        aria-label="Выбрать все"
+                      />
+                      Выбрать все
+                    </label>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button variant="outline" size="icon" onClick={() => setAddRouterOpen(true)}>
+                          <IconPlus />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Добавить</TooltipContent>
+                  </Tooltip>
+                </div>
               )}
             </div>
 
@@ -459,6 +476,7 @@ export function LogPanel() {
               )}
             </TabsContent>
           </Tabs>
+          <AddRouterDialog open={addRouterOpen} onOpenChange={setAddRouterOpen} />
         </div>
       </div>
     </TooltipProvider>
