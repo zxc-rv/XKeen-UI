@@ -9,6 +9,12 @@ export interface RemoteRouter {
   name: string
 }
 
+/** `true` online, `false` offline, `null` unknown */
+export type RouterOnlineStatus = boolean | null
+
+/** `true` auth enabled, `false` no auth, `null` unknown */
+export type RouterAuthStatus = boolean | null
+
 export type RouterCommandStatus = 'idle' | 'pending' | 'success' | 'error'
 
 export interface RouterCommandState {
@@ -31,4 +37,15 @@ export function routerLabel(router: RemoteRouter): string {
 
 export function findRouter(routers: RemoteRouter[], id: string): RemoteRouter | undefined {
   return routers.find((r) => routerId(r) === id)
+}
+
+export function isRouterSelectable(
+  id: string,
+  online: Record<string, RouterOnlineStatus>,
+  auth: Record<string, RouterAuthStatus>
+): boolean {
+  const isOnline = id === LOCAL_ROUTER_ID ? (online[id] ?? true) === true : online[id] === true
+  if (!isOnline) return false
+  if (id !== LOCAL_ROUTER_ID && auth[id] === true) return false
+  return true
 }

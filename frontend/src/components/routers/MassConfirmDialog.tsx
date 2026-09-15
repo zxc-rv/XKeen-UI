@@ -7,19 +7,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { LOCAL_ROUTER_ID } from '../../lib/routers'
+import { LOCAL_ROUTER_ID, type RouterAuthStatus, type RouterOnlineStatus } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { cn } from '../../lib/utils'
 
-function OnlineDot({ online }: { online: boolean | null }) {
+function OnlineDot({ online, auth }: { online: RouterOnlineStatus; auth: RouterAuthStatus }) {
+  const authEnabled = auth === true
   return (
     <span
       className={cn(
         'inline-block size-2 shrink-0 rounded-full',
-        online === true && 'bg-green-500',
-        online === false && 'bg-red-500',
-        online === null && 'bg-muted-foreground/40'
+        authEnabled && 'bg-yellow-500',
+        !authEnabled && online === true && 'bg-green-500',
+        !authEnabled && online === false && 'bg-red-500',
+        !authEnabled && online === null && 'bg-muted-foreground/40'
       )}
+      title={authEnabled ? 'Авторизация включена' : undefined}
       aria-hidden
     />
   )
@@ -72,5 +75,11 @@ export function MassConfirmDialog({
 
 export function RouterOnlineDot({ id }: { id: string }) {
   const online = useRoutersStore((s) => s.online[id])
-  return <OnlineDot online={id === LOCAL_ROUTER_ID ? (online ?? true) : (online ?? null)} />
+  const auth = useRoutersStore((s) => s.auth[id])
+  return (
+    <OnlineDot
+      online={id === LOCAL_ROUTER_ID ? (online ?? true) : (online ?? null)}
+      auth={id === LOCAL_ROUTER_ID ? false : (auth ?? null)}
+    />
+  )
 }

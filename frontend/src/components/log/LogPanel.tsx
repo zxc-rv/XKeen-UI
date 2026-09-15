@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { LOCAL_ROUTER_ID, routerId } from '../../lib/routers'
+import { LOCAL_ROUTER_ID, isRouterSelectable, routerId } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { useSettings } from '../../lib/store'
 import { cn } from '../../lib/utils'
@@ -25,6 +25,8 @@ export function LogPanel() {
   const multiRouter = useSettings((s) => s.multiRouter)
   const routers = useRoutersStore((s) => s.routers)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
+  const online = useRoutersStore((s) => s.online)
+  const auth = useRoutersStore((s) => s.auth)
   const setApplyTargets = useRoutersStore((s) => s.setApplyTargets)
   const [panelTab, setPanelTab] = useState<'journal' | 'routers'>('journal')
   const [addRouterOpen, setAddRouterOpen] = useState(false)
@@ -32,7 +34,9 @@ export function LogPanel() {
     if (!multiRouter && panelTab === 'routers') setPanelTab('journal')
   }, [multiRouter, panelTab])
   const allRouterIds = [LOCAL_ROUTER_ID, ...routers.map(routerId)]
-  const allRoutersSelected = allRouterIds.length > 0 && allRouterIds.every((id) => applyTargets.includes(id))
+  const selectableRouterIds = allRouterIds.filter((id) => isRouterSelectable(id, online, auth))
+  const allRoutersSelected =
+    selectableRouterIds.length > 0 && selectableRouterIds.every((id) => applyTargets.includes(id))
   const showSelectAllRouters = multiRouter && panelTab === 'routers' && routers.length > 0
   const showRoutersToolbar = multiRouter && panelTab === 'routers'
   const [filter, setFilter] = useState('')
@@ -414,7 +418,8 @@ export function LogPanel() {
                     <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
                       <Checkbox
                         checked={allRoutersSelected}
-                        onCheckedChange={(checked) => setApplyTargets(checked === true ? allRouterIds : [])}
+                        disabled={selectableRouterIds.length === 0}
+                        onCheckedChange={(checked) => setApplyTargets(checked === true ? selectableRouterIds : [])}
                         aria-label="Выбрать все"
                       />
                       Выбрать все

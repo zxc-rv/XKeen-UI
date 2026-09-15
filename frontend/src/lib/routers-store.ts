@@ -1,15 +1,27 @@
 import { create } from 'zustand'
-import { LOCAL_ROUTER_ID, type RemoteRouter, type RouterCommandState, findRouter, routerBaseUrl, routerId } from './routers'
+import {
+  LOCAL_ROUTER_ID,
+  type RemoteRouter,
+  type RouterAuthStatus,
+  type RouterCommandState,
+  type RouterOnlineStatus,
+  findRouter,
+  isRouterSelectable,
+  routerBaseUrl,
+  routerId,
+} from './routers'
 
 interface RoutersState {
   routers: RemoteRouter[]
   applyTargets: string[]
-  online: Record<string, boolean | null>
+  online: Record<string, RouterOnlineStatus>
+  auth: Record<string, RouterAuthStatus>
   commandStatus: Record<string, RouterCommandState>
   setRouters: (routers: RemoteRouter[]) => void
   toggleApplyTarget: (id: string) => void
   setApplyTargets: (ids: string[]) => void
-  setOnline: (id: string, online: boolean | null) => void
+  setOnline: (id: string, online: RouterOnlineStatus) => void
+  setAuth: (id: string, auth: RouterAuthStatus) => void
   setCommandStatus: (id: string, status: RouterCommandState) => void
   resetCommandStatuses: () => void
   getBaseUrlForId: (id: string) => string | null
@@ -19,6 +31,7 @@ export const useRoutersStore = create<RoutersState>((set, get) => ({
   routers: [],
   applyTargets: [LOCAL_ROUTER_ID],
   online: { [LOCAL_ROUTER_ID]: true },
+  auth: {},
   commandStatus: {},
 
   setRouters: (routers) =>
@@ -31,15 +44,21 @@ export const useRoutersStore = create<RoutersState>((set, get) => ({
 
   toggleApplyTarget: (id) =>
     set((state) => {
+      if (!isRouterSelectable(id, state.online, state.auth)) return state
       const has = state.applyTargets.includes(id)
       return {
         applyTargets: has ? state.applyTargets.filter((t) => t !== id) : [...state.applyTargets, id],
       }
     }),
 
-  setApplyTargets: (ids) => set({ applyTargets: ids }),
+  setApplyTargets: (ids) =>
+    set((state) => ({
+      applyTargets: ids.filter((id) => isRouterSelectable(id, state.online, state.auth)),
+    })),
 
   setOnline: (id, online) => set((state) => ({ online: { ...state.online, [id]: online } })),
+
+  setAuth: (id, auth) => set((state) => ({ auth: { ...state.auth, [id]: auth } })),
 
   setCommandStatus: (id, status) => set((state) => ({ commandStatus: { ...state.commandStatus, [id]: status } })),
 

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { IconCheck, IconLoader2, IconRouter, IconTrash, IconX } from '@tabler/icons-react'
 import { useState } from 'react'
 import { persistRouters, targetLabel } from '../../lib/routers-actions'
-import { LOCAL_ROUTER_ID, routerId, routerLabel } from '../../lib/routers'
+import { LOCAL_ROUTER_ID, isRouterSelectable, routerId, routerLabel } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { showToast } from '../../lib/store'
 import { cn } from '../../lib/utils'
@@ -38,6 +38,8 @@ function CommandStatusBadge({ id }: { id: string }) {
 export function RoutersListPanel() {
   const routers = useRoutersStore((s) => s.routers)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
+  const online = useRoutersStore((s) => s.online)
+  const auth = useRoutersStore((s) => s.auth)
   const toggleApplyTarget = useRoutersStore((s) => s.toggleApplyTarget)
 
   const [saving, setSaving] = useState(false)
@@ -81,16 +83,19 @@ export function RoutersListPanel() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((row) => {
             const checked = applyTargets.includes(row.id)
+            const selectable = isRouterSelectable(row.id, online, auth)
             return (
               <div
                 key={row.id}
                 className={cn(
                   'border-border grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-x-2 rounded-lg border px-2.5 py-1.5',
-                  checked ? 'bg-muted/40' : 'bg-muted/10'
+                  checked ? 'bg-muted/40' : 'bg-muted/10',
+                  !selectable && 'opacity-60'
                 )}
               >
                 <Checkbox
                   checked={checked}
+                  disabled={!selectable}
                   onCheckedChange={() => toggleApplyTarget(row.id)}
                   aria-label={`Выбрать ${row.title}`}
                 />

@@ -1,5 +1,5 @@
 import { apiCall, fanOutRouters, type FanOutResult } from './api'
-import { LOCAL_ROUTER_ID, type RemoteRouter, routerId, routerLabel } from './routers'
+import { LOCAL_ROUTER_ID, type RemoteRouter, isRouterSelectable, routerId, routerLabel } from './routers'
 import { getBaseUrlForId, useRoutersStore } from './routers-store'
 
 export const REMOTE_AUTH_UNSUPPORTED =
@@ -66,14 +66,24 @@ export async function pingRouterOnline(id: string): Promise<boolean> {
 }
 
 export async function refreshAllOnline(): Promise<void> {
-  const { routers, setOnline } = useRoutersStore.getState()
+  const { routers, setOnline, setAuth } = useRoutersStore.getState()
   const ids = [LOCAL_ROUTER_ID, ...routers.map(routerId)]
   await Promise.all(
     ids.map(async (id) => {
       const online = await pingRouterOnline(id)
-      setOnline(id, online)
+      if (id === LOCAL_ROUTER_ID || online) {
+        setOnline(id, online)
+        setAuth(id, false)
+        return
+      }
+      const authEnabled = await isRemoteAuthEnabled(getBaseUrlForId(id))
+      setOnline(id, false)
+      setAuth(id, authEnabled === true)
     })
   )
+  const state = useRoutersStore.getState()
+  const next = state.applyTargets.filter((id) => isRouterSelectable(id, state.online, state.auth))
+  if (next.length !== state.applyTargets.length) state.setApplyTargets(next)
 }
 
 export function targetLabel(id: string): string {
