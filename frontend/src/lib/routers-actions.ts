@@ -2,6 +2,9 @@ import { apiCall, fanOutRouters, type FanOutResult } from './api'
 import { LOCAL_ROUTER_ID, type RemoteRouter, routerId, routerLabel } from './routers'
 import { getBaseUrlForId, useRoutersStore } from './routers-store'
 
+export const REMOTE_AUTH_UNSUPPORTED =
+  'Удалённые панели с авторизацией не поддерживаются: cookie сессии не передаётся между хостами. Откройте панель напрямую или отключите auth в LAN.'
+
 export async function persistRouters(routers: RemoteRouter[]): Promise<{ success: boolean; error?: string }> {
   return apiCall<{ success: boolean; error?: string }>('PATCH', 'settings', { plugins: { routers } })
 }
@@ -15,6 +18,39 @@ export async function saveRouters(routers: RemoteRouter[]): Promise<void> {
 export function applyRoutersFromSettings(routers: RemoteRouter[]): RemoteRouter[] {
   useRoutersStore.getState().setRouters(routers)
   return routers
+}
+
+/** `true` / `false` if reachable; `null` if probe failed. */
+export async function isRemoteAuthEnabled(baseUrl: string | null): Promise<boolean | null> {
+  if (!baseUrl) return false
+  try {
+    const data = await apiCall<{ enabled?: boolean }>('GET', 'auth/login', undefined, {
+      baseUrl,
+      timeoutMs: 5000,
+    })
+    return !!data?.enabled
+  } catch {
+    return null
+  }
+}
+
+export async function filterAuthBlockedTargets(
+  targetIds: string[]
+): Promise<{ allowed: string[]; blocked: string[] }> {
+  const allowed: string[] = []
+  const blocked: string[] = []
+  await Promise.all(
+    targetIds.map(async (id) => {
+      if (id === LOCAL_ROUTER_ID) {
+        allowed.push(id)
+        return
+      }
+      const enabled = await isRemoteAuthEnabled(getBaseUrlForId(id))
+      if (enabled === true) blocked.push(id)
+      else allowed.push(id)
+    })
+  )
+  return { allowed, blocked }
 }
 
 export async function pingRouterOnline(id: string): Promise<boolean> {

@@ -9,8 +9,8 @@ import {
 } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { useState } from 'react'
-import { saveRouters } from '../../lib/routers-actions'
-import { DEFAULT_ROUTER_PORT, type RemoteRouter, routerId, routerLabel } from '../../lib/routers'
+import { isRemoteAuthEnabled, REMOTE_AUTH_UNSUPPORTED, saveRouters } from '../../lib/routers-actions'
+import { DEFAULT_ROUTER_PORT, type RemoteRouter, routerBaseUrl, routerId, routerLabel } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { showToast } from '../../lib/store'
 
@@ -44,6 +44,17 @@ export function AddRouterDialog({
 
     setSaving(true)
     try {
+      const authEnabled = await isRemoteAuthEnabled(routerBaseUrl(next.host, next.port))
+      if (authEnabled === true) {
+        showToast(
+          {
+            title: 'Авторизация включена',
+            body: REMOTE_AUTH_UNSUPPORTED,
+          },
+          'error'
+        )
+      }
+
       await saveRouters([...routers, next])
       onOpenChange(false)
       reset()
@@ -66,7 +77,10 @@ export function AddRouterDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Добавить роутер</DialogTitle>
-          <DialogDescription>Укажите адрес панели XKeen UI (по умолчанию порт 1000).</DialogDescription>
+          <DialogDescription>
+            Укажите адрес панели XKeen UI (по умолчанию порт 1000). Панели с включённой авторизацией недоступны для
+            массовых операций — cookie сессии не передаётся между хостами.
+          </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <InputGroup>

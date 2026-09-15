@@ -39,7 +39,7 @@ import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
-import { runMassTask, summarizeFanOut, targetLabel } from '../../lib/routers-actions'
+import { runMassTask, summarizeFanOut, targetLabel, filterAuthBlockedTargets, REMOTE_AUTH_UNSUPPORTED } from '../../lib/routers-actions'
 import { LOCAL_ROUTER_ID } from '../../lib/routers'
 import { useRoutersStore } from '../../lib/routers-store'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
@@ -546,6 +546,22 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     }
   }
 
+  async function resolveMassTargets(): Promise<string[] | null> {
+    const selected = getMassTargets()
+    const { allowed, blocked } = await filterAuthBlockedTargets(selected)
+    if (blocked.length > 0) {
+      showToast(
+        {
+          title: 'Пропущены панели с авторизацией',
+          body: `${blocked.map(targetLabel).join(', ')}. ${REMOTE_AUTH_UNSUPPORTED}`,
+        },
+        'error'
+      )
+    }
+    if (allowed.length === 0) return null
+    return allowed
+  }
+
   async function saveCurrentConfig(force = false) {
     const cfg = configsRef.current[activeIndexRef.current]
     if (!cfg || !editorRef.current) return
@@ -558,7 +574,8 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
       return
     }
 
-    const targets = getMassTargets()
+    const targets = await resolveMassTargets()
+    if (!targets) return
     const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
     if (hasRemote) {
       setMassConfirm({
@@ -671,7 +688,8 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
       return
     }
 
-    const targets = getMassTargets()
+    const targets = await resolveMassTargets()
+    if (!targets) return
     const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
     if (hasRemote) {
       setMassConfirm({
@@ -708,8 +726,9 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     }
   }
 
-  function quickBackup() {
-    const targets = getMassTargets()
+  async function quickBackup() {
+    const targets = await resolveMassTargets()
+    if (!targets) return
     const hasRemote = targets.some((t) => t !== LOCAL_ROUTER_ID)
     if (hasRemote) {
       setMassConfirm({
