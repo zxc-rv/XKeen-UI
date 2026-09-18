@@ -58,6 +58,7 @@ interface DnsConfig {
   fakeIpFilter: string
   bootstrap: string
   nameserver: string
+  proxyServerNameserver: string
   nameserverPolicy: string
   fallback: string
 }
@@ -68,6 +69,7 @@ export const DEFAULT_DNS_CONFIG: DnsConfig = {
   fakeIpFilter: '+.local',
   bootstrap: '77.88.8.8',
   nameserver: 'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query',
+  proxyServerNameserver: 'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query',
   nameserverPolicy: '',
   fallback: 'tls://77.88.8.1\ntls://77.88.8.8',
 }
@@ -173,6 +175,7 @@ export function patchDnsConfig(content: string, config: DnsConfig): string {
   else doc.deleteIn(['dns', 'nameserver-policy'])
 
   setOrDeleteList(doc, ['dns', 'nameserver'], parseList(config.nameserver))
+  setOrDeleteList(doc, ['dns', 'proxy-server-nameserver'], parseList(config.proxyServerNameserver))
   setOrDeleteList(doc, ['dns', 'fallback'], parseList(config.fallback))
 
   if (!doc.hasIn(['dns', 'fallback-filter'])) doc.setIn(['dns', 'fallback-filter'], { geoip: false })
@@ -277,6 +280,7 @@ export const DnsPanel = memo(function DnsPanel() {
     const fakeIpFilter = toLines(dns['fake-ip-filter'])
     const bootstrap = toLines(dns['default-nameserver'])
     const nameserver = toLines(dns['nameserver'])
+    const proxyServerNameserver = toLines(dns['proxy-server-nameserver'])
     const fallback = toLines(dns['fallback'])
 
     let nameserverPolicy = ''
@@ -300,6 +304,7 @@ export const DnsPanel = memo(function DnsPanel() {
       fakeIpFilter,
       bootstrap,
       nameserver,
+      proxyServerNameserver,
       nameserverPolicy,
       fallback,
     })
@@ -572,13 +577,25 @@ export const DnsPanel = memo(function DnsPanel() {
               </div>
 
               <div className="grid gap-2">
+                <DnsSettingLabel tooltip="При проксировании всех DNS из поля Nameserver, если адрес выбранного подключения является доменным именем, его нужно разрешить через отдельный резолвер. Здесь можно указать через какие.">
+                  Proxy Server Nameserver
+                </DnsSettingLabel>
+                <Textarea
+                  value={config.proxyServerNameserver}
+                  onChange={(e) => updateConfig({ proxyServerNameserver: e.target.value })}
+                  placeholder={'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query'}
+                  className="min-h-15 tracking-wide text-sm!"
+                />
+              </div>
+
+              <div className="grid gap-2">
                 <DnsSettingLabel tooltip="Резервные DNS-резолверы. Используются, если разрешение через основные - безуспешно.">
                   Fallback
                 </DnsSettingLabel>
                 <Textarea
                   value={config.fallback}
                   onChange={(e) => updateConfig({ fallback: e.target.value })}
-                  placeholder={'tls://8.8.4.4\ntls://1.1.1.1'}
+                  placeholder={'tls://1.1.1.1\ntls://8.8.8.8'}
                   className="min-h-15 tracking-wide text-sm!"
                 />
               </div>
