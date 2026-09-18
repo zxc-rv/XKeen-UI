@@ -9,6 +9,7 @@ mod geo;
 mod logger;
 mod ruleset_inspector;
 mod settings;
+mod system;
 mod types;
 mod updater;
 mod version;
@@ -475,6 +476,7 @@ async fn main() {
             get(settings::get_settings).patch(settings::patch_settings),
         )
         .route("/api/version", get(version::version_handler))
+        .route("/api/system", get(system::get_system_stats))
         .route("/api/ruleset", get(ruleset_inspector::get_ruleset_content))
         .route("/api/device-list", get(api_relay::get_device_list))
         .route("/api/update", post(updater::post_update))
