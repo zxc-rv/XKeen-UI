@@ -104,10 +104,12 @@ function parseNameserverPolicy(text: string): Record<string, string[]> {
   try {
     parsed = jsyaml.load(trimmed, { json: true })
   } catch {
-    return {}
+    throw new Error('Ошибка валидации YAML. Проверьте корректность записи')
   }
 
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Ошибка валидации YAML. Проверьте корректность записи')
+  }
 
   const result: Record<string, string[]> = {}
   for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -406,12 +408,27 @@ export const DnsPanel = memo(function DnsPanel() {
         return
       }
 
-      await clashFetch(clashApiPort ?? '', 'configs', {
-        method: 'PUT',
-        secret: clashApiSecret,
-        unix: clashApiUnix,
-        body: {},
-      })
+      try {
+        await clashFetch(clashApiPort ?? '', 'configs', {
+          method: 'PUT',
+          secret: clashApiSecret,
+          unix: clashApiUnix,
+          body: {},
+        })
+      } catch (mihomoError) {
+        const rollbackResult = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', {
+          file: yamlConfig.file,
+          content,
+        })
+        await refreshConfigs()
+
+        const mihomoMessage = mihomoError instanceof Error ? mihomoError.message : String(mihomoError)
+        if (!rollbackResult.success) {
+          throw new Error(`${mihomoMessage}. Не удалось откатить config.yaml: ${rollbackResult.error}`)
+        }
+        throw new Error(mihomoMessage)
+      }
+
       await refreshConfigs()
       showToast('DNS настройки применены')
     } catch (e) {
@@ -577,7 +594,7 @@ export const DnsPanel = memo(function DnsPanel() {
               </div>
 
               <div className="grid gap-2">
-                <DnsSettingLabel tooltip="При проксировании всех DNS из поля Nameserver, если адрес выбранного подключения является доменным именем, его нужно разрешить через отдельный резолвер. Здесь можно указать через какие.">
+                <DnsSettingLabel tooltip="При проксировании всех DNS из поля Nameserver, если адрес выбранного подключения является доменным именем, его нужно разрешить через отдельные резолверы. Здесь можно указать через какие.">
                   Proxy Server Nameserver
                 </DnsSettingLabel>
                 <Textarea
@@ -601,7 +618,7 @@ export const DnsPanel = memo(function DnsPanel() {
               </div>
 
               <div className="grid gap-2">
-                <DnsSettingLabel tooltip="DNS-резолвер для разрешения других резолверов, у которых в качестве адреса используется доменное имя. Допустимы только IP-адреса.">
+                <DnsSettingLabel tooltip="DNS-резолверы для разрешения других резолверов, у которых в качестве адреса используется доменное имя. Допустимы только IP-адреса.">
                   Bootstrap DNS
                 </DnsSettingLabel>
                 <Textarea
