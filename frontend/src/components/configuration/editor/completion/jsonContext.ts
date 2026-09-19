@@ -20,10 +20,10 @@ export interface ResolvedContext {
   readonly getSibling: (depth: number, key: string) => string | undefined
 }
 
-const BARE_TOKEN_RE = /[\w.-]*$/
-const BARE_TOKEN_FORWARD_RE = /^[\w.-]*/
+const BARE_TOKEN_RE = /[\p{L}\p{N}_.-]*$/u
+const BARE_TOKEN_FORWARD_RE = /^[\p{L}\p{N}_.-]*/u
 const QUOTED_VALID_FOR = /^[^"\n]*$/
-const BARE_VALID_FOR = /^[\w.-]*$/
+const BARE_VALID_FOR = /^[\p{L}\p{N}_.-]*$/u
 const TRIVIA_LOOKBACK = 4000
 const TRIVIA_MAX_STEPS = 20
 

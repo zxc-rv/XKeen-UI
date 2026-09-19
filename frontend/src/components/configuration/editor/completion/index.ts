@@ -149,11 +149,13 @@ export const completionThemeSpec: ThemeSpec = {
     fontSize: '13px',
     maxHeight: '16em',
     minWidth: '18ch',
+    padding: '4px 0',
   },
   '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
     display: 'flex',
     alignItems: 'center',
-    padding: '2px 8px',
+    padding: '5px 10px',
+    lineHeight: '1.4',
   },
   '.cm-completionMatchedText': {
     color: 'var(--cm-property)',

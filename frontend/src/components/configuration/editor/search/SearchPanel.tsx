@@ -192,7 +192,7 @@ export function SearchPanel({ handle }: Props) {
             render={
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 aria-expanded={state.replaceVisible}
                 aria-label={state.replaceVisible ? 'Скрыть замену' : 'Показать замену'}
                 onClick={toggleReplaceVisible}
@@ -205,11 +205,12 @@ export function SearchPanel({ handle }: Props) {
         </Tooltip>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1 md:flex-nowrap">
             {/* On narrow screens the field takes the whole first row; counter and buttons wrap below it. */}
-            <InputGroup className="min-w-0 flex-1 basis-full md:basis-auto">
+            <InputGroup className="h-8 min-w-0 flex-1 basis-full md:w-auto md:basis-auto">
               <InputGroupInput
                 ref={searchInputRef}
+                className="h-8"
                 {...{ 'main-field': '' }}
                 placeholder="Найти"
                 value={state.query.search}
@@ -231,7 +232,7 @@ export function SearchPanel({ handle }: Props) {
                       <InputGroupButton
                         aria-pressed={state.query.caseSensitive}
                         aria-label="Учитывать регистр"
-                        className="font-mono text-[11px]"
+                        className="aria-pressed:bg-primary/15 aria-pressed:text-primary hover:aria-pressed:bg-primary/25 font-mono text-[11px]"
                         onClick={toggleCaseSensitive}
                       >
                         Aa
@@ -246,7 +247,7 @@ export function SearchPanel({ handle }: Props) {
                       <InputGroupButton
                         aria-pressed={state.query.regexp}
                         aria-label="Регулярное выражение"
-                        className="font-mono text-[11px]"
+                        className="aria-pressed:bg-primary/15 aria-pressed:text-primary hover:aria-pressed:bg-primary/25 font-mono text-[11px]"
                         onClick={toggleRegexp}
                       >
                         .*
@@ -261,7 +262,7 @@ export function SearchPanel({ handle }: Props) {
                       <InputGroupButton
                         aria-pressed={state.query.wholeWord}
                         aria-label="Слово целиком"
-                        className="font-mono text-[11px]"
+                        className="aria-pressed:bg-primary/15 aria-pressed:text-primary hover:aria-pressed:bg-primary/25 font-mono text-[11px]"
                         onClick={toggleWholeWord}
                       >
                         ab
@@ -280,7 +281,7 @@ export function SearchPanel({ handle }: Props) {
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <Button variant="ghost" size="icon-xs" aria-label="Предыдущее совпадение" onClick={handleFindPrevious}>
+                  <Button variant="ghost" size="icon-sm" aria-label="Предыдущее совпадение" onClick={handleFindPrevious}>
                     <IconArrowUp />
                   </Button>
                 }
@@ -290,7 +291,7 @@ export function SearchPanel({ handle }: Props) {
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <Button variant="ghost" size="icon-xs" aria-label="Следующее совпадение" onClick={handleFindNext}>
+                  <Button variant="ghost" size="icon-sm" aria-label="Следующее совпадение" onClick={handleFindNext}>
                     <IconArrowDown />
                   </Button>
                 }
@@ -300,7 +301,7 @@ export function SearchPanel({ handle }: Props) {
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <Button variant="ghost" size="icon-xs" aria-label="Закрыть" onClick={handleClose}>
+                  <Button variant="ghost" size="icon-sm" aria-label="Закрыть" onClick={handleClose}>
                     <IconX />
                   </Button>
                 }
@@ -311,9 +312,10 @@ export function SearchPanel({ handle }: Props) {
 
           {state.replaceVisible && (
             <div className="flex items-center gap-1">
-              <InputGroup className="min-w-0 flex-1">
+              <InputGroup className="h-8 min-w-0 flex-1">
                 <InputGroupInput
                   ref={replaceInputRef}
+                  className="h-8"
                   placeholder="Заменить"
                   value={state.query.replace}
                   spellCheck={false}
@@ -326,7 +328,7 @@ export function SearchPanel({ handle }: Props) {
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <Button size="xs" variant="outline" onClick={handleReplaceOne}>
+                    <Button size="sm" variant="outline" onClick={handleReplaceOne}>
                       Заменить
                     </Button>
                   }
@@ -336,7 +338,7 @@ export function SearchPanel({ handle }: Props) {
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <Button size="xs" variant="outline" onClick={handleReplaceAll}>
+                    <Button size="sm" variant="outline" onClick={handleReplaceAll}>
                       Заменить все
                     </Button>
                   }

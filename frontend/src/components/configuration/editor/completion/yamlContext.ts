@@ -5,16 +5,21 @@ import type { ResolvedContext } from './jsonContext'
 
 export type { ResolvedContext }
 
-const VALUE_RE = /^(\s*)(- )?([\w.-]+):\s+(\S*)$/
-const ITEM_RE = /^(\s*)- ([^\s,]*)$/
-const KEY_RE = /^(\s*)(- )?([A-Za-z_][\w.-]*)?$/
+// Keys may be in any script (Mihomo users name rule-providers / sub-rules in Cyrillic), so the
+// identifier classes are Unicode-aware; quoted keys (`"Мои правила":`) are accepted where a key is
+// read back from the document and unquoted by `stripYamlScalar`.
+const KEY_CHARS = '[\\p{L}_][\\p{L}\\p{N}_.-]*'
+const KEY_TOKEN = `(?:"[^"]*"|'[^']*'|${KEY_CHARS})`
+const VALUE_RE = new RegExp(`^(\\s*)(- )?(${KEY_TOKEN}):\\s+(\\S*)$`, 'u')
+const ITEM_RE = /^(\s*)- ([^\s,]*)$/u
+const KEY_RE = new RegExp(`^(\\s*)(- )?(${KEY_CHARS})?$`, 'u')
 const ANCESTOR_DASH_RE = /^(\s*)-\s/
-const ANCESTOR_KEY_RE = /^(\s*)([A-Za-z_][\w.-]*):/
-const BLOCK_PAIR_RE = /^\s*([A-Za-z_][\w.-]*):\s*(.*)$/
-const INLINE_DASH_PAIR_RE = /^\s*-\s+([A-Za-z_][\w.-]*):\s*(.*)$/
+const ANCESTOR_KEY_RE = new RegExp(`^(\\s*)(${KEY_TOKEN}):`, 'u')
+const BLOCK_PAIR_RE = new RegExp(`^\\s*(${KEY_TOKEN}):\\s*(.*)$`, 'u')
+const INLINE_DASH_PAIR_RE = new RegExp(`^\\s*-\\s+(${KEY_TOKEN}):\\s*(.*)$`, 'u')
 const DASH_ONLY_RE = /^\s*-\s/
 const DOCUMENT_MARKER_RE = /^---\s*$/
-const BARE_VALID_FOR = /^[\w.-]*$/
+const BARE_VALID_FOR = /^[\p{L}\p{N}_.-]*$/u
 const BLOCKED_NODE_NAMES = ['Comment', 'QuotedLiteral', 'FlowMapping', 'FlowSequence', 'BlockLiteral']
 
 /** Hard cap on how many lines the upward/forward block scans will walk, however deep the file. */
@@ -96,7 +101,7 @@ function scanAncestors(
 
     const keyMatch = ANCESTOR_KEY_RE.exec(text)
     if (keyMatch && keyMatch[1].length < searchCol) {
-      path.unshift(keyMatch[2])
+      path.unshift(stripYamlScalar(keyMatch[2]))
       levels.unshift({ startLine: lineNo + 1, keyCol: searchCol, dashCol: null })
       searchCol = keyMatch[1].length
       continue
@@ -110,7 +115,7 @@ function scanAncestors(
 function forEachBlockPair(doc: Text, level: YamlLevel, visit: (key: string, value: string) => boolean | void): void {
   if (level.dashCol !== null) {
     const inline = INLINE_DASH_PAIR_RE.exec(doc.line(level.startLine).text)
-    if (inline && visit(inline[1], stripYamlScalar(inline[2])) === false) return
+    if (inline && visit(stripYamlScalar(inline[1]), stripYamlScalar(inline[2])) === false) return
   }
   const firstLine = level.dashCol !== null ? level.startLine + 1 : level.startLine
   for (let lineNo = firstLine, steps = 0; lineNo <= doc.lines && steps < MAX_SCAN_LINES; lineNo++, steps++) {
@@ -122,7 +127,7 @@ function forEachBlockPair(doc: Text, level: YamlLevel, visit: (key: string, valu
     if (indent > level.keyCol) continue
     const pair = BLOCK_PAIR_RE.exec(text)
     if (pair) {
-      if (visit(pair[1], stripYamlScalar(pair[2])) === false) return
+      if (visit(stripYamlScalar(pair[1]), stripYamlScalar(pair[2])) === false) return
       continue
     }
     if (DASH_ONLY_RE.test(text)) break
@@ -172,7 +177,7 @@ export function resolveYamlContext(state: EditorState, pos: number): ResolvedCon
   if (valueMatch) {
     const indent = valueMatch[1].length
     const hasDash = !!valueMatch[2]
-    const key = valueMatch[3]
+    const key = stripYamlScalar(valueMatch[3])
     const token = valueMatch[4]
     const { path, levels } = scanAncestors(doc, line.number, hasDash ? indent + 2 : indent, hasDash, hasDash ? indent : null)
     return {
