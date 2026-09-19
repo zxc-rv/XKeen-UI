@@ -8,6 +8,9 @@ import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
+import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID, routerId } from './lib/routers'
+import { applyRoutersFromSettings, refreshAllOnline } from './lib/routers-actions'
+import { useRoutersStore } from './lib/routers-store'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
 import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config, type ThemeMode } from './lib/types'
@@ -120,6 +123,7 @@ const ModalManager = memo(function ModalManager({
 
 function AppContent({ onLogout }: { onLogout: () => void }) {
   const { dispatch, showToast } = useAppActions()
+  const multiRouter = useSettings((s) => s.multiRouter)
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
     switchTab: () => { },
@@ -232,7 +236,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     const loadSettings = async () => {
       const data = await apiCall<any>('GET', 'settings')
-      if (data.success)
+      if (data.success) {
         dispatch({
           type: 'SET_SETTINGS',
           settings: {
@@ -252,8 +256,13 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             autoDns: data.clash_api?.auto_dns ?? 'disabled',
             timezone: data.log.timezone,
             authEnabled: !!data.auth?.enabled,
+            multiRouter: data.plugins?.multi_router ?? false,
           },
         })
+        if (Array.isArray(data.plugins?.routers)) {
+          applyRoutersFromSettings(data.plugins.routers)
+        }
+      }
     }
 
     const init = async () => {
@@ -269,6 +278,14 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
 
     init()
   }, [checkStatus, loadConfigs, dispatch, showToast, checkVersion])
+
+  const onlineTargetsKey = useRoutersStore((s) => [LOCAL_ROUTER_ID, ...s.routers.map(routerId)].join('|'))
+  useEffect(() => {
+    if (!multiRouter) return
+    void refreshAllOnline()
+    const timer = setInterval(() => void refreshAllOnline(), ONLINE_PING_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [onlineTargetsKey, multiRouter])
 
   const switchCore = useCallback(
     async (core: string) => {

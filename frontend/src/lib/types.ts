@@ -32,6 +32,7 @@ export interface AppSettings {
   autoDns: AutoDnsMode
   timezone: number
   authEnabled: boolean
+  multiRouter: boolean
 }
 
 export type ServiceStatus = 'loading' | 'running' | 'stopped' | 'pending'

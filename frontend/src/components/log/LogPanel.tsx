@@ -1,14 +1,20 @@
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconTrash, IconX } from '@tabler/icons-react'
+import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import { LOCAL_ROUTER_ID, isRouterSelectable, routerId } from '../../lib/routers'
+import { useRoutersStore } from '../../lib/routers-store'
 import { useSettings } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { WsMessage } from '../../lib/websocket'
 import { useWebSocket } from '../../lib/websocket'
+import { AddRouterDialog } from '../routers/AddRouterDialog'
+import { RoutersListPanel } from '../routers/RoutersListPanel'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']
@@ -16,6 +22,23 @@ const MAX_LINES = 1000
 
 export function LogPanel() {
   const timezone = useSettings((s) => s.timezone)
+  const multiRouter = useSettings((s) => s.multiRouter)
+  const routers = useRoutersStore((s) => s.routers)
+  const applyTargets = useRoutersStore((s) => s.applyTargets)
+  const online = useRoutersStore((s) => s.online)
+  const auth = useRoutersStore((s) => s.auth)
+  const setApplyTargets = useRoutersStore((s) => s.setApplyTargets)
+  const [panelTab, setPanelTab] = useState<'journal' | 'routers'>('journal')
+  const [addRouterOpen, setAddRouterOpen] = useState(false)
+  useEffect(() => {
+    if (!multiRouter && panelTab === 'routers') setPanelTab('journal')
+  }, [multiRouter, panelTab])
+  const allRouterIds = [LOCAL_ROUTER_ID, ...routers.map(routerId)]
+  const selectableRouterIds = allRouterIds.filter((id) => isRouterSelectable(id, online, auth))
+  const allRoutersSelected =
+    selectableRouterIds.length > 0 && selectableRouterIds.every((id) => applyTargets.includes(id))
+  const showSelectAllRouters = multiRouter && panelTab === 'routers' && routers.length > 0
+  const showRoutersToolbar = multiRouter && panelTab === 'routers'
   const [filter, setFilter] = useState('')
   const [currentFile, setCurrentFile] = useState('error.log')
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -301,103 +324,164 @@ export function LogPanel() {
             height: isFullscreen ? 'calc(100dvh - 1.25rem)' : '100%',
           }}
         >
-          <div className="flex shrink-0 flex-col justify-between gap-3 px-4 pt-4 sm:flex-row sm:items-center">
-            <h2 className="text-lg font-semibold select-none">Журнал</h2>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <div className="relative flex min-w-30 flex-1 items-center sm:flex-none">
-                <InputGroup className="w-40">
-                  <InputGroupInput
-                    placeholder="Фильтр"
-                    className="right-2"
-                    value={filter}
-                    onChange={(e) => handleFilterChange(e.target.value)}
-                  />
-                  <InputGroupAddon>
-                    <IconFilter />
-                  </InputGroupAddon>
-                  <InputGroupAddon align="inline-end">
-                    {filter && (
-                      <InputGroupButton
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => {
-                          if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
-                          setFilter('')
-                          ws.applyFilter('')
-                        }}
-                        className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
-                      >
-                        <IconX className="size-3.25" />
-                      </InputGroupButton>
-                    )}
-                  </InputGroupAddon>
-                </InputGroup>
-              </div>
-              <Select value={currentFile} onValueChange={switchFile}>
-                <SelectTrigger popper className="md:w-33">
-                  <SelectValue />
-                </SelectTrigger>
-
-                <SelectContent position="popper">
-                  <SelectGroup>
-                    {LOG_FILES.map((f) => (
-                      <SelectItem key={f} value={f} className="text-sm">
-                        {f}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
-                <Tooltip>
-                  <TooltipTrigger render={<Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}><IconTrash /></Button>} />
-                  <TooltipContent>Очистить лог</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger render={
-                    <Button variant="outline" size="icon" onClick={toggleFullscreen}>
-                      {isFullscreen ? <IconMinimize /> : <IconMaximize />}
-                    </Button>
-                  } />
-                  <TooltipContent>{isFullscreen ? 'Свернуть' : 'Развернуть'}</TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative min-h-0 flex-1">
-            <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
-              {isEmpty && (
-                <Empty className="h-full gap-0">
-                  <EmptyMedia variant="icon" className="size-8.5">
-                    <IconFile className="text-muted-foreground size-5" />
-                  </EmptyMedia>
-                  <EmptyTitle className="text-ring font-mono text-[13px] tracking-normal">Журнал пуст</EmptyTitle>
-                </Empty>
+          <Tabs
+            value={panelTab}
+            onValueChange={(v) => setPanelTab(v as 'journal' | 'routers')}
+            className="flex min-h-0 flex-1 flex-col gap-0"
+          >
+            <div className="flex shrink-0 flex-col justify-between gap-3 px-4 pt-4 sm:flex-row sm:items-center">
+              {multiRouter ? (
+                <TabsList variant="line" className="h-auto gap-3 bg-transparent p-0">
+                  <TabsTrigger value="journal" className="p-0 text-lg font-semibold">
+                    Журнал
+                  </TabsTrigger>
+                  <TabsTrigger value="routers" className="p-0 text-lg font-semibold">
+                    Роутеры
+                  </TabsTrigger>
+                </TabsList>
+              ) : (
+                <h2 className="text-lg font-semibold select-none">Журнал</h2>
               )}
-              <div
-                ref={logRef}
-                tabIndex={0}
-                className={cn(
-                  'text-foreground scrollbar-width:thin h-full overflow-y-auto px-3 py-1.5 font-mono text-[13px] leading-[1.6] wrap-anywhere contain-content',
-                  isAnimating && 'pointer-events-none'
-                )}
-                onScroll={handleScroll}
-                onClick={handleLogClick}
-              />
+              {panelTab === 'journal' && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="relative flex min-w-30 flex-1 items-center sm:flex-none">
+                    <InputGroup className="w-40">
+                      <InputGroupInput
+                        placeholder="Фильтр"
+                        className="right-2"
+                        value={filter}
+                        onChange={(e) => handleFilterChange(e.target.value)}
+                      />
+                      <InputGroupAddon>
+                        <IconFilter />
+                      </InputGroupAddon>
+                      <InputGroupAddon align="inline-end">
+                        {filter && (
+                          <InputGroupButton
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() => {
+                              if (filterTimerRef.current) clearTimeout(filterTimerRef.current)
+                              setFilter('')
+                              ws.applyFilter('')
+                            }}
+                            className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                          >
+                            <IconX className="size-3.25" />
+                          </InputGroupButton>
+                        )}
+                      </InputGroupAddon>
+                    </InputGroup>
+                  </div>
+                  <Select value={currentFile} onValueChange={switchFile}>
+                    <SelectTrigger popper className="md:w-33">
+                      <SelectValue />
+                    </SelectTrigger>
+
+                    <SelectContent position="popper">
+                      <SelectGroup>
+                        {LOG_FILES.map((f) => (
+                          <SelectItem key={f} value={f} className="text-sm">
+                            {f}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button variant="outline" size="icon" className="hover:text-destructive" onClick={() => ws.clearLog()}>
+                            <IconTrash />
+                          </Button>
+                        }
+                      />
+                      <TooltipContent>Очистить лог</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button variant="outline" size="icon" onClick={toggleFullscreen}>
+                            {isFullscreen ? <IconMinimize /> : <IconMaximize />}
+                          </Button>
+                        }
+                      />
+                      <TooltipContent>{isFullscreen ? 'Свернуть' : 'Развернуть'}</TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+              )}
+              {showRoutersToolbar && (
+                <div className="flex items-center gap-3">
+                  {showSelectAllRouters && (
+                    <label className="text-muted-foreground flex cursor-pointer items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={allRoutersSelected}
+                        disabled={selectableRouterIds.length === 0}
+                        onCheckedChange={(checked) => setApplyTargets(checked === true ? selectableRouterIds : [])}
+                        aria-label="Выбрать все"
+                      />
+                      Выбрать все
+                    </label>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button variant="outline" size="icon" onClick={() => setAddRouterOpen(true)}>
+                          <IconPlus />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Добавить</TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
             </div>
 
-            {showScrollBtn && !isAnimating && (
-              <Button
-                variant="outline"
-                size="icon-sm"
-                className="bg-background/80 absolute right-8 bottom-8 z-10 shadow-lg backdrop-blur!"
-                onClick={handleScrollToBottom}
-              >
-                <IconChevronDown size={14} />
-              </Button>
-            )}
-          </div>
+            <TabsContent value="journal" className="relative mt-0 min-h-0 flex-1">
+              <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
+                {isEmpty && (
+                  <Empty className="h-full gap-0">
+                    <EmptyMedia variant="icon" className="size-8.5">
+                      <IconFile className="text-muted-foreground size-5" />
+                    </EmptyMedia>
+                    <EmptyTitle className="text-ring font-mono text-[13px] tracking-normal">Журнал пуст</EmptyTitle>
+                  </Empty>
+                )}
+                <div
+                  ref={logRef}
+                  tabIndex={0}
+                  className={cn(
+                    'text-foreground scrollbar-width:thin h-full overflow-y-auto px-3 py-1.5 font-mono text-[13px] leading-[1.6] wrap-anywhere contain-content',
+                    isAnimating && 'pointer-events-none'
+                  )}
+                  onScroll={handleScroll}
+                  onClick={handleLogClick}
+                />
+              </div>
+
+              {showScrollBtn && !isAnimating && (
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  className="bg-background/80 absolute right-8 bottom-8 z-10 shadow-lg backdrop-blur!"
+                  onClick={handleScrollToBottom}
+                >
+                  <IconChevronDown size={14} />
+                </Button>
+              )}
+            </TabsContent>
+
+            <TabsContent value="routers" className="relative mt-0 min-h-0 flex-1">
+              {multiRouter && (
+                <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
+                  <RoutersListPanel />
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+          <AddRouterDialog open={addRouterOpen} onOpenChange={setAddRouterOpen} />
         </div>
       </div>
     </TooltipProvider>
