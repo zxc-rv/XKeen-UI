@@ -1,4 +1,3 @@
-import { autocompletion, completeAnyWord } from '@codemirror/autocomplete'
 import { historyField, indentWithTab } from '@codemirror/commands'
 import { jsonLanguage } from '@codemirror/lang-json'
 import { yamlLanguage } from '@codemirror/lang-yaml'
@@ -6,7 +5,6 @@ import {
   ensureSyntaxTree,
   foldedRanges,
   foldEffect,
-  foldKeymap as foldKeymapCmd,
   HighlightStyle,
   indentService,
   LanguageSupport,
@@ -20,13 +18,16 @@ import { Compartment, EditorSelection, EditorState, Prec, RangeSetBuilder, type 
 import { Decoration, EditorView, keymap, lineNumbers, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
-import { basicSetup } from 'codemirror'
 import * as jsyaml from 'js-yaml'
 import { parse as parseJsonc, printParseErrorCode, type ParseError } from 'jsonc-parser'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { getFileLanguage } from '../../lib/api'
-
-type EditorLanguage = 'json' | 'yaml' | 'text'
+import { completionThemeSpec, configAutocompletion } from './editor/completion'
+import { SearchPanel } from './editor/search/SearchPanel'
+import { createSearchExtension, searchThemeSpec, type SearchBridge, type SearchPanelHandle } from './editor/search/searchExtension'
+import { baseSetup } from './editor/setup'
+import type { EditorLanguage } from './editor/types'
 
 interface SavedViewState {
   anchor: number
@@ -322,7 +323,13 @@ const editorTheme = (isMobile: boolean, isDarkTheme: boolean) =>
         zIndex: 1,
       },
       '.cm-tooltip': { backgroundColor: 'var(--cm-panel-bg)', color: 'var(--cm-fg)', border: '1px solid var(--cm-border)', zIndex: 40 },
-      '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--cm-selection)' },
+      '.cm-tooltip-autocomplete ul li[aria-selected]': {
+        backgroundColor: 'var(--menu-active-bg)',
+        color: '#60a5fa',
+        fontWeight: '600',
+      },
+      ...searchThemeSpec(isDarkTheme),
+      ...completionThemeSpec,
     },
     { dark: isDarkTheme }
   )
@@ -347,6 +354,12 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   const suppressRef = useRef(false)
   const lastValidationRef = useRef<{ isValid: boolean; error?: string } | null>(null)
   const extensionsRef = useRef<Extension[]>([])
+  const [searchPanel, setSearchPanel] = useState<SearchPanelHandle | null>(null)
+  const searchBridgeRef = useRef<SearchBridge>({
+    open: (handle) => setSearchPanel(handle),
+    // A stale destroy (e.g. tab switch replacing the state) must not clear a newer panel.
+    close: (handle) => setSearchPanel((prev) => (prev === handle ? null : prev)),
+  })
 
   useLayoutEffect(() => {
     onContentChangeRef.current = onContentChange
@@ -367,8 +380,9 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
 
   const createExtensions = useCallback(
     (darkTheme: boolean): Extension[] => [
-      basicSetup,
-      autocompletion({ override: [completeAnyWord] }),
+      ...baseSetup,
+      configAutocompletion(() => ({ file: filenameRef.current, language: languageRef.current })),
+      createSearchExtension(searchBridgeRef.current),
       Prec.highest(
         lineNumbers({
           formatNumber: (n) => String(n).padStart(3, '\u00a0'),
@@ -387,10 +401,10 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
           },
         })
       ),
-      EditorState.allowMultipleSelections.of(true),
       keymap.of([
         {
           key: 'Mod-s',
+          scope: 'editor search-panel',
           run: () => {
             onSaveRef.current?.()
             return true
@@ -415,7 +429,6 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
           },
         },
         indentWithTab,
-        ...foldKeymapCmd,
       ]),
       Prec.highest(syntaxHighlighting(editorHighlight)),
       languageCompartmentRef.current.of(getLanguageExtension(languageRef.current)),
@@ -715,6 +728,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   return (
     <div className="border-border bg-input-background absolute inset-4 overflow-hidden rounded-xl border">
       <div ref={containerRef} className="h-full w-full" />
+      {searchPanel && createPortal(<SearchPanel handle={searchPanel} />, searchPanel.dom)}
     </div>
   )
 })
