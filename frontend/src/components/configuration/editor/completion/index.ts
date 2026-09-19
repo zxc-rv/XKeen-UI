@@ -128,10 +128,10 @@ export function configAutocompletion(getTarget: () => CompletionTarget): Extensi
   return [
     autocompletion({
       override: [configCompletionSource(getTarget)],
-      selectOnOpen: false,
+      selectOnOpen: true,
       icons: false,
       activateOnTyping: true,
-      closeOnBlur: true,
+      closeOnBlur: false,
       defaultKeymap: true,
       maxRenderedOptions: 60,
       activateOnCompletion: (completion) => completion.type === 'key-enum',
@@ -142,20 +142,24 @@ export function configAutocompletion(getTarget: () => CompletionTarget): Extensi
 
 export const completionThemeSpec: ThemeSpec = {
   '.cm-tooltip.cm-tooltip-autocomplete': {
-    borderRadius: '6px',
+    backgroundColor: 'var(--input-background) !important',
+    color: 'var(--popover-foreground)',
+    border: '1px solid var(--border) !important',
+    borderRadius: '8px',
   },
   '.cm-tooltip.cm-tooltip-autocomplete > ul': {
     fontFamily: 'var(--font-mono)',
     fontSize: '13px',
     maxHeight: '16em',
     minWidth: '18ch',
-    padding: '4px 0',
+    padding: '4px',
   },
   '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
     display: 'flex',
     alignItems: 'center',
-    padding: '5px 10px',
+    padding: '4px !important',
     lineHeight: '1.4',
+    borderRadius: '6px',
   },
   '.cm-completionMatchedText': {
     color: 'var(--cm-property)',

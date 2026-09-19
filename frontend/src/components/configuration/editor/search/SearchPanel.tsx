@@ -232,7 +232,7 @@ export function SearchPanel({ handle }: Props) {
                       <InputGroupButton
                         aria-pressed={state.query.caseSensitive}
                         aria-label="Учитывать регистр"
-                        className="aria-pressed:bg-primary/15 aria-pressed:text-primary hover:aria-pressed:bg-primary/25 font-mono text-[11px]"
+                        className="aria-pressed:bg-accent font-mono text-[11px]"
                         onClick={toggleCaseSensitive}
                       >
                         Aa
@@ -247,7 +247,7 @@ export function SearchPanel({ handle }: Props) {
                       <InputGroupButton
                         aria-pressed={state.query.regexp}
                         aria-label="Регулярное выражение"
-                        className="aria-pressed:bg-primary/15 aria-pressed:text-primary hover:aria-pressed:bg-primary/25 font-mono text-[11px]"
+                        className="aria-pressed:bg-accent font-mono text-[11px]"
                         onClick={toggleRegexp}
                       >
                         .*
@@ -262,7 +262,7 @@ export function SearchPanel({ handle }: Props) {
                       <InputGroupButton
                         aria-pressed={state.query.wholeWord}
                         aria-label="Слово целиком"
-                        className="aria-pressed:bg-primary/15 aria-pressed:text-primary hover:aria-pressed:bg-primary/25 font-mono text-[11px]"
+                        className="aria-pressed:bg-accent font-mono text-[11px]"
                         onClick={toggleWholeWord}
                       >
                         ab

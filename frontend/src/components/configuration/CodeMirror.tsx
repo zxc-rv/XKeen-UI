@@ -323,7 +323,11 @@ const editorTheme = (isMobile: boolean, isDarkTheme: boolean) =>
         zIndex: 1,
       },
       '.cm-tooltip': { backgroundColor: 'var(--cm-panel-bg)', color: 'var(--cm-fg)', border: '1px solid var(--cm-border)', zIndex: 40 },
-      '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--cm-selection)' },
+      '.cm-tooltip-autocomplete ul li[aria-selected]': {
+        backgroundColor: 'var(--menu-active-bg)',
+        color: '#60a5fa',
+        fontWeight: '600',
+      },
       ...searchThemeSpec(isDarkTheme),
       ...completionThemeSpec,
     },
