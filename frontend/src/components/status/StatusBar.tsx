@@ -218,10 +218,12 @@ export function StatusBar({
             <div className="flex items-center rounded-lg border bg-muted/40 px-3 py-1">
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.75 pb-0.5">
-                  <div className="relative flex size-2.5 shrink-0 items-center justify-center">
-                    {isRunning && <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
+                  <div className="relative size-2.5 shrink-0">
+                    {isRunning && (
+                      <span className="absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-emerald-400 opacity-60" />
+                    )}
                     <span className={cn(
-                      "relative inline-flex size-1.75 rounded-full",
+                      "absolute left-1/2 top-1/2 size-1.75 -translate-x-1/2 -translate-y-1/2 rounded-full",
                       isRunning ? "bg-emerald-500" : isPending ? "bg-amber-500 animate-pulse" : "bg-red-500"
                     )} />
                   </div>
