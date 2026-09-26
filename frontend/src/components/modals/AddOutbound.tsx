@@ -291,7 +291,6 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
   const [subTab, setSubTab] = useState('form')
   const [isCustomUA, setIsCustomUA] = useState(false)
   const [customUA, setCustomUA] = useState('')
-  const [generated, setGenerated] = useState(false)
   const [resultUri, setResultUri] = useState<string | null>(null)
   const [replaceOpen, setReplaceOpen] = useState(false)
   const [replaceTarget, setReplaceTarget] = useState<string | null>(null)
@@ -314,7 +313,6 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
       setSubDefaultName(null)
       setIsCustomUA(false)
       setCustomUA('')
-      setGenerated(false)
       setReplaceOpen(false)
       setReplaceTarget(null)
       setRenameRefs(true)
@@ -338,7 +336,6 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
       setResult({ content: '', type: 'proxy-provider', protocol: 'HTTP' })
       setResultUri(null)
       setSubTab('form')
-      setGenerated(true)
       return
     }
 
@@ -454,7 +451,7 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
     close()
   }
 
-  const showSubForm = generated && subForm && result
+  const showSubForm = subForm && result
   const isMihomoProxyFlow = state.currentCore === 'mihomo' && result?.type === 'proxy'
   const isMihomoProviderFlow = state.currentCore === 'mihomo' && Boolean(showSubForm)
   const configYamlContent = state.configs.find((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')?.content ?? ''
@@ -510,7 +507,7 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
                     <Tooltip>
                       <TooltipTrigger
                         render={
-                          <Button variant="ghost" size="icon-sm" onClick={generated ? copySub : copy}>
+                          <Button variant="ghost" size="icon-sm" onClick={subForm ? copySub : copy}>
                             {copied ? <IconCheck className="text-green-500" /> : <IconCopy className="size-4.5" />}
                           </Button>
                         }
@@ -815,7 +812,7 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
               </div>
             )}
 
-            {result && !generated && (
+            {result && !subForm && (
               <div className="border-border bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
                 <div className="border-border bg-muted/30 flex w-full shrink-0 items-center justify-between border-b px-3 py-1">
                   <Badge className="bg-blue-500/10! px-2 pt-2.25 pb-2.5 text-[10px] tracking-wider text-blue-400">{result.protocol}</Badge>
