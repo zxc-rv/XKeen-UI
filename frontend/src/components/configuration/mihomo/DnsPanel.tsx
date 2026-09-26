@@ -445,7 +445,7 @@ export const DnsPanel = memo(function DnsPanel() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col gap-4 p-4">
+      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
         <fieldset className="border-border rounded-lg border px-4 pb-4 pt-1.5">
           <legend className="text-sm font-medium px-1">Статус DNS</legend>
           <div className="flex flex-col gap-3 pt-1">
