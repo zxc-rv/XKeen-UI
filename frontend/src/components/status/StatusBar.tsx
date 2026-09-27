@@ -233,14 +233,14 @@ export function StatusBar({
                 </div>
                 <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px] tracking-tight text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <IconDatabase className="size-3" />
+                    <IconDatabase className={cn('size-3', usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100))} />
                     <span className={usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100)}>
                       {formatMemoryMB(systemStats?.memoryUsed ?? 0)}/{formatMemoryMB(systemStats?.memoryTotal ?? 0)} МБ
                     </span>
                   </span>
                   <span className="h-3 w-px bg-border" />
                   <span className="flex items-center gap-1">
-                    <IconCpu className="size-3" />
+                    <IconCpu className={cn('size-3', systemStats ? usageColorClass(systemStats.cpuUsage) : '')} />
                     <span className={systemStats ? usageColorClass(systemStats.cpuUsage) : ''}>
                       {systemStats ? `${systemStats.cpuUsage.toFixed(0)}%` : '—'}
                     </span>
