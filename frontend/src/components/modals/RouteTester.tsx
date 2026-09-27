@@ -9,9 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { IconAlertTriangle, IconChevronDown, IconFileUpload, IconRoute, IconX } from '@tabler/icons-react'
+import { IconAlertTriangle, IconArrowRight, IconChevronDown, IconFileUpload, IconRoute, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { apiCall, buildClashHeaders, capitalize } from '../../lib/api'
+import { apiCall, buildClashHeaders, capitalize, clashFetch } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
 import { cn } from '../../lib/utils'
 
@@ -64,6 +64,11 @@ interface RouteTestRunResponse {
   warnings?: string[]
 }
 
+interface ProxyLite {
+  type?: string
+  now?: string
+}
+
 const MAX_TARGETS = 500
 const NO_INBOUND = '__none__'
 const KIND_LABELS: Record<string, string> = { domain: 'домен', ip: 'ip' }
@@ -86,7 +91,31 @@ function pluralizeTargets(n: number): string {
   return 'целей'
 }
 
-function ResultRow({ result, expanded, onToggle }: { result: RouteTestResult; expanded: boolean; onToggle: () => void }) {
+function resolveProxyChain(proxies: Record<string, ProxyLite | undefined>, name: string): string[] {
+  const chain = [name]
+  const visited = new Set([name])
+  let current = name
+  for (;;) {
+    const info = proxies[current]
+    if (!info?.now || visited.has(info.now)) break
+    chain.push(info.now)
+    visited.add(info.now)
+    current = info.now
+  }
+  return chain
+}
+
+function ResultRow({
+  result,
+  chain,
+  expanded,
+  onToggle,
+}: {
+  result: RouteTestResult
+  chain?: string[]
+  expanded: boolean
+  onToggle: () => void
+}) {
   const hasDetails = result.skipped.length > 0 || !!result.error
 
   return (
@@ -107,6 +136,17 @@ function ResultRow({ result, expanded, onToggle }: { result: RouteTestResult; ex
           {result.outcome === 'error' ? 'Ошибка' : (result.outbound ?? '—')}
         </Badge>
       </div>
+
+      {chain && chain.length > 1 && (
+        <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-1 text-xs">
+          {chain.map((name, i) => (
+            <span key={`${name}-${i}`} className="flex items-center gap-1">
+              {i > 0 && <IconArrowRight size={11} className="shrink-0" />}
+              <span className="truncate">{name}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {result.outcome !== 'error' && (
         <div
@@ -133,7 +173,7 @@ function ResultRow({ result, expanded, onToggle }: { result: RouteTestResult; ex
 
       {result.resolvedIps.length > 0 && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
-          <span >{result.resolvedIps.join(', ')}</span>
+          <span>{result.resolvedIps.join(', ')}</span>
           {result.dnsSource && (
             <Badge variant="outline" className="h-4.5 rounded-sm px-1.5 text-[10px]">
               {DNS_SOURCE_LABELS[result.dnsSource] ?? result.dnsSource}
@@ -185,6 +225,7 @@ export function RouteTesterModal() {
   const [running, setRunning] = useState(false)
   const [results, setResults] = useState<RouteTestResult[] | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
+  const [chains, setChains] = useState<Record<string, string[]>>({})
   const [filter, setFilter] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -268,6 +309,7 @@ export function RouteTesterModal() {
     setRunning(true)
     setResults(null)
     setWarnings([])
+    setChains({})
     setFilter(null)
     setExpanded(new Set())
     const controller = new AbortController()
@@ -318,6 +360,39 @@ export function RouteTesterModal() {
   function cancelRun() {
     abortRef.current?.abort()
   }
+
+  // Resolve mihomo's live proxy-group chain (e.g. Discord -> Auto -> Финляндия) for the outbounds
+  // that came back from the run. One bulk GET /clash/proxies, then walk `.now` locally — no
+  // per-name lookups, which used to 404 for proxy-provider members and spam the log.
+  useEffect(() => {
+    if (!modals.showRouteTestModal || !results || core !== 'mihomo' || !(clashApiPort || clashApiUnix)) return
+    const uniqueOutbounds = Array.from(new Set(results.filter((r) => r.outbound).map((r) => r.outbound as string)))
+    if (uniqueOutbounds.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      let data: { proxies?: Record<string, ProxyLite> } | null = null
+      try {
+        data = await clashFetch<{ proxies?: Record<string, ProxyLite> }>(clashApiPort ?? '', 'proxies', {
+          secret: clashApiSecret,
+          unix: clashApiUnix ?? null,
+          retry: false,
+        })
+      } catch {
+        data = null
+      }
+      if (cancelled) return
+      const proxies = data?.proxies ?? {}
+      const next: Record<string, string[]> = {}
+      for (const name of uniqueOutbounds) {
+        const chain = resolveProxyChain(proxies, name)
+        if (chain.length > 1) next[name] = chain
+      }
+      setChains(next)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [results, core, clashApiPort, clashApiSecret, clashApiUnix, modals.showRouteTestModal])
 
   const chipEntries = useMemo(() => {
     if (!results) return []
@@ -528,7 +603,13 @@ export function RouteTesterModal() {
                   <div className="text-muted-foreground flex h-20 items-center justify-center text-xs">Нет результатов</div>
                 ) : (
                   filteredResults.map((r) => (
-                    <ResultRow key={r.target} result={r} expanded={expanded.has(r.target)} onToggle={() => toggleExpanded(r.target)} />
+                    <ResultRow
+                      key={r.target}
+                      result={r}
+                      chain={r.outbound ? chains[r.outbound] : undefined}
+                      expanded={expanded.has(r.target)}
+                      onToggle={() => toggleExpanded(r.target)}
+                    />
                   ))
                 )}
               </div>
