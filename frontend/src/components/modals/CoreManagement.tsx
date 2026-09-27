@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { IconCpu } from '@tabler/icons-react'
-import { useAppContext, useModalContext } from '../../lib/store'
+import { useAppContext, useDnsStatusStore, useModalContext } from '../../lib/store'
 
 interface Props {
   onSwitchCore: (core: string) => void
@@ -19,6 +19,9 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
   const { state } = useAppContext()
   const { modals, dispatch } = useModalContext()
   const { currentCore, coreVersions, availableCores } = state
+  const dnsStatus = useDnsStatusStore((s) => s.status)
+
+  const isDnsEnabled = !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.dnsMihomo
 
   const close = () => dispatch({ type: 'SHOW_MODAL', modal: 'showCoreManageModal', show: false })
 
@@ -59,15 +62,23 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
                   </div>
                   <div className="flex items-center gap-2">
                     {!isActive && isInstalled && (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          close()
-                          onSwitchCore(core.id)
-                        }}
-                      >
-                        Переключить
-                      </Button>
+                      <div className="relative">
+                        <Button
+                          size="sm"
+                          disabled={isDnsEnabled}
+                          onClick={() => {
+                            close()
+                            onSwitchCore(core.id)
+                          }}
+                        >
+                          Переключить
+                        </Button>
+                        {isDnsEnabled && (
+                          <span className="text-destructive pointer-events-none absolute top-full left-1/2 -translate-x-1/2 text-[9px] mt-0.5 whitespace-nowrap">
+                            Отключите управление DNS
+                          </span>
+                        )}
+                      </div>
                     )}
                     <Button
                       variant="outline"

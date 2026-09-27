@@ -214,8 +214,8 @@ export function StatusBar({
         <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-2 rounded-xl border px-3 py-3 sm:px-4 md:flex-row md:items-center">
 
           {/* Статус */}
-          <div className="order-2 flex w-full items-center justify-center md:justify-start gap-1.5 md:order-1 md:w-auto">
-            <div className="flex items-center rounded-lg border bg-muted/40 px-3 py-1">
+          <div className="order-2 flex w-full items-center justify-center md:justify-start md:order-1 md:w-auto">
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5">
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.75 pb-0.5">
                   <div className="relative size-2.5 shrink-0">
@@ -247,54 +247,56 @@ export function StatusBar({
                   </span>
                 </span>
               </div>
-            </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
-              {isConfigsLoading ? (
-                <>
-                  <Skeleton className="size-8 rounded-md" />
-                  <Skeleton className="size-8 rounded-md" />
-                </>
-              ) : (
-                <>
-                  {isRunning && (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button variant="outline" size="icon" onClick={restartService} disabled={isPending}>
-                            {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconRefresh className="size-4" />}
-                          </Button>
-                        }
-                      />
-                      <TooltipContent>Перезапустить</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {!isRunning && (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button variant="outline" size="icon" className="text-emerald-500 hover:border-emerald-500/50 hover:text-emerald-400" onClick={startService} disabled={isPending}>
-                            {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerPlayFilled className="size-4" />}
-                          </Button>
-                        }
-                      />
-                      <TooltipContent>Запустить</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {isRunning && (
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <Button variant="outline" size="icon" className="text-destructive hover:text-destructive/80" onClick={stopService} disabled={isPending}>
-                            {isPending ? <Spinner className="size-4 text-muted-foreground" /> : <IconPlayerStopFilled className="size-4" />}
-                          </Button>
-                        }
-                      />
-                      <TooltipContent>Остановить</TooltipContent>
-                    </Tooltip>
-                  )}
-                </>
-              )}
+              <span className="h-6 w-px bg-border" />
+
+              <div className="flex shrink-0 items-center gap-1">
+                {isConfigsLoading ? (
+                  <>
+                    <Skeleton className="size-7 rounded-md" />
+                    <Skeleton className="size-7 rounded-md" />
+                  </>
+                ) : (
+                  <>
+                    {isRunning && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button variant="outline" size="icon-sm" onClick={restartService} disabled={isPending}>
+                              {isPending ? <Spinner className="size-3.5 text-muted-foreground" /> : <IconRefresh className="size-4" />}
+                            </Button>
+                          }
+                        />
+                        <TooltipContent>Перезапустить</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {!isRunning && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button variant="outline" size="icon-sm" className="text-emerald-500 hover:border-emerald-500/50 hover:text-emerald-400" onClick={startService} disabled={isPending}>
+                              {isPending ? <Spinner className="size-3.5 text-muted-foreground" /> : <IconPlayerPlayFilled className="size-4" />}
+                            </Button>
+                          }
+                        />
+                        <TooltipContent>Запустить</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {isRunning && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button variant="outline" size="icon-sm" className="text-destructive hover:text-destructive/80" onClick={stopService} disabled={isPending}>
+                              {isPending ? <Spinner className="size-3.5 text-muted-foreground" /> : <IconPlayerStopFilled className="size-4" />}
+                            </Button>
+                          }
+                        />
+                        <TooltipContent>Остановить</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -320,7 +322,7 @@ export function StatusBar({
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <Button variant="outline" onClick={onOpenCoreManage}>
+                    <Button variant="outline" onClick={onOpenCoreManage} disabled={isPending}>
                       <IconCpu data-icon="inline-start" className="size-4.5" />
                       <span className="text-[13px]">{capitalize(currentCore)}</span>
                       {coreVersions[currentCore] && (
@@ -347,6 +349,7 @@ export function StatusBar({
                     <Button
                       variant="outline"
                       onClick={() => onOpenUpdate('self')}
+                      disabled={isPending}
                       className={cn(
                         'relative overflow-hidden text-xs tracking-wider',
                         isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''

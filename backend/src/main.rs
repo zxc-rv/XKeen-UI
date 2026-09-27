@@ -500,13 +500,13 @@ async fn main() {
             }
         }));
 
-    let unsecure_api = Router::new()
+    let insecure_api = Router::new()
         .route("/api/auth/setup", post(auth::post_setup))
         .route("/api/auth/login", get(auth::get_login_info).post(auth::post_login));
 
     let app = Router::new()
         .merge(secure_api)
-        .merge(unsecure_api)
+        .merge(insecure_api)
         .fallback(frontend_embedder::serve)
         .layer(CorsLayer::permissive())
         .with_state(state);

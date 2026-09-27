@@ -259,6 +259,10 @@ const ProxyCard = memo(function ProxyCard({
               : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
       )}
       onClick={() => !selectionDisabled && onSelect(selectorName, proxyName)}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        if (canTest && !isTestingSingle) onTestSingle(proxyName)
+      }}
     >
       <div className="flex min-w-0 items-center gap-1.5">
         {proxy.icon && (

@@ -386,6 +386,7 @@ const parseHysteria2Xray = (uri) => {
   }
 }
 
+/** existingConfig: текст текущего конфига (substring-проверки) ИЛИ массив уже занятых имён/тегов (exact-match через includes) */
 function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
   const generateName = (base) => {
     let index = 1

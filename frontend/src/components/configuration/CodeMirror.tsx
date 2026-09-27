@@ -293,6 +293,7 @@ const editorTheme = (isMobile: boolean, isDarkTheme: boolean) =>
       '.cm-content': {
         caretColor: 'var(--cm-caret)',
         padding: '8px 0 16px 0',
+        fontFeatureSettings: '"calt" 0',
       },
       '.cm-line': { padding: '0 4px' },
       '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--cm-caret)' },
