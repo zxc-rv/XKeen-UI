@@ -87,6 +87,16 @@ const clashApiSettings: ToggleSetting[] = [
   },
 ]
 
+const pluginSettings: ToggleSetting[] = [
+  {
+    id: 'multi-router',
+    key: 'multiRouter',
+    path: 'plugins.multi_router',
+    title: 'Несколько роутеров',
+    description: 'Сохранение, применение и бэкап конфигов на выбранные роутеры',
+  },
+]
+
 const themeOptions: { value: ThemeMode; label: string }[] = [
   { value: 'auto', label: 'Авто' },
   { value: 'light', label: 'Светлая' },
@@ -454,7 +464,7 @@ export function SettingsModal() {
       const [section, key] = path.split('.')
       try {
         const body: Record<string, unknown> = {}
-        if (['gui', 'updater', 'log', 'auth', 'clash_api'].includes(section)) body[section] = key ? { [key]: value } : value
+        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins'].includes(section)) body[section] = key ? { [key]: value } : value
         const result = await apiCall<any>('PATCH', 'settings', body)
         if (!result.success) {
           showToast('Ошибка: ' + result.error, 'error')
@@ -590,6 +600,7 @@ export function SettingsModal() {
               <TabsTrigger value="gui">Режим GUI</TabsTrigger>
               <TabsTrigger value="clash-api">Mihomo</TabsTrigger>
               <TabsTrigger value="updates">Обновления</TabsTrigger>
+              <TabsTrigger value="plugins">Плагины</TabsTrigger>
             </TabsList>
           </div>
 
@@ -791,6 +802,17 @@ export function SettingsModal() {
                     </Fragment>
                   ))}
                   <ProxySettingsField githubProxies={settings.githubProxies} onAddProxy={addProxy} onRemoveProxy={removeProxy} />
+                </FieldGroup>
+              </TabsContent>
+
+              <TabsContent value="plugins">
+                <FieldGroup className="gap-0!">
+                  {pluginSettings.map((item, index) => (
+                    <Fragment key={item.id}>
+                      <SwitchSettingField item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
+                      {index < pluginSettings.length - 1 && <Separator className="my-0" />}
+                    </Fragment>
+                  ))}
                 </FieldGroup>
               </TabsContent>
             </div>

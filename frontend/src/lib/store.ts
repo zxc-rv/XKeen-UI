@@ -35,6 +35,7 @@ const initialSettings: AppSettings = {
   autoDns: 'disabled',
   timezone: 0,
   authEnabled: false,
+  multiRouter: false,
 }
 
 const initialState: AppState = {
