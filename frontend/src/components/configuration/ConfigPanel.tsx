@@ -17,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   IconBox,
+  IconBoltFilled,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
@@ -1036,7 +1037,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                     </Tooltip>
                     <DropdownMenu>
                       <DropdownMenuTrigger render={<Button variant="outline"><IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span></Button>} />
-                      <DropdownMenuContent align="end" className="min-w-57">
+                      <DropdownMenuContent align="end" className="min-w-64">
                         <DropdownMenuGroup>
                           <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
                           <DropdownMenuItem onClick={onOpenImport}>
@@ -1050,11 +1051,25 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                           <DropdownMenuItem onClick={onOpenTemplate}>
                             <IconFileText /> Шаблоны конфигураций
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={onOpenBackups}>
+                          <DropdownMenuItem
+                            className="whitespace-nowrap"
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('[data-quick-backup]')) void quickBackup()
+                              else onOpenBackups()
+                            }}
+                          >
                             <IconBox /> Бэкапы конфигураций
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={quickBackup}>
-                            <IconBox /> Быстрый бэкап
+                            <Button
+                              variant="outline"
+                              size="icon-xs"
+                              data-quick-backup
+                              aria-label="Быстрый бэкап"
+                              title="Быстрый бэкап"
+                              tabIndex={-1}
+                              className="ml-auto size-5 rounded-[min(var(--radius-md),6px)]"
+                            >
+                              <IconBoltFilled />
+                            </Button>
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={onOpenGeoScan}>
                             <IconSearch /> Скан геофайлов
