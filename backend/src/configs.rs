@@ -355,7 +355,7 @@ pub async fn patch_config(State(state): State<AppState>, Json(req): Json<RenameR
 
 async fn validate_core(core: &str, files: &[ConfigReq]) -> Result<(), String> {
     let temp_dir = std::env::temp_dir().join(format!(
-        "xkeen-validate-{}-{}",
+        "xkeen-ui-validation-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
