@@ -544,13 +544,34 @@ fn parse_domain_item(raw: &str, asset_dir: &Path) -> Result<DomainItem, String> 
     })
 }
 
-fn build_summary(raw: &RawRule, domain_raw: &[String], ip_raw: &[String], target: &RuleTarget) -> String {
+/// Максимум элементов списка, показываемых в тексте правила до `… (+N)` — длинные geosite/geoip
+/// списки иначе делают строку нечитаемой.
+const SUMMARY_LIST_LIMIT: usize = 5;
+
+/// `items` через `, `; сверх `SUMMARY_LIST_LIMIT` — обрезка с счётчиком остатка.
+fn join_list(items: &[String]) -> String {
+    if items.len() <= SUMMARY_LIST_LIMIT {
+        items.join(", ")
+    } else {
+        format!(
+            "{}, … (+{})",
+            items[..SUMMARY_LIST_LIMIT].join(", "),
+            items.len() - SUMMARY_LIST_LIMIT
+        )
+    }
+}
+
+/// Текст правила для UI (`rule.text`/`skipped[].text`): условия в конфиг-словаре xray, поля через
+/// `; ` в фиксированном порядке, без outbound/balancerTag — цель показывается в UI отдельным
+/// бейджем, дублировать её в тексте не нужно (см. также `skipped_rule_text_matches_same_format`
+/// в тестах).
+fn build_summary(raw: &RawRule, domain_raw: &[String], ip_raw: &[String]) -> String {
     let mut parts = Vec::new();
     if !domain_raw.is_empty() {
-        parts.push(format!("domain: {}", domain_raw.join(", ")));
+        parts.push(format!("domain: {}", join_list(domain_raw)));
     }
     if !ip_raw.is_empty() {
-        parts.push(format!("ip: {}", ip_raw.join(", ")));
+        parts.push(format!("ip: {}", join_list(ip_raw)));
     }
     if let Some(p) = &raw.port {
         parts.push(format!("port: {}", p.raw));
@@ -558,11 +579,11 @@ fn build_summary(raw: &RawRule, domain_raw: &[String], ip_raw: &[String], target
     if let Some(n) = &raw.network
         && !n.0.is_empty()
     {
-        parts.push(format!("network: {}", n.0.join(",")));
+        parts.push(format!("network: {}", join_list(&n.0)));
     }
     let source = raw.source_ip.clone().or_else(|| raw.source.clone()).unwrap_or_default();
     if !source.0.is_empty() {
-        parts.push(format!("source: {}", source.0.join(", ")));
+        parts.push(format!("source: {}", join_list(&source.0)));
     }
     if raw.source_port.is_some() {
         parts.push("sourcePort".into());
@@ -570,7 +591,7 @@ fn build_summary(raw: &RawRule, domain_raw: &[String], ip_raw: &[String], target
     if let Some(t) = &raw.inbound_tag
         && !t.0.is_empty()
     {
-        parts.push(format!("inboundTag: {}", t.0.join(", ")));
+        parts.push(format!("inboundTag: {}", join_list(&t.0)));
     }
     for (label, present) in [
         ("user", raw.user.as_ref().is_some_and(|l| !l.0.is_empty())),
@@ -586,19 +607,13 @@ fn build_summary(raw: &RawRule, domain_raw: &[String], ip_raw: &[String], target
             parts.push(label.to_string());
         }
     }
-    let arrow = match target {
-        RuleTarget::Outbound(t) => format!("→ {t}"),
-        RuleTarget::Balancer(t) => format!("→ балансировщик {t}"),
-    };
-    let prefix = if raw.rule_tag.is_empty() {
-        String::new()
+    let joined = parts.join("; ");
+    if raw.rule_tag.is_empty() {
+        joined
+    } else if joined.is_empty() {
+        format!("ruleTag: {}", raw.rule_tag)
     } else {
-        format!("[{}] ", raw.rule_tag)
-    };
-    if parts.is_empty() {
-        format!("{prefix}{arrow}")
-    } else {
-        format!("{prefix}{} {arrow}", parts.join("; "))
+        format!("ruleTag: {}; {joined}", raw.rule_tag)
     }
 }
 
@@ -699,7 +714,7 @@ fn compile_rule(index: usize, raw: &RawRule, asset_dir: &Path) -> Result<Option<
 
     let domain_raw_strings = domain_raw.map(|l| l.0.clone()).unwrap_or_default();
     let ip_raw_strings = ip_raw.map(|l| l.0.clone()).unwrap_or_default();
-    let summary = build_summary(raw, &domain_raw_strings, &ip_raw_strings, &target);
+    let summary = build_summary(raw, &domain_raw_strings, &ip_raw_strings);
 
     Ok(Some(CompiledRule {
         original_index: index,
@@ -1833,6 +1848,107 @@ mod tests {
         assert_eq!(r.outbound.as_deref(), Some("proxy"));
         assert_eq!(r.rule.as_ref().unwrap().index, 1);
         assert_eq!(r.rule.as_ref().unwrap().detail.as_deref(), Some("keyword:tube"));
+    }
+
+    /// UI рендерит `#index rule.text — rule.detail`, а цель (outbound/balancer) — отдельным
+    /// бейджем: `text` не должен дублировать её через `→`, поля идут через `; `, списки — `, `.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rule_text_has_no_target_arrow_and_uses_semicolons() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "outbounds": [{"tag": "direct"}, {"tag": "proxy"}],
+            "routing": {"rules": [
+                {"domain": ["geosite:blocked", "github"], "port": "443", "network": ["tcp"], "outboundTag": "proxy"}
+            ]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(&ctx(Target::Domain("github.com".into())), &no_resolver())
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(
+            r.rule.as_ref().unwrap().text,
+            "domain: geosite:blocked, github; port: 443; network: tcp"
+        );
+    }
+
+    /// Балансировщик — тоже цель: текст правила не должен упоминать `→ балансировщик …`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rule_text_has_no_balancer_arrow() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "outbounds": [{"tag": "proxy"}],
+            "routing": {
+                "balancers": [{"tag": "bal1", "selector": ["proxy"]}],
+                "rules": [{"domain": ["example.com"], "balancerTag": "bal1"}]
+            }
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(&ctx(Target::Domain("example.com".into())), &no_resolver())
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(r.rule.as_ref().unwrap().text, "domain: example.com");
+    }
+
+    /// `ruleTag` — префикс `ruleTag: <tag>; ` без скобок (было `[<tag>] `).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rule_text_rule_tag_prefix_has_no_brackets() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "outbounds": [{"tag": "proxy"}],
+            "routing": {"rules": [
+                {"ruleTag": "Blocked", "domain": ["geosite:blocked", "github"], "outboundTag": "proxy"}
+            ]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(&ctx(Target::Domain("github.com".into())), &no_resolver())
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(
+            r.rule.as_ref().unwrap().text,
+            "ruleTag: Blocked; domain: geosite:blocked, github"
+        );
+    }
+
+    /// Длинные списки условий обрезаются до первых `SUMMARY_LIST_LIMIT` (5) элементов + `… (+N)`,
+    /// иначе строка в UI становится нечитаемой при большом geosite/geoip списке.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rule_text_truncates_long_domain_lists() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "outbounds": [{"tag": "proxy"}],
+            "routing": {"rules": [
+                {"domain": ["a1", "a2", "a3", "a4", "a5", "a6", "a7"], "outboundTag": "proxy"}
+            ]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(&ctx(Target::Domain("a1.example.com".into())), &no_resolver())
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(r.rule.as_ref().unwrap().text, "domain: a1, a2, a3, a4, a5, … (+2)");
+    }
+
+    /// `skipped[].text` строится тем же `build_summary`, что и совпавшее правило — тот же формат,
+    /// без цели, без скобок вокруг `ruleTag`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn skipped_rule_text_matches_same_format() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"rules": [
+                {"ruleTag": "Skip", "domain": ["example.com"], "user": ["a@b.com"], "outboundTag": "proxy"}
+            ]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(&ctx(Target::Domain("example.com".into())), &no_resolver())
+            .await;
+        assert_eq!(r.outcome, Outcome::Default);
+        assert_eq!(r.skipped.len(), 1);
+        assert_eq!(r.skipped[0].text, "ruleTag: Skip; domain: example.com; user");
     }
 
     #[tokio::test(flavor = "multi_thread")]
