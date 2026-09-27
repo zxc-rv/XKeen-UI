@@ -26,6 +26,7 @@ const ImportAmneziaModal = lazyLoad(() => import('./components/modals/ImportAmne
 const TemplateModal = lazyLoad(() => import('./components/modals/Templates'), 'TemplateModal')
 const SettingsModal = lazyLoad(() => import('./components/modals/Settings'), 'SettingsModal')
 const GeoScanModal = lazyLoad(() => import('./components/modals/GeoScan'), 'GeoScanModal')
+const RouteTesterModal = lazyLoad(() => import('./components/modals/RouteTester'), 'RouteTesterModal')
 
 function useThemeMode(theme: ThemeMode) {
   useEffect(() => {
@@ -69,6 +70,7 @@ const ModalManager = memo(function ModalManager({
   const mountTemplate = useLazyMount(modals.showTemplateModal)
   const mountSettings = useLazyMount(modals.showSettingsModal)
   const mountGeoScan = useLazyMount(modals.showGeoScanModal)
+  const mountRouteTest = useLazyMount(modals.showRouteTestModal)
 
   return (
     <>
@@ -118,6 +120,11 @@ const ModalManager = memo(function ModalManager({
       {mountGeoScan && (
         <LazyBoundary>
           <GeoScanModal />
+        </LazyBoundary>
+      )}
+      {mountRouteTest && (
+        <LazyBoundary>
+          <RouteTesterModal />
         </LazyBoundary>
       )}
     </>
@@ -530,6 +537,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             onOpenImportAmnezia={() => openModal('showImportAmneziaModal')}
             onOpenTemplate={() => openModal('showTemplateModal')}
             onOpenGeoScan={() => openModal('showGeoScanModal')}
+            onOpenRouteTest={() => openModal('showRouteTestModal')}
             onOpenBackups={() => openModal('showBackupsModal')}
             onRefreshConfigs={() => loadConfigs(undefined, false, true)}
           />

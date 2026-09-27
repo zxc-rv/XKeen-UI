@@ -17,7 +17,7 @@ use crate::logger::log;
 use crate::types::{ApiResponse, AppState, MIHOMO_CONF_DIR};
 
 #[derive(Clone)]
-enum ClashTarget {
+pub(crate) enum ClashTarget {
     Tcp {
         host: String,
         port: String,
@@ -235,7 +235,7 @@ fn should_forward_response_header(name: &HeaderName) -> bool {
     )
 }
 
-fn header_value(headers: &HeaderMap, name: &str) -> Option<String> {
+pub(crate) fn header_value(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get(name)
         .and_then(|v| v.to_str().ok())
@@ -304,7 +304,7 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
-async fn resolve_clash_target(
+pub(crate) async fn resolve_clash_target(
     port_override: Option<String>, secret_override: Option<String>, unix_override: Option<String>,
 ) -> Result<ClashTarget, String> {
     if let Some(u) = unix_override {
@@ -335,7 +335,7 @@ fn sanitize_unix_name(raw: &str) -> Option<String> {
     Some(format!("{}/{}", MIHOMO_CONF_DIR, name))
 }
 
-fn build_url(scheme: &str, host: &str, port: &str, path: &str, query: Option<&str>) -> String {
+pub(crate) fn build_url(scheme: &str, host: &str, port: &str, path: &str, query: Option<&str>) -> String {
     let mut url = format!("{}://{}:{}/{}", scheme, host, port, path.trim_start_matches('/'));
     if let Some(q) = query {
         url.push('?');

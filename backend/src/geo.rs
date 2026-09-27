@@ -80,7 +80,7 @@ fn find_categories<F: FnMut(&[u8]) -> bool>(data: &[u8], mut matches: F) -> Vec<
     found
 }
 
-fn parse_cidr_and_match(mut buf: &[u8], target_v4: Option<u32>, target_v6: Option<u128>) -> bool {
+pub(crate) fn parse_cidr_and_match(mut buf: &[u8], target_v4: Option<u32>, target_v6: Option<u128>) -> bool {
     let (mut cidr_ip, mut prefix) = (&[][..], 0u32);
     while buf.has_remaining() {
         let Ok((t, wt)) = decode_key(&mut buf) else {
@@ -121,7 +121,7 @@ fn parse_cidr_and_match(mut buf: &[u8], target_v4: Option<u32>, target_v6: Optio
     }
 }
 
-fn parse_domain_and_match(mut buf: &[u8], dom_low: &str) -> bool {
+pub(crate) fn parse_domain_and_match(mut buf: &[u8], dom_low: &str) -> bool {
     let (mut domain_type, mut value) = (0i32, "");
     while buf.has_remaining() {
         let Ok((t, wt)) = decode_key(&mut buf) else {
@@ -281,7 +281,7 @@ pub async fn get_geosite(
     geo_query_handler(params, false, None).await
 }
 
-async fn resolve_domain(client: &reqwest::Client, domain: &str) -> Result<IpAddr, String> {
+pub(crate) async fn resolve_domain(client: &reqwest::Client, domain: &str) -> Result<IpAddr, String> {
     #[derive(serde::Deserialize)]
     struct DohResponse {
         #[serde(rename = "Answer")]

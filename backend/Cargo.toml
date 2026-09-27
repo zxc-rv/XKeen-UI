@@ -12,6 +12,7 @@ colored = "3"
 flate2 = "1.1"
 futures-util = "0.3"
 http = "1.4.0"
+maxminddb = { version = "0.32.0", default-features = false, features = ["mmap"] }
 memmap2 = "0.9"
 md5 = "0.8"
 mime_guess = "2"
@@ -51,6 +52,10 @@ urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
 yaml-rust2 = { version = "0.13", default-features = false }
 zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+# Только для тестов (idle_cache.rs): tokio::time::pause/advance и #[tokio::test(start_paused = true)].
+tokio = { version = "1", features = ["test-util"] }
 
 [profile.release]
 opt-level = 3

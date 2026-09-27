@@ -32,6 +32,7 @@ import {
   IconListDetails,
   IconPencil,
   IconRefresh,
+  IconRoute,
   IconSearch,
   IconTrash,
   IconX,
@@ -91,6 +92,7 @@ interface Props {
   onOpenImportAmnezia: () => void
   onOpenTemplate: () => void
   onOpenGeoScan: () => void
+  onOpenRouteTest: () => void
   onOpenBackups: () => void
   onRefreshConfigs: () => Promise<Config[]>
   editorRef: React.RefObject<CodeMirrorRef | null>
@@ -282,7 +284,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   )
 }
 
-export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate, onOpenGeoScan, onOpenBackups, onRefreshConfigs, editorRef, configActionsRef }: Props) {
+export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate, onOpenGeoScan, onOpenRouteTest, onOpenBackups, onRefreshConfigs, editorRef, configActionsRef }: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
@@ -1073,6 +1075,9 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={onOpenGeoScan}>
                             <IconSearch /> Скан геофайлов
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={onOpenRouteTest}>
+                            <IconRoute /> Проверка маршрута
                           </DropdownMenuItem>
                         </DropdownMenuGroup>
                         <DropdownMenuSeparator />

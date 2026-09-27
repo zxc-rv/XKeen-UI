@@ -13,7 +13,9 @@ const MIHOMO_CONF_DIRIG_PATH: &str = "/opt/etc/mihomo/config.yaml";
 
 static MIHOMO_YAML_CACHE: LazyLock<RwLock<Option<(SystemTime, Arc<Vec<Yaml>>)>>> = LazyLock::new(|| RwLock::new(None));
 
-async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
+/// Общий кэш `config.yaml` mihomo по mtime — используется и этим модулем, и `route_test::mihomo`
+/// (нужен движку тестера маршрутов, чтобы не парсить YAML на каждый запрос).
+pub(crate) async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
     let mtime = tokio::fs::metadata(MIHOMO_CONF_DIRIG_PATH)
         .await
         .map_err(|e| format!("Ошибка чтения конфига: {e}"))?
@@ -112,7 +114,11 @@ pub async fn get_ruleset_content(State(_state): State<AppState>, Query(params): 
     ok_response(content)
 }
 
-async fn convert_mrs(mrs_path: &str, behavior: &str) -> Result<String, String> {
+/// Конвертирует `.mrs` в текстовый список правил через `mihomo convert-ruleset <behavior> mrs`.
+/// Используется хендлером `/api/ruleset` и `route_test::providers` (там же логика, что и в
+/// `ConvertMain`/`ConvertToMrs` mihomo: при исходном формате `mrs` результат — plain-текстовый
+/// дамп, по одной записи на строку, вне зависимости от того, что было в исходном провайдере).
+pub(crate) async fn convert_mrs(mrs_path: &str, behavior: &str) -> Result<String, String> {
     if tokio::fs::metadata(mrs_path).await.is_err() {
         return Err(format!("MRS файл не найден: {mrs_path}"));
     }
@@ -153,10 +159,17 @@ fn random_suffix() -> String {
 }
 
 fn resolve_provider_path(path: &str) -> String {
+    resolve_provider_path_in(path, MIHOMO_CONF_DIR)
+}
+
+/// Резолвит относительный `path` провайдера к каталогу mihomo. Параметризовано по `base_dir`,
+/// чтобы `route_test::providers` могло переиспользовать ту же логику с временным каталогом
+/// в тестах (боевой код всегда зовёт через `resolve_provider_path`, привязанный к `MIHOMO_CONF_DIR`).
+pub(crate) fn resolve_provider_path_in(path: &str, base_dir: &str) -> String {
     if path.starts_with('/') {
         path.to_string()
     } else {
-        format!("{}/{}", MIHOMO_CONF_DIR, path.trim_start_matches("./"))
+        format!("{}/{}", base_dir, path.trim_start_matches("./"))
     }
 }
 

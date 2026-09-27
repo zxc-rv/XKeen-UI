@@ -7,6 +7,7 @@ mod dns;
 mod frontend_embedder;
 mod geo;
 mod logger;
+mod route_test;
 mod ruleset_inspector;
 mod settings;
 mod system;
@@ -478,6 +479,10 @@ async fn main() {
         .route("/api/version", get(version::version_handler))
         .route("/api/system", get(system::get_system_stats))
         .route("/api/ruleset", get(ruleset_inspector::get_ruleset_content))
+        .route(
+            "/api/route-test",
+            get(route_test::get_route_test_meta).post(route_test::post_route_test),
+        )
         .route("/api/device-list", get(api_relay::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))
