@@ -5,7 +5,7 @@ use serde::Deserialize;
 use std::sync::{Arc, LazyLock, RwLock};
 use std::time::SystemTime;
 use tokio::process::Command;
-use yaml_rust2::{Yaml, YamlLoader};
+use yaml_rust2::{Yaml, YamlEmitter, YamlLoader};
 
 use crate::types::{ApiResponse, AppState, MIHOMO_CONF_DIR};
 
@@ -112,6 +112,68 @@ pub async fn get_ruleset_content(State(_state): State<AppState>, Query(params): 
     };
 
     ok_response(content)
+}
+
+#[derive(Deserialize)]
+pub struct ProxyProviderContentQuery {
+    pub name: String,
+    #[serde(rename = "vehicleType")]
+    pub vehicle_type: Option<String>,
+}
+
+pub async fn get_proxy_provider_content(State(_state): State<AppState>, Query(params): Query<ProxyProviderContentQuery>) -> Response {
+    let docs = match load_mihomo_yaml().await {
+        Ok(d) => d,
+        Err(e) => return error_response(e),
+    };
+    let Some(parsed) = docs.first() else {
+        return error_response("YAML пуст".into());
+    };
+
+    let provider = &parsed["proxy-providers"][params.name.as_str()];
+    if provider.is_badvalue() {
+        return error_response(format!("Провайдер '{}' не найден", params.name));
+    }
+
+    if params
+        .vehicle_type
+        .as_deref()
+        .is_some_and(|v| v.eq_ignore_ascii_case("inline"))
+    {
+        let content = match proxies_payload_to_yaml(&provider["payload"]) {
+            Some(c) => c,
+            None => return error_response("Payload пуст или не найден".into()),
+        };
+        return ok_response(content);
+    }
+
+    let url = provider["url"].as_str();
+    let path = provider["path"].as_str();
+
+    let final_path = match path {
+        Some(p) => resolve_provider_path(p),
+        None => match url {
+            Some(u) => format!("{}/proxies/{:x}", MIHOMO_CONF_DIR, md5::compute(u)),
+            None => return error_response("В провайдере нет ни path, ни url".into()),
+        },
+    };
+
+    match tokio::fs::read_to_string(&final_path).await {
+        Ok(content) => ok_response(content),
+        Err(e) => error_response(format!("Не удалось прочитать файл {final_path}: {e}")),
+    }
+}
+
+fn proxies_payload_to_yaml(payload: &Yaml) -> Option<String> {
+    let items = payload.as_vec()?;
+    if items.is_empty() {
+        return None;
+    }
+    let mut root = yaml_rust2::yaml::Hash::new();
+    root.insert(Yaml::String("proxies".into()), Yaml::Array(items.clone()));
+    let mut content = String::new();
+    YamlEmitter::new(&mut content).dump(&Yaml::Hash(root)).ok()?;
+    Some(content.trim_start_matches("---\n").to_string())
 }
 
 /// Конвертирует `.mrs` в текстовый список правил через `mihomo convert-ruleset <behavior> mrs`.

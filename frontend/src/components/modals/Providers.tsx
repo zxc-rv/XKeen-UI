@@ -12,8 +12,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall, clashFetch } from '../../lib/api'
 import { fetchClashProxies, useAppActions } from '../../lib/store'
 import { cn } from '../../lib/utils'
+import { ReadOnlyYamlView } from '../configuration/editor/ReadOnlyYamlView'
 
-const ruleContentCache = new Map<string, string>()
+const providerContentCache = new Map<string, string>()
 const DIALOG_CLOSE_ANIMATION_MS = 220
 
 type ProvidersModalKind = 'rules' | 'proxies'
@@ -294,7 +295,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
         await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
       }
       await loadProviders(true)
-      ruleContentCache.delete(name)
+      providerContentCache.delete(`${kind}:${name}`)
       showToast(`Провайдер ${name} обновлён`)
     } catch (e) {
       showToast(`Не удалось обновить ${name}: ${e instanceof Error ? e.message : 'неизвестная ошибка'}`, 'error')
@@ -328,20 +329,25 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
     }
   }
 
-  async function viewProviderContent(provider: RuleProvider) {
-    if (ruleContentCache.has(provider.name)) {
-      openViewContent({ name: provider.name, content: ruleContentCache.get(provider.name)! })
+  async function viewProviderContent(provider: RuleProvider | ProxyProvider) {
+    const cacheKey = `${kind}:${provider.name}`
+    if (providerContentCache.has(cacheKey)) {
+      openViewContent({ name: provider.name, content: providerContentCache.get(cacheKey)! })
       return
     }
     setViewingName(provider.name)
     try {
       const params = new URLSearchParams({ name: provider.name })
-      if (provider.format) params.set('format', provider.format)
-      if (provider.behavior) params.set('behavior', provider.behavior)
       if (provider.vehicleType) params.set('vehicleType', provider.vehicleType)
-      const res = await apiCall<{ success: boolean; error?: string; content?: string }>('GET', `ruleset?${params.toString()}`)
+      if (kind === 'rules') {
+        const ruleProvider = provider as RuleProvider
+        if (ruleProvider.format) params.set('format', ruleProvider.format)
+        if (ruleProvider.behavior) params.set('behavior', ruleProvider.behavior)
+      }
+      const endpoint = kind === 'proxies' ? 'proxy-provider' : 'ruleset'
+      const res = await apiCall<{ success: boolean; error?: string; content?: string }>('GET', `${endpoint}?${params.toString()}`)
       if (!res.success || res.content === undefined) throw new Error(res.error ?? 'Нет данных')
-      ruleContentCache.set(provider.name, res.content)
+      providerContentCache.set(cacheKey, res.content)
       openViewContent({ name: provider.name, content: res.content })
     } catch (e) {
       showToast(`Не удалось загрузить содержимое: ${e instanceof Error ? e.message : 'неизвестная ошибка'}`, 'error')
@@ -476,17 +482,28 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                               {formatRelativeTime(provider.updatedAt)}
                             </TableCell>
                             <TableCell className="text-right">
-                              {isHttp ? (
+                              <div className="flex items-center justify-end gap-0.5">
                                 <Button
                                   variant="ghost"
                                   size="icon-xs"
                                   className="hover:bg-transparent! hover:text-blue-400"
-                                  onClick={() => updateProvider(provider.name, provider.vehicleType)}
-                                  disabled={!!updatingName}
+                                  onClick={() => viewProviderContent(provider)}
+                                  disabled={!!viewingName || !!updatingName}
                                 >
-                                  {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                                  {viewingName === provider.name ? <Spinner className="size-4" /> : <IconEye className="size-4" />}
                                 </Button>
-                              ) : null}
+                                {isHttp ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="hover:bg-transparent! hover:text-blue-400"
+                                    onClick={() => updateProvider(provider.name, provider.vehicleType)}
+                                    disabled={!!updatingName}
+                                  >
+                                    {updatingName === provider.name ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
+                                  </Button>
+                                ) : null}
+                              </div>
                             </TableCell>
                           </TableRow>
                         )
@@ -609,8 +626,14 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                 </Badge>
               </DialogTitle>
             </DialogHeader>
-            <div className="border-border bg-input-background min-h-0 flex-1 scrollbar-thin overflow-auto rounded-xl border">
-              <pre className="p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap">{viewContent?.content}</pre>
+            <div className="border-border bg-input-background min-h-0 flex-1 overflow-hidden rounded-xl border">
+              {kind === 'proxies' ? (
+                <ReadOnlyYamlView content={viewContent?.content ?? ''} />
+              ) : (
+                <pre className="scrollbar-thin h-full overflow-auto p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap">
+                  {viewContent?.content}
+                </pre>
+              )}
             </div>
           </div>
         </DialogContent>
