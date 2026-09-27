@@ -533,7 +533,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     const fileName = cfg.file.split('/').pop()
     if (results.length <= 1) {
       showToast(
-        summary.fail === 0 ? `Файл "${fileName}" сохранен` : `Ошибка сохранения: ${summary.body}`,
+        summary.fail === 0 ? `Файл "${fileName}" сохранен` : errorToastText(summary.body, 'Ошибка сохранения'),
         summary.fail === 0 ? 'success' : 'error'
       )
     } else {
@@ -628,8 +628,8 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     if (!saveResult.success) {
       throw new Error(
         saveResult.error === 'Validation failed'
-          ? `валидация ${capitalize(core)}`
-          : saveResult.error || 'ошибка сохранения'
+          ? `Ошибка валидации ${capitalize(currentCore)}: проверьте журнал`
+          : saveResult.error || 'Ошибка сохранения'
       )
     }
     const action = restartActionFor(cfg, content)
@@ -653,7 +653,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     const summary = summarizeFanOut(results)
     if (results.length <= 1) {
       showToast(
-        summary.fail === 0 ? 'Изменения применены' : `Ошибка: ${summary.body}`,
+        summary.fail === 0 ? 'Изменения применены' : errorToastText(summary.body),
         summary.fail === 0 ? 'success' : 'error'
       )
     } else {
@@ -713,7 +713,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     const summary = summarizeFanOut(results)
     if (results.length <= 1) {
       showToast(
-        summary.fail === 0 ? 'Быстрый бэкап создан' : `Ошибка: ${summary.body}`,
+        summary.fail === 0 ? 'Быстрый бэкап создан' : errorToastText(summary.body),
         summary.fail === 0 ? 'success' : 'error'
       )
     } else {
@@ -1133,6 +1133,10 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
       </>
     </TooltipProvider>
   )
+}
+
+function errorToastText(body: string, fallbackPrefix = 'Ошибка') {
+  return /^ошибк/i.test(body) ? body : `${fallbackPrefix}: ${body}`
 }
 
 function hasComments(content: string) {
