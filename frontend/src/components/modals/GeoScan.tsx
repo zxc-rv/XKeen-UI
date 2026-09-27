@@ -250,7 +250,7 @@ export function GeoScanModal() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !scanning && scan()}
-            placeholder={geoType === 'ip' ? '1.1.1.1' : 'Полный домен, например google.com'}
+            placeholder={geoType === 'ip' ? 'IP-Адрес или полный домен, например 1.1.1.1 или www.google.com' : 'Полный домен, например www.google.com'}
           />
           <InputGroupAddon align="inline-end">
             {input && (
