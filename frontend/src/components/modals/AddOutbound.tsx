@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { copyText } from '@/lib/utils'
-import { IconCheck, IconCopy, IconLink, IconPlus, IconRefresh, IconReplace, IconX } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconInfoCircle, IconLink, IconPlus, IconRefresh, IconReplace, IconX } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
 import {
   listMihomoProviders,
@@ -29,6 +29,14 @@ const USER_AGENTS = [
   'Happ/5.6.0/ios/2608171408651',
   'v2rayN/7.24.8',
   'v2rayNG/2.2.6'
+]
+
+const CLIENT_FINGERPRINTS = ['chrome', 'firefox', 'safari', 'iOS', 'android', 'edge', '360', 'qq', 'random']
+
+const X25519_OPTIONS: { value: 'inherit' | 'enable' | 'disable'; label: string }[] = [
+  { value: 'inherit', label: 'Наследовать от провайдера' },
+  { value: 'enable', label: 'Включить принудительно' },
+  { value: 'disable', label: 'Выключить принудительно' },
 ]
 
 function randomHwid(): string {
@@ -147,6 +155,8 @@ interface SubscriptionForm {
   filter: string
   excludeFilter: string
   excludeType: string
+  fingerprint: string
+  x25519: 'inherit' | 'enable' | 'disable'
 }
 
 function generateSubYaml(form: SubscriptionForm): string {
@@ -156,6 +166,14 @@ function generateSubYaml(form: SubscriptionForm): string {
     interval: form.interval,
     override: { udp: true },
   }
+
+  const overrideExpr: string[] = []
+  if (form.fingerprint) overrideExpr.push(`'.["client-fingerprint"] = "${form.fingerprint}"'`)
+  if (form.x25519 !== 'inherit')
+    overrideExpr.push(
+      `'(select(.type == "vless" and .["reality-opts"] != null) | .["reality-opts"]["support-x25519mlkem768"]) = ${form.x25519 === 'enable'}'`
+    )
+  if (overrideExpr.length) sub.override['override-expr'] = overrideExpr
 
   if (form.hcEnable) {
     sub['health-check'] = {
@@ -200,6 +218,8 @@ function createDefaultForm(url: string, existingConfig: string): SubscriptionFor
     filter: '',
     excludeFilter: '',
     excludeType: '',
+    fingerprint: '',
+    x25519: 'inherit',
   }
 }
 
@@ -559,6 +579,80 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
                               className="h-8 text-xs"
                             />
                           </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="grid gap-1.5">
+                              <Label className="text-xs">
+                                Client Fingerprint<span className="text-destructive"> *</span>
+                              </Label>
+                              <Select
+                                value={subForm.fingerprint || '__inherit__'}
+                                items={{
+                                  __inherit__: 'Наследовать от провайдера',
+                                  ...Object.fromEntries(CLIENT_FINGERPRINTS.map((fp) => [fp, fp])),
+                                }}
+                                onValueChange={(v) => updateSubField('fingerprint', v === '__inherit__' ? '' : v)}
+                              >
+                                <SelectTrigger size="sm" className="h-8 w-full text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    <SelectItem value="__inherit__">
+                                      <span className="text-xs">Наследовать от провайдера</span>
+                                    </SelectItem>
+                                    {CLIENT_FINGERPRINTS.map((fp) => (
+                                      <SelectItem key={fp} value={fp}>
+                                        <span className="text-xs">{fp}</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="grid gap-1.5">
+                              <div className="flex items-center gap-1">
+                                <Label className="text-xs">
+                                  X25519MLKEM768<span className="text-destructive"> *</span>
+                                </Label>
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    render={<span className="text-muted-foreground inline-flex cursor-help" />}
+                                    aria-label="Подробнее: X25519MLKEM768"
+                                  >
+                                    <IconInfoCircle size={14} />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" sideOffset={8} className="max-w-xs">
+                                    Принудительное включение X25519MLKEM768 работает не со всеми вариантами
+                                    client-fingerprint. В противном случае принудительное включение не даст никакого
+                                    эффекта.
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                              <Select
+                                value={subForm.x25519}
+                                items={Object.fromEntries(X25519_OPTIONS.map((opt) => [opt.value, opt.label]))}
+                                onValueChange={(v) => updateSubField('x25519', v as SubscriptionForm['x25519'])}
+                              >
+                                <SelectTrigger size="sm" className="h-8 w-full text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectGroup>
+                                    {X25519_OPTIONS.map((opt) => (
+                                      <SelectItem key={opt.value} value={opt.value}>
+                                        <span className="text-xs">{opt.label}</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <p className="text-muted-foreground text-xs">
+                            * Требуется версия Mihomo v1.19.29 и новее
+                          </p>
 
                         </div>
                       </fieldset>
