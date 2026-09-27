@@ -205,6 +205,22 @@ const ProxySettingsField = memo(function ProxySettingsField({
   )
 })
 
+const PING_URL_PRESETS = [
+  'www.google.com/generate_204',
+  'www.youtube.com/generate_204',
+  'www.gstatic.com/generate_204',
+  'cp.cloudflare.com/generate_204',
+] as const
+
+const PING_URL_CUSTOM = '__custom__'
+
+function parsePingUrl(raw: string): { protocol: string; host: string; custom: boolean } {
+  const match = raw.match(/^(https?):\/\/(.+)$/i)
+  const protocol = match?.[1]?.toLowerCase() ?? 'https'
+  const host = match?.[2] ?? raw
+  return { protocol, host, custom: !(PING_URL_PRESETS as readonly string[]).includes(host) }
+}
+
 const PingTestSettingsField = memo(function PingTestSettingsField({
   pingUrl,
   pingTimeout,
@@ -216,39 +232,125 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
   onSave: (url: string, timeout: number) => Promise<boolean>
   showToast: (msg: string, type?: 'success' | 'error') => void
 }) {
-  const [url, setUrl] = useState(pingUrl)
+  const [initial] = useState(() => parsePingUrl(pingUrl))
+  const [protocol, setProtocol] = useState(initial.protocol)
+  const [host, setHost] = useState(initial.host)
+  const [custom, setCustom] = useState(initial.custom)
   const [timeout, setTimeout] = useState(String(pingTimeout))
 
   const save = useCallback(async () => {
-    const tUrl = url.trim()
+    const tHost = host.trim()
     const tTimeout = Number(timeout)
-    if (!tUrl) return showToast('URL пинг-теста пустой', 'error')
+    if (!tHost) return showToast('URL пинг-теста пустой', 'error')
     if (!(Number.isInteger(tTimeout) && tTimeout > 0)) return showToast('Таймаут должен быть целым числом больше 0', 'error')
+    const tUrl = `${protocol}://${tHost}`
     if (tUrl === pingUrl && tTimeout === pingTimeout) return
     const ok = await onSave(tUrl, tTimeout)
     if (ok) {
-      setUrl(tUrl)
+      setHost(tHost)
       setTimeout(String(tTimeout))
     }
-  }, [onSave, pingUrl, pingTimeout, showToast, timeout, url])
+  }, [onSave, pingUrl, pingTimeout, showToast, timeout, host, protocol])
+
+  const saveHost = useCallback(
+    async (newHost: string, newProtocol: string) => {
+      const tHost = newHost.trim()
+      const tTimeout = Number(timeout)
+      if (!tHost) return showToast('URL пинг-теста пустой', 'error')
+      if (!(Number.isInteger(tTimeout) && tTimeout > 0)) return showToast('Таймаут должен быть целым числом больше 0', 'error')
+      const tUrl = `${newProtocol}://${tHost}`
+      if (tUrl === pingUrl && tTimeout === pingTimeout) return
+      const ok = await onSave(tUrl, tTimeout)
+      if (ok) {
+        setHost(tHost)
+        setProtocol(newProtocol)
+        setTimeout(String(tTimeout))
+      }
+    },
+    [onSave, pingUrl, pingTimeout, showToast, timeout]
+  )
+
+  const hostSelectValue = custom ? PING_URL_CUSTOM : host
 
   return (
     <FieldGroup className="gap-0!">
       <Field className="px-0 py-3">
         <FieldContent>
-          <FieldLabel htmlFor="ping-test-url">URL пинга</FieldLabel>
+          <FieldLabel>URL пинга</FieldLabel>
           <FieldDescription className="text-[13px]">Адрес для ручного пинг-теста через Clash API</FieldDescription>
         </FieldContent>
-        <InputGroup>
-          <InputGroupInput
-            id="ping-test-url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void save()}
-            onBlur={() => void save()}
-            placeholder="https://www.gstatic.com/generate_204"
-          />
-        </InputGroup>
+        <div className="flex items-center gap-2">
+          <Select
+            value={protocol}
+            items={{ http: 'http', https: 'https' }}
+            onValueChange={(value) => {
+              setProtocol(value)
+              void saveHost(host, value)
+            }}
+          >
+            <SelectTrigger className="w-24 text-sm" aria-label="Протокол">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="http" className="text-sm">
+                  http
+                </SelectItem>
+                <SelectItem value="https" className="text-sm">
+                  https
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={hostSelectValue}
+            items={{
+              ...Object.fromEntries(PING_URL_PRESETS.map((p) => [p, p])),
+              [PING_URL_CUSTOM]: 'Свой URL...',
+            }}
+            onValueChange={(value) => {
+              if (value === PING_URL_CUSTOM) {
+                setCustom(true)
+              } else {
+                setHost(value)
+                setCustom(false)
+                void saveHost(value, protocol)
+              }
+            }}
+          >
+            <SelectTrigger className="min-w-0 flex-1 text-sm" aria-label="Хост">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {PING_URL_PRESETS.map((item) => (
+                  <SelectItem key={item} value={item} className="text-sm">
+                    {item}
+                  </SelectItem>
+                ))}
+                <SelectItem value={PING_URL_CUSTOM} className="text-sm">
+                  Свой URL...
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {custom && (
+          <InputGroup >
+            <InputGroupAddon align="inline-start">{protocol}://</InputGroupAddon>
+            <InputGroupInput
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void save()}
+              onBlur={() => void save()}
+              placeholder="www.example.com/generate_204"
+              aria-label="Свой URL пинга"
+              className='text-sm placeholder:text-sm pl-0!'
+            />
+          </InputGroup>
+        )}
       </Field>
 
       <Separator className="my-0" />
@@ -265,7 +367,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
             min={1}
             step={100}
             inputMode="numeric"
-            className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             value={timeout}
             onChange={(e) => setTimeout(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void save()}
