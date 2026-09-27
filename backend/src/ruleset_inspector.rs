@@ -124,7 +124,7 @@ pub(crate) async fn convert_mrs(mrs_path: &str, behavior: &str) -> Result<String
     }
 
     let behavior = behavior.to_ascii_lowercase();
-    let tmp_path = format!("/opt/tmp/convert_{}", random_suffix());
+    let tmp_path = format!("/tmp/convert-ruleset_{}", random_suffix());
 
     let output = Command::new("/opt/sbin/mihomo")
         .args(["convert-ruleset", behavior.as_str(), "mrs", mrs_path, &tmp_path])
