@@ -29,6 +29,8 @@ import type { Config } from '../../../lib/types'
 
 import type { DnsStatus } from '../../../lib/store'
 
+const SETUP_FILTER_STORAGE_KEY = 'dnsSetupFilter'
+
 interface DnsStatusResponse {
   success: boolean
   status?: DnsStatus
@@ -213,7 +215,7 @@ export const DnsPanel = memo(function DnsPanel() {
 
   const [isToggling, setIsToggling] = useState(false)
   const [enableDialogOpen, setEnableDialogOpen] = useState(false)
-  const [setupFilter, setSetupFilter] = useState(true)
+  const [setupFilter, setSetupFilter] = useState(() => localStorage.getItem(SETUP_FILTER_STORAGE_KEY) !== 'false')
   const [disableOpen, setDisableOpen] = useState(false)
   const [config, setConfig] = useState<DnsConfig>(DEFAULT_DNS_CONFIG)
   const [isApplying, setIsApplying] = useState(false)
@@ -670,7 +672,13 @@ export const DnsPanel = memo(function DnsPanel() {
           <div className="flex flex-col gap-3 py-2">
             <div className="flex items-center justify-between">
               <Label className="text-sm">Автонастройка интернет-фильтра</Label>
-              <Switch checked={setupFilter} onCheckedChange={setSetupFilter} />
+              <Switch
+                checked={setupFilter}
+                onCheckedChange={(checked) => {
+                  setSetupFilter(checked)
+                  localStorage.setItem(SETUP_FILTER_STORAGE_KEY, String(checked))
+                }}
+              />
             </div>
             <p className="text-muted-foreground text-xs">
               Будет выполнена очистка DoU, DoT и DoH резолверов и добавлен IPv4 адрес br0 интерфейса для перенаправления запросов в Mihomo
