@@ -165,9 +165,6 @@ export function patchDnsConfig(content: string, config: DnsConfig): string {
   if (config.enhancedMode === 'fake-ip') {
     doc.setIn(['dns', 'fake-ip-filter-mode'], config.fakeIpFilterMode)
     setOrDeleteList(doc, ['dns', 'fake-ip-filter'], parseList(config.fakeIpFilter))
-  } else {
-    doc.deleteIn(['dns', 'fake-ip-filter-mode'])
-    doc.deleteIn(['dns', 'fake-ip-filter'])
   }
 
   setOrDeleteList(doc, ['dns', 'default-nameserver'], parseList(config.bootstrap))
