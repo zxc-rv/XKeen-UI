@@ -890,6 +890,13 @@ export function SettingsModal() {
               </TabsContent>
 
               <TabsContent value="plugins">
+                <Alert className="my-2 border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
+                  <IconAlertCircle className="size-4.5" />
+                  <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
+                    Функционал данного раздела экспериментален и не проходит тщательное тестирование. Использовать на свой страх и риск.
+                  </AlertDescription>
+                </Alert>
+
                 <FieldGroup className="gap-0!">
                   {pluginSettings.map((item, index) => (
                     <Fragment key={item.id}>
