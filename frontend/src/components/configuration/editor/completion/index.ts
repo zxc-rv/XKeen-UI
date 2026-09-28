@@ -153,6 +153,7 @@ export const completionThemeSpec: ThemeSpec = {
     maxHeight: '16em',
     minWidth: '18ch',
     padding: '4px',
+    scrollbarWidth: 'thin',
   },
   '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
     display: 'flex',
