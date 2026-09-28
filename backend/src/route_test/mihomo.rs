@@ -761,6 +761,46 @@ impl<'a, R: Resolver> EvalState<'a, R> {
             }
         }
     }
+
+    /// `component/fakeip/skipper.go::Skipper::ShouldSkipped` — возвращает `true`, если домену
+    /// положен НАСТОЯЩИЙ IP (домен «исключён» из fake-ip), а не фейковый.
+    async fn fake_ip_should_skip(&mut self, filter: &FakeIpFilter, domain: &str) -> bool {
+        match filter {
+            FakeIpFilter::Rules(rules) => {
+                for r in rules {
+                    if eval_predicate(&r.node, self).await == Verdict::Match {
+                        return r.real_ip;
+                    }
+                }
+                false
+            }
+            FakeIpFilter::Domains {
+                mode,
+                matcher,
+                geosite_tags,
+                has_ruleset_ref,
+            } => {
+                if *has_ruleset_ref {
+                    self.push_warning(
+                        "dns.fake-ip-filter: записи 'rule-set:' не поддерживаются тестером и игнорируются".into(),
+                    );
+                }
+                let mut should = matcher.matches(domain).is_some();
+                if !should {
+                    for tag in geosite_tags {
+                        if self.eval_geosite(tag).await == Verdict::Match {
+                            should = true;
+                            break;
+                        }
+                    }
+                }
+                match mode {
+                    FilterListMode::Blacklist => should,
+                    FilterListMode::Whitelist => !should,
+                }
+            }
+        }
+    }
 }
 
 /// Рекурсивное async-вычисление предиката. Возвращает боксированный future явно — рекурсивные
@@ -868,6 +908,402 @@ pub(crate) fn eval_predicate<'a, R: Resolver>(
     })
 }
 
+/// Режим `dns.enhanced-mode` (`constant/dns.go::DNSMode`), плюс `dns.enable: false` — определяет,
+/// известен ли `DstIP` ДО начала сопоставления правил (сверено с Alpha: `tunnel.go::preHandleMetadata`,
+/// `component/resolver/enhancer.go::MappingEnabled`, `dns/enhancer.go`, `hub/executor/executor.go::
+/// updateDNS`). При `dns.enable: false` mihomo вообще не создаёт resolver/enhancer
+/// (`resolver.DefaultHostMapper = nil`) — `MappingEnabled()` не вызывается, `DstIP` остаётся тем,
+/// что реально пришло на redir/tproxy (клиент сам резолвил домен настоящим DNS) — известен с самого
+/// начала, как и в `RedirHost`. `RedirHost` (`redir-host`): mihomo резолвит домен САМ при DNS-запросе
+/// клиента и отдаёт клиенту НАСТОЯЩИЙ IP, запоминая обратный маппинг (`dns/enhancer.go::mapping`);
+/// `preHandleMetadata` восстанавливает `Host` через `FindHostByIP`, `IsFakeIP` для настоящего IP
+/// всегда `false` -> `DstIP` НЕ обнуляется. `no-resolve` в этом случае ничего не решает:
+/// `rules/common/ipcidr.go::IPCIDR.Match` пропускает лишь ВЫЗОВ `helper.ResolveIP()`, а не проверку
+/// уже валидного `DstIP` (`ip.IsValid() && i.ipnet.Contains(ip)` выполняется всегда). `FakeIp`: клиент
+/// получает фейковый IP, `preHandleMetadata` его обнуляет (`IsFakeIP` -> `metadata.DstIP =
+/// netip.Addr{}`) -> действует прежняя ленивая семантика, ЕСЛИ домен не исключён `dns.fake-ip-filter`
+/// (исключённому домену отдаётся настоящий IP -> тот же случай, что и `RedirHost`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EnhancedMode {
+    Normal,
+    RedirHost,
+    FakeIp,
+}
+
+/// `dns.fake-ip-filter-mode` (`constant/dns.go::FilterMode`): `component/fakeip/skipper.go::
+/// Skipper::ShouldSkipped` — blacklist отдаёт настоящий IP домену ИЗ списка, whitelist — домену НЕ
+/// из списка.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FilterListMode {
+    Blacklist,
+    Whitelist,
+}
+
+/// Одна строка режима `dns.fake-ip-filter-mode: rule` (`config/config.go::parseFakeIPRules`) — та же
+/// грамматика, что у top-level `rules` (`tp,payload,action[,params]`), но цель — не outbound, а
+/// `fake-ip`/`real-ip`. mihomo допускает только домен-правила и `MATCH` (`isDomainRule`); тестер
+/// терпимее к прочим типам — они просто никогда не совпадают.
+struct FakeIpFilterRuleLine {
+    node: RuleKind,
+    real_ip: bool,
+}
+
+/// `dns.fake-ip-filter`: обычный режим — домен-трай (`+.`/`.`/`*`/точное, тот же синтаксис, что и у
+/// rule-provider behavior `domain`, см. `providers::build_domain_provider`) плюс `geosite:`.
+/// `rule-set:` в фильтре встречается редко и не реализован — см. предупреждение в
+/// `EvalState::fake_ip_should_skip`. `Rules` — режим `dns.fake-ip-filter-mode: rule`.
+enum FakeIpFilter {
+    Domains {
+        mode: FilterListMode,
+        matcher: providers::DomainProvider,
+        geosite_tags: Vec<String>,
+        has_ruleset_ref: bool,
+    },
+    Rules(Vec<FakeIpFilterRuleLine>),
+}
+
+struct DnsConfig {
+    enable: bool,
+    enhanced_mode: EnhancedMode,
+    fake_ip_filter: FakeIpFilter,
+}
+
+/// Один протокол сниффера (`component/sniffer/{tls,http,quic}_sniffer.go`): порты по умолчанию,
+/// если `sniff.<TYPE>.ports`/легаси `sniffer.port-whitelist` не заданы — 443/tcp (TLS), 80/tcp
+/// (HTTP), 443/udp (QUIC).
+struct SniffProtocol {
+    network: Network,
+    ports: PortRanges,
+    override_dest: bool,
+}
+
+/// Запись `sniffer.skip-dst-address`/`skip-src-address` (`config/config.go::parseIPCIDR`): обычный
+/// CIDR или `rule-set:name[,name2,...]` (ipcidr-провайдер, тот же `Providers`, что и у RULE-SET в
+/// правилах). `geoip:` в этих списках не поддержан тестером (редкость, требует ещё одного geodb-
+/// плеча ради маргинального случая) — такие записи молча пропускаются.
+enum SkipIpEntry {
+    Cidr(Cidr),
+    RuleSet(String),
+}
+
+fn skip_ip_matches(entries: &[SkipIpEntry], ip: IpAddr, providers: &Providers) -> bool {
+    entries.iter().any(|e| match e {
+        SkipIpEntry::Cidr(c) => c.contains(ip),
+        SkipIpEntry::RuleSet(name) => matches!(
+            providers.get(name),
+            Some(ParsedProvider::IpCidr(p)) if p.matches(ip).is_some()
+        ),
+    })
+}
+
+/// `sniffer.*`, нужное тестеру только для решения, «сбрасывает» ли (в терминах мейнтейнера)
+/// `override-destination: true` уже известный по DNS-маппингу `DstIP`. Дефолты полей —
+/// `config/config.go::DefaultRawConfig` (`Sniffer: RawSniffer{ForceDnsMapping: true, ParsePureIp:
+/// true, OverrideDest: true, ...}`, `Enable: false`) — при `sniffer.enable: true` без явных
+/// оверрайдов сниффер ПО УМОЛЧАНИЮ перезапускается поверх DNS-маппинга (`force-dns-mapping: true`) и
+/// по умолчанию ЖЕ сбрасывает уже известный IP (`override-destination: true`) — именно это и стоит
+/// за репортом мейнтейнера: обычный `sniffer: {enable: true, sniff: {...}}` без явного
+/// `override-destination: false` даёт лениво-подобную (текущую) семантику, а не заранее известный IP.
+///
+/// Тестер всегда предполагает, что LAN-клиент резолвил домен через сам роутер (redir-host/fake-ip
+/// DNS-перехват), но — в отличие от более ранней версии этого комментария — это НЕ делает
+/// `parse-pure-ip` неприменимым: при `dns.enable: false`/`enhanced-mode: normal` `Host` остаётся
+/// `""` вообще всю дорогу (маппинг не создаётся, `resolver.DefaultHostMapper == nil`), и именно
+/// ветка `shouldOverride`: `metadata.Host == "" && parsePureIp` — единственная, которая может
+/// запустить сниффер в этом случае (`force-dns-mapping` требует `DNSMode == DNSMapping`, которого
+/// без маппинга не бывает; `force-domain` не может матчить пустой `Host`). См. `via_dns_mapping` в
+/// `would_downgrade_eager` и его вызов в `Engine::evaluate`.
+struct SnifferConfig {
+    enable: bool,
+    force_dns_mapping: bool,
+    /// `parse-pure-ip` (дефолт `true`, как и остальные два — `config/config.go::DefaultRawConfig`).
+    parse_pure_ip: bool,
+    force_domain: providers::DomainProvider,
+    skip_domain: providers::DomainProvider,
+    skip_dst_address: Vec<SkipIpEntry>,
+    skip_src_address: Vec<SkipIpEntry>,
+    /// Порядок как в `constant/sniffer/sniffer.go::List` — TLS, HTTP, QUIC.
+    protocols: Vec<SniffProtocol>,
+}
+
+/// Параметры одной проверки "сбросил бы сниффер уже известный IP" — сгруппированы в структуру
+/// вместо длинного списка аргументов (`clippy::too_many_arguments`). `via_dns_mapping` — см.
+/// doc-комментарий `SnifferConfig` и `Engine::evaluate`: выбирает, какая ветка `shouldOverride` в
+/// mihomo триггерит повторный сниффинг — `force-dns-mapping`/`force-domain` (redir-host/fake-ip-
+/// filtered) или `parse-pure-ip` (dns выключен/`normal`, `Host` пуст).
+struct EagerDowngradeCheck<'a> {
+    port: u16,
+    network: Network,
+    domain: &'a str,
+    /// Уже известные на момент вызова значения (для `skip-dst-address`/`skip-src-address`, которые
+    /// матчатся по НАСТОЯЩЕМУ адресу подключения, а не по цели теста как таковой).
+    dst_ip: Option<IpAddr>,
+    source_ip: Option<IpAddr>,
+    via_dns_mapping: bool,
+}
+
+impl SnifferConfig {
+    /// `true`, если сниффер реально перезапустится поверх уже известного домена/IP и своим
+    /// `override-destination: true` сбросит уже известный `DstIP` — тогда действует прежняя ленивая
+    /// семантика.
+    fn would_downgrade_eager(&self, check: EagerDowngradeCheck<'_>, providers: &Providers) -> bool {
+        if !self.enable {
+            return false;
+        }
+        // `shouldOverride`: skip-dst-address/skip-src-address проверяются РАНЬШЕ остальных условий
+        // и просто отменяют сниффинг целиком — IP остаётся известным независимо от override.
+        if check
+            .dst_ip
+            .is_some_and(|ip| skip_ip_matches(&self.skip_dst_address, ip, providers))
+        {
+            return false;
+        }
+        if check
+            .source_ip
+            .is_some_and(|ip| skip_ip_matches(&self.skip_src_address, ip, providers))
+        {
+            return false;
+        }
+        let Some(proto) = self
+            .protocols
+            .iter()
+            .find(|p| p.network == check.network && p.ports.check(check.port))
+        else {
+            return false;
+        };
+        let triggered = if check.via_dns_mapping {
+            self.force_dns_mapping || self.force_domain.matches(check.domain).is_some()
+        } else {
+            self.parse_pure_ip
+        };
+        if !triggered {
+            return false;
+        }
+        // `domainCanReplace`: даже когда сниффинг реально прошёл, домен из `skip-domain` отбрасывает
+        // его результат целиком (`TCPSniff` возвращает `false`, metadata не трогается) — тоже без
+        // даунгрейда.
+        if self.skip_domain.matches(check.domain).is_some() {
+            return false;
+        }
+        proto.override_dest
+    }
+}
+
+fn yaml_str_list(y: &Yaml) -> Vec<String> {
+    y.as_vec()
+        .map(|v| {
+            v.iter()
+                .filter_map(|x| {
+                    x.as_str()
+                        .map(str::to_string)
+                        .or_else(|| x.as_i64().map(|n| n.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn build_fake_ip_filter(
+    mode_raw: &str, lines: &[String], providers: &Providers, warnings: &mut Vec<String>,
+) -> FakeIpFilter {
+    if mode_raw == "rule" {
+        let mut rules = Vec::new();
+        for line in lines {
+            let (tp, payload, action, params) = parse_rule_payload(line, true);
+            let real_ip = match action.to_lowercase().as_str() {
+                "real-ip" => true,
+                "fake-ip" => false,
+                _ => continue,
+            };
+            // `config/config.go::parseFakeIPRules` отклоняет RULE-SET поведения `ipcidr` в
+            // `fake-ip-filter-mode: rule` ещё при старте mihomo (`must be domain or classical`) —
+            // такой конфиг вообще не запустился бы. Тестер терпимее: пропускает строку с
+            // предупреждением вместо того, чтобы имитировать IP-матчинг там, где реальный mihomo
+            // его не допустил бы.
+            if tp == "RULE-SET" && matches!(providers.get(&payload), Some(ParsedProvider::IpCidr(_))) {
+                warnings.push(format!(
+                    "dns.fake-ip-filter (режим rule): RULE-SET,{payload} — провайдер поведения \
+                     ipcidr недопустим в fake-ip-filter (mihomo отклонил бы такой конфиг), строка \
+                     пропущена"
+                ));
+                continue;
+            }
+            let node = if tp == "MATCH" {
+                RuleKind::Match
+            } else {
+                build_rule_kind(&tp, &payload, &params)
+            };
+            rules.push(FakeIpFilterRuleLine { node, real_ip });
+        }
+        return FakeIpFilter::Rules(rules);
+    }
+
+    let mode = if mode_raw == "whitelist" {
+        FilterListMode::Whitelist
+    } else {
+        FilterListMode::Blacklist
+    };
+    let mut plain: Vec<&str> = Vec::new();
+    let mut geosite_tags = Vec::new();
+    let mut has_ruleset_ref = false;
+    for line in lines {
+        let lower = line.to_ascii_lowercase();
+        if let Some(rest) = lower.strip_prefix("geosite:") {
+            geosite_tags.extend(rest.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()));
+        } else if lower.starts_with("rule-set:") {
+            has_ruleset_ref = true;
+        } else {
+            plain.push(line.as_str());
+        }
+    }
+    let matcher = providers::build_domain_provider(plain.into_iter()).unwrap_or_default();
+    FakeIpFilter::Domains {
+        mode,
+        matcher,
+        geosite_tags,
+        has_ruleset_ref,
+    }
+}
+
+/// `dns.fake-ip-filter` по умолчанию, когда ключ в конфиге вовсе отсутствует (`config/config.go`,
+/// `DefaultRawConfig`).
+fn default_fake_ip_filter_lines() -> Vec<String> {
+    vec![
+        "dns.msftnsci.com".to_string(),
+        "www.msftnsci.com".to_string(),
+        "www.msftconnecttest.com".to_string(),
+    ]
+}
+
+fn build_dns_config(doc: &Yaml, providers: &Providers, warnings: &mut Vec<String>) -> DnsConfig {
+    let dns = &doc["dns"];
+    let enable = dns["enable"].as_bool().unwrap_or(false);
+    let enhanced_mode = match dns["enhanced-mode"]
+        .as_str()
+        .unwrap_or("redir-host")
+        .to_lowercase()
+        .as_str()
+    {
+        "fake-ip" => EnhancedMode::FakeIp,
+        "normal" => EnhancedMode::Normal,
+        _ => EnhancedMode::RedirHost,
+    };
+    let filter_mode_raw = dns["fake-ip-filter-mode"]
+        .as_str()
+        .unwrap_or("blacklist")
+        .to_lowercase();
+    let filter_lines = match dns["fake-ip-filter"].as_vec() {
+        Some(v) => v.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+        None => default_fake_ip_filter_lines(),
+    };
+    let fake_ip_filter = build_fake_ip_filter(&filter_mode_raw, &filter_lines, providers, warnings);
+    DnsConfig {
+        enable,
+        enhanced_mode,
+        fake_ip_filter,
+    }
+}
+
+fn build_sniff_protocol(name: &str, ports_list: &[String], override_dest: bool) -> SniffProtocol {
+    let (network, default_ports) = match name {
+        "HTTP" => (Network::Tcp, PortRanges(vec![(80, 80)])),
+        "QUIC" => (Network::Udp, PortRanges(vec![(443, 443)])),
+        _ => (Network::Tcp, PortRanges(vec![(443, 443)])),
+    };
+    let ports = if ports_list.is_empty() {
+        default_ports
+    } else {
+        PortRanges::parse(&ports_list.join("/")).unwrap_or(default_ports)
+    };
+    SniffProtocol {
+        network,
+        ports,
+        override_dest,
+    }
+}
+
+/// `sniffer.skip-dst-address`/`skip-src-address` (`config/config.go::parseIPCIDR`): CIDR-строки и
+/// `rule-set:name[,name2,...]`. `geoip:` намеренно не поддержан (см. `SkipIpEntry`).
+fn parse_skip_ip_list(lines: &[String]) -> Vec<SkipIpEntry> {
+    let mut out = Vec::new();
+    for line in lines {
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("rule-set:") {
+            // "rule-set:" — чистый ASCII-префикс, байтовый срез исходной (не приведённой к
+            // нижнему регистру) строки безопасен и сохраняет исходный регистр имени провайдера.
+            for name in line["rule-set:".len()..].split(',') {
+                let name = name.trim();
+                if !name.is_empty() {
+                    out.push(SkipIpEntry::RuleSet(name.to_string()));
+                }
+            }
+        } else if lower.starts_with("geoip:") {
+            continue;
+        } else if let Some(cidr) = Cidr::parse(line) {
+            out.push(SkipIpEntry::Cidr(cidr));
+        }
+    }
+    out
+}
+
+fn build_sniffer_config(doc: &Yaml) -> SnifferConfig {
+    let sn = &doc["sniffer"];
+    let enable = sn["enable"].as_bool().unwrap_or(false);
+    // Дефолты — `config/config.go::DefaultRawConfig` (`RawSniffer{ForceDnsMapping: true,
+    // ParsePureIp: true, OverrideDest: true}`), НЕ "выключено": при `sniffer.enable: true` без
+    // явных оверрайдов сниффер по умолчанию перезапускается над уже известным доменом/IP-целью и
+    // сбрасывает уже известный IP.
+    let global_override = sn["override-destination"].as_bool().unwrap_or(true);
+    let force_dns_mapping = sn["force-dns-mapping"].as_bool().unwrap_or(true);
+    let parse_pure_ip = sn["parse-pure-ip"].as_bool().unwrap_or(true);
+    let force_domain_lines = yaml_str_list(&sn["force-domain"]);
+    let force_domain =
+        providers::build_domain_provider(force_domain_lines.iter().map(String::as_str)).unwrap_or_default();
+    let skip_domain_lines = yaml_str_list(&sn["skip-domain"]);
+    let skip_domain =
+        providers::build_domain_provider(skip_domain_lines.iter().map(String::as_str)).unwrap_or_default();
+    let skip_dst_address = parse_skip_ip_list(&yaml_str_list(&sn["skip-dst-address"]));
+    let skip_src_address = parse_skip_ip_list(&yaml_str_list(&sn["skip-src-address"]));
+
+    let mut protocols = Vec::new();
+    if let Some(map) = sn["sniff"].as_hash() {
+        for name in ["TLS", "HTTP", "QUIC"] {
+            let Some((_, cfg)) = map
+                .iter()
+                .find(|(k, _)| k.as_str().is_some_and(|s| s.eq_ignore_ascii_case(name)))
+            else {
+                continue;
+            };
+            let ports_list = yaml_str_list(&cfg["ports"]);
+            let override_dest = cfg["override-destination"].as_bool().unwrap_or(global_override);
+            protocols.push(build_sniff_protocol(name, &ports_list, override_dest));
+        }
+    } else if let Some(list) = sn["sniffing"].as_vec() {
+        // Легаси-формат (`Deprecated: Use Sniff instead`) — один общий port-whitelist/override на
+        // все перечисленные протоколы.
+        let global_ports = yaml_str_list(&sn["port-whitelist"]);
+        for name in ["TLS", "HTTP", "QUIC"] {
+            if list
+                .iter()
+                .any(|v| v.as_str().is_some_and(|s| s.eq_ignore_ascii_case(name)))
+            {
+                protocols.push(build_sniff_protocol(name, &global_ports, global_override));
+            }
+        }
+    }
+
+    SnifferConfig {
+        enable,
+        force_dns_mapping,
+        parse_pure_ip,
+        force_domain,
+        skip_domain,
+        skip_dst_address,
+        skip_src_address,
+        protocols,
+    }
+}
+
 /// Загруженный и разобранный конфиг mihomo (правила, провайдеры, geo-файлы).
 pub struct Engine {
     rules: Vec<TopRule>,
@@ -877,7 +1313,16 @@ pub struct Engine {
     geoip_dat_path: Option<PathBuf>,
     geoip_mmdb_path: Option<PathBuf>,
     asn_mmdb_path: Option<PathBuf>,
+    // В `Box` — иначе `DomainProvider`-поля (домен-трай для `force-domain`/`fake-ip-filter`)
+    // раздувают `Engine` настолько, что `ActiveEngine` в `mod.rs` (enum над `mihomo::Engine`/
+    // `xray::Engine`) ловит clippy::large_enum_variant.
+    dns: Box<DnsConfig>,
+    sniffer: Box<SnifferConfig>,
     warnings: Mutex<Vec<String>>,
+    /// Домены, для которых сработала eager-семантика (см. `Engine::evaluate`) — копятся отдельно
+    /// от `warnings`, чтобы собрать одно предупреждение со списком целей (см. `warnings()`), а не
+    /// одинаковую строку без разбора, к каким целям она относится.
+    eager_targets: Mutex<Vec<String>>,
 }
 
 async fn find_geo_file(dir: &Path, candidates: &[&str]) -> Option<PathBuf> {
@@ -910,6 +1355,10 @@ async fn build_engine(doc: &Yaml, base_dir: &Path) -> Result<Engine, String> {
     let geoip_mmdb_path = find_geo_file(base_dir, &["country.mmdb", "geoip.db", "geoip.metadb"]).await;
     let asn_mmdb_path = find_geo_file(base_dir, &["asn.mmdb"]).await;
 
+    let mut config_warnings = Vec::new();
+    let dns = Box::new(build_dns_config(doc, &providers, &mut config_warnings));
+    let sniffer = Box::new(build_sniffer_config(doc));
+
     Ok(Engine {
         rules,
         providers,
@@ -918,7 +1367,10 @@ async fn build_engine(doc: &Yaml, base_dir: &Path) -> Result<Engine, String> {
         geoip_dat_path,
         geoip_mmdb_path,
         asn_mmdb_path,
-        warnings: Mutex::new(Vec::new()),
+        dns,
+        sniffer,
+        warnings: Mutex::new(config_warnings),
+        eager_targets: Mutex::new(Vec::new()),
     })
 }
 
@@ -965,6 +1417,73 @@ impl Engine {
             asn_mmdb_path: self.asn_mmdb_path.as_deref(),
             warnings: &self.warnings,
         };
+
+        // Мейнтейнерский баг (zxc-rv): "override-destination: false -> IP-правила видят IP домена
+        // даже с no-resolve". Источник вопроса не в самом сниффере, а в том, что при redir-host
+        // (и при dns.enable=false) `DstIP` валиден ЕЩЁ ДО сопоставления правил — `no-resolve`
+        // блокирует лишь явный вызов резолва, но не отменяет уже известный IP (см. doc-комментарий
+        // `EnhancedMode`). Поэтому здесь резолв делается один раз ЗАРАНЕЕ (через тот же `dst_ip`,
+        // которым иначе лениво пользуются IP-правила) — все последующие правила, включая
+        // `no-resolve`, увидят готовый `resolved_ip` сразу (см. `EvalState::dst_ip`: он возвращает
+        // уже установленный IP до проверки `no_resolve`).
+        if let Some(domain) = domain_target {
+            // `via_dns_mapping`: `true`, если `Host` уже восстановлен через DNS-маппинг mihomo
+            // (redir-host, либо fake-ip с доменом, исключённым из fake-ip-filter -> `DNSMode`
+            // тоже `DNSMapping`, см. doc-комментарий `EnhancedMode`) -> `shouldOverride`
+            // триггерится через `force-dns-mapping`/`force-domain`. `false` — dns выключен или
+            // `enhanced-mode: normal`: `resolver.DefaultHostMapper == nil`/режим не Fake-IP/Mapping,
+            // маппинг вообще не создаётся -> `Host` остаётся `""` всю дорогу -> `shouldOverride`
+            // триггерится веткой `metadata.Host == "" && parsePureIp`, а не `force-dns-mapping`
+            // (`force-domain` не может матчить пустой `Host`). `None` — fake-ip без исключения:
+            // домену дают фейковый IP, остаётся прежняя ленивая семантика безусловно.
+            let eager_reason = if self.dns.enable {
+                match self.dns.enhanced_mode {
+                    EnhancedMode::Normal => Some(false),
+                    EnhancedMode::RedirHost => Some(true),
+                    EnhancedMode::FakeIp => eval
+                        .fake_ip_should_skip(&self.dns.fake_ip_filter, domain)
+                        .await
+                        .then_some(true),
+                }
+            } else {
+                Some(false)
+            };
+            if let Some(via_dns_mapping) = eager_reason {
+                // Резолвим сразу — IP нужен и для собственно eager-семантики, и чтобы проверить
+                // `sniffer.skip-dst-address` (он матчится по уже известному DstIP, а не по цели
+                // теста как таковой).
+                let _ = eval.dst_ip(false).await;
+                let downgrade = self.sniffer.would_downgrade_eager(
+                    EagerDowngradeCheck {
+                        port: ctx.port,
+                        network: ctx.network,
+                        domain,
+                        dst_ip: eval.resolved_ip,
+                        source_ip: ctx.source_ip,
+                        via_dns_mapping,
+                    },
+                    &self.providers,
+                );
+                if downgrade {
+                    // Сниффер реально перезапустился бы и `override-destination: true` сбросил бы
+                    // уже известный `DstIP` (`replaceDomain`: `metadata.DstIP = netip.Addr{}`) —
+                    // откатываем заранее сделанный резолв, дальше снова действует прежняя ленивая
+                    // семантика (см. `EvalState::dst_ip`).
+                    eval.resolve_tried = false;
+                    eval.resolved_ip = None;
+                    eval.resolved_ips_all.clear();
+                    eval.dns_source = None;
+                } else {
+                    // Копится по целям, а не сразу как готовая строка — единое предупреждение со
+                    // списком целей формируется в `warnings()` (см. поле `eager_targets`), чтобы в
+                    // пачке из нескольких целей было видно, для каких именно оно сработало.
+                    let mut targets = self.eager_targets.lock().unwrap();
+                    if !targets.iter().any(|t| t == domain) {
+                        targets.push(domain.to_string());
+                    }
+                }
+            }
+        }
 
         let mut skipped = Vec::new();
         let mut matched: Option<(String, MatchedRule)> = None;
@@ -1014,7 +1533,27 @@ impl Engine {
 
     /// Предупреждения, накопленные при загрузке/вычислении (напр. отсутствующие geo-файлы).
     pub fn warnings(&self) -> Vec<String> {
-        self.warnings.lock().unwrap().clone()
+        let mut out = self.warnings.lock().unwrap().clone();
+        let eager = self.eager_targets.lock().unwrap();
+        if !eager.is_empty() {
+            const SHOWN: usize = 10;
+            let mut msg = format!(
+                "DNS-режим отдаёт настоящий IP до сопоставления правил (redir-host, dns выключен, \
+                 домен исключён из fake-ip-filter, либо сниффер не перезапускается поверх уже \
+                 известного домена) — IP-правила видят его даже с no-resolve: {}",
+                eager
+                    .iter()
+                    .take(SHOWN)
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            if eager.len() > SHOWN {
+                msg.push_str(&format!(", и ещё {}", eager.len() - SHOWN));
+            }
+            out.push(msg);
+        }
+        out
     }
 }
 
@@ -1302,7 +1841,13 @@ rules:
     async fn lazy_resolve_ip_rule_after_domain_rules_and_no_resolve_sees_unresolved() {
         let dir = std::env::temp_dir().join(format!("route-tester-mihomo-lazy-{}", uuid::Uuid::new_v4()));
         tokio::fs::create_dir_all(&dir).await.unwrap();
+        // fake-ip (домен не в fake-ip-filter) -> прежняя ленивая семантика (см. `EnhancedMode`):
+        // без явного `dns:` тестер по умолчанию считает IP известным заранее (redir-host/dns
+        // выключен) и этот тест перестал бы отличать ленивый резолв от заранее известного IP.
         let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: fake-ip
 rules:
   - "IP-CIDR,9.9.9.9/32,NoResolveHit,no-resolve"
   - "IP-CIDR,203.0.113.5/32,ResolvedHit"
@@ -1625,7 +2170,15 @@ rules:
             "DOMAIN-SUFFIX,example.org\nIP-CIDR,203.0.113.0/24\n",
         )
         .await;
+        // fake-ip (домен не в fake-ip-filter) -> прежняя ленивая семантика, см. `EnhancedMode`:
+        // при redir-host/dns выключен (дефолт без явного `dns:`) IP известен ещё до сопоставления
+        // правил, и `no-resolve` на RULE-SET здесь не подавил бы уже готовый IP — этот тест
+        // специально проверяет именно подавление резолва, поэтому берёт домен, лишённый заранее
+        // известного IP.
         let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: fake-ip
 rule-providers:
   mixed@classical: {type: http, format: text, behavior: classical, url: https://example.com/mixed-classical.txt}
 rules:
@@ -1865,5 +2418,599 @@ rules:
         let res3 = engine3.evaluate(&ctx_domain("google.com"), &empty_resolver()).await;
         assert_eq!(res3.outbound.as_deref(), Some("Proxy"));
         assert!(res3.skipped.is_empty());
+    }
+
+    // --- Мейнтейнерский баг (zxc-rv): сниффер/DNS-режим и `no-resolve` ------------------------
+    // "override-destination: false -> разрешаем домены на ЛЮБОМ IP-правиле, даже если есть
+    // no-resolve; override-destination: true -> разрешаем домены только если в IP-правиле нет
+    // no-resolve" (при redir-host / fake-ip-filter, см. doc-комментарий `EnhancedMode`).
+
+    fn resolver_with(domain: &str, ip: &str) -> StaticResolver {
+        let mut map = Map::new();
+        map.insert(domain.to_string(), vec![ip.parse().unwrap()]);
+        StaticResolver(map)
+    }
+
+    #[tokio::test]
+    async fn redir_host_makes_no_resolve_ip_rule_see_real_ip() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-redirhost-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        // redir-host: mihomo сам резолвит домен при DNS-запросе клиента и отдаёт ему настоящий IP ->
+        // DstIP известен ещё до сопоставления правил, no-resolve тут ничего не блокирует.
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("NoResolveHit"));
+        assert_eq!(res.resolved_ips, vec!["203.0.113.5".parse::<IpAddr>().unwrap()]);
+    }
+
+    #[tokio::test]
+    async fn dns_disabled_by_default_is_also_eager() {
+        // Без `dns:` вовсе (дефолт mihomo — `enable: false`): resolver.DefaultHostMapper == nil,
+        // но redir/tproxy всё равно видит настоящий DstIP клиента - как и при redir-host.
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-dnsoff-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let yaml = r#"
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("NoResolveHit"));
+    }
+
+    #[tokio::test]
+    async fn fake_ip_non_filtered_domain_keeps_lazy_semantics() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-fakeip-lazy-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        // fake-ip, домен не подпадает под дефолтный fake-ip-filter (msftnsci/msftconnecttest) ->
+        // клиент получает фейковый IP, preHandleMetadata его обнуляет -> прежняя ленивая семантика.
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("DIRECT"));
+        assert!(
+            res.resolved_ips.is_empty(),
+            "no-resolve не должен резолвить домен при fake-ip"
+        );
+    }
+
+    #[tokio::test]
+    async fn fake_ip_filter_blacklist_excluded_domain_is_eager() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-fakeip-bl-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        // blacklist (дефолтный режим): домен ИЗ списка получает настоящий IP (как redir-host).
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-filter-mode: blacklist
+  fake-ip-filter:
+    - "+.vultr.example"
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("www.vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("www.vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("NoResolveHit"));
+    }
+
+    #[tokio::test]
+    async fn fake_ip_filter_whitelist_mode_inverts_membership() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-fakeip-wl-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        // whitelist: ТОЛЬКО домены из списка получают fake-ip (лениво); всё остальное -> real ip.
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-filter-mode: whitelist
+  fake-ip-filter:
+    - "fakeip.example"
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        // В списке whitelist -> fake-ip -> ленивая семантика -> no-resolve не видит IP.
+        let res_listed = engine
+            .evaluate(
+                &ctx_domain("fakeip.example"),
+                &resolver_with("fakeip.example", "203.0.113.5"),
+            )
+            .await;
+        assert_eq!(res_listed.outbound.as_deref(), Some("DIRECT"));
+        // Не в списке whitelist -> реальный IP -> eager -> no-resolve видит IP.
+        let res_other = engine
+            .evaluate(
+                &ctx_domain("other.example"),
+                &resolver_with("other.example", "203.0.113.5"),
+            )
+            .await;
+        assert_eq!(res_other.outbound.as_deref(), Some("NoResolveHit"));
+    }
+
+    #[tokio::test]
+    async fn per_protocol_override_destination_wins_over_global() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-proto-override-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        // redir-host (eager по умолчанию) + сниффер включён с force-dns-mapping, глобальный
+        // override-destination: false, но TLS (443/tcp) переопределяет его в true -> для порта 443
+        // (TLS) сниффер "сбрасывает" уже известный IP -> лениво; для 80 (HTTP, override не
+        // переопределён -> false) IP остаётся известным заранее.
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: true
+  override-destination: false
+  force-dns-mapping: true
+  sniff:
+    TLS:
+      ports: [443]
+      override-destination: true
+    HTTP:
+      ports: [80]
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+
+        let mut ctx_tls = ctx_domain("vultr.example");
+        ctx_tls.port = 443;
+        let res_tls = engine.evaluate(&ctx_tls, &resolver).await;
+        assert_eq!(
+            res_tls.outbound.as_deref(),
+            Some("DIRECT"),
+            "TLS override-destination:true -> лениво"
+        );
+
+        let mut ctx_http = ctx_domain("vultr.example");
+        ctx_http.port = 80;
+        let res_http = engine.evaluate(&ctx_http, &resolver).await;
+        assert_eq!(
+            res_http.outbound.as_deref(),
+            Some("NoResolveHit"),
+            "HTTP наследует глобальный override-destination:false -> IP известен заранее"
+        );
+    }
+
+    #[tokio::test]
+    async fn sniffer_disabled_does_not_downgrade_eager_ip() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-sniff-off-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        // redir-host остаётся eager независимо от override-destination, если сниффер вообще
+        // выключен (он тогда физически не может ничего "сбросить").
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: false
+  override-destination: true
+  force-dns-mapping: true
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("NoResolveHit"));
+    }
+
+    #[tokio::test]
+    async fn sniffer_explicit_force_dns_mapping_false_does_not_downgrade() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-sniff-noforce-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        // `force-dns-mapping`/`override-destination` по умолчанию `true` (`config/config.go::
+        // DefaultRawConfig`) — здесь оба заданы явно (mapping выключен), поэтому сниффер не
+        // перезапускается поверх уже известного домена (`shouldOverride` в mihomo), и
+        // `override-destination: true` ни на что не влияет: даунгрейда нет.
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: true
+  override-destination: true
+  force-dns-mapping: false
+  sniff:
+    TLS:
+      ports: [443]
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("NoResolveHit"));
+    }
+
+    /// Конфиг «как у мейнтейнера»: `sniffer.enable: true` со списком `sniff.<TYPE>.ports`, БЕЗ
+    /// явных `override-destination`/`force-dns-mapping` — оба по умолчанию `true`
+    /// (`config/config.go::DefaultRawConfig`). Значит сниффер реально перезапускается над уже
+    /// известным (по redir-host DNS-маппингу) доменом и своим `override-destination: true`
+    /// сбрасывает уже известный IP -> `no-resolve` на `vultr@ipcidr` НЕ матчит.
+    #[tokio::test]
+    async fn user_router_default_sniffer_config_downgrades_to_lazy() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-userrouter-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(dir.join("rules")).await.unwrap();
+        write(
+            &dir.join("rules"),
+            &format!("{:x}", md5::compute("https://example.com/vultr-ipcidr.txt")),
+            "108.61.0.0/16\n",
+        )
+        .await;
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: true
+  sniff:
+    HTTP:
+      ports: [80, 8080]
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+rule-providers:
+  vultr@ipcidr: {type: http, format: text, behavior: ipcidr, url: https://example.com/vultr-ipcidr.txt}
+rules:
+  - "RULE-SET,vultr@ipcidr,Proxy,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("www.vultr.com", "108.61.212.10");
+        let res = engine.evaluate(&ctx_domain("www.vultr.com"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("DIRECT"));
+        assert!(res.resolved_ips.is_empty());
+    }
+
+    /// Тот же конфиг, но с явным `override-destination: false` на уровне сниффера — мейнтейнерская
+    /// правка бага: сниффер всё ещё перезапускается (force-dns-mapping по умолчанию `true`), но
+    /// больше не сбрасывает уже известный IP -> `no-resolve` матчит.
+    #[tokio::test]
+    async fn user_router_config_with_override_destination_false_matches() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-userrouter-ov-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(dir.join("rules")).await.unwrap();
+        write(
+            &dir.join("rules"),
+            &format!("{:x}", md5::compute("https://example.com/vultr-ipcidr.txt")),
+            "108.61.0.0/16\n",
+        )
+        .await;
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: true
+  override-destination: false
+  sniff:
+    HTTP:
+      ports: [80, 8080]
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+rule-providers:
+  vultr@ipcidr: {type: http, format: text, behavior: ipcidr, url: https://example.com/vultr-ipcidr.txt}
+rules:
+  - "RULE-SET,vultr@ipcidr,Proxy,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("www.vultr.com", "108.61.212.10");
+        let res = engine.evaluate(&ctx_domain("www.vultr.com"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("Proxy"));
+        assert_eq!(res.resolved_ips, vec!["108.61.212.10".parse::<IpAddr>().unwrap()]);
+    }
+
+    /// `skip-dst-address: [rule-set:telegram@ipcidr]` — цель резолвится в адрес из этого набора ->
+    /// `shouldOverride` возвращает `false` ещё до всех остальных условий -> сниффер не трогает
+    /// metadata вообще -> IP остаётся известным независимо от `override-destination` (даже `true`).
+    #[tokio::test]
+    async fn skip_dst_address_rule_set_prevents_downgrade() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-skipdst-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(dir.join("rules")).await.unwrap();
+        write(
+            &dir.join("rules"),
+            &format!("{:x}", md5::compute("https://example.com/telegram-ipcidr.txt")),
+            "149.154.160.0/20\n",
+        )
+        .await;
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: true
+  override-destination: true
+  skip-dst-address:
+    - "rule-set:telegram@ipcidr"
+  sniff:
+    TLS:
+      ports: [443]
+rule-providers:
+  telegram@ipcidr: {type: http, format: text, behavior: ipcidr, url: https://example.com/telegram-ipcidr.txt}
+rules:
+  - "IP-CIDR,149.154.167.99/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("telegram.example", "149.154.167.99");
+        let res = engine.evaluate(&ctx_domain("telegram.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("NoResolveHit"));
+    }
+
+    /// Тот же `skip-dst-address`, но целевой домен резолвится в IP ВНЕ набора telegram — сниффер
+    /// снова применяется как обычно (`override-destination: true` по умолчанию) -> лениво.
+    #[tokio::test]
+    async fn skip_dst_address_does_not_apply_to_unrelated_ip() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-skipdst-miss-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(dir.join("rules")).await.unwrap();
+        write(
+            &dir.join("rules"),
+            &format!("{:x}", md5::compute("https://example.com/telegram-ipcidr.txt")),
+            "149.154.160.0/20\n",
+        )
+        .await;
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: true
+  skip-dst-address:
+    - "rule-set:telegram@ipcidr"
+  sniff:
+    TLS:
+      ports: [443]
+rule-providers:
+  telegram@ipcidr: {type: http, format: text, behavior: ipcidr, url: https://example.com/telegram-ipcidr.txt}
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("DIRECT"));
+    }
+
+    /// Регрессия по конкретному репорту мейнтейнера: `www.vultr.com` на роутере с
+    /// `override-destination: false` (redir-host) должен матчить `vultr@ipcidr` с `no-resolve`, а
+    /// не проваливаться в `MATCH` ("Пропущено правил: 2" — эти два правила видны в `skipped`, но
+    /// само совпадение по `vultr@ipcidr` больше не пропускается).
+    #[tokio::test]
+    async fn vultr_ipcidr_no_resolve_regression() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-vultr-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(dir.join("rules")).await.unwrap();
+        write(
+            &dir.join("rules"),
+            &format!("{:x}", md5::compute("https://example.com/vultr-ipcidr.txt")),
+            "108.61.0.0/16\n",
+        )
+        .await;
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+sniffer:
+  enable: true
+  override-destination: false
+  sniff:
+    HTTP:
+      ports: [80, 8080]
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+rule-providers:
+  vultr@ipcidr: {type: http, format: text, behavior: ipcidr, url: https://example.com/vultr-ipcidr.txt}
+rules:
+  - "SRC-IP-CIDR,192.168.1.5/32,Local"
+  - "IN-TYPE,TPROXY,DIRECT"
+  - "RULE-SET,vultr@ipcidr,Proxy,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("www.vultr.com", "108.61.212.10");
+        let res = engine.evaluate(&ctx_domain("www.vultr.com"), &resolver).await;
+        assert_eq!(res.outcome, Outcome::Matched);
+        assert_eq!(res.outbound.as_deref(), Some("Proxy"));
+        assert_eq!(res.rule.unwrap().index, 2);
+        // SRC-IP-CIDR (нет source_ip) и IN-TYPE (недоступно вне реального соединения) — те самые
+        // "пропущенные" правила из репорта, не влияющие на итоговое совпадение.
+        assert_eq!(res.skipped.len(), 2);
+    }
+
+    /// Без `dns:` вовсе (dns выключен -> Host всю дорогу `""`, mapping не создаётся): триггер
+    /// сниффера — `parse-pure-ip` (дефолт `true`), а НЕ `force-dns-mapping` (он требует `DNSMode ==
+    /// DNSMapping`, которого без mapping не бывает) — здесь `force-dns-mapping` явно выключен, но
+    /// сниффер всё равно перезапускается через `parse-pure-ip` и (дефолтным) `override-destination:
+    /// true` сбрасывает уже известный IP.
+    #[tokio::test]
+    async fn parse_pure_ip_default_true_triggers_downgrade_when_dns_disabled() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-pureip-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let yaml = r#"
+sniffer:
+  enable: true
+  force-dns-mapping: false
+  sniff:
+    TLS:
+      ports: [443]
+rules:
+  - "IP-CIDR,203.0.113.5/32,Hit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(
+            res.outbound.as_deref(),
+            Some("DIRECT"),
+            "parse-pure-ip:true (дефолт) -> лениво"
+        );
+    }
+
+    /// Тот же конфиг с явным `parse-pure-ip: false` — единственный триггер `shouldOverride` для
+    /// dns-выключенного случая отключён, сниффер не перезапускается вовсе -> IP остаётся известным.
+    #[tokio::test]
+    async fn parse_pure_ip_false_keeps_eager_when_dns_disabled() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-pureip-off-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let yaml = r#"
+sniffer:
+  enable: true
+  force-dns-mapping: false
+  parse-pure-ip: false
+  sniff:
+    TLS:
+      ports: [443]
+rules:
+  - "IP-CIDR,203.0.113.5/32,Hit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        assert_eq!(res.outbound.as_deref(), Some("Hit"));
+    }
+
+    /// `dns.fake-ip-filter-mode: rule` с `RULE-SET` на ipcidr-провайдер — mihomo отверг бы такой
+    /// конфиг при старте (`parseFakeIPRules`: "must be domain or classical"); тестер вместо этого
+    /// пропускает строку и предупреждает, а домен без иных совпавших правил остаётся на обычной
+    /// (ленивой) fake-ip семантике — т.е. ведёт себя как если бы правила вовсе не было.
+    #[tokio::test]
+    async fn fake_ip_filter_rule_mode_rejects_ipcidr_ruleset() {
+        let dir = std::env::temp_dir().join(format!(
+            "route-tester-mihomo-fakeip-rule-ipcidr-{}",
+            uuid::Uuid::new_v4()
+        ));
+        tokio::fs::create_dir_all(dir.join("rules")).await.unwrap();
+        write(
+            &dir.join("rules"),
+            &format!("{:x}", md5::compute("https://example.com/bad-ipcidr.txt")),
+            "203.0.113.0/24\n",
+        )
+        .await;
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-filter-mode: rule
+  fake-ip-filter:
+    - "RULE-SET,bad@ipcidr,real-ip"
+rule-providers:
+  bad@ipcidr: {type: http, format: text, behavior: ipcidr, url: https://example.com/bad-ipcidr.txt}
+rules:
+  - "IP-CIDR,203.0.113.5/32,NoResolveHit,no-resolve"
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("vultr.example", "203.0.113.5");
+        let res = engine.evaluate(&ctx_domain("vultr.example"), &resolver).await;
+        // Правило проигнорировано -> ни один rule-mode матч не сработал -> обычная fake-ip
+        // семантика (не исключён) -> лениво -> no-resolve не видит IP.
+        assert_eq!(res.outbound.as_deref(), Some("DIRECT"));
+        assert!(
+            engine
+                .warnings()
+                .iter()
+                .any(|w| w.contains("bad@ipcidr") && w.contains("ipcidr недопустим")),
+            "должно быть предупреждение о пропущенной RULE-SET,bad@ipcidr строке: {:?}",
+            engine.warnings()
+        );
+    }
+
+    /// Агрегированное предупреждение об eager-резолве должно перечислять затронутые цели одной
+    /// строкой (а не быть неразличимой одинаковой строкой для всех целей в пачке).
+    #[tokio::test]
+    async fn eager_warning_lists_affected_targets() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-eager-warn-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+rules:
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        let resolver = resolver_with("t.me", "149.154.167.99");
+        let _ = engine.evaluate(&ctx_domain("t.me"), &resolver).await;
+        let _ = engine
+            .evaluate(
+                &ctx_domain("web.telegram.org"),
+                &resolver_with("web.telegram.org", "149.154.167.99"),
+            )
+            .await;
+        // Один и тот же домен второй раз -> не должен задублироваться в списке.
+        let _ = engine.evaluate(&ctx_domain("t.me"), &resolver).await;
+
+        let warnings = engine.warnings();
+        let msg = warnings
+            .iter()
+            .find(|w| w.contains("даже с no-resolve"))
+            .expect("должно быть агрегированное предупреждение об eager-резолве");
+        assert!(msg.contains("t.me"), "{msg}");
+        assert!(msg.contains("web.telegram.org"), "{msg}");
+        assert_eq!(warnings.iter().filter(|w| w.contains("даже с no-resolve")).count(), 1);
+    }
+
+    /// Список целей в предупреждении ограничен, чтобы не раздувать ответ на большой пачке.
+    #[tokio::test]
+    async fn eager_warning_caps_target_list() {
+        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-eager-warn-cap-{}", uuid::Uuid::new_v4()));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let yaml = r#"
+dns:
+  enable: true
+  enhanced-mode: redir-host
+rules:
+  - "MATCH,DIRECT"
+"#;
+        let engine = from_yaml_str(yaml, &dir).await.unwrap();
+        for i in 0..12 {
+            let domain = format!("target{i}.example");
+            let resolver = resolver_with(&domain, "203.0.113.5");
+            let _ = engine.evaluate(&ctx_domain(&domain), &resolver).await;
+        }
+        let warnings = engine.warnings();
+        let msg = warnings
+            .iter()
+            .find(|w| w.contains("даже с no-resolve"))
+            .expect("должно быть агрегированное предупреждение");
+        assert!(msg.contains("target0.example"));
+        assert!(msg.contains("и ещё 2"), "{msg}");
+        assert!(!msg.contains("target11.example"), "{msg}");
     }
 }

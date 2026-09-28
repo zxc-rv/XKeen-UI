@@ -243,6 +243,20 @@ impl<'a> DomainBuilder<'a> {
     }
 }
 
+/// Строит `DomainProvider` из произвольного набора строк того же домен-синтаксиса (`+.`/`.`/`*`/
+/// точное совпадение), что и у rule-provider'ов behavior `domain`. Используется не только для
+/// провайдеров, но и для config-полей с тем же трай-форматом: `sniffer.force-domain`/`skip-domain`
+/// и `dns.fake-ip-filter` (`config/config.go::parseDomain` строит их через тот же
+/// `trie.DomainSetBuilder`, что и `rules/provider/domain_strategy.go` для rule-set'ов) — см.
+/// `mihomo.rs::build_dns_config`/`build_sniffer_config`.
+pub(crate) fn build_domain_provider<'a>(lines: impl Iterator<Item = &'a str>) -> Result<DomainProvider, String> {
+    let mut b = DomainBuilder::default();
+    for line in lines {
+        b.insert(line);
+    }
+    b.build()
+}
+
 impl DomainProvider {
     /// Возвращает исходный текст записи, под которую подпадает домен, если есть совпадение.
     /// Приоритет при нескольких подходящих паттернах (для `detail`, не для исхода Match/NoMatch —
