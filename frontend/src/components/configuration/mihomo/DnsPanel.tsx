@@ -663,8 +663,8 @@ export const DnsPanel = memo(function DnsPanel() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Включить управление DNS?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Передача управление DNS от KeeneticOS к Mihomo
+            <AlertDialogDescription className="whitespace-pre-line text-xs">
+              Обратите внимание, что после включения этой функции DNS-разрешения в роутере будет целиком зависить от Mihomo и его конфигурации. В связи с этим перед остановкой сервиса необходимо отключить "Управление DNS", иначе доступ к интернету может пропасть.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 py-2">
