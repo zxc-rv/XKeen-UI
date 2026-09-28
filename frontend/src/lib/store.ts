@@ -4,8 +4,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from './api'
 import { getStoredTheme } from './theme'
 import {
+  DEFAULT_MIHOMO_REPO,
   DEFAULT_PING_TEST_TIMEOUT,
   DEFAULT_PING_TEST_URL,
+  DEFAULT_XRAY_REPO,
   type AppAction,
   type AppSettings,
   type AppState,
@@ -26,6 +28,8 @@ const initialSettings: AppSettings = {
   autoCheckCore: true,
   backupCore: true,
   githubProxies: [],
+  xrayRepo: DEFAULT_XRAY_REPO,
+  mihomoRepo: DEFAULT_MIHOMO_REPO,
   pingTestUrl: DEFAULT_PING_TEST_URL,
   pingTestTimeout: DEFAULT_PING_TEST_TIMEOUT,
   showSourceName: false,

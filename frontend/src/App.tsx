@@ -14,7 +14,14 @@ import { useRoutersStore } from './lib/routers-store'
 import { listMihomoTakenNames, replaceMihomoProvider, replaceMihomoProxy } from './lib/mihomoReplace'
 import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
 import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
-import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type Config, type ThemeMode } from './lib/types'
+import {
+  DEFAULT_MIHOMO_REPO,
+  DEFAULT_PING_TEST_TIMEOUT,
+  DEFAULT_PING_TEST_URL,
+  DEFAULT_XRAY_REPO,
+  type Config,
+  type ThemeMode,
+} from './lib/types'
 import { parseClashApiCredentials } from './lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 
@@ -257,6 +264,8 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             autoCheckCore: data.updater.auto_check_core ?? true,
             backupCore: data.updater.backup_core,
             githubProxies: data.updater.github_proxy || [],
+            xrayRepo: data.updater.xray_repo ?? DEFAULT_XRAY_REPO,
+            mihomoRepo: data.updater.mihomo_repo ?? DEFAULT_MIHOMO_REPO,
             pingTestUrl: data.clash_api?.ping_url ?? DEFAULT_PING_TEST_URL,
             pingTestTimeout: data.clash_api?.ping_timeout ?? DEFAULT_PING_TEST_TIMEOUT,
             showSourceName: data.clash_api?.show_source_name ?? false,

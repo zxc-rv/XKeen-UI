@@ -38,19 +38,102 @@ enum DownloadResult {
     Disk(PathBuf),
 }
 
-pub fn get_repo(core: &str) -> Option<&'static str> {
-    match core {
-        "xray" => Some("XTLS/Xray-core"),
-        "mihomo" => Some("MetaCubeX/mihomo"),
-        "self" => Some("zxc-rv/XKeen-UI"),
-        _ => None,
+pub fn repo_slug(url: &str) -> String {
+    let s = url.trim().trim_end_matches('/');
+    let s = s
+        .strip_prefix("https://")
+        .or_else(|| s.strip_prefix("http://"))
+        .unwrap_or(s);
+    let s = s.strip_prefix("www.").unwrap_or(s);
+    let s = match s.find('/') {
+        Some(i) if s[..i].contains('.') => &s[i + 1..],
+        _ => s,
+    };
+    s.strip_suffix(".git").unwrap_or(s).to_string()
+}
+
+pub fn valid_repo_url(url: &str) -> bool {
+    let slug = repo_slug(url);
+    let mut parts = slug.split('/');
+    matches!(
+        (parts.next(), parts.next(), parts.next()),
+        (Some(a), Some(b), None) if !a.is_empty() && !b.is_empty()
+    )
+}
+
+pub fn get_repo(updater: &UpdaterSettings, core: &str) -> Option<String> {
+    let (url, fallback) = match core {
+        "xray" => (&updater.xray_repo, "XTLS/Xray-core"),
+        "mihomo" => (&updater.mihomo_repo, "MetaCubeX/mihomo"),
+        "self" => return Some("zxc-rv/XKeen-UI".into()),
+        _ => return None,
+    };
+    Some(if valid_repo_url(url) {
+        repo_slug(url)
+    } else {
+        fallback.into()
+    })
+}
+
+pub fn pick_asset(assets: &[String], arch: &str, ver: &str) -> Option<String> {
+    // архитектурные суффиксы: (mihomo-стиль, xray-стиль)
+    let (m, x) = match arch {
+        "aarch64" => ("arm64", "arm64-v8a"),
+        "mips" if cfg!(target_endian = "little") => ("mipsle-softfloat", "mips32le"),
+        "mips" => ("mips-softfloat", "mips32"),
+        _ => return None,
+    };
+
+    // alpha-ассеты заканчиваются хешем, а в релизе ещё .deb/.rpm/.zip/.zst
+    if ver == "Prerelease-Alpha" {
+        let alpha = format!("linux-{}-alpha", m);
+        return assets.iter().find(|a| a.ends_with(".gz") && a.contains(&alpha)).cloned();
     }
+
+    // хвосты имени ассета без названия ядра:
+    //   prizrak-core-linux-arm64-v1.19.31.gz -> linux-arm64-v1.19.31.gz
+    //   Xray-linux-arm64-v8a.zip             -> linux-arm64-v8a.zip
+    let tails = [format!("linux-{}-{}.gz", m, ver), format!("linux-{}.zip", x)];
+    assets.iter().find(|a| tails.iter().any(|t| a.ends_with(t))).cloned()
+}
+
+async fn fetch_release_assets(
+    client: &reqwest::Client, proxies: &[String], repo: &str, tag: &str,
+) -> Vec<String> {
+    let url = format!("{}/{}/releases/tags/{}", GITHUB_API, repo, tag);
+    let list = std::iter::once(url.clone()).chain(
+        proxies
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .map(|p| format!("{}/{}", p.trim_end_matches('/'), url)),
+    );
+
+    for u in list {
+        let res = match client
+            .get(&u)
+            .header("Accept", "application/vnd.github+json")
+            .timeout(Duration::from_secs(15))
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => r,
+            _ => continue,
+        };
+        if let Ok(rel) = res.json::<GhRelease>().await {
+            return rel.assets.into_iter().map(|a| a.name).collect();
+        }
+    }
+    Vec::new()
 }
 
 pub async fn fetch_latest_version(
-    client: &reqwest::Client, core: &str, proxies: &[String], current_ver: Option<&str>,
+    client: &reqwest::Client,
+    repo: &str,
+    core: &str,
+    proxies: &[String],
+    current_ver: Option<&str>,
 ) -> Option<(String, String)> {
-    let repo = get_repo(core)?;
     let url = format!("{}/{}/releases?per_page=10", GITHUB_API, repo);
     let list = std::iter::once(url.clone()).chain(
         proxies
@@ -299,7 +382,11 @@ async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path
 }
 
 pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
-    let Some(repo) = get_repo(&req.core) else {
+    let (repo, proxies) = {
+        let s = state.settings.read().unwrap();
+        (get_repo(&s.updater, &req.core), s.updater.github_proxy.clone())
+    };
+    let Some(repo) = repo else {
         return response(false, Some("Неизвестное ядро".into()));
     };
     let ver = if req.version.starts_with(|c: char| c.is_ascii_digit()) {
@@ -323,7 +410,6 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
 
     let tmp_dir = Path::new("/opt/tmp");
     _ = fs::create_dir_all(tmp_dir).await;
-    let proxies = state.settings.read().unwrap().updater.github_proxy.clone();
     let arch = std::env::consts::ARCH;
 
     if req.core == "self" {
@@ -401,49 +487,50 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         }
         return response(true, None);
     }
-    let (asset, url) = match req.core.as_str() {
-        "xray" => {
-            let x = match arch {
-                "aarch64" => "Xray-linux-arm64-v8a.zip",
-                "mips" if cfg!(target_endian = "little") => "Xray-linux-mips32le.zip",
-                "mips" => "Xray-linux-mips32.zip",
-                _ => return response(false, Some("Архитектура не поддерживается".into())),
-            };
-            (x.into(), format!("{GITHUB_RELEASE}/{repo}/releases/download/{ver}/{x}"))
-        }
-        "mihomo" => {
-            let m = match arch {
-                "aarch64" => "arm64",
-                "mips" if cfg!(target_endian = "little") => "mipsle-softfloat",
-                "mips" => "mips-softfloat",
-                _ => return response(false, Some("Архитектура не поддерживается".into())),
-            };
-            if ver == "Prerelease-Alpha" {
-                let arch_suffix = format!("mihomo-linux-{}", m);
-                let found = req
-                    .assets
-                    .into_iter()
-                    .find(|a| a.contains(&arch_suffix) && a.ends_with(".gz"));
+    let assets = if req.assets.is_empty() {
+        log("INFO", format!("Получение списка ассетов релиза {}...", ver));
+        fetch_release_assets(&state.http_client, &proxies, &repo, &ver).await
+    } else {
+        req.assets.clone()
+    };
 
-                match found {
-                    Some(name) => (
-                        name.clone(),
-                        format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, name),
-                    ),
-                    None => {
-                        return response(false, Some("Ассет не найден — обновите страницу и повторите".into()));
-                    }
-                }
-            } else {
-                let n = format!("mihomo-linux-{}-{}.gz", m, ver);
-                (
-                    n.clone(),
-                    format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, n),
-                )
+    let asset = if !assets.is_empty() {
+        match pick_asset(&assets, arch, &ver) {
+            Some(a) => a,
+            None => {
+                let msg = if matches!(arch, "aarch64" | "mips") {
+                    "Не найден ассет для этой архитектуры в релизе"
+                } else {
+                    "Архитектура не поддерживается"
+                };
+                return response(false, Some(msg.into()));
             }
         }
-        _ => return response(false, Some("Неизвестное ядро".into())),
+    } else {
+        // фолбэк: хардкод имён для стоковых репозиториев, если список ассетов получить не удалось
+        match req.core.as_str() {
+            "xray" => match arch {
+                "aarch64" => "Xray-linux-arm64-v8a.zip".to_string(),
+                "mips" if cfg!(target_endian = "little") => "Xray-linux-mips32le.zip".to_string(),
+                "mips" => "Xray-linux-mips32.zip".to_string(),
+                _ => return response(false, Some("Архитектура не поддерживается".into())),
+            },
+            "mihomo" if ver == "Prerelease-Alpha" => {
+                return response(false, Some("Ассет не найден — обновите страницу и повторите".into()));
+            }
+            "mihomo" => {
+                let m = match arch {
+                    "aarch64" => "arm64",
+                    "mips" if cfg!(target_endian = "little") => "mipsle-softfloat",
+                    "mips" => "mips-softfloat",
+                    _ => return response(false, Some("Архитектура не поддерживается".into())),
+                };
+                format!("mihomo-linux-{}-{}.gz", m, ver)
+            }
+            _ => return response(false, Some("Неизвестное ядро".into())),
+        }
     };
+    let url = format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, asset);
 
     match req.core.as_str() {
         "xray" if !Path::new("/opt/bin/jq").exists() => {
@@ -473,7 +560,34 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     fn unpack<R: Read + Seek>(rdr: R, out_path: &Path, core: &str, is_zip: bool) -> std::io::Result<()> {
         let mut out = File::create(out_path)?;
         if is_zip {
-            std::io::copy(&mut zip::ZipArchive::new(rdr)?.by_name(core)?, &mut out)?;
+            let mut archive = zip::ZipArchive::new(rdr)?;
+            let mut entry: Option<String> = None;
+            for i in 0..archive.len() {
+                if let Ok(f) = archive.by_index(i) {
+                    let base = f.name().rsplit('/').next().unwrap_or(f.name()).to_string();
+                    if !f.is_dir() && base.eq_ignore_ascii_case(core) {
+                        entry = Some(f.name().to_string());
+                        break;
+                    }
+                }
+            }
+            if entry.is_none() {
+                let mut files: Vec<String> = Vec::new();
+                for i in 0..archive.len() {
+                    if let Ok(f) = archive.by_index(i) {
+                        if !f.is_dir() {
+                            files.push(f.name().to_string());
+                        }
+                    }
+                }
+                if files.len() == 1 {
+                    entry = files.into_iter().next();
+                }
+            }
+            let name = entry.ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "бинарник ядра не найден в архиве")
+            })?;
+            std::io::copy(&mut archive.by_name(&name)?, &mut out)?;
         } else {
             std::io::copy(&mut flate2::read::GzDecoder::new(rdr), &mut out)?;
         }
@@ -554,4 +668,109 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     *state.update_checker.last_core_toast.write().unwrap() = None;
 
     response(true, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slug_from_repo_url() {
+        assert_eq!(repo_slug("https://github.com/XTLS/Xray-core"), "XTLS/Xray-core");
+        assert_eq!(repo_slug("https://github.com/MetaCubeX/mihomo/"), "MetaCubeX/mihomo");
+        assert_eq!(repo_slug("github.com/zxc-rv/XKeen-UI"), "zxc-rv/XKeen-UI");
+        assert_eq!(repo_slug("XTLS/Xray-core"), "XTLS/Xray-core");
+        assert_eq!(repo_slug("https://github.com/owner/repo.git"), "owner/repo");
+    }
+
+    #[test]
+    fn repo_url_validation() {
+        assert!(valid_repo_url("https://github.com/XTLS/Xray-core"));
+        assert!(valid_repo_url("XTLS/Xray-core"));
+        assert!(!valid_repo_url("https://github.com"));
+        assert!(!valid_repo_url(""));
+        assert!(!valid_repo_url("   "));
+    }
+
+    #[test]
+    fn repo_from_settings() {
+        let mut s = UpdaterSettings::default();
+        assert_eq!(get_repo(&s, "xray").as_deref(), Some("XTLS/Xray-core"));
+        assert_eq!(get_repo(&s, "mihomo").as_deref(), Some("MetaCubeX/mihomo"));
+        assert_eq!(get_repo(&s, "self").as_deref(), Some("zxc-rv/XKeen-UI"));
+
+        s.xray_repo = "https://github.com/someone/xray-fork".into();
+        assert_eq!(get_repo(&s, "xray").as_deref(), Some("someone/xray-fork"));
+
+        s.xray_repo = "https://github.com".into();
+        assert_eq!(get_repo(&s, "xray").as_deref(), Some("XTLS/Xray-core"));
+    }
+
+    #[test]
+    fn picks_asset_by_arch_and_version() {
+        let custom = vec![
+            "prizrak-core-linux-arm64-v1.19.31.gz".to_string(),
+            "prizrak-core-linux-arm64-compatible-v1.19.31.gz".to_string(),
+            "prizrak-core-linux-mipsle-softfloat-v1.19.31.gz".to_string(),
+            "prizrak-core-linux-mips-softfloat-v1.19.31.gz".to_string(),
+            "prizrak-core-windows-arm64-v1.19.31.gz".to_string(),
+            "prizrak-core-linux-arm64-v1.19.31.gz.sha256".to_string(),
+        ];
+        assert_eq!(
+            pick_asset(&custom, "aarch64", "v1.19.31").as_deref(),
+            Some("prizrak-core-linux-arm64-v1.19.31.gz")
+        );
+        if cfg!(target_endian = "little") {
+            assert_eq!(
+                pick_asset(&custom, "mips", "v1.19.31").as_deref(),
+                Some("prizrak-core-linux-mipsle-softfloat-v1.19.31.gz")
+            );
+        } else {
+            assert_eq!(
+                pick_asset(&custom, "mips", "v1.19.31").as_deref(),
+                Some("prizrak-core-linux-mips-softfloat-v1.19.31.gz")
+            );
+        }
+        assert_eq!(pick_asset(&custom, "x86_64", "v1.19.31"), None);
+    }
+
+    #[test]
+    fn picks_stock_assets() {
+        let xray = vec![
+            "Xray-linux-arm64-v8a.zip".to_string(),
+            "Xray-linux-64.zip".to_string(),
+            "Xray-windows-64.zip".to_string(),
+            "Xray-macos-arm64.zip".to_string(),
+            "geoip.dat".to_string(),
+            "geosite.dat".to_string(),
+        ];
+        assert_eq!(
+            pick_asset(&xray, "aarch64", "v25.9.6").as_deref(),
+            Some("Xray-linux-arm64-v8a.zip")
+        );
+
+        let mihomo = vec![
+            "mihomo-linux-arm64-v1.19.3.gz".to_string(),
+            "mihomo-linux-arm64-compatible-v1.19.3.gz".to_string(),
+            "mihomo-linux-mipsle-softfloat-v1.19.3.gz".to_string(),
+            "mihomo-linux-64-v1.19.3.gz".to_string(),
+        ];
+        assert_eq!(
+            pick_asset(&mihomo, "aarch64", "v1.19.3").as_deref(),
+            Some("mihomo-linux-arm64-v1.19.3.gz")
+        );
+
+        let alpha = vec![
+            "mihomo-linux-arm64-alpha-5a3f7c1e.deb".to_string(),
+            "mihomo-linux-arm64-alpha-5a3f7c1e.rpm".to_string(),
+            "mihomo-linux-arm64-alpha-5a3f7c1e.gz".to_string(),
+            "mihomo-linux-mipsle-softfloat-alpha-5a3f7c1e.gz".to_string(),
+        ];
+        assert_eq!(
+            pick_asset(&alpha, "aarch64", "Prerelease-Alpha").as_deref(),
+            Some("mihomo-linux-arm64-alpha-5a3f7c1e.gz")
+        );
+
+        assert_eq!(pick_asset(&["Xray-linux-64.zip".to_string()], "aarch64", "v25.9.6"), None);
+    }
 }

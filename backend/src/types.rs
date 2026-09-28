@@ -144,12 +144,16 @@ pub struct UpdaterSettings {
     pub auto_check_core: bool,
     pub backup_core: bool,
     pub github_proxy: Vec<String>,
+    pub xray_repo: String,
+    pub mihomo_repo: String,
 }
 
 impl Default for UpdaterSettings {
     fn default() -> Self {
         Self {
             github_proxy: vec!["https://gh-proxy.com".into(), "https://ghfast.top".into()],
+            xray_repo: "https://github.com/XTLS/Xray-core".into(),
+            mihomo_repo: "https://github.com/MetaCubeX/mihomo".into(),
             backup_core: true,
             auto_check_ui: true,
             auto_check_core: true,

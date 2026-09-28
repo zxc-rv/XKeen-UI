@@ -215,6 +215,62 @@ const ProxySettingsField = memo(function ProxySettingsField({
   )
 })
 
+type RepoSourceKey = 'xrayRepo' | 'mihomoRepo'
+
+const RepoSourceField = memo(function RepoSourceField({
+  repoKey,
+  label,
+  description,
+  value,
+  onSave,
+  showToast,
+}: {
+  repoKey: RepoSourceKey
+  label: string
+  description: string
+  value: string
+  onSave: (key: RepoSourceKey, url: string) => Promise<boolean>
+  showToast: (msg: string, type?: 'success' | 'error') => void
+}) {
+  const [draft, setDraft] = useState(value)
+
+  const save = useCallback(async () => {
+    let url = draft.trim().replace(/\/+$/, '')
+    if (!url) {
+      showToast('URL репозитория не может быть пустым', 'error')
+      return
+    }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+    if (url === value) {
+      setDraft(url)
+      return
+    }
+    if (await onSave(repoKey, url)) setDraft(url)
+  }, [draft, onSave, repoKey, showToast, value])
+
+  return (
+    <Field className="px-0 py-3">
+      <FieldContent>
+        <FieldLabel htmlFor={`${repoKey}-input`}>{label}</FieldLabel>
+        <FieldDescription className="text-[13px] text-wrap!">{description}</FieldDescription>
+      </FieldContent>
+      <Field orientation="horizontal" className="gap-2">
+        <InputGroup className="flex-1">
+          <InputGroupInput
+            id={`${repoKey}-input`}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void save()}
+            onBlur={() => void save()}
+            placeholder="https://github.com/owner/repo"
+            className="text-sm"
+          />
+        </InputGroup>
+      </Field>
+    </Field>
+  )
+})
+
 const PING_URL_PRESETS = [
   'www.google.com/generate_204',
   'www.youtube.com/generate_204',
@@ -531,6 +587,15 @@ export function SettingsModal() {
     [dispatch, saveSetting, settings.githubProxies]
   )
 
+  const saveRepoSource = useCallback(
+    async (key: RepoSourceKey, url: string) => {
+      const ok = await saveSetting(key === 'xrayRepo' ? 'updater.xray_repo' : 'updater.mihomo_repo', url)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { [key]: url } })
+      return ok
+    },
+    [dispatch, saveSetting]
+  )
+
   const setTimezone = useCallback(
     async (value: string) => {
       const offset = parseInt(value, 10)
@@ -801,6 +866,25 @@ export function SettingsModal() {
                       <Separator className="my-0" />
                     </Fragment>
                   ))}
+                  <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Источники</p>
+                  <RepoSourceField
+                    repoKey="xrayRepo"
+                    label="Источник Xray"
+                    description="Репозиторий GitHub, из которого скачивается и проверяется ядро Xray"
+                    value={settings.xrayRepo}
+                    onSave={saveRepoSource}
+                    showToast={showToast}
+                  />
+                  <Separator className="my-0" />
+                  <RepoSourceField
+                    repoKey="mihomoRepo"
+                    label="Источник Mihomo"
+                    description="Репозиторий GitHub, из которого скачивается и проверяется ядро Mihomo"
+                    value={settings.mihomoRepo}
+                    onSave={saveRepoSource}
+                    showToast={showToast}
+                  />
+                  <Separator className="my-0" />
                   <ProxySettingsField githubProxies={settings.githubProxies} onAddProxy={addProxy} onRemoveProxy={removeProxy} />
                 </FieldGroup>
               </TabsContent>

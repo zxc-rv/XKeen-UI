@@ -61,12 +61,14 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
     let ui_tag = state.update_checker.ui_latest_tag.read().unwrap().clone();
     let core_tag = state.update_checker.core_latest_tag.read().unwrap().clone();
 
+    let updater_settings = state.settings.read().unwrap().updater.clone();
+
     let make_link = |repo: &str, tag: Option<&str>| -> Option<String> {
         tag.map(|t| format!("{}/{}/releases/tag/{}", GITHUB_RELEASE, repo, t))
     };
 
     {
-        let link = get_repo("self").and_then(|r| make_link(r, ui_tag.as_deref()));
+        let link = get_repo(&updater_settings, "self").and_then(|r| make_link(&r, ui_tag.as_deref()));
         res.insert("xkeen-ui".into(), json!({
             "version": VERSION.trim_start_matches('v'),
             "outdated": ui,
@@ -85,8 +87,8 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 
     if current_core == "mihomo" {
         if let Some(v) = mihomo_version {
-            if let Some(repo) = get_repo("mihomo") {
-                res.insert("mihomo".into(), make_core_obj(v, repo, core_tag.as_deref()));
+            if let Some(repo) = get_repo(&updater_settings, "mihomo") {
+                res.insert("mihomo".into(), make_core_obj(v, &repo, core_tag.as_deref()));
             }
         }
         if let Some(v) = xray_version {
@@ -94,8 +96,8 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
         }
     } else {
         if let Some(v) = xray_version {
-            if let Some(repo) = get_repo("xray") {
-                res.insert("xray".into(), make_core_obj(v, repo, core_tag.as_deref()));
+            if let Some(repo) = get_repo(&updater_settings, "xray") {
+                res.insert("xray".into(), make_core_obj(v, &repo, core_tag.as_deref()));
             }
         }
         if let Some(v) = mihomo_version {
@@ -114,7 +116,7 @@ pub fn start_update_checker(state: AppState) {
         loop {
             interval.tick().await;
 
-            let (check_ui, check_core, proxies) = {
+            let (check_ui, check_core, proxies, upd) = {
                 let s = state.settings.read().unwrap();
                 let need = |on, last: &std::sync::RwLock<Option<Instant>>, sec| {
                     on && last.read().unwrap().map_or(true, |t| t.elapsed().as_secs() > sec)
@@ -123,13 +125,15 @@ pub fn start_update_checker(state: AppState) {
                     need(s.updater.auto_check_ui, &state.update_checker.last_ui_check, 14400),
                     need(s.updater.auto_check_core, &state.update_checker.last_core_check, 14400),
                     s.updater.github_proxy.clone(),
+                    s.updater.clone(),
                 )
             };
 
             if check_ui {
                 let cur = VERSION.trim_start_matches('v');
-                if let Some((latest, tag)) =
-                    updater::fetch_latest_version(&state.http_client, "self", &proxies, Some(cur)).await
+                if let Some(repo) = get_repo(&upd, "self")
+                    && let Some((latest, tag)) =
+                        updater::fetch_latest_version(&state.http_client, &repo, "self", &proxies, Some(cur)).await
                 {
                     *state.update_checker.ui_outdated.write().unwrap() = compare_versions(&latest, cur);
                     *state.update_checker.ui_latest_tag.write().unwrap() = Some(tag);
@@ -139,17 +143,20 @@ pub fn start_update_checker(state: AppState) {
 
             if check_core {
                 let core = state.core.read().unwrap().name.clone();
-                let cur_opt = get_local_core_version(&core).await;
-                let cur_str = cur_opt.as_deref().map(|v| v.trim_start_matches('v'));
-                if let Some((latest, tag)) = updater::fetch_latest_version(&state.http_client, &core, &proxies, cur_str).await
-                {
-                    if let Some(cur) = cur_str {
-                        if !cur.is_empty() {
-                            *state.update_checker.core_outdated.write().unwrap() = compare_versions(&latest, cur);
+                if let Some(repo) = get_repo(&upd, &core) {
+                    let cur_opt = get_local_core_version(&core).await;
+                    let cur_str = cur_opt.as_deref().map(|v| v.trim_start_matches('v'));
+                    if let Some((latest, tag)) =
+                        updater::fetch_latest_version(&state.http_client, &repo, &core, &proxies, cur_str).await
+                    {
+                        if let Some(cur) = cur_str {
+                            if !cur.is_empty() {
+                                *state.update_checker.core_outdated.write().unwrap() = compare_versions(&latest, cur);
+                            }
                         }
+                        *state.update_checker.core_latest_tag.write().unwrap() = Some(tag);
+                        *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
                     }
-                    *state.update_checker.core_latest_tag.write().unwrap() = Some(tag);
-                    *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
                 }
             }
         }

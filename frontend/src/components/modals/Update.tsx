@@ -13,7 +13,7 @@ import remarkGfm from 'remark-gfm'
 import { apiCall, capitalize } from '../../lib/api'
 import { useAppContext, useModalContext, useSettings } from '../../lib/store'
 import type { Release } from '../../lib/types'
-import { cn } from '../../lib/utils'
+import { cn, repoSlug } from '../../lib/utils'
 
 const GITHUB_API = 'https://api.github.com/repos'
 const JSDELIVR_API = 'https://data.jsdelivr.com/v1/package/gh'
@@ -52,6 +52,8 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
   const { modals } = useModalContext()
   const backupCore = useSettings((s) => s.backupCore)
   const githubProxies = useSettings((s) => s.githubProxies)
+  const xrayRepo = useSettings((s) => s.xrayRepo)
+  const mihomoRepo = useSettings((s) => s.mihomoRepo)
   const { updateModalCore } = modals
   const [releases, setReleases] = useState<Release[]>([])
   const [selectedVersion, setSelectedVersion] = useState('')
@@ -61,12 +63,20 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
   const [installing, setInstalling] = useState(false)
 
   const coreLabel = updateModalCore === 'self' ? 'XKeen UI' : capitalize(updateModalCore)
+  const repo =
+    updateModalCore === 'self'
+      ? CORE_REPOS.self
+      : updateModalCore === 'xray'
+        ? repoSlug(xrayRepo) || CORE_REPOS.xray
+        : updateModalCore === 'mihomo'
+          ? repoSlug(mihomoRepo) || CORE_REPOS.mihomo
+          : ''
   const close = () => dispatch({ type: 'SHOW_MODAL', modal: 'showUpdateModal', show: false })
 
   useEffect(() => {
     if (modals.showUpdateModal) fetchReleases()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modals.showUpdateModal, updateModalCore])
+  }, [modals.showUpdateModal, updateModalCore, repo])
 
   async function fetchReleases() {
     setLoading(true)
@@ -75,7 +85,6 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
     setReleases([])
     setSource('')
     try {
-      const repo = CORE_REPOS[updateModalCore as keyof typeof CORE_REPOS]
       if (!repo) throw new Error('UNKNOWN_CORE')
 
       const ghUrl = `${GITHUB_API}/${repo}/releases?per_page=10`
@@ -166,7 +175,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
           core: updateModalCore,
           version: selectedVersion,
           backup_core: backupCore,
-          ...(selectedVersion === 'Prerelease-Alpha' && { assets: selectedRelease?.assets ?? [] }),
+          assets: selectedRelease?.assets ?? [],
         }),
       })
       const data = await res.json()
@@ -210,6 +219,11 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
               <div>
                 Выберите версию для установки
                 <span className="flex items-center gap-1.5">
+                  {repo && (
+                    <Badge variant="outline" className="h-5 rounded-full border-ring/40 bg-muted/50 px-2 text-xs font-medium">
+                      {repo}
+                    </Badge>
+                  )}
                   {!loading && source && (
                     <Badge
                       variant="outline"

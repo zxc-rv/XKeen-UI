@@ -1,5 +1,7 @@
 export const DEFAULT_PING_TEST_URL = 'https://www.gstatic.com/generate_204'
 export const DEFAULT_PING_TEST_TIMEOUT = 5000
+export const DEFAULT_XRAY_REPO = 'https://github.com/XTLS/Xray-core'
+export const DEFAULT_MIHOMO_REPO = 'https://github.com/MetaCubeX/mihomo'
 
 export type ThemeMode = 'light' | 'dark' | 'auto'
 
@@ -23,6 +25,8 @@ export interface AppSettings {
   autoCheckCore: boolean
   backupCore: boolean
   githubProxies: string[]
+  xrayRepo: string
+  mihomoRepo: string
   pingTestUrl: string
   pingTestTimeout: number
   showSourceName: boolean

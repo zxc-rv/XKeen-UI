@@ -5,6 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function repoSlug(url: string): string {
+  let s = url.trim().replace(/\/+$/, '')
+  s = s.replace(/^https?:\/\//i, '').replace(/^www\./i, '')
+  const i = s.indexOf('/')
+  if (i > 0 && s.slice(0, i).includes('.')) s = s.slice(i + 1)
+  return s.replace(/\.git$/i, '')
+}
+
 export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator?.clipboard?.writeText) {
