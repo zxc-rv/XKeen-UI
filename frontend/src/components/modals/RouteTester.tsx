@@ -441,7 +441,11 @@ export function RouteTesterModal() {
             Проверка маршрута
           </DialogTitle>
           <DialogDescription>
-            {loadingInit ? 'Загрузка данных ядра...' : core ? `Активное ядро: ${capitalize(core)}` : 'Не удалось определить активное ядро'}
+            {loadingInit ? 'Загрузка данных ядра...' : core ? (
+              <>
+                Активное ядро: <span className="font-semibold text-chart-2">{capitalize(core)}</span>
+              </>
+            ) : 'Не удалось определить активное ядро'}
           </DialogDescription>
         </DialogHeader>
 
@@ -456,7 +460,7 @@ export function RouteTesterModal() {
                   if (canRun) run()
                 }
               }}
-              placeholder={'Цель на строку, например:\nyoutube.com\n1.1.1.1\nhttps://example.com:8443/path'}
+              placeholder={'По одному адресу на строку, например:\nyoutube.com\n1.1.1.1\nwww.google.com'}
               aria-label="Список целей для проверки маршрута"
               className="min-h-24 max-h-72 resize-y text-[13px]!"
             />
@@ -510,11 +514,11 @@ export function RouteTesterModal() {
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="text-muted-foreground text-xs tracking-wide">Сеть</span>
-              <ButtonGroup>
-                <Button type="button" variant={network === 'tcp' ? 'default' : 'outline'} size="sm" onClick={() => setNetwork('tcp')}>
+              <ButtonGroup >
+                <Button type="button" variant={network === 'tcp' ? 'default' : 'outline'} onClick={() => setNetwork('tcp')}>
                   TCP
                 </Button>
-                <Button type="button" variant={network === 'udp' ? 'default' : 'outline'} size="sm" onClick={() => setNetwork('udp')}>
+                <Button type="button" variant={network === 'udp' ? 'default' : 'outline'} onClick={() => setNetwork('udp')}>
                   UDP
                 </Button>
               </ButtonGroup>
@@ -527,8 +531,8 @@ export function RouteTesterModal() {
                 id="route-test-source-ip"
                 value={sourceIp}
                 onChange={(e) => setSourceIp(e.target.value)}
-                placeholder="192.168.1.5"
-                className={cn('h-9', !sourceIpValid && 'border-destructive')}
+                placeholder="192.168.1.2"
+                className={cn(!sourceIpValid && 'border-destructive')}
               />
             </div>
             {core === 'xray' && (

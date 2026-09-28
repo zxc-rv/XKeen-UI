@@ -386,7 +386,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
             }}
           >
             <SelectTrigger className="min-w-0 flex-1 text-sm" aria-label="Хост">
-              <SelectValue />
+              {custom ? <span className="text-muted-foreground">Свой URL...</span> : <SelectValue />}
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
@@ -395,7 +395,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
                     {item}
                   </SelectItem>
                 ))}
-                <SelectItem value={PING_URL_CUSTOM} className="text-sm">
+                <SelectItem value={PING_URL_CUSTOM} className="text-muted-foreground text-sm">
                   Свой URL...
                 </SelectItem>
               </SelectGroup>

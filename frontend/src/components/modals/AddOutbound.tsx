@@ -107,8 +107,8 @@ function FlagPicker({ value, onAdd }: { value: string; onAdd: (next: string) => 
   const search = query.trim().toLowerCase()
   const visibleFlags = search
     ? FLAG_OPTIONS.filter(
-        (flag) => flag.label.toLowerCase().includes(search) || flag.en.toLowerCase().includes(search)
-      )
+      (flag) => flag.label.toLowerCase().includes(search) || flag.en.toLowerCase().includes(search)
+    )
     : FLAG_OPTIONS
 
   function toggleFlag(flag: string) {
@@ -735,7 +735,7 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
                             />
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div className="grid gap-1.5">
                               <Label className="text-xs">
                                 Client Fingerprint<span className="text-destructive"> *</span>
@@ -886,7 +886,7 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
                                 }
                               }}>
                                 <SelectTrigger size="sm" className="h-8 w-full text-xs">
-                                  {isCustomUA ? <span className="text-xs text-muted-foreground">Свой...</span> : <SelectValue />}
+                                  {isCustomUA ? <span className="text-xs text-muted-foreground">Свой User-Agent...</span> : <SelectValue />}
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectGroup>
@@ -896,7 +896,7 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
                                       </SelectItem>
                                     ))}
                                     <SelectItem value="__custom__">
-                                      <span className="text-xs text-muted-foreground">Свой...</span>
+                                      <span className="text-xs text-muted-foreground">Свой User-Agent...</span>
                                     </SelectItem>
                                   </SelectGroup>
                                 </SelectContent>
