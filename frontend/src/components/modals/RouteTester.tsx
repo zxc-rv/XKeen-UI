@@ -458,7 +458,7 @@ export function RouteTesterModal() {
               }}
               placeholder={'Цель на строку, например:\nyoutube.com\n1.1.1.1\nhttps://example.com:8443/path'}
               aria-label="Список целей для проверки маршрута"
-              className="min-h-24 resize-y text-[13px]!"
+              className="min-h-24 max-h-72 resize-y text-[13px]!"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className={cn('text-muted-foreground text-xs', overLimit && 'text-destructive')}>
@@ -468,7 +468,7 @@ export function RouteTesterModal() {
               <div>
                 <input ref={fileInputRef} type="file" accept=".txt,.list,.csv,text/plain" className="hidden" onChange={handleFilePick} />
                 <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                  <IconFileUpload data-icon="inline-start" className="size-3.5" /> Загрузить .txt
+                  <IconFileUpload data-icon="inline-start" /> Загрузить .txt
                 </Button>
               </div>
             </div>
