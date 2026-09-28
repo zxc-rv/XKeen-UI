@@ -1,15 +1,15 @@
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { IconAlertTriangle, IconArrowRight, IconChevronDown, IconFileUpload, IconRoute, IconX } from '@tabler/icons-react'
+import { IconAlertTriangle, IconArrowRight, IconChevronDown, IconChevronUp, IconFileUpload, IconRoute, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall, buildClashHeaders, capitalize, clashFetch } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
@@ -71,7 +71,6 @@ interface ProxyLite {
 
 const MAX_TARGETS = 500
 const NO_INBOUND = '__none__'
-const KIND_LABELS: Record<string, string> = { domain: 'домен', ip: 'ip' }
 const DNS_SOURCE_LABELS: Record<string, string> = { mihomo: 'mihomo', doh: 'DoH' }
 
 const IPV4_REGEX = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
@@ -95,7 +94,7 @@ function resolveProxyChain(proxies: Record<string, ProxyLite | undefined>, name:
   const chain = [name]
   const visited = new Set([name])
   let current = name
-  for (;;) {
+  for (; ;) {
     const info = proxies[current]
     if (!info?.now || visited.has(info.now)) break
     chain.push(info.now)
@@ -122,11 +121,8 @@ function ResultRow({
     <div className="border-border bg-card rounded-lg border p-3 text-[13px]">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="truncate" title={result.target}>
+          <span className="truncate text-sm font-medium tracking-wider" title={result.target}>
             {result.target}
-          </span>
-          <span className="text-muted-foreground shrink-0 text-[11px] tracking-wide uppercase">
-            {KIND_LABELS[result.kind] ?? result.kind}
           </span>
         </div>
         <Badge
@@ -220,7 +216,6 @@ export function RouteTesterModal() {
   const [network, setNetwork] = useState<Network>('tcp')
   const [sourceIp, setSourceIp] = useState('')
   const [inboundTag, setInboundTag] = useState(NO_INBOUND)
-  const [advancedOpen, setAdvancedOpen] = useState('')
 
   const [running, setRunning] = useState(false)
   const [results, setResults] = useState<RouteTestResult[] | null>(null)
@@ -283,6 +278,11 @@ export function RouteTesterModal() {
   const overLimit = targets.length > MAX_TARGETS
   const portNum = Number(port)
   const portValid = Number.isInteger(portNum) && portNum >= 1 && portNum <= 65535
+
+  function bumpPort(delta: number) {
+    const base = Number.isFinite(portNum) ? Math.trunc(portNum) : 1
+    setPort(String(Math.min(65535, Math.max(1, base + delta))))
+  }
   const sourceIpTrimmed = sourceIp.trim()
   const sourceIpValid = !sourceIpTrimmed || isValidIp(sourceIpTrimmed)
   const canRun = targets.length > 0 && !overLimit && portValid && sourceIpValid && !running
@@ -369,26 +369,26 @@ export function RouteTesterModal() {
     const uniqueOutbounds = Array.from(new Set(results.filter((r) => r.outbound).map((r) => r.outbound as string)))
     if (uniqueOutbounds.length === 0) return
     let cancelled = false
-    ;(async () => {
-      let data: { proxies?: Record<string, ProxyLite> } | null = null
-      try {
-        data = await clashFetch<{ proxies?: Record<string, ProxyLite> }>(clashApiPort ?? '', 'proxies', {
-          secret: clashApiSecret,
-          unix: clashApiUnix ?? null,
-          retry: false,
-        })
-      } catch {
-        data = null
-      }
-      if (cancelled) return
-      const proxies = data?.proxies ?? {}
-      const next: Record<string, string[]> = {}
-      for (const name of uniqueOutbounds) {
-        const chain = resolveProxyChain(proxies, name)
-        if (chain.length > 1) next[name] = chain
-      }
-      setChains(next)
-    })()
+      ; (async () => {
+        let data: { proxies?: Record<string, ProxyLite> } | null = null
+        try {
+          data = await clashFetch<{ proxies?: Record<string, ProxyLite> }>(clashApiPort ?? '', 'proxies', {
+            secret: clashApiSecret,
+            unix: clashApiUnix ?? null,
+            retry: false,
+          })
+        } catch {
+          data = null
+        }
+        if (cancelled) return
+        const proxies = data?.proxies ?? {}
+        const next: Record<string, string[]> = {}
+        for (const name of uniqueOutbounds) {
+          const chain = resolveProxyChain(proxies, name)
+          if (chain.length > 1) next[name] = chain
+        }
+        setChains(next)
+      })()
     return () => {
       cancelled = true
     }
@@ -479,15 +479,34 @@ export function RouteTesterModal() {
               <Label htmlFor="route-test-port" className="text-muted-foreground text-xs tracking-wide">
                 Порт
               </Label>
-              <Input
-                id="route-test-port"
-                type="number"
-                min={1}
-                max={65535}
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-                className={cn('h-9 w-24', !portValid && 'border-destructive')}
-              />
+              <InputGroup className={cn('h-9 w-24', !portValid && 'border-destructive')}>
+                <InputGroupInput
+                  id="route-test-port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  inputMode="numeric"
+                  className="text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  value={port}
+                  onChange={(e) => setPort(e.target.value)}
+                />
+                <InputGroupAddon align="inline-end" className="flex flex-col gap-0">
+                  <InputGroupButton
+                    aria-label="Увеличить порт"
+                    className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+                    onClick={() => bumpPort(1)}
+                  >
+                    <IconChevronUp />
+                  </InputGroupButton>
+                  <InputGroupButton
+                    aria-label="Уменьшить порт"
+                    className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+                    onClick={() => bumpPort(-1)}
+                  >
+                    <IconChevronDown />
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="text-muted-foreground text-xs tracking-wide">Сеть</span>
@@ -500,53 +519,43 @@ export function RouteTesterModal() {
                 </Button>
               </ButtonGroup>
             </div>
+            <div className="flex min-w-40 flex-1 flex-col gap-1.5">
+              <Label htmlFor="route-test-source-ip" className="text-muted-foreground text-xs tracking-wide">
+                IP источника (необязательно)
+              </Label>
+              <Input
+                id="route-test-source-ip"
+                value={sourceIp}
+                onChange={(e) => setSourceIp(e.target.value)}
+                placeholder="192.168.1.5"
+                className={cn('h-9', !sourceIpValid && 'border-destructive')}
+              />
+            </div>
+            {core === 'xray' && (
+              <div className="flex min-w-40 flex-1 flex-col gap-1.5">
+                <Label className="text-muted-foreground text-xs tracking-wide">Inbound</Label>
+                <Select
+                  value={inboundTag}
+                  items={{ [NO_INBOUND]: '— не задан —', ...Object.fromEntries(inboundTags.map((tag) => [tag, tag])) }}
+                  onValueChange={setInboundTag}
+                >
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value={NO_INBOUND}>— не задан —</SelectItem>
+                      {inboundTags.map((tag) => (
+                        <SelectItem key={tag} value={tag}>
+                          {tag}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
-
-          <Accordion type="single" collapsible value={advancedOpen} onValueChange={setAdvancedOpen}>
-            <AccordionItem value="advanced" className="border-none">
-              <AccordionTrigger className="py-2 text-xs font-medium hover:no-underline">Дополнительно</AccordionTrigger>
-              <AccordionContent className="flex flex-col gap-3 pt-1 pb-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="route-test-source-ip" className="text-muted-foreground text-xs tracking-wide">
-                    IP источника (необязательно)
-                  </Label>
-                  <Input
-                    id="route-test-source-ip"
-                    value={sourceIp}
-                    onChange={(e) => setSourceIp(e.target.value)}
-                    placeholder="192.168.1.5"
-                    className={cn('h-9', !sourceIpValid && 'border-destructive')}
-                  />
-                  {!sourceIpValid && <span className="text-destructive text-xs">Некорректный IP-адрес</span>}
-                </div>
-
-                {core === 'xray' && (
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-muted-foreground text-xs tracking-wide">Inbound</Label>
-                    <Select
-                      value={inboundTag}
-                      items={{ [NO_INBOUND]: '— не задан —', ...Object.fromEntries(inboundTags.map((tag) => [tag, tag])) }}
-                      onValueChange={setInboundTag}
-                    >
-                      <SelectTrigger className="w-full text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value={NO_INBOUND}>— не задан —</SelectItem>
-                          {inboundTags.map((tag) => (
-                            <SelectItem key={tag} value={tag}>
-                              {tag}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
 
           <div className="flex items-center gap-2">
             <Button onClick={run} disabled={!canRun} className="h-9 flex-1">
@@ -574,8 +583,8 @@ export function RouteTesterModal() {
                 <AlertTitle className="text-xs">Предупреждения</AlertTitle>
                 <AlertDescription className="text-xs">
                   <ul className="list-disc space-y-0.5 pl-4">
-                    {warnings.map((w, i) => (
-                      <li key={i}>{w}</li>
+                    {warnings.map((warning, index) => (
+                      <li key={index}>{warning}</li>
                     ))}
                   </ul>
                 </AlertDescription>

@@ -1319,10 +1319,6 @@ pub struct Engine {
     dns: Box<DnsConfig>,
     sniffer: Box<SnifferConfig>,
     warnings: Mutex<Vec<String>>,
-    /// Домены, для которых сработала eager-семантика (см. `Engine::evaluate`) — копятся отдельно
-    /// от `warnings`, чтобы собрать одно предупреждение со списком целей (см. `warnings()`), а не
-    /// одинаковую строку без разбора, к каким целям она относится.
-    eager_targets: Mutex<Vec<String>>,
 }
 
 async fn find_geo_file(dir: &Path, candidates: &[&str]) -> Option<PathBuf> {
@@ -1370,7 +1366,6 @@ async fn build_engine(doc: &Yaml, base_dir: &Path) -> Result<Engine, String> {
         dns,
         sniffer,
         warnings: Mutex::new(config_warnings),
-        eager_targets: Mutex::new(Vec::new()),
     })
 }
 
@@ -1473,14 +1468,6 @@ impl Engine {
                     eval.resolved_ip = None;
                     eval.resolved_ips_all.clear();
                     eval.dns_source = None;
-                } else {
-                    // Копится по целям, а не сразу как готовая строка — единое предупреждение со
-                    // списком целей формируется в `warnings()` (см. поле `eager_targets`), чтобы в
-                    // пачке из нескольких целей было видно, для каких именно оно сработало.
-                    let mut targets = self.eager_targets.lock().unwrap();
-                    if !targets.iter().any(|t| t == domain) {
-                        targets.push(domain.to_string());
-                    }
                 }
             }
         }
@@ -1533,27 +1520,7 @@ impl Engine {
 
     /// Предупреждения, накопленные при загрузке/вычислении (напр. отсутствующие geo-файлы).
     pub fn warnings(&self) -> Vec<String> {
-        let mut out = self.warnings.lock().unwrap().clone();
-        let eager = self.eager_targets.lock().unwrap();
-        if !eager.is_empty() {
-            const SHOWN: usize = 10;
-            let mut msg = format!(
-                "DNS-режим отдаёт настоящий IP до сопоставления правил (redir-host, dns выключен, \
-                 домен исключён из fake-ip-filter, либо сниффер не перезапускается поверх уже \
-                 известного домена) — IP-правила видят его даже с no-resolve: {}",
-                eager
-                    .iter()
-                    .take(SHOWN)
-                    .map(String::as_str)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            if eager.len() > SHOWN {
-                msg.push_str(&format!(", и ещё {}", eager.len() - SHOWN));
-            }
-            out.push(msg);
-        }
-        out
+        self.warnings.lock().unwrap().clone()
     }
 }
 
@@ -2949,68 +2916,5 @@ rules:
             "должно быть предупреждение о пропущенной RULE-SET,bad@ipcidr строке: {:?}",
             engine.warnings()
         );
-    }
-
-    /// Агрегированное предупреждение об eager-резолве должно перечислять затронутые цели одной
-    /// строкой (а не быть неразличимой одинаковой строкой для всех целей в пачке).
-    #[tokio::test]
-    async fn eager_warning_lists_affected_targets() {
-        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-eager-warn-{}", uuid::Uuid::new_v4()));
-        tokio::fs::create_dir_all(&dir).await.unwrap();
-        let yaml = r#"
-dns:
-  enable: true
-  enhanced-mode: redir-host
-rules:
-  - "MATCH,DIRECT"
-"#;
-        let engine = from_yaml_str(yaml, &dir).await.unwrap();
-        let resolver = resolver_with("t.me", "149.154.167.99");
-        let _ = engine.evaluate(&ctx_domain("t.me"), &resolver).await;
-        let _ = engine
-            .evaluate(
-                &ctx_domain("web.telegram.org"),
-                &resolver_with("web.telegram.org", "149.154.167.99"),
-            )
-            .await;
-        // Один и тот же домен второй раз -> не должен задублироваться в списке.
-        let _ = engine.evaluate(&ctx_domain("t.me"), &resolver).await;
-
-        let warnings = engine.warnings();
-        let msg = warnings
-            .iter()
-            .find(|w| w.contains("даже с no-resolve"))
-            .expect("должно быть агрегированное предупреждение об eager-резолве");
-        assert!(msg.contains("t.me"), "{msg}");
-        assert!(msg.contains("web.telegram.org"), "{msg}");
-        assert_eq!(warnings.iter().filter(|w| w.contains("даже с no-resolve")).count(), 1);
-    }
-
-    /// Список целей в предупреждении ограничен, чтобы не раздувать ответ на большой пачке.
-    #[tokio::test]
-    async fn eager_warning_caps_target_list() {
-        let dir = std::env::temp_dir().join(format!("route-tester-mihomo-eager-warn-cap-{}", uuid::Uuid::new_v4()));
-        tokio::fs::create_dir_all(&dir).await.unwrap();
-        let yaml = r#"
-dns:
-  enable: true
-  enhanced-mode: redir-host
-rules:
-  - "MATCH,DIRECT"
-"#;
-        let engine = from_yaml_str(yaml, &dir).await.unwrap();
-        for i in 0..12 {
-            let domain = format!("target{i}.example");
-            let resolver = resolver_with(&domain, "203.0.113.5");
-            let _ = engine.evaluate(&ctx_domain(&domain), &resolver).await;
-        }
-        let warnings = engine.warnings();
-        let msg = warnings
-            .iter()
-            .find(|w| w.contains("даже с no-resolve"))
-            .expect("должно быть агрегированное предупреждение");
-        assert!(msg.contains("target0.example"));
-        assert!(msg.contains("и ещё 2"), "{msg}");
-        assert!(!msg.contains("target11.example"), "{msg}");
     }
 }
