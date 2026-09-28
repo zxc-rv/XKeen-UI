@@ -35,6 +35,43 @@
 //!
 //!   Порядок файлов — сортировка по имени (`os.ReadDir`/`main/run.go:readConfDir` отдают файлы уже
 //!   отсортированными; наш `read_dir` + `sort_by_key(file_name)` даёт тот же порядок для ASCII-имён).
+//! - `sniffing`/`routeOnly` на выбранном (по `inboundTag` запроса) inbound'е: правила видят не то,
+//!   что ввёл пользователь тестера, а то, во что превратился `ob.Target`/`ob.RouteTarget`
+//!   (`common/session`) после (не)сработавшего sniffing-оверрайда в `app/dispatcher/default.go`
+//!   (`Dispatch`/`DispatchLink`, `shouldOverride`), прочитанные в `features/routing/session/context.go`
+//!   (`GetTargetDomain`: сперва `RouteTarget`, потом `Target`; `GetTargetIPs`: **только** `Target`,
+//!   `RouteTarget` не смотрит) и в `features/routing/dns/context.go`
+//!   (`ResolvableContext.GetTargetIPs`, только под `IpOnDemand`: сперва пытается резолвить именно
+//!   `GetTargetDomain()`, и лишь при ошибке DNS откатывается на `ctx.Context.GetTargetIPs()`).
+//!   Моделируем это только для "прозрачных" протоколов без домена в самом протоколе —
+//!   `dokodemo-door`/`tunnel`/`tun` (`infra/conf/xray.go::inboundConfigLoader`): у них исходный
+//!   `ob.Target` — IP, который клиент/ОС уже знали, домен целиком зависит от sniffing. Для
+//!   остальных протоколов (vmess/vless/trojan/socks/http/…) домен обычно приходит из самого
+//!   протокола, `ob.Target` = домен с самого начала — оставляем текущее (без sniffing) поведение.
+//!   Для выбранного "прозрачного" inbound'а с целью-доменом:
+//!   - `sniffing.enabled == false`, ИЛИ `destOverride` пуст (`shouldOverride`:
+//!     `for _, p := range request.OverrideDestinationForProtocol` — пустой список не даёт `true`
+//!     никогда), ИЛИ `metadataOnly == true` (`app/dispatcher/sniffer.go::NewSniffer`:
+//!     `metadataSniffer` стоит только у fakedns-сниффера — HTTP/TLS/QUIC/BitTorrent туда не входят,
+//!     при `metadataOnly` домен из реального трафика не сниффится в принципе), ИЛИ домен подпадает
+//!     под `sniffing.domainsExcluded` (тот же матчер и тот же дефолт `Domain_Substr`, что и у
+//!     `domain`-условий правил — `infra/conf/xray.go::SniffingConfig.Build` зовёт ту же
+//!     `geodata.ParseDomainRules`) — override не срабатывает: `ob.Target` остаётся IP, `RouteTarget`
+//!     невалиден, `GetTargetDomain()` = `""` ⇒ домен-условия детерминированно `NoMatch`, а
+//!     `ip`-условия видят IP сразу, независимо от `domainStrategy` (`pickRouteInternal` пропускает
+//!     второй проход `IpIfNonMatch` при пустом `GetTargetDomain()`).
+//!   - override срабатывает и `routeOnly == false`: sniffed-домен становится самим `ob.Target` —
+//!     это ровно текущее (не тронутое) поведение, `domainStrategy` работает как раньше.
+//!   - override срабатывает и `routeOnly == true`: `RouteTarget` = sniffed-домен, `Target` остаётся
+//!     исходным IP — домен виден (через `RouteTarget`), IP виден сразу же, независимо от
+//!     `domainStrategy`. Под `IpOnDemand` реальный xray резолвил бы именно sniffed-домен
+//!     (`ResolvableContext.GetTargetIPs` сперва смотрит на домен), а не готовый IP клиента — но
+//!     тестеру взять "уже известный IP клиента" неоткуда, поэтому IP получаем одинаково во всех этих
+//!     под-случаях: через резолвер тестера по введённому домену, один раз в начале прохода, без
+//!     второго прохода `IpIfNonMatch`.
+//!
+//!   `ipsExcluded` не моделируем — проверяется по адресу до оверрайда, а у тестера его не существует,
+//!   когда цель — домен.
 
 use super::cidr::Cidr;
 use super::dns::{DnsSource, Resolver};
@@ -254,6 +291,26 @@ struct RawOutbound {
 struct RawInbound {
     #[serde(default)]
     tag: String,
+    #[serde(default)]
+    protocol: String,
+    #[serde(default)]
+    sniffing: Option<RawSniffingConfig>,
+}
+
+/// `infra/conf/xray.go::SniffingConfig` — только поля, нужные тестеру (`ipsExcluded` не моделируем,
+/// см. блок-комментарий модуля).
+#[derive(Deserialize, Default, Clone)]
+struct RawSniffingConfig {
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default, rename = "destOverride")]
+    dest_override: StringList,
+    #[serde(default, rename = "domainsExcluded")]
+    domains_excluded: StringList,
+    #[serde(default, rename = "metadataOnly")]
+    metadata_only: bool,
+    #[serde(default, rename = "routeOnly")]
+    route_only: bool,
 }
 
 #[derive(Deserialize, Default, Clone)]
@@ -405,6 +462,23 @@ struct CompiledRule {
     inbound_tag: Option<Vec<String>>,
     unsupported: Vec<String>,
     summary: String,
+}
+
+/// `infra/conf/xray.go::inboundConfigLoader`: единственные протоколы без домена в самом протоколе —
+/// клиент/ОС отдают только IP, домен целиком зависит от sniffing (см. блок-комментарий модуля).
+const TRANSPARENT_PROTOCOLS: &[&str] = &["dokodemo-door", "tunnel", "tun"];
+
+/// Что нужно от `inbound.sniffing` тестеру: остальные поля (`ipsExcluded`) не моделируем.
+struct InboundInfo {
+    is_transparent: bool,
+    sniffing_enabled: bool,
+    metadata_only: bool,
+    /// Только "список непуст" — конкретный состав `destOverride` (`http`/`tls`/`quic`/`fakedns`,
+    /// и связанный с `fakedns` особый случай `routeOnly`) намеренно не моделируется: тестер не
+    /// знает, каким протоколом реально шёл бы синтетический трафик до цели.
+    dest_override_present: bool,
+    route_only: bool,
+    domains_excluded: Vec<DomainItem>,
 }
 
 fn resolve_asset_path(asset_dir: &Path, file: &str) -> PathBuf {
@@ -1026,7 +1100,8 @@ fn apply_resolution(result: &mut RouteResult, resolved: Option<(&[IpAddr], DnsSo
 /// рабочий поток tokio-рантайма замороженным (сам `geodb.rs` остаётся синхронным и без tokio-знания,
 /// т.к. его сигнатуры общие с mihomo — обёртка тут, на вызывающей стороне).
 async fn evaluate_rule<R: Resolver>(
-    rule: &CompiledRule, ctx: &TestContext, lazy_ips: &LazyIps<'_, R>, warn: &mut (dyn FnMut(String) + Send),
+    rule: &CompiledRule, ctx: &TestContext, lazy_ips: &LazyIps<'_, R>, domain_visible: bool,
+    warn: &mut (dyn FnMut(String) + Send),
 ) -> FieldOutcome {
     let mut detail = None;
     let mut unknown: Option<String> = None;
@@ -1046,6 +1121,11 @@ async fn evaluate_rule<R: Resolver>(
         };
     }
     if let Some(items) = &rule.domain {
+        // `GetTargetDomain()` вернула бы "" — sniffing не сработал (см. `Engine::sniff_view`
+        // и блок-комментарий модуля), домен-условие детерминированно не совпадает.
+        if !domain_visible {
+            return FieldOutcome::NoMatch;
+        }
         step!(tokio::task::block_in_place(|| eval_domain(items, &ctx.target, warn)));
     }
     if let Some(items) = &rule.ip {
@@ -1112,6 +1192,9 @@ pub struct Engine {
     /// конфига (теги outbound'ов и селекторы уже все известны), не на каждый `evaluate()`.
     balancer_members: std::collections::HashMap<String, Vec<String>>,
     rules: Vec<CompiledRule>,
+    /// Тег inbound'а → то, что нужно знать о его `sniffing` для эмуляции `routeOnly` (см.
+    /// блок-комментарий модуля). Только для тегов, реально присутствующих в мерже.
+    inbound_info: std::collections::HashMap<String, InboundInfo>,
     load_warnings: Vec<String>,
     runtime_warnings: Mutex<Vec<String>>,
 }
@@ -1153,6 +1236,41 @@ impl Engine {
             if !ib.tag.is_empty() && seen.insert(ib.tag.clone()) {
                 inbound_tags_list.push(ib.tag.clone());
             }
+        }
+
+        // `override_config` уже мержит `inbounds` по тегу (один тег — одна запись после всех
+        // файлов), поэтому здесь достаточно один раз собрать `sniffing` для каждого тега.
+        let mut inbound_info = std::collections::HashMap::new();
+        for ib in &merged.inbounds {
+            if ib.tag.is_empty() {
+                continue;
+            }
+            let is_transparent = TRANSPARENT_PROTOCOLS.contains(&ib.protocol.to_lowercase().as_str());
+            let sniff = ib.sniffing.clone().unwrap_or_default();
+            let domains_excluded = match sniff
+                .domains_excluded
+                .0
+                .iter()
+                .map(|s| parse_domain_item(s, asset_dir))
+                .collect::<Result<Vec<_>, _>>()
+            {
+                Ok(items) => items,
+                Err(e) => {
+                    warnings.push(format!("inbound {}: sniffing.domainsExcluded: {e}", ib.tag));
+                    Vec::new()
+                }
+            };
+            inbound_info.insert(
+                ib.tag.clone(),
+                InboundInfo {
+                    is_transparent,
+                    sniffing_enabled: sniff.enabled,
+                    metadata_only: sniff.metadata_only,
+                    dest_override_present: !sniff.dest_override.0.is_empty(),
+                    route_only: sniff.route_only,
+                    domains_excluded,
+                },
+            );
         }
 
         let routing = merged.routing.unwrap_or_default();
@@ -1205,6 +1323,7 @@ impl Engine {
             domain_strategy,
             balancer_members,
             rules,
+            inbound_info,
             load_warnings: warnings,
             runtime_warnings: Mutex::new(Vec::new()),
         }
@@ -1218,12 +1337,12 @@ impl Engine {
     }
 
     async fn find_match<R: Resolver>(
-        &self, ctx: &TestContext, lazy_ips: &LazyIps<'_, R>, skipped: &mut Vec<SkippedRule>,
+        &self, ctx: &TestContext, lazy_ips: &LazyIps<'_, R>, domain_visible: bool, skipped: &mut Vec<SkippedRule>,
     ) -> Option<(&CompiledRule, Option<String>)> {
         for rule in &self.rules {
             let warn = |msg: String| self.push_runtime_warning(msg);
             let mut warn_boxed = warn;
-            match evaluate_rule(rule, ctx, lazy_ips, &mut warn_boxed).await {
+            match evaluate_rule(rule, ctx, lazy_ips, domain_visible, &mut warn_boxed).await {
                 FieldOutcome::Match(detail) => return Some((rule, detail)),
                 FieldOutcome::Unknown(reason) => {
                     skipped.push(SkippedRule {
@@ -1238,6 +1357,42 @@ impl Engine {
         None
     }
 
+    /// `(domain_visible, force_ip_known)` для выбранного по `ctx.inbound_tag` inbound'а — см.
+    /// блок-комментарий модуля. Вне "прозрачной" тройки протоколов, без выбранного inbound'а, или
+    /// если цель — не домен, возвращает `(true, false)`: текущее (без sniffing) поведение,
+    /// `domainStrategy` работает как раньше.
+    fn sniff_view(&self, ctx: &TestContext) -> (bool, bool) {
+        const UNCHANGED: (bool, bool) = (true, false);
+        if !matches!(ctx.target, Target::Domain(_)) {
+            return UNCHANGED;
+        }
+        let Some(tag) = &ctx.inbound_tag else {
+            return UNCHANGED;
+        };
+        let Some(info) = self.inbound_info.get(tag) else {
+            return UNCHANGED;
+        };
+        if !info.is_transparent {
+            return UNCHANGED;
+        }
+        let mut warn = |msg: String| self.push_runtime_warning(msg);
+        let excluded = matches!(
+            eval_domain(&info.domains_excluded, &ctx.target, &mut warn),
+            FieldOutcome::Match(_)
+        );
+        let effective_sniff = info.sniffing_enabled && !info.metadata_only && info.dest_override_present && !excluded;
+        if !effective_sniff {
+            // Override не сработал: `ob.Target` остаётся IP, `RouteTarget` невалиден.
+            (false, true)
+        } else if info.route_only {
+            // `RouteTarget` = sniffed-домен (виден), `Target` остаётся исходным IP (виден сразу).
+            (true, true)
+        } else {
+            // sniffed-домен становится самим `ob.Target` — текущее поведение, не тронуто.
+            (true, false)
+        }
+    }
+
     /// Прогоняет цель через `routing.rules` и возвращает итог сравнения.
     pub async fn evaluate<R: Resolver>(&self, ctx: &TestContext, resolver: &R) -> RouteResult {
         let mut result = RouteResult {
@@ -1247,25 +1402,29 @@ impl Engine {
         };
 
         let is_domain = matches!(ctx.target, Target::Domain(_));
+        let (domain_visible, force_ip_known) = self.sniff_view(ctx);
         let warn_fn = |msg: String| self.push_runtime_warning(msg);
 
         // `IpOnDemand` подключает DNS-клиент к проходу целиком, но сам запрос всё равно ленивый
         // (см. `LazyIps`) — первое правило, которое реально проверяет `ip`, его и вызовет.
-        // `AsIs` и первый проход `IpIfNonMatch` DNS-клиента не видят вообще.
-        let pass1_should_resolve = is_domain && self.domain_strategy == DomainStrategy::IpOnDemand;
+        // `AsIs` и первый проход `IpIfNonMatch` DNS-клиента не видят вообще — если только `sniff_view`
+        // не форсирует IP видимым с самого начала (`routeOnly`/отсутствие домена после sniffing).
+        let pass1_should_resolve = is_domain && (force_ip_known || self.domain_strategy == DomainStrategy::IpOnDemand);
         let lazy1 = LazyIps::new(&ctx.target, resolver, pass1_should_resolve, &warn_fn);
 
         let mut skipped = Vec::new();
-        if let Some((rule, detail)) = self.find_match(ctx, &lazy1, &mut skipped).await {
+        if let Some((rule, detail)) = self.find_match(ctx, &lazy1, domain_visible, &mut skipped).await {
             apply_resolution(&mut result, lazy1.resolved());
             return self.finish(result, rule, detail, skipped);
         }
         apply_resolution(&mut result, lazy1.resolved());
 
-        if is_domain && self.domain_strategy == DomainStrategy::IpIfNonMatch {
+        // Второй проход `IpIfNonMatch` реален только когда домен вообще виден (`pickRouteInternal`
+        // пропускает его при пустом `GetTargetDomain()`) и IP не был известен уже с первого прохода.
+        if is_domain && domain_visible && !force_ip_known && self.domain_strategy == DomainStrategy::IpIfNonMatch {
             skipped.clear();
             let lazy2 = LazyIps::new(&ctx.target, resolver, true, &warn_fn);
-            if let Some((rule, detail)) = self.find_match(ctx, &lazy2, &mut skipped).await {
+            if let Some((rule, detail)) = self.find_match(ctx, &lazy2, domain_visible, &mut skipped).await {
                 apply_resolution(&mut result, lazy2.resolved());
                 return self.finish(result, rule, detail, skipped);
             }
@@ -1407,6 +1566,13 @@ mod tests {
             network: ReqNetwork::Tcp,
             source_ip: None,
             inbound_tag: None,
+        }
+    }
+
+    fn ctx_inbound(target: Target, tag: &str) -> TestContext {
+        TestContext {
+            inbound_tag: Some(tag.to_string()),
+            ..ctx(target)
         }
     }
 
@@ -2146,6 +2312,275 @@ mod tests {
             .await;
         assert_eq!(r2.outcome, Outcome::Matched);
         assert!(r2.resolved_ips.is_empty());
+    }
+
+    // --- sniffing/routeOnly выбранного inbound'а ---
+
+    /// `routeOnly: true` на "прозрачном" inbound'е (см. `TRANSPARENT_PROTOCOLS`): IP виден сразу
+    /// (пул совпал бы с `ob.Target`), независимо от `domainStrategy: AsIs`, который в обычном режиме
+    /// вообще запрещает резолв.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn route_only_true_matches_ip_rule_under_asis() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "routeOnly": true}}],
+            "outbounds": [{"tag": "direct"}, {"tag": "proxy"}],
+            "routing": {"domainStrategy": "AsIs", "rules": [{"ip": ["1.2.3.4/32"], "outboundTag": "proxy"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let mut resolver_map = StdHashMap::new();
+        resolver_map.insert("example.com".to_string(), vec!["1.2.3.4".parse().unwrap()]);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &StaticResolver(resolver_map),
+            )
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(r.outbound.as_deref(), Some("proxy"));
+    }
+
+    /// `routeOnly: true` форсирует однопроходное поведение уровня `IpOnDemand` независимо от
+    /// сконфигурированного `domainStrategy` ("на domainStrategy похуй") — `ip`-правило РАНЬШЕ
+    /// domain-правила в списке должно совпасть уже на первом (и единственном) проходе, а не
+    /// провалиться в обычный для `IpIfNonMatch` второй проход.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn route_only_true_matches_earlier_ip_rule_on_first_pass_under_ip_if_non_match() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "routeOnly": true}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"domainStrategy": "IPIfNonMatch", "rules": [
+                {"ip": ["1.2.3.4/32"], "outboundTag": "proxy"},
+                {"domain": ["example.com"], "outboundTag": "wrong"}
+            ]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let mut resolver_map = StdHashMap::new();
+        resolver_map.insert("example.com".to_string(), vec!["1.2.3.4".parse().unwrap()]);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &StaticResolver(resolver_map),
+            )
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(r.outbound.as_deref(), Some("proxy"));
+    }
+
+    /// `routeOnly: false` (по умолчанию) — sniffed-домен становится самим `ob.Target`, поведение
+    /// не отличается от отсутствия sniffing вовсе: `domainStrategy: AsIs` по-прежнему никогда не
+    /// резолвит для `ip`-условий.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn route_only_false_leaves_domain_strategy_governing_ip_rules() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "routeOnly": false}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"domainStrategy": "AsIs", "rules": [{"ip": ["1.2.3.4/32"], "outboundTag": "proxy"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let mut resolver_map = StdHashMap::new();
+        resolver_map.insert("example.com".to_string(), vec!["1.2.3.4".parse().unwrap()]);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &StaticResolver(resolver_map),
+            )
+            .await;
+        assert_eq!(
+            r.outcome,
+            Outcome::Default,
+            "AsIs никогда не резолвит — ip-правило не должно совпасть"
+        );
+    }
+
+    /// Выбранный "прозрачный" inbound без эффективного sniffing (тут: `enabled: false`) — override
+    /// никогда не срабатывает, `ob.Target` остаётся IP: домен-условие детерминированно `NoMatch`
+    /// (даже не "unknown"/skipped), а `ip`-условие видит IP сразу же — независимо от `AsIs`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn transparent_inbound_without_sniffing_hides_domain_reveals_ip_immediately() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door", "sniffing": {"enabled": false}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"domainStrategy": "AsIs", "rules": [
+                {"domain": ["example.com"], "outboundTag": "wrong"},
+                {"ip": ["1.2.3.4/32"], "outboundTag": "proxy"}
+            ]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let mut resolver_map = StdHashMap::new();
+        resolver_map.insert("example.com".to_string(), vec!["1.2.3.4".parse().unwrap()]);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &StaticResolver(resolver_map),
+            )
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(r.outbound.as_deref(), Some("proxy"));
+        assert!(
+            r.skipped.is_empty(),
+            "домен-условие — детерминированный NoMatch, не Unknown/skipped"
+        );
+    }
+
+    /// Тот же "нет эффективного sniffing", но через `destOverride: []` (пустой список — реальный
+    /// `shouldOverride` никогда не сработает на пустом переборе `OverrideDestinationForProtocol`).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn transparent_inbound_with_empty_dest_override_hides_domain() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": [], "routeOnly": true}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"rules": [{"domain": ["example.com"], "outboundTag": "wrong"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &no_resolver(),
+            )
+            .await;
+        assert_eq!(
+            r.outcome,
+            Outcome::Default,
+            "пустой destOverride — sniffing не может сработать"
+        );
+    }
+
+    /// `metadataOnly: true` — `app/dispatcher/sniffer.go::NewSniffer` не помечает HTTP/TLS/QUIC/
+    /// BitTorrent сниферы как `metadataSniffer`, только fakedns; реальный домен из трафика не
+    /// сниффится, override не срабатывает — как при `enabled: false`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn transparent_inbound_with_metadata_only_hides_domain() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "metadataOnly": true, "routeOnly": true}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"rules": [{"domain": ["example.com"], "outboundTag": "wrong"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &no_resolver(),
+            )
+            .await;
+        assert_eq!(
+            r.outcome,
+            Outcome::Default,
+            "metadataOnly — домен из трафика не сниффится"
+        );
+    }
+
+    /// Цель попадает в `sniffing.domainsExcluded` — sniffing для неё не срабатывает, как при
+    /// `enabled: false`, даже если в остальном sniffing включён с `routeOnly: true`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn domains_excluded_hit_behaves_like_no_sniffing() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "routeOnly": true,
+                    "domainsExcluded": ["example.com"]}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"rules": [{"domain": ["example.com"], "outboundTag": "wrong"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &no_resolver(),
+            )
+            .await;
+        assert_eq!(
+            r.outcome,
+            Outcome::Default,
+            "домен исключён из sniffing — override не срабатывает"
+        );
+    }
+
+    /// "Прозрачная" тройка протоколов — только `dokodemo-door`/`tunnel`/`tun`; на остальных
+    /// (домен приходит из самого протокола) `routeOnly` тестером не эмулируется — поведение как без
+    /// выбранного inbound'а вовсе.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn non_transparent_inbound_keeps_domain_strategy_governed_behavior() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "vless",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "routeOnly": true}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"domainStrategy": "AsIs", "rules": [{"ip": ["1.2.3.4/32"], "outboundTag": "proxy"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let mut resolver_map = StdHashMap::new();
+        resolver_map.insert("example.com".to_string(), vec!["1.2.3.4".parse().unwrap()]);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Domain("example.com".into()), "in1"),
+                &StaticResolver(resolver_map),
+            )
+            .await;
+        assert_eq!(
+            r.outcome,
+            Outcome::Default,
+            "не прозрачный протокол — AsIs по-прежнему не резолвит"
+        );
+    }
+
+    /// Без выбранного inbound'а (`inbound_tag: None`) — поведение полностью прежнее, даже если в
+    /// конфиге есть "прозрачный" inbound с `routeOnly: true`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn no_inbound_selected_keeps_default_behavior() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "routeOnly": true}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"domainStrategy": "AsIs", "rules": [{"ip": ["1.2.3.4/32"], "outboundTag": "proxy"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let mut resolver_map = StdHashMap::new();
+        resolver_map.insert("example.com".to_string(), vec!["1.2.3.4".parse().unwrap()]);
+        let r = e
+            .evaluate(
+                &ctx(Target::Domain("example.com".into())),
+                &StaticResolver(resolver_map),
+            )
+            .await;
+        assert_eq!(
+            r.outcome,
+            Outcome::Default,
+            "нет inbound_tag — AsIs по-прежнему не резолвит"
+        );
+    }
+
+    /// `Target::Ip` — sniffing/routeOnly никогда не влияют: сниффить нечего, домен-условий это не
+    /// касается, ip-условие видит literal-IP цель как обычно.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn ip_target_is_unaffected_by_sniffing_config() {
+        let asset_dir = std::env::temp_dir();
+        let cfg = r#"{
+            "inbounds": [{"tag": "in1", "protocol": "dokodemo-door",
+                "sniffing": {"enabled": true, "destOverride": ["tls"], "routeOnly": true}}],
+            "outbounds": [{"tag": "direct"}],
+            "routing": {"rules": [{"ip": ["1.2.3.4/32"], "outboundTag": "proxy"}]}
+        }"#;
+        let e = engine(&[("00.json", cfg)], &asset_dir);
+        let r = e
+            .evaluate(
+                &ctx_inbound(Target::Ip("1.2.3.4".parse().unwrap()), "in1"),
+                &no_resolver(),
+            )
+            .await;
+        assert_eq!(r.outcome, Outcome::Matched);
+        assert_eq!(r.outbound.as_deref(), Some("proxy"));
     }
 
     /// `app/proxyman/outbound/outbound.go::Manager.Select`: селекторы балансировщика — ПРЕФИКСЫ
