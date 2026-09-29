@@ -171,8 +171,7 @@ pub async fn fetch_latest_version(
         if is_alpha && core == "mihomo" {
             if let Some(r) = rels.iter().find(|r| r.tag_name == "Prerelease-Alpha") {
                 for asset in &r.assets {
-                    if let Some(idx) = asset.name.find("alpha-") {
-                        let hash = asset.name[idx..].trim_end_matches(".gz").trim_end_matches(".zip");
+                    if let Some(hash) = asset.name.find("alpha-").and_then(|index| asset.name[index..].split('.').next()) {
                         return Some((hash.to_string(), "Prerelease-Alpha".into()));
                     }
                 }

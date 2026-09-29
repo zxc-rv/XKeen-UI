@@ -164,17 +164,8 @@ pub fn start_update_checker(state: AppState) {
 }
 
 fn compare_versions(latest: &str, current: &str) -> bool {
-    if current.to_lowercase().contains("alpha") || latest.to_lowercase().contains("alpha") {
-        return latest != current;
+    match (semver::Version::parse(latest), semver::Version::parse(current)) {
+        (Ok(latest_version), Ok(current_version)) => latest_version > current_version,
+        _ => latest != current,
     }
-
-    let parse = |v: &str| {
-        v.split('-')
-            .next()
-            .unwrap_or(v)
-            .split('.')
-            .filter_map(|s| s.parse::<u32>().ok())
-            .collect::<Vec<_>>()
-    };
-    parse(latest) > parse(current)
 }
