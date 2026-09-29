@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX } from '@tabler/icons-react'
+import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX, IconArrowBackUp } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
@@ -234,8 +234,12 @@ const RepoSourceField = memo(function RepoSourceField({
 }) {
   const [draft, setDraft] = useState(value)
 
-  const save = useCallback(async () => {
-    let url = draft.trim().replace(/\/+$/, '')
+  const defaultUrl = repoKey === 'xrayRepo'
+    ? 'https://github.com/XTLS/Xray-core'
+    : 'https://github.com/MetaCubeX/mihomo'
+
+  const save = useCallback(async (overrideUrl?: string) => {
+    let url = (typeof overrideUrl === 'string' ? overrideUrl : draft).trim().replace(/\/+$/, '')
     if (!url) {
       showToast('URL репозитория не может быть пустым', 'error')
       return
@@ -262,9 +266,22 @@ const RepoSourceField = memo(function RepoSourceField({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void save()}
             onBlur={() => void save()}
-            placeholder="https://github.com/owner/repo"
-            className="text-sm"
+            placeholder={defaultUrl}
+            className="text-sm placeholder:text-sm"
           />
+          {draft !== defaultUrl && (
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                aria-label="Вернуть значение по-умолчанию"
+                title="Вернуть значение по-умолчанию"
+                className=" text-muted-foreground hover:text-foreground hover:bg-transparent!"
+                onMouseDown={(e) => e.preventDefault()} // Блочим лишний onBlur инпута
+                onClick={() => void save(defaultUrl)}
+              >
+                <IconArrowBackUp className='size-4.5' />
+              </InputGroupButton>
+            </InputGroupAddon>
+          )}
         </InputGroup>
       </Field>
     </Field>
