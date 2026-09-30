@@ -38,7 +38,13 @@ export const replaceVisibleField = StateField.define<boolean>({
   update: (value, tr) => tr.effects.reduce((acc, effect) => (effect.is(setReplaceVisible) ? effect.value : acc), value),
 })
 
-export function createSearchExtension(bridge: SearchBridge): Extension {
+export interface SearchExtensionOptions {
+  /** Include the replace bindings (`Mod-h`, `Mod-Alt-f`). Defaults to `true`. */
+  replace?: boolean
+}
+
+export function createSearchExtension(bridge: SearchBridge, options: SearchExtensionOptions = {}): Extension {
+  const replace = options.replace ?? true
   return [
     replaceVisibleField,
     search({
@@ -60,7 +66,7 @@ export function createSearchExtension(bridge: SearchBridge): Extension {
         }
       },
     }),
-    Prec.high(keymap.of(editorSearchKeymap)),
+    Prec.high(keymap.of(replace ? editorSearchKeymap : searchOnlyKeymap)),
   ]
 }
 
@@ -70,10 +76,9 @@ export const openReplacePanel = (view: EditorView): boolean => {
   return true
 }
 
-export const editorSearchKeymap: readonly KeyBinding[] = [
+/** Search-only bindings — no replace shortcuts, for read-only views. */
+export const searchOnlyKeymap: readonly KeyBinding[] = [
   { key: 'Mod-f', run: openSearchPanel, scope: 'editor search-panel' },
-  { key: 'Mod-h', run: openReplacePanel, scope: 'editor search-panel' },
-  { key: 'Mod-Alt-f', run: openReplacePanel, scope: 'editor search-panel' }, // macOS: Cmd-H hides the app
   { key: 'F3', run: findNext, shift: findPrevious, scope: 'editor search-panel', preventDefault: true },
   { key: 'Mod-g', run: findNext, shift: findPrevious, scope: 'editor search-panel', preventDefault: true },
   { key: 'Escape', run: closeSearchPanel, scope: 'editor search-panel' },
@@ -81,6 +86,13 @@ export const editorSearchKeymap: readonly KeyBinding[] = [
   { key: 'Mod-Alt-g', run: gotoLine },
   { key: 'Mod-d', run: selectNextOccurrence, preventDefault: true },
 ]
+
+const replaceKeymap: readonly KeyBinding[] = [
+  { key: 'Mod-h', run: openReplacePanel, scope: 'editor search-panel' },
+  { key: 'Mod-Alt-f', run: openReplacePanel, scope: 'editor search-panel' }, // macOS: Cmd-H hides the app
+]
+
+export const editorSearchKeymap: readonly KeyBinding[] = [...searchOnlyKeymap, ...replaceKeymap]
 
 export interface QueryPatch {
   search?: string

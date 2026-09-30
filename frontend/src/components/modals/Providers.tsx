@@ -1,14 +1,17 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
+import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { IconDatabase, IconEye, IconFilter, IconLetterCase, IconRefresh, IconStack2, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml'
 import { apiCall, clashFetch } from '../../lib/api'
 import { fetchClashProxies, useAppActions } from '../../lib/store'
 import { cn } from '../../lib/utils'
@@ -143,6 +146,26 @@ function getTrafficSummary(info?: ProxySubscriptionInfo) {
   }
 }
 
+interface ProxiesBlock {
+  text: string
+  count: number | null
+}
+
+function extractProxiesBlock(content: string): ProxiesBlock | null {
+  const doc = parseDocument(content)
+  if (doc.errors.length > 0 || !isMap(doc.contents)) return null
+  const pair = doc.contents.items.find((entry) => isScalar(entry.key) && entry.key.value === 'proxies')
+  if (!pair || !isScalar(pair.key) || !isNode(pair.value)) return null
+  const keyStart = pair.key.range?.[0]
+  const valueEnd = pair.value.range?.[1]
+  if (keyStart === undefined || valueEnd === undefined) return null
+  const value = pair.value
+  return {
+    text: content.slice(keyStart, valueEnd).trimEnd(),
+    count: isSeq(value) || isMap(value) ? value.items.length : null,
+  }
+}
+
 function LoadingTable({ kind }: { kind: ProvidersModalKind }) {
   const cells = kind === 'proxies' ? 7 : 7
   return (
@@ -167,6 +190,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   const [viewingName, setViewingName] = useState('')
   const [viewContent, setViewContent] = useState<{ name: string; content: string } | null>(null)
   const [viewContentOpen, setViewContentOpen] = useState(false)
+  const [onlyProxies, setOnlyProxies] = useState(true)
   const viewContentCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [proxyProviders, setProxyProviders] = useState<ProxyProvider[]>([])
   const [ruleProviders, setRuleProviders] = useState<RuleProvider[]>([])
@@ -204,6 +228,17 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
     }, DIALOG_CLOSE_ANIMATION_MS)
   }, [clearViewContentCloseTimer])
 
+  const proxiesBlock = useMemo(() => {
+    if (kind !== 'proxies' || !viewContent) return null
+    return extractProxiesBlock(viewContent.content)
+  }, [kind, viewContent])
+  const canFilterProxies = proxiesBlock !== null
+  const visibleViewContent = useMemo(() => {
+    if (!viewContent) return ''
+    if (kind !== 'proxies' || !onlyProxies || !proxiesBlock) return viewContent.content
+    return proxiesBlock.text
+  }, [viewContent, kind, onlyProxies, proxiesBlock])
+  const viewBadgeCount = proxiesBlock?.count ?? visibleViewContent.split('\n').filter(Boolean).length
   const loadProviders = useCallback(
     async (silent = false) => {
       if (!clashApiPort && !clashApiUnix) return
@@ -622,15 +657,34 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                 <IconEye size={20} className="text-chart-2" />
                 {viewContent?.name}
                 <Badge variant="ghost" className="rounded-full border-none bg-blue-500/10! px-2 text-xs text-blue-400!">
-                  {viewContent?.content.split('\n').filter(Boolean).length ?? 0}
+                  {viewBadgeCount}
                 </Badge>
               </DialogTitle>
             </DialogHeader>
+            {kind === 'proxies' && (
+              <div className="flex shrink-0 items-center justify-end gap-2">
+                <Checkbox
+                  id="providers-view-only-proxies"
+                  checked={canFilterProxies && onlyProxies}
+                  disabled={!canFilterProxies}
+                  onCheckedChange={(value) => setOnlyProxies(value === true)}
+                />
+                <Label
+                  htmlFor="providers-view-only-proxies"
+                  className={cn(
+                    'text-muted-foreground text-xs font-normal',
+                    canFilterProxies ? 'hover:text-foreground cursor-pointer' : 'cursor-not-allowed opacity-50'
+                  )}
+                >
+                  Показывать только proxies
+                </Label>
+              </div>
+            )}
             <div className="border-border bg-input-background min-h-0 flex-1 overflow-hidden rounded-xl border">
               {kind === 'proxies' ? (
-                <ReadOnlyYamlView content={viewContent?.content ?? ''} />
+                <ReadOnlyYamlView content={visibleViewContent} />
               ) : (
-                <pre className="scrollbar-thin h-full overflow-auto p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap">
+                <pre className="h-full scrollbar-thin overflow-auto p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap">
                   {viewContent?.content}
                 </pre>
               )}

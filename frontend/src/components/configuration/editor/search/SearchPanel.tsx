@@ -13,6 +13,8 @@ import type { SearchPanelHandle } from './searchExtension'
 
 interface Props {
   handle: SearchPanelHandle
+  /** Show the replace row and its shortcuts. Read-only views pass `false`. */
+  replaceEnabled?: boolean
 }
 
 interface PanelState {
@@ -45,7 +47,7 @@ function formatCounter(
   return { text: `${current} из ${total}`, error: false }
 }
 
-export function SearchPanel({ handle }: Props) {
+export function SearchPanel({ handle, replaceEnabled = true }: Props) {
   const { view } = handle
   const [state, setState] = useState<PanelState>(() => readPanelState(handle))
   const matchIndexRef = useRef(new MatchIndex())
@@ -138,7 +140,7 @@ export function SearchPanel({ handle }: Props) {
 
     if (event.key === 'Enter' && mod && event.altKey) {
       event.preventDefault()
-      replaceAll(view)
+      if (replaceEnabled) replaceAll(view)
       return
     }
     if (event.key === 'Enter' && event.altKey) {
@@ -187,22 +189,24 @@ export function SearchPanel({ handle }: Props) {
         onKeyDown={handleKeyDown}
         className="border-border bg-popover/95 text-popover-foreground pointer-events-auto ml-auto flex w-full items-start gap-1 rounded-b-lg border-x-0 border-t-0 p-1.5 shadow-md backdrop-blur-sm md:w-auto md:max-w-[min(42rem,calc(100%-1.75rem))] md:min-w-[30rem] md:rounded-lg md:border"
       >
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-expanded={state.replaceVisible}
-                aria-label={state.replaceVisible ? 'Скрыть замену' : 'Показать замену'}
-                onClick={toggleReplaceVisible}
-              >
-                <IconChevronRight className={cn('transition-transform', state.replaceVisible && 'rotate-90')} />
-              </Button>
-            }
-          />
-          <TooltipContent>Показать замену ({shortcut('Ctrl+H')})</TooltipContent>
-        </Tooltip>
+        {replaceEnabled && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-expanded={state.replaceVisible}
+                  aria-label={state.replaceVisible ? 'Скрыть замену' : 'Показать замену'}
+                  onClick={toggleReplaceVisible}
+                >
+                  <IconChevronRight className={cn('transition-transform', state.replaceVisible && 'rotate-90')} />
+                </Button>
+              }
+            />
+            <TooltipContent>Показать замену ({shortcut('Ctrl+H')})</TooltipContent>
+          </Tooltip>
+        )}
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-1 md:flex-nowrap">
@@ -310,7 +314,7 @@ export function SearchPanel({ handle }: Props) {
             </Tooltip>
           </div>
 
-          {state.replaceVisible && (
+          {replaceEnabled && state.replaceVisible && (
             <div className="flex items-center gap-1">
               <InputGroup className="h-8 min-w-0 flex-1">
                 <InputGroupInput
