@@ -87,7 +87,10 @@ pub fn pick_asset(assets: &[String], arch: &str, ver: &str) -> Option<String> {
     // alpha-ассеты заканчиваются хешем, а в релизе ещё .deb/.rpm/.zip/.zst
     if ver == "Prerelease-Alpha" {
         let alpha = format!("linux-{}-alpha", m);
-        return assets.iter().find(|a| a.ends_with(".gz") && a.contains(&alpha)).cloned();
+        return assets
+            .iter()
+            .find(|a| a.ends_with(".gz") && a.contains(&alpha))
+            .cloned();
     }
 
     // хвосты имени ассета без названия ядра:
@@ -97,9 +100,7 @@ pub fn pick_asset(assets: &[String], arch: &str, ver: &str) -> Option<String> {
     assets.iter().find(|a| tails.iter().any(|t| a.ends_with(t))).cloned()
 }
 
-async fn fetch_release_assets(
-    client: &reqwest::Client, proxies: &[String], repo: &str, tag: &str,
-) -> Vec<String> {
+async fn fetch_release_assets(client: &reqwest::Client, proxies: &[String], repo: &str, tag: &str) -> Vec<String> {
     let url = format!("{}/{}/releases/tags/{}", GITHUB_API, repo, tag);
     let list = std::iter::once(url.clone()).chain(
         proxies
@@ -128,11 +129,7 @@ async fn fetch_release_assets(
 }
 
 pub async fn fetch_latest_version(
-    client: &reqwest::Client,
-    repo: &str,
-    core: &str,
-    proxies: &[String],
-    current_ver: Option<&str>,
+    client: &reqwest::Client, repo: &str, core: &str, proxies: &[String], current_ver: Option<&str>,
 ) -> Option<(String, String)> {
     let url = format!("{}/{}/releases?per_page=10", GITHUB_API, repo);
     let list = std::iter::once(url.clone()).chain(
@@ -171,7 +168,11 @@ pub async fn fetch_latest_version(
         if is_alpha && core == "mihomo" {
             if let Some(r) = rels.iter().find(|r| r.tag_name == "Prerelease-Alpha") {
                 for asset in &r.assets {
-                    if let Some(hash) = asset.name.find("alpha-").and_then(|index| asset.name[index..].split('.').next()) {
+                    if let Some(hash) = asset
+                        .name
+                        .find("alpha-")
+                        .and_then(|index| asset.name[index..].split('.').next())
+                    {
                         return Some((hash.to_string(), "Prerelease-Alpha".into()));
                     }
                 }
@@ -436,13 +437,11 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let integrity_check = tokio::task::spawn_blocking({
             let source = source.clone();
             move || -> Result<(), String> {
-                let meta = std::fs::metadata(&source)
-                    .map_err(|e| format!("Ошибка проверки файла: {}", e))?;
+                let meta = std::fs::metadata(&source).map_err(|e| format!("Ошибка проверки файла: {}", e))?;
                 if meta.len() < 1024 * 1024 {
                     return Err("Файл меньше 1МБ — повреждённый артефакт".into());
                 }
-                let mut f = std::fs::File::open(&source)
-                    .map_err(|e| format!("Ошибка открытия файла: {}", e))?;
+                let mut f = std::fs::File::open(&source).map_err(|e| format!("Ошибка открытия файла: {}", e))?;
                 let mut magic = [0u8; 4];
                 f.read_exact(&mut magic)
                     .map_err(|e| format!("Ошибка чтения файла: {}", e))?;
@@ -583,9 +582,8 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
                     entry = files.into_iter().next();
                 }
             }
-            let name = entry.ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::NotFound, "бинарник ядра не найден в архиве")
-            })?;
+            let name = entry
+                .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "бинарник ядра не найден в архиве"))?;
             std::io::copy(&mut archive.by_name(&name)?, &mut out)?;
         } else {
             std::io::copy(&mut flate2::read::GzDecoder::new(rdr), &mut out)?;
@@ -770,6 +768,9 @@ mod tests {
             Some("mihomo-linux-arm64-alpha-5a3f7c1e.gz")
         );
 
-        assert_eq!(pick_asset(&["Xray-linux-64.zip".to_string()], "aarch64", "v25.9.6"), None);
+        assert_eq!(
+            pick_asset(&["Xray-linux-64.zip".to_string()], "aarch64", "v25.9.6"),
+            None
+        );
     }
 }

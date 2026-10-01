@@ -2,7 +2,7 @@ use crate::logger::log;
 use crate::types::*;
 use axum::extract::State;
 use axum::response::{IntoResponse, Json};
-use reqwest::Method;
+use reqwest::{Method, StatusCode};
 use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
@@ -96,12 +96,18 @@ async fn fetch_rci(state: &AppState, endpoint: &str) -> Result<serde_json::Value
         req = req.header("X-Ndma-Tkn", token);
     }
 
-    let response = req.send().await.map_err(|e| format!("Ошибка запроса RCI ({endpoint}): {e}"))?;
+    let response = req
+        .send()
+        .await
+        .map_err(|e| format!("Ошибка запроса RCI ({endpoint}): {e}"))?;
     if !response.status().is_success() {
         return Err(format!("RCI ({endpoint}) вернул {}", response.status()));
     }
 
-    response.json().await.map_err(|e| format!("Ошибка парсинга RCI ({endpoint}): {e}"))
+    response
+        .json()
+        .await
+        .map_err(|e| format!("Ошибка парсинга RCI ({endpoint}): {e}"))
 }
 
 async fn fetch_running_config(state: &AppState) -> Result<String, String> {
@@ -121,42 +127,54 @@ async fn fetch_running_config(state: &AppState) -> Result<String, String> {
 }
 
 async fn req_rci(
-    state: &AppState,
-    method: Method,
-    path: &str,
-    payload: serde_json::Value,
-) -> Result<(), String> {
+    state: &AppState, method: Method, path: &str, payload: serde_json::Value, ignore_not_found: bool,
+) -> Result<bool, String> {
     let mut req = state
         .http_client
         .request(method.clone(), format!("http://127.0.0.1:79/rci/{path}"))
         .json(&payload)
         .timeout(Duration::from_secs(5));
-        
+
     if let Some(ref token) = state.rci_token {
         req = req.header("X-Ndma-Tkn", token);
     }
 
-    let response = req.send().await.map_err(|e| format!("Ошибка {method} RCI (/{path}): {e}"))?;
-    
+    let response = req
+        .send()
+        .await
+        .map_err(|e| format!("Ошибка {method} RCI (/{path}): {e}"))?;
+
     let status = response.status();
+    if ignore_not_found && status == StatusCode::NOT_FOUND {
+        return Ok(false);
+    }
     if !status.is_success() {
         let err = response.text().await.unwrap_or_default();
         return Err(format!("RCI вернул код {}, ответ: {}", status, err));
     }
 
-    Ok(())
+    Ok(true)
 }
 
 async fn run_rci_step(
-    state: &AppState,
-    step: &str,
-    method: Method,
-    path: &str,
-    payload: serde_json::Value,
+    state: &AppState, step: &str, method: Method, path: &str, payload: serde_json::Value,
 ) -> Result<(), String> {
-    match req_rci(state, method.clone(), path, payload).await {
-        Ok(_) => {
-            log("INFO", format!("DNS: '{step}' ({method} /{path}) — успешно"));
+    let optional_component = match path {
+        "dns-proxy/https/upstream" => Some("DoH"),
+        "dns-proxy/tls/upstream" => Some("DoT"),
+        _ => None,
+    };
+
+    match req_rci(state, method.clone(), path, payload, optional_component.is_some()).await {
+        Ok(true) => Ok(()),
+        Ok(false) => {
+            log(
+                "WARN",
+                format!(
+                    "Не удалось очистить {} (компонент не установлен?)",
+                    optional_component.unwrap_or_default()
+                ),
+            );
             Ok(())
         }
         Err(e) => {
@@ -192,10 +210,7 @@ pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-pub async fn post_dns(
-    State(state): State<AppState>,
-    Json(req): Json<DnsEnableReq>,
-) -> impl IntoResponse {
+pub async fn post_dns(State(state): State<AppState>, Json(req): Json<DnsEnableReq>) -> impl IntoResponse {
     let br0_ip = match get_br0_ip() {
         Ok(ip) => ip,
         Err(e) => {
@@ -209,15 +224,57 @@ pub async fn post_dns(
     };
 
     let mut steps: Vec<(&str, Method, &str, serde_json::Value)> = vec![
-        ("Включение opkg dns-override", Method::POST, "opkg/dns-override", json!({})),
-        ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
+        (
+            "Включение opkg dns-override",
+            Method::POST,
+            "opkg/dns-override",
+            json!({}),
+        ),
+        (
+            "Сохранение конфигурации",
+            Method::POST,
+            "system/configuration/save",
+            json!({}),
+        ),
     ];
 
     if req.setup_filter {
-        steps.insert(0, ("Отключение HTTPS DNS-прокси", Method::DELETE, "dns-proxy/https/upstream", json!({})));
-        steps.insert(1, ("Отключение TLS DNS-прокси", Method::DELETE, "dns-proxy/tls/upstream", json!({})));
-        steps.insert(2, ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})));
-        steps.insert(3, ("Установка name-server на br0", Method::POST, "ip/name-server", json!({"address": br0_ip, "port": 53})));
+        steps.insert(
+            0,
+            (
+                "Отключение HTTPS DNS-прокси",
+                Method::DELETE,
+                "dns-proxy/https/upstream",
+                json!({}),
+            ),
+        );
+        steps.insert(
+            1,
+            (
+                "Отключение TLS DNS-прокси",
+                Method::DELETE,
+                "dns-proxy/tls/upstream",
+                json!({}),
+            ),
+        );
+        steps.insert(
+            2,
+            (
+                "Сброс системных DNS-серверов",
+                Method::DELETE,
+                "ip/name-server",
+                json!({}),
+            ),
+        );
+        steps.insert(
+            3,
+            (
+                "Установка name-server на br0",
+                Method::POST,
+                "ip/name-server",
+                json!({"address": br0_ip, "port": 53}),
+            ),
+        );
     }
 
     for (step, method, path, payload) in &steps {
@@ -236,14 +293,17 @@ pub async fn post_dns(
     if let Some(config_path) = find_mihomo_config() {
         if let Err(e) = tokio::fs::write(&config_path, &req.config_content).await {
             log("ERROR", format!("Ошибка записи config.yaml: {e}"));
-        } else {
-            log("INFO", format!("config.yaml обновлён в {config_path}"));
         }
     } else {
         log("ERROR", "config.yaml не найден, конфигурация не записана".into());
     }
 
-    log("INFO", format!("Управление DNS включено, name-server: {br0_ip}"));
+    let message = if req.setup_filter {
+        format!("Управление DNS включено, name-server установлен: {br0_ip}:53")
+    } else {
+        "Управление DNS включено".into()
+    };
+    log("INFO", message);
     Json(DnsResponse {
         success: true,
         error: None,
@@ -251,13 +311,20 @@ pub async fn post_dns(
     })
 }
 
-pub async fn delete_dns(
-    State(state): State<AppState>,
-    Json(_req): Json<DnsDeleteReq>,
-) -> impl IntoResponse {
+pub async fn delete_dns(State(state): State<AppState>, Json(_req): Json<DnsDeleteReq>) -> impl IntoResponse {
     let mut steps: Vec<(&str, Method, &str, serde_json::Value)> = vec![
-        ("Отключение opkg dns-override", Method::DELETE, "opkg/dns-override", json!({})),
-        ("Сохранение конфигурации", Method::POST, "system/configuration/save", json!({})),
+        (
+            "Отключение opkg dns-override",
+            Method::DELETE,
+            "opkg/dns-override",
+            json!({}),
+        ),
+        (
+            "Сохранение конфигурации",
+            Method::POST,
+            "system/configuration/save",
+            json!({}),
+        ),
     ];
 
     let has_br0 = match fetch_running_config(&state).await {
@@ -269,8 +336,24 @@ pub async fn delete_dns(
     };
 
     if has_br0 {
-        steps.insert(1, ("Сброс системных DNS-серверов", Method::DELETE, "ip/name-server", json!({})));
-        steps.insert(2, ("Установка name-server на 77.88.8.8", Method::POST, "ip/name-server", json!({"address": "77.88.8.8", "port": 53})));
+        steps.insert(
+            1,
+            (
+                "Сброс системных DNS-серверов",
+                Method::DELETE,
+                "ip/name-server",
+                json!({}),
+            ),
+        );
+        steps.insert(
+            2,
+            (
+                "Установка name-server на 77.88.8.8",
+                Method::POST,
+                "ip/name-server",
+                json!({"address": "77.88.8.8", "port": 53}),
+            ),
+        );
     }
 
     for (step, method, path, payload) in &steps {
@@ -286,7 +369,12 @@ pub async fn delete_dns(
         }
     }
 
-    log("INFO", "Управление DNS отключено".into());
+    let message = if has_br0 {
+        "Управление DNS отключено, name-server установлен: 77.88.8.8:53"
+    } else {
+        "Управление DNS отключено"
+    };
+    log("INFO", message.into());
     Json(DnsResponse {
         success: true,
         error: None,

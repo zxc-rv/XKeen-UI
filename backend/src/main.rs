@@ -29,7 +29,7 @@ use std::io::{self, Write};
 use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::{exit};
+use std::process::exit;
 use std::sync::{Arc, RwLock};
 use tokio::sync::broadcast;
 use tower_http::cors::CorsLayer;
@@ -122,7 +122,12 @@ fn setup_process_logging() {
 
     if !stdio_is_interactive() {
         if let Err(e) = redirect_stderr_to_process_log() {
-            eprintln!("{} {}: {}", " Не удалось перенаправить stderr в".red().bold(), XKEEN_UI_LOG, e);
+            eprintln!(
+                "{} {}: {}",
+                " Не удалось перенаправить stderr в".red().bold(),
+                XKEEN_UI_LOG,
+                e
+            );
         }
     }
 }
@@ -254,7 +259,10 @@ async fn main() {
             router_req = router_req.header("X-Ndma-Tkn", token);
         }
 
-        let router_info = router_req.send().ok().and_then(|resp| resp.json::<serde_json::Value>().ok());
+        let router_info = router_req
+            .send()
+            .ok()
+            .and_then(|resp| resp.json::<serde_json::Value>().ok());
 
         let device = router_info
             .as_ref()
@@ -274,8 +282,7 @@ async fn main() {
     }
 
     let version: &'static str = Box::leak(format!("{} ({})", VERSION, get_arch()).into_boxed_str());
-    let mut command = <Cli as clap::CommandFactory>::command()
-        .version(version);
+    let mut command = <Cli as clap::CommandFactory>::command().version(version);
 
     if std::env::args().any(|arg| arg == "-h" || arg == "--help") {
         command.print_help().unwrap();
@@ -445,7 +452,10 @@ async fn main() {
             .await
         {
             Ok(resp) if resp.status() == StatusCode::FORBIDDEN => {
-                log("ERROR", "Ошибка доступа к RCI. Некоторый функционал может быть недоступен.".into());
+                log(
+                    "ERROR",
+                    "Ошибка доступа к RCI. Некоторый функционал может быть недоступен.".into(),
+                );
             }
             _ => {}
         }
@@ -479,7 +489,10 @@ async fn main() {
         .route("/api/version", get(version::version_handler))
         .route("/api/system", get(system::get_system_stats))
         .route("/api/ruleset", get(ruleset_inspector::get_ruleset_content))
-        .route("/api/proxy-provider", get(ruleset_inspector::get_proxy_provider_content))
+        .route(
+            "/api/proxy-provider",
+            get(ruleset_inspector::get_proxy_provider_content),
+        )
         .route(
             "/api/route-test",
             get(route_test::get_route_test_meta).post(route_test::post_route_test),

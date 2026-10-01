@@ -147,7 +147,9 @@ async fn proxy_ws_inner(client_ws: WebSocket, path: String, target: ClashTarget)
             let url = build_url("ws", "127.0.0.1", "80", &path, None);
             let (ws, _) = timeout(Duration::from_secs(5), async {
                 let stream = UnixStream::connect(socket_path).await?;
-                client_async(url, stream).await.map_err(|e| std::io::Error::other(e.to_string()))
+                client_async(url, stream)
+                    .await
+                    .map_err(|e| std::io::Error::other(e.to_string()))
             })
             .await
             .map_err(|_| "Upstream connect timeout".to_string())?

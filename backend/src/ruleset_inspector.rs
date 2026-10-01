@@ -121,7 +121,9 @@ pub struct ProxyProviderContentQuery {
     pub vehicle_type: Option<String>,
 }
 
-pub async fn get_proxy_provider_content(State(_state): State<AppState>, Query(params): Query<ProxyProviderContentQuery>) -> Response {
+pub async fn get_proxy_provider_content(
+    State(_state): State<AppState>, Query(params): Query<ProxyProviderContentQuery>,
+) -> Response {
     let docs = match load_mihomo_yaml().await {
         Ok(d) => d,
         Err(e) => return error_response(e),

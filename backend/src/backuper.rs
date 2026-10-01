@@ -320,7 +320,14 @@ fn rename_backup_sync(name: &str, new_name: &str) -> Result<(), String> {
         return Err("файл с таким именем уже существует".into());
     }
     fs::rename(&backup_path, &new_path).map_err(io_error)?;
-    log("INFO", format!("Бэкап конфигураций переименован: {} -> {}", backup_path.display(), new_path.display()));
+    log(
+        "INFO",
+        format!(
+            "Бэкап конфигураций переименован: {} -> {}",
+            backup_path.display(),
+            new_path.display()
+        ),
+    );
     Ok(())
 }
 

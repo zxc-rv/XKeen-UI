@@ -49,15 +49,16 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
     if let Err(e) = settings.validate_plugins() {
         return Json(serde_json::json!({"success": false, "error": e}));
     }
-    for (name, url) in [
-        ("Xray", &settings.updater.xray_repo),
-        ("Mihomo", &settings.updater.mihomo_repo),
-    ] {
+    for (name, url) in [("Xray", &settings.updater.xray_repo), ("Mihomo", &settings.updater.mihomo_repo)] {
         if url.trim().is_empty() {
-            return Json(serde_json::json!({"success": false, "error": format!("URL репозитория {} не может быть пустым", name)}));
+            return Json(
+                serde_json::json!({"success": false, "error": format!("URL репозитория {} не может быть пустым", name)}),
+            );
         }
         if !crate::updater::valid_repo_url(url) {
-            return Json(serde_json::json!({"success": false, "error": format!("Некорректный URL репозитория {}", name)}));
+            return Json(
+                serde_json::json!({"success": false, "error": format!("Некорректный URL репозитория {}", name)}),
+            );
         }
     }
     settings.normalize_proxies();

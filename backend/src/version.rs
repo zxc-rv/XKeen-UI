@@ -13,10 +13,7 @@ pub async fn get_local_core_version(core: &str) -> Option<String> {
     let arg = if core == "mihomo" { "-v" } else { "version" };
     let mut cmd = Command::new(format!("/opt/sbin/{}", core));
     cmd.arg(arg);
-    let out = timeout(Duration::from_secs(5), cmd.output())
-        .await
-        .ok()?
-        .ok()?;
+    let out = timeout(Duration::from_secs(5), cmd.output()).await.ok()?.ok()?;
 
     let s = String::from_utf8_lossy(&out.stdout);
     let p: Vec<&str> = s.split_whitespace().collect();
@@ -69,12 +66,15 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 
     {
         let link = get_repo(&updater_settings, "self").and_then(|r| make_link(&r, ui_tag.as_deref()));
-        res.insert("xkeen-ui".into(), json!({
-            "version": VERSION.trim_start_matches('v'),
-            "outdated": ui,
-            "show_toast": check(ui, &state.update_checker.last_ui_toast),
-            "link": link,
-        }));
+        res.insert(
+            "xkeen-ui".into(),
+            json!({
+                "version": VERSION.trim_start_matches('v'),
+                "outdated": ui,
+                "show_toast": check(ui, &state.update_checker.last_ui_toast),
+                "link": link,
+            }),
+        );
     }
 
     let make_core_obj = |v: String, repo: &str, tag: Option<&str>| -> serde_json::Value {
