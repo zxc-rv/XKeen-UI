@@ -569,7 +569,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     const cfg = configsRef.current[activeIndexRef.current]
     if (!cfg || !editorRef.current) return
     const content = editorRef.current.getValue()
-    if (!content.trim()) return showToast('Конфигурация пустая', 'error')
+    if (!content.trim() && !cfg.file.endsWith('.lst')) return showToast('Конфигурация пустая', 'error')
     if (!editorRef.current.isValid(cfg.file)) return showToast('Файл содержит ошибки', 'error')
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
       dispatch({ type: 'SET_PENDING_SAVE_ACTION', action: () => saveCurrentConfig(true) })
@@ -683,7 +683,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     const cfg = configsRef.current[activeIndexRef.current]
     if (!cfg || !editorRef.current) return
     const content = editorRef.current.getValue()
-    if (!content.trim()) return showToast('Файл пустой', 'error')
+    if (!content.trim() && !cfg.file.endsWith('.lst')) return showToast('Файл пустой', 'error')
     if (!editorRef.current.isValid(cfg.file)) return showToast('Файл содержит ошибки', 'error')
     if (!force && isGuiActive(cfg) && hasComments(cfg.savedContent)) {
       dispatch({ type: 'SET_PENDING_SAVE_ACTION', action: () => saveAndApply(true) })
