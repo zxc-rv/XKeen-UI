@@ -629,6 +629,10 @@ export function RouteTesterModal() {
             )}
           </div>
         )}
+
+        <p className="text-muted-foreground shrink-0 pt-1 text-center text-xs">
+          В зависимости от конфигурации DNS/sniffer могут быть неточности
+        </p>
       </DialogContent>
     </Dialog>
   )
