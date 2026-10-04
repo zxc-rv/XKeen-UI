@@ -1,4 +1,4 @@
-import { REMOTE_FETCH_TIMEOUT_MS } from './routers'
+import { REMOTE_FETCH_TIMEOUT_MS } from './multi-routers/model'
 
 const RETRY_DELAYS = [500, 1000, 2000, 4000, 8000]
 const RETRY_STATUSES = new Set([502, 503, 504])

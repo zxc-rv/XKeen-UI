@@ -7,14 +7,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { LOCAL_ROUTER_ID, isRouterSelectable, routerId } from '../../lib/routers'
-import { useRoutersStore } from '../../lib/routers-store'
+import { LOCAL_ROUTER_ID, isRouterSelectable, routerId } from '../../lib/multi-routers/model'
+import { useRoutersStore } from '../../lib/multi-routers/store'
 import { useSettings } from '../../lib/store'
 import { cn } from '../../lib/utils'
 import type { WsMessage } from '../../lib/websocket'
 import { useWebSocket } from '../../lib/websocket'
-import { AddRouterDialog } from '../routers/AddRouterDialog'
-import { RoutersListPanel } from '../routers/RoutersListPanel'
+import { AddRouterDialog } from './multi-routers/AddRouterDialog'
+import { RoutersListPanel } from './multi-routers/RoutersListPanel'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
 
 const LOG_FILES = ['error.log', 'access.log']

@@ -9,7 +9,7 @@ import {
   isRouterSelectable,
   routerBaseUrl,
   routerId,
-} from './routers'
+} from './model'
 
 interface RoutersState {
   routers: RemoteRouter[]

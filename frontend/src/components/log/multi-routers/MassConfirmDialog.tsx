@@ -7,9 +7,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { LOCAL_ROUTER_ID, type RouterAuthStatus, type RouterOnlineStatus } from '../../lib/routers'
-import { useRoutersStore } from '../../lib/routers-store'
-import { cn } from '../../lib/utils'
+import { LOCAL_ROUTER_ID, type RouterAuthStatus, type RouterOnlineStatus } from '../../../lib/multi-routers/model'
+import { useRoutersStore } from '../../../lib/multi-routers/store'
+import { cn } from '../../../lib/utils'
 
 function OnlineDot({ online, auth }: { online: RouterOnlineStatus; auth: RouterAuthStatus }) {
   const authEnabled = auth === true

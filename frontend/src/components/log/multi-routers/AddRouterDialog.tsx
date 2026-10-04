@@ -9,10 +9,10 @@ import {
 } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
 import { useState } from 'react'
-import { isRemoteAuthEnabled, REMOTE_AUTH_UNSUPPORTED, saveRouters } from '../../lib/routers-actions'
-import { DEFAULT_ROUTER_PORT, type RemoteRouter, routerBaseUrl, routerId, routerLabel } from '../../lib/routers'
-import { useRoutersStore } from '../../lib/routers-store'
-import { showToast } from '../../lib/store'
+import { isRemoteAuthEnabled, REMOTE_AUTH_UNSUPPORTED, saveRouters } from '../../../lib/multi-routers/actions'
+import { DEFAULT_ROUTER_PORT, type RemoteRouter, routerBaseUrl, routerId, routerLabel } from '../../../lib/multi-routers/model'
+import { useRoutersStore } from '../../../lib/multi-routers/store'
+import { showToast } from '../../../lib/store'
 
 export function AddRouterDialog({
   open,

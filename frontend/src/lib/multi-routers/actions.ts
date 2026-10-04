@@ -1,6 +1,6 @@
-import { apiCall, fanOutRouters, type FanOutResult } from './api'
-import { LOCAL_ROUTER_ID, type RemoteRouter, isRouterSelectable, routerId, routerLabel } from './routers'
-import { getBaseUrlForId, useRoutersStore } from './routers-store'
+import { apiCall, fanOutRouters, type FanOutResult } from '../api'
+import { LOCAL_ROUTER_ID, type RemoteRouter, isRouterSelectable, routerId, routerLabel } from './model'
+import { getBaseUrlForId, useRoutersStore } from './store'
 
 export const REMOTE_AUTH_UNSUPPORTED =
   'Удалённые панели с авторизацией не поддерживаются: cookie сессии не передаётся между хостами. Откройте панель напрямую или отключите auth в LAN.'
