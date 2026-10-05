@@ -207,18 +207,18 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
 
   return (
     <Dialog open={modals.showUpdateModal} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="w-full max-w-[95vw]! p-0! md:w-187.5">
-        <div className="flex max-h-[90dvh] flex-col gap-4 overflow-hidden p-6">
+      <DialogContent className="top-0! left-0! flex! h-[100svh]! max-h-[100svh]! w-full! max-w-none! translate-x-0! translate-y-0! flex-col gap-0 overflow-hidden rounded-none p-0! md:top-1/2! md:left-1/2! md:h-auto! md:max-h-[90dvh]! md:w-187.5! md:max-w-[95vw]! md:-translate-x-1/2! md:-translate-y-1/2! md:rounded-xl">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-6">
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
               <IconDownload size={24} className="text-chart-2" />
               Обновление {coreLabel}
             </DialogTitle>
 
-            <DialogDescription className="flex w-full items-center justify-between" render={
+            <DialogDescription className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2" render={
               <div>
-                Выберите версию для установки
-                <span className="flex items-center gap-1.5">
+                <span className="min-w-0">Выберите версию для установки</span>
+                <span className="flex max-w-full flex-wrap items-center gap-1.5">
                   {repo && (
                     <Badge variant="outline" className="h-5 rounded-full border-ring/40 bg-muted/50 px-2 text-xs font-medium">
                       {repo}
@@ -245,7 +245,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
             } />
           </DialogHeader>
 
-          <ScrollArea className="max-h-[500px] min-h-0 flex-1" hideScrollbar>
+          <ScrollArea className="max-h-[calc(100svh-14rem)] min-h-0 overflow-hidden md:max-h-[min(32rem,calc(90dvh-14rem))]" hideScrollbar>
             {loading ? (
               <div className="text-muted-foreground flex min-h-88 flex-col items-center justify-center gap-3 py-16">
                 <Spinner className="text-chart-2 size-10" />
@@ -354,7 +354,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
             )}
           </ScrollArea>
 
-          <DialogFooter className="shrink-0">
+          <DialogFooter className="mt-auto shrink-0">
             <Button onClick={install} disabled={!selectedVersion || installing} className="w-full">
               {installing ? 'Установка...' : 'Установить'}
             </Button>
