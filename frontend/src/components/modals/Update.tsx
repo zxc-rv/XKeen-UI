@@ -245,13 +245,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
             } />
           </DialogHeader>
 
-          <ScrollArea
-            className="shrink-0"
-            hideScrollbar
-            style={{
-              maxHeight: 'min(calc(70px * 7 + 8px), calc(90dvh - 160px))',
-            }}
-          >
+          <ScrollArea className="max-h-[500px] min-h-0 flex-1" hideScrollbar>
             {loading ? (
               <div className="text-muted-foreground flex min-h-88 flex-col items-center justify-center gap-3 py-16">
                 <Spinner className="text-chart-2 size-10" />
