@@ -115,8 +115,7 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
               <IconAlertCircle size={18} className="text-amber-400" /> Внимание
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Перед переключением ядра рекомендуется отключить управление DNS, в противном случае может пропасть доступ в интернет.
-              Продолжить?
+              Управление DNS активно, при переключении ядра может пропасть доступ в интернет. Продолжить?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

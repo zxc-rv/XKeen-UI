@@ -226,15 +226,9 @@ export const DnsPanel = memo(function DnsPanel() {
     }
   }, [dispatch])
 
-  const isAllActive = useMemo(
-    () => !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.dnsMihomo,
-    [dnsStatus]
-  )
+  const isAllActive = useMemo(() => !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.dnsMihomo, [dnsStatus])
 
-  const showMihomoSettings = useMemo(
-    () => !!dnsStatus && dnsStatus.dnsMihomo,
-    [dnsStatus]
-  )
+  const showMihomoSettings = useMemo(() => !!dnsStatus && dnsStatus.dnsMihomo, [dnsStatus])
 
   const fetchStatus = useCallback(async () => {
     setDnsStatusLoading(true)
@@ -445,8 +439,8 @@ export const DnsPanel = memo(function DnsPanel() {
   return (
     <TooltipProvider delayDuration={300}>
       <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
-        <fieldset className="border-border rounded-lg border px-4 pb-4 pt-1.5">
-          <legend className="text-sm font-medium px-1">Статус DNS</legend>
+        <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
+          <legend className="px-1 text-sm font-medium">Статус DNS</legend>
           <div className="flex flex-col gap-3 pt-1">
             {!isLoading && dnsStatus && !dnsStatus.providerIgnored && (
               <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
@@ -457,22 +451,18 @@ export const DnsPanel = memo(function DnsPanel() {
               </Alert>
             )}
             {isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="text-muted-foreground flex items-center gap-2 text-sm">
                 <Spinner /> Загрузка...
               </div>
             ) : (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm">DNS Override</Label>
-                  <Badge variant={dnsStatus?.dnsOverride ? 'emerald' : 'rose'}>
-                    {dnsStatus?.dnsOverride ? 'Активно' : 'Неактивно'}
-                  </Badge>
+                  <Badge variant={dnsStatus?.dnsOverride ? 'emerald' : 'rose'}>{dnsStatus?.dnsOverride ? 'Активно' : 'Неактивно'}</Badge>
                 </div>
                 <div className="flex items-center justify-between">
                   <Label className="text-sm">DNS Mihomo</Label>
-                  <Badge variant={dnsStatus?.dnsMihomo ? 'emerald' : 'rose'}>
-                    {dnsStatus?.dnsMihomo ? 'Активно' : 'Неактивно'}
-                  </Badge>
+                  <Badge variant={dnsStatus?.dnsMihomo ? 'emerald' : 'rose'}>{dnsStatus?.dnsMihomo ? 'Активно' : 'Неактивно'}</Badge>
                 </div>
 
                 <Separator />
@@ -482,18 +472,11 @@ export const DnsPanel = memo(function DnsPanel() {
                     <Label htmlFor="dns-toggle" className="text-sm font-medium">
                       Включить управление DNS
                     </Label>
-                    <p className="text-muted-foreground text-xs">
-                      Передача управления DNS от KeeneticOS к Mihomo
-                    </p>
+                    <p className="text-muted-foreground text-xs">Передача управления DNS от KeeneticOS к Mihomo</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {isToggling && <Spinner className="text-muted-foreground" />}
-                    <Switch
-                      id="dns-toggle"
-                      checked={isAllActive}
-                      onCheckedChange={handleToggleEnable}
-                      disabled={isToggling || isLoading}
-                    />
+                    <Switch id="dns-toggle" checked={isAllActive} onCheckedChange={handleToggleEnable} disabled={isToggling || isLoading} />
                   </div>
                 </div>
               </div>
@@ -502,8 +485,8 @@ export const DnsPanel = memo(function DnsPanel() {
         </fieldset>
 
         {showMihomoSettings && (
-          <fieldset className="border-border rounded-lg border px-4 pb-4 pt-1.5">
-            <legend className="text-sm font-medium px-1">Mihomo DNS</legend>
+          <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
+            <legend className="px-1 text-sm font-medium">Mihomo DNS</legend>
             <div className="flex flex-col gap-4 pt-1">
               <div className="grid gap-2">
                 <DnsSettingLabel tooltip="Redir-host - реальные IP в ответах. Медленнее, лучше совместимость, рекомендуется \nFake-ip - поддельные IP в ответах. Быстрее, не совместимо с исключениями/политиками XKeen, для продвинутых пользователей">
@@ -529,11 +512,13 @@ export const DnsPanel = memo(function DnsPanel() {
               {config.enhancedMode === 'fake-ip' && (
                 <>
                   <div className="grid gap-2">
-                    <DnsSettingLabel tooltip="Режим фильтрации Fake IP.
-                      Whitelist - использовать fake-ip только для перечисленных доменов. 
+                    <DnsSettingLabel
+                      tooltip="Режим фильтрации Fake IP.
+                      Whitelist - использовать fake-ip только для перечисленных доменов.
                       Blacklist - Использовать fake-ip для всего, кроме перечисленных доменов.
                       Rule - classical правила domain-suffix, domain-keyword и пр.
-                      Для Whitelist и Blacklist поддерживается rule-set: и +. синтаксис">
+                      Для Whitelist и Blacklist поддерживается rule-set: и +. синтаксис"
+                    >
                       Fake IP Filter Mode
                     </DnsSettingLabel>
                     <Select
@@ -555,14 +540,12 @@ export const DnsPanel = memo(function DnsPanel() {
                   </div>
 
                   <div className="grid gap-2">
-                    <DnsSettingLabel tooltip="Список доменов для фильтрации fake-ip. По одному на строку.">
-                      Fake IP Filter
-                    </DnsSettingLabel>
+                    <DnsSettingLabel tooltip="Список доменов для фильтрации fake-ip. По одному на строку.">Fake IP Filter</DnsSettingLabel>
                     <Textarea
                       value={config.fakeIpFilter}
                       onChange={(e) => updateConfig({ fakeIpFilter: e.target.value })}
                       placeholder={'+.local'}
-                      className="min-h-15 tracking-wide text-sm!"
+                      className="min-h-15 text-sm! tracking-wide"
                     />
                   </div>
                 </>
@@ -576,7 +559,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.nameserver}
                   onChange={(e) => updateConfig({ nameserver: e.target.value })}
                   placeholder={'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query'}
-                  className="min-h-15 tracking-wide text-sm!"
+                  className="min-h-15 text-sm! tracking-wide"
                 />
               </div>
 
@@ -588,7 +571,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.nameserverPolicy}
                   onChange={(e) => updateConfig({ nameserverPolicy: e.target.value })}
                   placeholder={'rule-set:category-ru@domain: [77.88.8.8, 195.208.5.1]'}
-                  className="min-h-15 tracking-wide text-sm!"
+                  className="min-h-15 text-sm! tracking-wide"
                 />
               </div>
 
@@ -600,7 +583,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.proxyServerNameserver}
                   onChange={(e) => updateConfig({ proxyServerNameserver: e.target.value })}
                   placeholder={'https://1.1.1.1/dns-query\nhttps://8.8.8.8/dns-query'}
-                  className="min-h-15 tracking-wide text-sm!"
+                  className="min-h-15 text-sm! tracking-wide"
                 />
               </div>
 
@@ -612,7 +595,7 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.fallback}
                   onChange={(e) => updateConfig({ fallback: e.target.value })}
                   placeholder={'tls://1.1.1.1\ntls://8.8.8.8'}
-                  className="min-h-15 tracking-wide text-sm!"
+                  className="min-h-15 text-sm! tracking-wide"
                 />
               </div>
 
@@ -624,15 +607,11 @@ export const DnsPanel = memo(function DnsPanel() {
                   value={config.bootstrap}
                   onChange={(e) => updateConfig({ bootstrap: e.target.value })}
                   placeholder={'77.88.8.8\n77.8.8.1'}
-                  className="min-h-15 tracking-wide text-sm!"
+                  className="min-h-15 text-sm! tracking-wide"
                 />
               </div>
 
-              <Button
-                className="w-full"
-                onClick={handleApply}
-                disabled={isApplying}
-              >
+              <Button className="w-full" onClick={handleApply} disabled={isApplying}>
                 {isApplying ? <Spinner /> : <IconDeviceFloppy data-icon="inline-start" />}
                 Применить
               </Button>
@@ -646,7 +625,7 @@ export const DnsPanel = memo(function DnsPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>Отключить управление DNS?</AlertDialogTitle>
             <AlertDialogDescription>
-              Будет отключен Mihomo DNS, dns-override и при необходимости перенастроен интернет-фильтр.
+              Mihomo DNS и opkg dns-override будут отключены, а управление передано обратно KeeneticOS.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -662,8 +641,10 @@ export const DnsPanel = memo(function DnsPanel() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Включить управление DNS?</AlertDialogTitle>
-            <AlertDialogDescription className="whitespace-pre-line text-xs">
-              Обратите внимание, что после включения этой функции DNS-разрешения в роутере будет целиком зависить от Mihomo и его конфигурации. В связи с этим перед остановкой сервиса необходимо отключить "Управление DNS", иначе доступ к интернету может пропасть.
+            <AlertDialogDescription className="text-xs whitespace-pre-line">
+              Обратите внимание, что после включения этой функции DNS-разрешения в роутере будет целиком зависить от Mihomo и его
+              конфигурации. В связи с этим перед остановкой сервиса необходимо отключить "Управление DNS", иначе доступ к интернету может
+              пропасть.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-3 py-2">

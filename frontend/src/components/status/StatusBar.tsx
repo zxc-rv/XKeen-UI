@@ -13,7 +13,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { IconBox, IconCpu, IconMemory, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
+import {
+  IconBox,
+  IconCpu,
+  IconMemory,
+  IconLogout,
+  IconPlayerPlayFilled,
+  IconPlayerStopFilled,
+  IconRefresh,
+  IconSettings,
+  IconAlertCircle,
+} from '@tabler/icons-react'
 import { useEffect, useState, useCallback } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
 import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
@@ -167,13 +177,6 @@ export function StatusBar({
     onRefreshStatus()
   }
 
-  async function forceStopService() {
-    setPending('Остановка...')
-    const result = await apiCall<any>('POST', 'control', { action: 'stop' })
-    showToast(result.success ? 'XKeen остановлен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
-    onRefreshStatus()
-  }
-
   async function disableDnsAndStop() {
     setPending('Остановка...')
     try {
@@ -206,39 +209,41 @@ export function StatusBar({
     onRefreshStatus()
   }
 
-  const statusText = serviceStatus === 'running' ? 'Сервис запущен' : serviceStatus === 'stopped' ? 'Сервис остановлен' : pendingText || 'Загрузка...'
+  const statusText =
+    serviceStatus === 'running' ? 'Сервис запущен' : serviceStatus === 'stopped' ? 'Сервис остановлен' : pendingText || 'Загрузка...'
 
   return (
     <>
       <TooltipProvider delayDuration={500}>
         <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-2 rounded-xl border px-3 py-3 sm:px-4 md:flex-row md:items-center">
-
           {/* Статус */}
-          <div className="order-2 flex w-full items-center justify-center md:justify-start md:order-1 md:w-auto">
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5">
+          <div className="order-2 flex w-full items-center justify-center md:order-1 md:w-auto md:justify-start">
+            <div className="bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-1.5">
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.75 pb-0.5">
                   <div className="relative size-2.5 shrink-0">
                     {isRunning && (
-                      <span className="absolute left-1/2 top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-emerald-400 opacity-60" />
+                      <span className="absolute top-1/2 left-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-emerald-400 opacity-60" />
                     )}
-                    <span className={cn(
-                      "absolute left-1/2 top-1/2 size-1.75 -translate-x-1/2 -translate-y-1/2 rounded-full",
-                      isRunning ? "bg-emerald-500" : isPending ? "bg-amber-500 animate-pulse" : "bg-red-500"
-                    )} />
+                    <span
+                      className={cn(
+                        'absolute top-1/2 left-1/2 size-1.75 -translate-x-1/2 -translate-y-1/2 rounded-full',
+                        isRunning ? 'bg-emerald-500' : isPending ? 'animate-pulse bg-amber-500' : 'bg-red-500'
+                      )}
+                    />
                   </div>
-                  <span className="text-xs font-medium text-foreground/80">
-                    {statusText}
-                  </span>
+                  <span className="text-foreground/80 text-xs font-medium">{statusText}</span>
                 </div>
-                <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px] tracking-tight text-muted-foreground">
+                <span className="text-muted-foreground flex items-center gap-1.5 text-[11px] tracking-tight whitespace-nowrap">
                   <span className="flex items-center gap-1">
-                    <IconMemory className={cn('size-3.25', usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100))} />
+                    <IconMemory
+                      className={cn('size-3.25', usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100))}
+                    />
                     <span className={usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100)}>
                       {formatMemoryMB(systemStats?.memoryUsed ?? 0)}/{formatMemoryMB(systemStats?.memoryTotal ?? 0)} МБ
                     </span>
                   </span>
-                  <span className="h-3 w-px bg-border" />
+                  <span className="bg-border h-3 w-px" />
                   <span className="flex items-center gap-1">
                     <IconCpu className={cn('size-3.25', systemStats ? usageColorClass(systemStats.cpuUsage) : '')} />
                     <span className={systemStats ? usageColorClass(systemStats.cpuUsage) : ''}>
@@ -248,7 +253,7 @@ export function StatusBar({
                 </span>
               </div>
 
-              <span className="h-6 w-px bg-border" />
+              <span className="bg-border h-6 w-px" />
 
               <div className="flex shrink-0 items-center gap-1">
                 {isConfigsLoading ? (
@@ -263,7 +268,7 @@ export function StatusBar({
                         <TooltipTrigger
                           render={
                             <Button variant="outline" size="icon-sm" onClick={restartService} disabled={isPending}>
-                              {isPending ? <Spinner className="size-3.5 text-muted-foreground" /> : <IconRefresh className="size-4" />}
+                              {isPending ? <Spinner className="text-muted-foreground size-3.5" /> : <IconRefresh className="size-4" />}
                             </Button>
                           }
                         />
@@ -274,8 +279,18 @@ export function StatusBar({
                       <Tooltip>
                         <TooltipTrigger
                           render={
-                            <Button variant="outline" size="icon-sm" className="text-emerald-500 hover:border-emerald-500/50 hover:text-emerald-400" onClick={startService} disabled={isPending}>
-                              {isPending ? <Spinner className="size-3.5 text-muted-foreground" /> : <IconPlayerPlayFilled className="size-4" />}
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              className="text-emerald-500 hover:border-emerald-500/50 hover:text-emerald-400"
+                              onClick={startService}
+                              disabled={isPending}
+                            >
+                              {isPending ? (
+                                <Spinner className="text-muted-foreground size-3.5" />
+                              ) : (
+                                <IconPlayerPlayFilled className="size-4" />
+                              )}
                             </Button>
                           }
                         />
@@ -286,8 +301,18 @@ export function StatusBar({
                       <Tooltip>
                         <TooltipTrigger
                           render={
-                            <Button variant="outline" size="icon-sm" className="text-destructive hover:text-destructive/80" onClick={stopService} disabled={isPending}>
-                              {isPending ? <Spinner className="size-3.5 text-muted-foreground" /> : <IconPlayerStopFilled className="size-4" />}
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              className="text-destructive hover:text-destructive/80"
+                              onClick={stopService}
+                              disabled={isPending}
+                            >
+                              {isPending ? (
+                                <Spinner className="text-muted-foreground size-3.5" />
+                              ) : (
+                                <IconPlayerStopFilled className="size-4" />
+                              )}
                             </Button>
                           }
                         />
@@ -400,29 +425,20 @@ export function StatusBar({
       <AlertDialog open={dnsWarningOpen} onOpenChange={setDnsWarningOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Внимание</AlertDialogTitle>
-            <AlertDialogDescription>
-              Включено управление DNS, при остановке сервиса пропадет доступ в интернет. Отключить управление?
-            </AlertDialogDescription>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <IconAlertCircle size={18} className="text-amber-400" /> Внимание
+            </AlertDialogTitle>
+            <AlertDialogDescription>Перед остановкой XKeen будет отключено управление DNS. Продолжить?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDnsWarningOpen(false)}>Отмена</AlertDialogCancel>
-            <AlertDialogAction
-              variant="outline"
-              onClick={() => {
-                setDnsWarningOpen(false)
-                forceStopService()
-              }}
-            >
-              Не отключать
-            </AlertDialogAction>
             <AlertDialogAction
               onClick={() => {
                 setDnsWarningOpen(false)
                 disableDnsAndStop()
               }}
             >
-              Отключить
+              Продолжить
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
