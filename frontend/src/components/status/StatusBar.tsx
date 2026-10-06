@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { IconBox, IconCpu, IconDatabase, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
+import { IconBox, IconCpu, IconMemory, IconLogout, IconPlayerPlayFilled, IconPlayerStopFilled, IconRefresh, IconSettings } from '@tabler/icons-react'
 import { useEffect, useState, useCallback } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
 import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
@@ -233,14 +233,14 @@ export function StatusBar({
                 </div>
                 <span className="flex items-center gap-1.5 whitespace-nowrap text-[11px] tracking-tight text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <IconDatabase className={cn('size-3', usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100))} />
+                    <IconMemory className={cn('size-3.25', usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100))} />
                     <span className={usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100)}>
                       {formatMemoryMB(systemStats?.memoryUsed ?? 0)}/{formatMemoryMB(systemStats?.memoryTotal ?? 0)} МБ
                     </span>
                   </span>
                   <span className="h-3 w-px bg-border" />
                   <span className="flex items-center gap-1">
-                    <IconCpu className={cn('size-3', systemStats ? usageColorClass(systemStats.cpuUsage) : '')} />
+                    <IconCpu className={cn('size-3.25', systemStats ? usageColorClass(systemStats.cpuUsage) : '')} />
                     <span className={systemStats ? usageColorClass(systemStats.cpuUsage) : ''}>
                       {systemStats ? `${systemStats.cpuUsage.toFixed(0)}%` : '—'}
                     </span>
