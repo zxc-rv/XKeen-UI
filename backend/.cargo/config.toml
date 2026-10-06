@@ -1,2 +1,5 @@
 [unstable]
 build-std = ["std", "panic_abort", "proc_macro"]
+
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-musl-gcc"
