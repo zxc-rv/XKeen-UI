@@ -13,12 +13,18 @@ import { IconDatabase, IconEye, IconFilter, IconLetterCase, IconRefresh, IconSta
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml'
 import { apiCall, clashFetch } from '../../lib/api'
-import { fetchClashProxies, useAppActions } from '../../lib/store'
-import { cn } from '../../lib/utils'
+import { fetchClashProxies, fetchClashRuleProviders, useAppActions, useProxiesStore } from '../../lib/store'
+import type { ProxyProvider, ProxySubscriptionInfo, RuleProvider } from '../../lib/types'
+import { cn, normalizeVehicleType } from '../../lib/utils'
 import { ReadOnlyYamlView } from '../configuration/editor/ReadOnlyYamlView'
 
 const providerContentCache = new Map<string, string>()
 const DIALOG_CLOSE_ANIMATION_MS = 220
+
+function isProvidersLoaded(kind: 'rules' | 'proxies') {
+  const { proxyProvidersLoaded, ruleProvidersLoaded } = useProxiesStore.getState()
+  return kind === 'proxies' ? proxyProvidersLoaded : ruleProvidersLoaded
+}
 
 type ProvidersModalKind = 'rules' | 'proxies'
 
@@ -31,42 +37,10 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
-interface ProxySubscriptionInfo {
-  Upload?: number
-  Download?: number
-  Total?: number
-  Expire?: number
-}
-
-interface ProxyProvider {
-  name: string
-  type: string
-  vehicleType: string
-  proxies?: Array<unknown>
-  updatedAt?: string
-  subscriptionInfo?: ProxySubscriptionInfo
-}
-
-interface RuleProvider {
-  name: string
-  type: string
-  vehicleType: string
-  ruleCount?: number
-  format?: string
-  behavior?: string
-  updatedAt?: string
-}
-
-const ALLOWED_PROXY_VEHICLE_TYPES = new Set(['HTTP', 'FILE', 'INLINE'])
-
 const FORMAT_LABELS: Record<string, string> = {
   MrsRule: 'MRS',
   YamlRule: 'YAML',
   TextRule: 'TEXT',
-}
-
-function normalizeVehicleType(value?: string) {
-  return value?.trim().toUpperCase() ?? ''
 }
 
 function formatVehicleType(value?: string) {
@@ -183,7 +157,7 @@ function LoadingTable({ kind }: { kind: ProvidersModalKind }) {
 
 export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clashApiUnix, onOpenChange }: Props) {
   const { showToast } = useAppActions()
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(() => !isProvidersLoaded(kind))
   const [reloading, setReloading] = useState(false)
   const [updatingAll, setUpdatingAll] = useState(false)
   const [updatingName, setUpdatingName] = useState('')
@@ -192,8 +166,8 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   const [viewContentOpen, setViewContentOpen] = useState(false)
   const [onlyProxies, setOnlyProxies] = useState(true)
   const viewContentCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [proxyProviders, setProxyProviders] = useState<ProxyProvider[]>([])
-  const [ruleProviders, setRuleProviders] = useState<RuleProvider[]>([])
+  const proxyProviders = useProxiesStore((state) => state.proxyProviders)
+  const ruleProviders = useProxiesStore((state) => state.ruleProviders)
   const [filter, setFilter] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const title = kind === 'proxies' ? 'Провайдеры прокси' : 'Провайдеры правил'
@@ -246,39 +220,22 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
       else setLoading(true)
 
       try {
-        if (kind === 'proxies') {
-          const data = await clashFetch<{ providers?: Record<string, ProxyProvider> }>(clashApiPort, 'providers/proxies', {
-            secret: clashApiSecret,
-            unix: clashApiUnix ?? null,
-          })
-          setProxyProviders(
-            Object.values(data.providers ?? {}).filter((provider) =>
-              ALLOWED_PROXY_VEHICLE_TYPES.has(normalizeVehicleType(provider.vehicleType))
-            )
-          )
-        } else {
-          const data = await clashFetch<{ providers?: Record<string, RuleProvider> }>(clashApiPort, 'providers/rules', {
-            secret: clashApiSecret,
-            unix: clashApiUnix ?? null,
-          })
-          setRuleProviders(Object.values(data.providers ?? {}))
-        }
-      } catch {
-        showToast(`Не удалось загрузить ${kind === 'proxies' ? 'провайдеры прокси' : 'провайдеры правил'}`, 'error')
+        if (kind === 'proxies') await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
+        else await fetchClashRuleProviders(clashApiPort, clashApiSecret, clashApiUnix ?? null)
       } finally {
         setLoading(false)
         setReloading(false)
       }
     },
-    [clashApiPort, clashApiSecret, clashApiUnix, kind, showToast]
+    [clashApiPort, clashApiSecret, clashApiUnix, kind]
   )
 
   useEffect(() => {
     if (!open) return
 
-    const timeoutId = setTimeout(() => void loadProviders(), 0)
+    const timeoutId = setTimeout(() => void loadProviders(isProvidersLoaded(kind)), 0)
     return () => clearTimeout(timeoutId)
-  }, [open, loadProviders])
+  }, [open, kind, loadProviders])
 
   const rows = useMemo(() => (kind === 'proxies' ? proxyProviders : ruleProviders), [kind, proxyProviders, ruleProviders])
   const httpProviderNames = useMemo(
@@ -326,9 +283,6 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
         secret: clashApiSecret,
         unix: clashApiUnix ?? null,
       })
-      if (kind === 'proxies') {
-        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
-      }
       await loadProviders(true)
       providerContentCache.delete(`${kind}:${name}`)
       showToast(`Провайдер ${name} обновлён`)
@@ -352,9 +306,6 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
           })
         )
       )
-      if (kind === 'proxies') {
-        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
-      }
       await loadProviders(true)
       showToast(kind === 'proxies' ? 'Провайдеры прокси обновлены' : 'Провайдеры правил обновлены')
     } catch (e) {

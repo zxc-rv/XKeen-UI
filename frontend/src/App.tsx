@@ -4,15 +4,32 @@ import { LoginForm } from './components/auth/Login'
 import type { CodeMirrorRef } from './components/configuration/CodeMirror'
 import { ConfigPanel } from './components/configuration/ConfigPanel'
 import { LogPanel } from './components/log/LogPanel'
+import { ImportModal } from './components/modals/AddOutbound'
+import { CommentsWarningModal } from './components/modals/CommentsWarning'
+import { CoreManageModal } from './components/modals/CoreManagement'
+import { GeoScanModal } from './components/modals/GeoScan'
+import { ImportAmneziaModal } from './components/modals/ImportAmnezia'
+import { RouteTesterModal } from './components/modals/RouteTester'
+import { SettingsModal } from './components/modals/Settings'
+import { TemplateModal } from './components/modals/Templates'
+import { UpdateModal } from './components/modals/Update'
 import { StatusBar } from './components/status/StatusBar'
 import { Toast } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
-import { LazyBoundary, lazyLoad, useLazyMount } from './lib/loader'
+import { useLazyMount } from './lib/loader'
 import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID, routerId } from './lib/multi-routers/model'
 import { applyRoutersFromSettings, refreshAllOnline } from './lib/multi-routers/actions'
 import { useRoutersStore } from './lib/multi-routers/store'
 import { listMihomoTakenNames, replaceMihomoProvider, replaceMihomoProxy } from './lib/mihomoReplace'
-import { fetchClashProxies, getAppState, syncClashApiPort, useAppActions, useModalContext, useSettings } from './lib/store'
+import {
+  fetchClashProxies,
+  fetchClashRuleProviders,
+  getAppState,
+  syncClashApiPort,
+  useAppActions,
+  useModalContext,
+  useSettings,
+} from './lib/store'
 import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
 import {
   DEFAULT_MIHOMO_REPO,
@@ -24,16 +41,6 @@ import {
 } from './lib/types'
 import { parseClashApiCredentials } from './lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
-
-const CommentsWarningModal = lazyLoad(() => import('./components/modals/CommentsWarning'), 'CommentsWarningModal')
-const CoreManageModal = lazyLoad(() => import('./components/modals/CoreManagement'), 'CoreManageModal')
-const UpdateModal = lazyLoad(() => import('./components/modals/Update'), 'UpdateModal')
-const ImportModal = lazyLoad(() => import('./components/modals/AddOutbound'), 'ImportModal')
-const ImportAmneziaModal = lazyLoad(() => import('./components/modals/ImportAmnezia'), 'ImportAmneziaModal')
-const TemplateModal = lazyLoad(() => import('./components/modals/Templates'), 'TemplateModal')
-const SettingsModal = lazyLoad(() => import('./components/modals/Settings'), 'SettingsModal')
-const GeoScanModal = lazyLoad(() => import('./components/modals/GeoScan'), 'GeoScanModal')
-const RouteTesterModal = lazyLoad(() => import('./components/modals/RouteTester'), 'RouteTesterModal')
 
 function useThemeMode(theme: ThemeMode) {
   useEffect(() => {
@@ -81,59 +88,23 @@ const ModalManager = memo(function ModalManager({
 
   return (
     <>
-      {mountCommentsWarning && (
-        <LazyBoundary>
-          <CommentsWarningModal />
-        </LazyBoundary>
-      )}
+      {mountCommentsWarning && <CommentsWarningModal />}
       {mountCoreManage && (
-        <LazyBoundary>
-          <CoreManageModal
-            onSwitchCore={onSwitchCore}
-            onOpenUpdate={(core: string) => {
-              dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
-              openModal('showUpdateModal')
-            }}
-          />
-        </LazyBoundary>
+        <CoreManageModal
+          onSwitchCore={onSwitchCore}
+          onOpenUpdate={(core: string) => {
+            dispatch({ type: 'SET_UPDATE_MODAL_CORE', core })
+            openModal('showUpdateModal')
+          }}
+        />
       )}
-      {mountUpdate && (
-        <LazyBoundary>
-          <UpdateModal onInstalled={onInstalled} />
-        </LazyBoundary>
-      )}
-      {mountImport && (
-        <LazyBoundary>
-          <ImportModal onGenerate={onGenerate} onAddToConfig={onAddToConfig} onReplace={onReplace} />
-        </LazyBoundary>
-      )}
-      {mountAmneziaImport && (
-        <LazyBoundary>
-          <ImportAmneziaModal
-            onAddToConfig={onAddToConfig}
-          />
-        </LazyBoundary>
-      )}
-      {mountTemplate && (
-        <LazyBoundary>
-          <TemplateModal onImport={onImportTemplate} />
-        </LazyBoundary>
-      )}
-      {mountSettings && (
-        <LazyBoundary>
-          <SettingsModal />
-        </LazyBoundary>
-      )}
-      {mountGeoScan && (
-        <LazyBoundary>
-          <GeoScanModal />
-        </LazyBoundary>
-      )}
-      {mountRouteTest && (
-        <LazyBoundary>
-          <RouteTesterModal />
-        </LazyBoundary>
-      )}
+      {mountUpdate && <UpdateModal onInstalled={onInstalled} />}
+      {mountImport && <ImportModal onGenerate={onGenerate} onAddToConfig={onAddToConfig} onReplace={onReplace} />}
+      {mountAmneziaImport && <ImportAmneziaModal onAddToConfig={onAddToConfig} />}
+      {mountTemplate && <TemplateModal onImport={onImportTemplate} />}
+      {mountSettings && <SettingsModal />}
+      {mountGeoScan && <GeoScanModal />}
+      {mountRouteTest && <RouteTesterModal />}
     </>
   )
 })
@@ -143,7 +114,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   const multiRouter = useSettings((s) => s.multiRouter)
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
-    switchTab: () => { },
+    switchTab: () => {},
     getActiveIndex: () => 0,
   })
 
@@ -178,6 +149,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           const activeCores = core ?? appState.currentCore
           if ((port || unix) && activeCores === 'mihomo' && !skipProxies && appState.serviceStatus === 'running') {
             fetchClashProxies(port ?? '', secret, false, unix)
+            fetchClashRuleProviders(port ?? '', secret, unix)
           }
           return configs
         } else {
@@ -229,7 +201,14 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
         }
 
         if (!showUpdateToast) return
-        if (ui.show_toast) showToast({ title: 'Доступно обновление', body: 'Доступна новая версия XKeen UI', persistent: true, id: 'update-ui', ...(ui.link && { action: { url: ui.link } }) })
+        if (ui.show_toast)
+          showToast({
+            title: 'Доступно обновление',
+            body: 'Доступна новая версия XKeen UI',
+            persistent: true,
+            id: 'update-ui',
+            ...(ui.link && { action: { url: ui.link } }),
+          })
 
         for (const core of ['mihomo', 'xray']) {
           const entry = data[core]

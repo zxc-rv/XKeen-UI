@@ -41,7 +41,13 @@ import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
-import { runMassTask, summarizeFanOut, targetLabel, filterAuthBlockedTargets, REMOTE_AUTH_UNSUPPORTED } from '../../lib/multi-routers/actions'
+import {
+  runMassTask,
+  summarizeFanOut,
+  targetLabel,
+  filterAuthBlockedTargets,
+  REMOTE_AUTH_UNSUPPORTED,
+} from '../../lib/multi-routers/actions'
 import { LOCAL_ROUTER_ID } from '../../lib/multi-routers/model'
 import { useRoutersStore } from '../../lib/multi-routers/store'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
@@ -49,6 +55,8 @@ import type { Config } from '../../lib/types'
 import { cn } from '../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { MassConfirmDialog } from '../log/multi-routers/MassConfirmDialog'
+import { BackupsModal } from '../modals/Backups'
+import { ProvidersModal } from '../modals/Providers'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -57,17 +65,11 @@ import type { CodeMirrorRef } from './CodeMirror'
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
 const GuiLog = lazyLoad(() => import('./xray/GuiLog'), 'GuiLog')
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
-const ProvidersModal = lazyLoad(() => import('../modals/Providers'), 'ProvidersModal')
-const BackupsModal = lazyLoad(() => import('../modals/Backups'), 'BackupsModal')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
-const BackupsModalContainer = memo(function BackupsModalContainer({
-  onRefreshConfigs,
-}: {
-  onRefreshConfigs: () => Promise<unknown>
-}) {
+const BackupsModalContainer = memo(function BackupsModalContainer({ onRefreshConfigs }: { onRefreshConfigs: () => Promise<unknown> }) {
   const { modals, dispatch } = useModalContext()
   const mounted = useLazyMount(modals.showBackupsModal)
   const handleOpenChange = useCallback(
@@ -75,11 +77,7 @@ const BackupsModalContainer = memo(function BackupsModalContainer({
     [dispatch]
   )
   if (!mounted) return null
-  return (
-    <LazyBoundary>
-      <BackupsModal open={modals.showBackupsModal} onOpenChange={handleOpenChange} onRefreshConfigs={onRefreshConfigs} />
-    </LazyBoundary>
-  )
+  return <BackupsModal open={modals.showBackupsModal} onOpenChange={handleOpenChange} onRefreshConfigs={onRefreshConfigs} />
 })
 
 type ClashMode = 'rule' | 'global' | 'direct'
@@ -131,7 +129,6 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   }
 
   const closeDialog = () => setPopoverOpen(false)
-
 
   const fileExt = useMemo(() => {
     if (!dialogData || dialogData.type === 'delete') return ''
@@ -189,7 +186,12 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
     )
 
   return (
-    <Popover open={popoverOpen} onOpenChange={(open) => { if (!open) setPopoverOpen(false) }}>
+    <Popover
+      open={popoverOpen}
+      onOpenChange={(open) => {
+        if (!open) setPopoverOpen(false)
+      }}
+    >
       <ContextMenu>
         <ContextMenuTrigger className="contents">
           <Tooltip>
@@ -235,11 +237,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <PopoverContent
-        align="start"
-        className="w-auto min-w-64"
-        avoidCollisions={!isMobile}
-      >
+      <PopoverContent align="start" className="w-auto min-w-64" avoidCollisions={!isMobile}>
         {dialogData?.type === 'delete' ? (
           <>
             <p className="text-sm font-medium">Удалить «{config.file.split('/').pop()}»?</p>
@@ -284,7 +282,17 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
   )
 }
 
-export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate, onOpenGeoScan, onOpenRouteTest, onOpenBackups, onRefreshConfigs, editorRef, configActionsRef }: Props) {
+export function ConfigPanel({
+  onOpenImport,
+  onOpenImportAmnezia,
+  onOpenTemplate,
+  onOpenGeoScan,
+  onOpenRouteTest,
+  onOpenBackups,
+  onRefreshConfigs,
+  editorRef,
+  configActionsRef,
+}: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
@@ -379,7 +387,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
         .then((data) => {
           if (data.mode) setMode(data.mode)
         })
-        .catch(() => { })
+        .catch(() => {})
     }, 200)
     return () => {
       cancelled = true
@@ -515,12 +523,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
 
   async function executeSave(targets: string[], cfg: Config, content: string) {
     const results = await runMassTask(targets, async (_id, baseUrl) => {
-      const result = await apiCall<{ success: boolean; error?: string }>(
-        'PUT',
-        'configs',
-        { file: cfg.file, content },
-        { baseUrl }
-      )
+      const result = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: cfg.file, content }, { baseUrl })
       if (!result.success) throw new Error(result.error || 'ошибка сохранения')
     })
 
@@ -654,10 +657,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
 
     const summary = summarizeFanOut(results)
     if (results.length <= 1) {
-      showToast(
-        summary.fail === 0 ? 'Изменения применены' : errorToastText(summary.body),
-        summary.fail === 0 ? 'success' : 'error'
-      )
+      showToast(summary.fail === 0 ? 'Изменения применены' : errorToastText(summary.body), summary.fail === 0 ? 'success' : 'error')
     } else {
       showToast(
         {
@@ -714,10 +714,7 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
     })
     const summary = summarizeFanOut(results)
     if (results.length <= 1) {
-      showToast(
-        summary.fail === 0 ? 'Быстрый бэкап создан' : errorToastText(summary.body),
-        summary.fail === 0 ? 'success' : 'error'
-      )
+      showToast(summary.fail === 0 ? 'Быстрый бэкап создан' : errorToastText(summary.body), summary.fail === 0 ? 'success' : 'error')
     } else {
       showToast(
         {
@@ -829,7 +826,11 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
             {isMihomo && currentPanel === 'connections' && (
               <div className="ml-auto flex items-center gap-2">
                 <span className="text-muted-foreground text-xs">Режим маршрутизации</span>
-                <Select value={mode} items={{ direct: 'DIRECT', rule: 'RULE', global: 'GLOBAL' }} onValueChange={(value) => changeMode(value as ClashMode)}>
+                <Select
+                  value={mode}
+                  items={{ direct: 'DIRECT', rule: 'RULE', global: 'GLOBAL' }}
+                  onValueChange={(value) => changeMode(value as ClashMode)}
+                >
                   <SelectTrigger className="w-30">
                     <SelectValue />
                   </SelectTrigger>
@@ -855,18 +856,22 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                   Рулсеты
                 </Button>
                 <Tooltip>
-                  <TooltipTrigger render={
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
-                      onClick={() =>
-                        window.dispatchEvent(new CustomEvent(TOGGLE_ALL_SELECTORS_EVENT, { detail: { collapsed: !allSelectorsCollapsed } }))
-                      }
-                    >
-                      {allSelectorsCollapsed ? <IconChevronDown /> : <IconChevronUp />}
-                    </Button>
-                  } />
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
+                        onClick={() =>
+                          window.dispatchEvent(
+                            new CustomEvent(TOGGLE_ALL_SELECTORS_EVENT, { detail: { collapsed: !allSelectorsCollapsed } })
+                          )
+                        }
+                      >
+                        {allSelectorsCollapsed ? <IconChevronDown /> : <IconChevronUp />}
+                      </Button>
+                    }
+                  />
                   <TooltipContent>{allSelectorsCollapsed ? 'Развернуть все' : 'Свернуть все'}</TooltipContent>
                 </Tooltip>
               </div>
@@ -1014,31 +1019,41 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
                 ) : (
                   <>
                     <Tooltip>
-                      <TooltipTrigger render={
-                        <Button
-                          size="default"
-                          disabled={!canApply}
-                          className="bg-green-600 text-white hover:bg-green-700"
-                          onClick={() => saveAndApply()}
-                        >
-                          <IconRefresh data-icon="inline-start" /> Применить
-                        </Button>
-                      } />
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            size="default"
+                            disabled={!canApply}
+                            className="bg-green-600 text-white hover:bg-green-700"
+                            onClick={() => saveAndApply()}
+                          >
+                            <IconRefresh data-icon="inline-start" /> Применить
+                          </Button>
+                        }
+                      />
                       <TooltipContent>Сохранить и перезапустить</TooltipContent>
                     </Tooltip>
                     <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
                       <IconDeviceFloppy data-icon="inline-start" /> Сохранить
                     </Button>
                     <Tooltip>
-                      <TooltipTrigger render={
-                        <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
-                          <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
-                        </Button>
-                      } />
+                      <TooltipTrigger
+                        render={
+                          <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
+                            <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
+                          </Button>
+                        }
+                      />
                       <TooltipContent>Форматировать файл</TooltipContent>
                     </Tooltip>
                     <DropdownMenu>
-                      <DropdownMenuTrigger render={<Button variant="outline"><IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span></Button>} />
+                      <DropdownMenuTrigger
+                        render={
+                          <Button variant="outline">
+                            <IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span>
+                          </Button>
+                        }
+                      />
                       <DropdownMenuContent align="end" className="min-w-64">
                         <DropdownMenuGroup>
                           <DropdownMenuLabel>Утилиты</DropdownMenuLabel>
@@ -1113,16 +1128,14 @@ export function ConfigPanel({ onOpenImport, onOpenImportAmnezia, onOpenTemplate,
           )}
         </div>
         {providersModalKind && mountProvidersModal && (
-          <LazyBoundary>
-            <ProvidersModal
-              open={isProvidersModalOpen}
-              kind={providersModalKind}
-              clashApiPort={activeClashApiPort ?? ''}
-              clashApiSecret={clashApiSecret ?? null}
-              clashApiUnix={activeClashApiUnix ?? null}
-              onOpenChange={handleProvidersModalOpenChange}
-            />
-          </LazyBoundary>
+          <ProvidersModal
+            open={isProvidersModalOpen}
+            kind={providersModalKind}
+            clashApiPort={activeClashApiPort ?? ''}
+            clashApiSecret={clashApiSecret ?? null}
+            clashApiUnix={activeClashApiUnix ?? null}
+            onOpenChange={handleProvidersModalOpenChange}
+          />
         )}
         <BackupsModalContainer onRefreshConfigs={refreshConfigsAndEditor} />
         {massConfirm && (
