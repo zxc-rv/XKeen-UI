@@ -32,7 +32,7 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
   const { currentCore, coreVersions, availableCores } = state
   const dnsStatus = useDnsStatusStore((s) => s.status)
 
-  const isDnsEnabled = !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.dnsMihomo
+  const isDnsEnabled = currentCore === 'mihomo' && !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.dnsMihomo
 
   const [pendingCore, setPendingCore] = useState<string | null>(null)
 
