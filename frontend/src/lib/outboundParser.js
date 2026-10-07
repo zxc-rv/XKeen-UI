@@ -24,29 +24,34 @@ const getStreamSettings = (type, params) => {
   const number = (val) => (val ? +val : undefined)
   const bool = (val) => val === 'true' || val === true || val === '1' || undefined
   const string = (val) => val || undefined
+  let finalmask
+  try {
+    finalmask = params.fm ? JSON.parse(decodeURIComponent(params.fm)) : undefined
+  } catch {}
   const output = {
     network: type,
     security: string(params.security),
     tlsSettings:
       params.security === 'tls'
         ? {
-          fingerprint: string(params.fp) || 'chrome',
-          serverName: string(params.sni),
-          alpn: params.alpn?.split(','),
-          allowInsecure: bool(params.allowinsecure || params.insecure),
-        }
+            fingerprint: string(params.fp) || 'chrome',
+            serverName: string(params.sni),
+            alpn: params.alpn?.split(','),
+            allowInsecure: bool(params.allowinsecure || params.insecure),
+          }
         : undefined,
     realitySettings:
       params.security === 'reality'
         ? {
-          fingerprint: string(params.fp) || 'chrome',
-          serverName: string(params.sni),
-          publicKey: string(params.pbk),
-          shortId: string(params.sid),
-          spiderX: string(params.spx),
-          mldsa65Verify: string(params.pqv),
-        }
+            fingerprint: string(params.fp) || 'chrome',
+            serverName: string(params.sni),
+            publicKey: string(params.pbk),
+            shortId: string(params.sid),
+            spiderX: string(params.spx),
+            mldsa65Verify: string(params.pqv),
+          }
         : undefined,
+    finalmask,
   }
   if (type === 'tcp' && params.headerType) output.tcpSettings = { header: { type: params.headerType } }
   if (type === 'raw' && params.headerType) output.rawSettings = { header: { type: params.headerType } }
@@ -54,7 +59,7 @@ const getStreamSettings = (type, params) => {
     let extra
     try {
       extra = params.extra ? JSON.parse(decodeURIComponent(params.extra)) : undefined
-    } catch { }
+    } catch {}
     output.xhttpSettings = {
       host: string(params.host),
       path: params.path || '/',
@@ -166,7 +171,7 @@ const protocols = {
       const decoded = safeBase64(userinfo).split(':')
       method = decoded[0]
       password = decoded.slice(1).join(':')
-        ;[address, port] = server.split(':')
+      ;[address, port] = server.split(':')
       if (address.startsWith('[') && server.includes(']:')) {
         const parts = server.split(']:')
         address = parts[0] + ']'
@@ -176,7 +181,7 @@ const protocols = {
       const decoded = safeBase64(head)
       const match = decoded.match(/^(.*?):(.*?)@(.*):(\d+)$/)
       if (!match) throw new Error('Ошибка парсинга')
-        ;[, method, password, address, port] = match
+      ;[, method, password, address, port] = match
     }
 
     return {
@@ -311,13 +316,13 @@ function convertToMihomoYaml(proxyConfig) {
     const mapXmux = (xmux) =>
       xmux
         ? {
-          'max-connections': xmux.maxConnections,
-          'max-concurrency': xmux.maxConcurrency,
-          'c-max-reuse-times': xmux.cMaxReuseTimes,
-          'h-max-request-times': xmux.hMaxRequestTimes,
-          'h-max-reusable-secs': xmux.hMaxReusableSecs,
-          'h-keep-alive-period': xmux.hKeepAlivePeriod,
-        }
+            'max-connections': xmux.maxConnections,
+            'max-concurrency': xmux.maxConcurrency,
+            'c-max-reuse-times': xmux.cMaxReuseTimes,
+            'h-max-request-times': xmux.hMaxRequestTimes,
+            'h-max-reusable-secs': xmux.hMaxReusableSecs,
+            'h-keep-alive-period': xmux.hKeepAlivePeriod,
+          }
         : undefined
 
     common['xhttp-opts'] = {
@@ -330,27 +335,27 @@ function convertToMihomoYaml(proxyConfig) {
       'reuse-settings': mapXmux(extra.xmux),
       'download-settings': extra.downloadSettings
         ? (() => {
-          const ds = extra.downloadSettings
-          const tls = ds.tlsSettings || {}
-          const xs = ds.xhttpSettings || {}
-          return {
-            // xhttp part
-            path: xs.path,
-            host: xs.host,
-            headers: xs.headers,
-            'no-grpc-header': xs.noGRPCHeader || undefined,
-            'x-padding-bytes': xs.xPaddingBytes,
-            'reuse-settings': mapXmux(xs.xmux),
-            // proxy part
-            server: ds.address,
-            port: ds.port,
-            tls: ds.security === 'tls' || undefined,
-            alpn: tls.alpn,
-            'skip-cert-verify': tls.allowInsecure || undefined,
-            servername: tls.serverName,
-            'client-fingerprint': tls.fingerprint,
-          }
-        })()
+            const ds = extra.downloadSettings
+            const tls = ds.tlsSettings || {}
+            const xs = ds.xhttpSettings || {}
+            return {
+              // xhttp part
+              path: xs.path,
+              host: xs.host,
+              headers: xs.headers,
+              'no-grpc-header': xs.noGRPCHeader || undefined,
+              'x-padding-bytes': xs.xPaddingBytes,
+              'reuse-settings': mapXmux(xs.xmux),
+              // proxy part
+              server: ds.address,
+              port: ds.port,
+              tls: ds.security === 'tls' || undefined,
+              alpn: tls.alpn,
+              'skip-cert-verify': tls.allowInsecure || undefined,
+              servername: tls.serverName,
+              'client-fingerprint': tls.fingerprint,
+            }
+          })()
         : undefined,
     }
   }
@@ -361,10 +366,6 @@ const parseHysteria2Xray = (uri) => {
   const url = new URL(uri)
   const params = Object.fromEntries([...url.searchParams].map(([k, v]) => [k.toLowerCase(), v]))
   const tag = decodeURIComponent(url.hash.slice(1)) || 'PROXY'
-  let finalmask = { quicParams: { congestion: 'bbr', debug: false } }
-  try {
-    if (params.fm) finalmask = JSON.parse(decodeURIComponent(params.fm))
-  } catch { }
 
   const streamSettings = getStreamSettings('hysteria', { ...params, security: params.security || 'tls' })
   streamSettings.hysteriaSettings = {
@@ -372,7 +373,10 @@ const parseHysteria2Xray = (uri) => {
     version: 2,
   }
   if (streamSettings.tlsSettings) streamSettings.tlsSettings.alpn = streamSettings.tlsSettings.alpn || ['h3']
-  streamSettings.finalmask = finalmask
+  streamSettings.finalmask = {
+    ...streamSettings.finalmask,
+    quicParams: { congestion: 'bbr', bbrProfile: 'standard', ...streamSettings.finalmask?.quicParams },
+  }
 
   return {
     tag,
@@ -386,7 +390,6 @@ const parseHysteria2Xray = (uri) => {
   }
 }
 
-/** existingConfig: текст текущего конфига (substring-проверки) ИЛИ массив уже занятых имён/тегов (exact-match через includes) */
 function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
   const generateName = (base) => {
     let index = 1
