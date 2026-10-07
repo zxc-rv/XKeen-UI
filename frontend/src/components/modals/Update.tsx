@@ -215,44 +215,47 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
               Обновление {coreLabel}
             </DialogTitle>
 
-            <DialogDescription className="flex w-full items-center justify-between" render={
-              <div>
-                Выберите версию для установки
-                <span className="flex items-center gap-1.5">
-                  {repo && (
-                    <Badge variant="outline" className="h-5 rounded-full border-ring/40 bg-muted/50 px-2 text-xs font-medium">
-                      {repo}
-                    </Badge>
-                  )}
-                  {!loading && source && (
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'h-5 rounded-full border-none px-2 text-xs font-medium',
-                        source === 'github' ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'
-                      )}
-                    >
-                      {source === 'github' ? 'GitHub' : 'jsDelivr'}
-                    </Badge>
-                  )}
-                  {!loading && releases.length > 0 && (
-                    <Badge variant="outline" className="h-6 w-6 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
-                      {releases.length}
-                    </Badge>
-                  )}
-                </span>
-              </div>
-            } />
+            <DialogDescription
+              className="flex w-full items-center justify-between"
+              render={
+                <div>
+                  Выберите версию для установки
+                  <span className="flex items-center gap-1.5">
+                    {repo && (
+                      <Badge variant="outline" className="border-ring/40 bg-muted/50 h-5 rounded-full px-2 text-xs font-medium">
+                        {repo}
+                      </Badge>
+                    )}
+                    {!loading && source && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'h-5 rounded-full border-none px-2 text-xs font-medium',
+                          source === 'github' ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'
+                        )}
+                      >
+                        {source === 'github' ? 'GitHub' : 'jsDelivr'}
+                      </Badge>
+                    )}
+                    {!loading && releases.length > 0 && (
+                      <Badge variant="outline" className="h-6 w-6 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
+                        {releases.length}
+                      </Badge>
+                    )}
+                  </span>
+                </div>
+              }
+            />
           </DialogHeader>
 
-          <ScrollArea className="max-h-[500px] min-h-0 flex-1" hideScrollbar>
+          <ScrollArea className="h-125 min-h-0" hideScrollbar>
             {loading ? (
-              <div className="text-muted-foreground flex min-h-88 flex-col items-center justify-center gap-3 py-16">
+              <div className="text-muted-foreground flex min-h-125 flex-col items-center justify-center gap-3">
                 <Spinner className="text-chart-2 size-10" />
                 <span className="text-sm tracking-normal">Загрузка релизов...</span>
               </div>
             ) : releases.length === 0 ? (
-              <Empty className="min-h-88 border-none">
+              <Empty className="min-h-125 border-none">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
                     <IconPlaylistX className="size-8" />
