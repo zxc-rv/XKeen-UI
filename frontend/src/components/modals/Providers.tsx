@@ -345,7 +345,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={0}>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,850px)]">
+        <DialogContent initialFocus={false} className="w-full max-w-[95vw]! md:w-[min(80vw,850px)]">
           <div className="flex max-h-[88dvh] flex-col gap-4 overflow-hidden md:max-h-[55dvh]">
             <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
