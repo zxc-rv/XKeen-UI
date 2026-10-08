@@ -48,6 +48,15 @@ function formatVehicleType(value?: string) {
   return normalized ? normalized[0] + normalized.slice(1).toLowerCase() : '—'
 }
 
+function isNeverUpdated(value?: string | number) {
+  return typeof value === 'string' && value.startsWith('0001-01-01')
+}
+
+function UpdatedAtLabel({ value }: { value?: string | number }) {
+  if (isNeverUpdated(value)) return <span className="text-red-400">Не обновлялось</span>
+  return <>{formatRelativeTime(value)}</>
+}
+
 function formatDateTime(value?: string | number) {
   if (!value) return '—'
   const date = new Date(typeof value === 'number' ? value * 1000 : value)
@@ -467,8 +476,13 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                             </TableCell>
                             <TableCell className="min-w-42 font-medium tabular-nums">{traffic.total}</TableCell>
                             <TableCell className="tabular-nums">{traffic.expire}</TableCell>
-                            <TableCell className="tabular-nums" title={provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}>
-                              {formatRelativeTime(provider.updatedAt)}
+                            <TableCell
+                              className="tabular-nums"
+                              title={
+                                provider.updatedAt && !isNeverUpdated(provider.updatedAt) ? formatDateTime(provider.updatedAt) : undefined
+                              }
+                            >
+                              <UpdatedAtLabel value={provider.updatedAt} />
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5">
@@ -558,9 +572,13 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                             </TableCell>
                             <TableCell
                               className="tabular-nums"
-                              title={isUpdatable && provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}
+                              title={
+                                isUpdatable && provider.updatedAt && !isNeverUpdated(provider.updatedAt)
+                                  ? formatDateTime(provider.updatedAt)
+                                  : undefined
+                              }
                             >
-                              {isUpdatable ? formatRelativeTime(provider.updatedAt) : ''}
+                              {isUpdatable ? <UpdatedAtLabel value={provider.updatedAt} /> : ''}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5">
