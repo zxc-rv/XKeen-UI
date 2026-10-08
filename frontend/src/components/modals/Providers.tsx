@@ -317,8 +317,10 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
 
   async function viewProviderContent(provider: RuleProvider | ProxyProvider) {
     const cacheKey = `${kind}:${provider.name}`
-    if (providerContentCache.has(cacheKey)) {
-      openViewContent({ name: provider.name, content: providerContentCache.get(cacheKey)! })
+    const isMrsRule = kind === 'rules' && (provider as RuleProvider).format === 'MrsRule'
+    const cachedContent = isMrsRule ? providerContentCache.get(cacheKey) : undefined
+    if (cachedContent !== undefined) {
+      openViewContent({ name: provider.name, content: cachedContent })
       return
     }
     setViewingName(provider.name)
@@ -333,7 +335,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
       const endpoint = kind === 'proxies' ? 'proxy-provider' : 'ruleset'
       const res = await apiCall<{ success: boolean; error?: string; content?: string }>('GET', `${endpoint}?${params.toString()}`)
       if (!res.success || res.content === undefined) throw new Error(res.error ?? 'Нет данных')
-      providerContentCache.set(cacheKey, res.content)
+      if (isMrsRule) providerContentCache.set(cacheKey, res.content)
       openViewContent({ name: provider.name, content: res.content })
     } catch (e) {
       showToast(`Не удалось загрузить содержимое: ${e instanceof Error ? e.message : 'неизвестная ошибка'}`, 'error')
