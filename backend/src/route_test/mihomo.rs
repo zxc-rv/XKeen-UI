@@ -1371,7 +1371,7 @@ async fn build_engine(doc: &Yaml, base_dir: &Path) -> Result<Engine, String> {
 
 /// Загружает и парсит `config.yaml` + провайдеры активного mihomo.
 pub async fn load() -> Result<Engine, String> {
-    let docs = crate::ruleset_inspector::load_mihomo_yaml().await?;
+    let docs = crate::provider_inspector::load_mihomo_yaml().await?;
     let doc = docs.first().ok_or_else(|| "YAML пуст".to_string())?;
     build_engine(doc, Path::new(crate::types::MIHOMO_CONF_DIR)).await
 }

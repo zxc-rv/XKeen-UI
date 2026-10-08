@@ -8,7 +8,7 @@ mod frontend_embedder;
 mod geo;
 mod logger;
 mod route_test;
-mod ruleset_inspector;
+mod provider_inspector;
 mod settings;
 mod system;
 mod types;
@@ -488,10 +488,13 @@ async fn main() {
         )
         .route("/api/version", get(version::version_handler))
         .route("/api/system", get(system::get_system_stats))
-        .route("/api/ruleset", get(ruleset_inspector::get_ruleset_content))
         .route(
-            "/api/proxy-provider",
-            get(ruleset_inspector::get_proxy_provider_content),
+            "/api/rule-providers",
+            get(provider_inspector::get_rule_providers_content).put(provider_inspector::put_rule_providers_content),
+        )
+        .route(
+            "/api/proxy-providers",
+            get(provider_inspector::get_proxy_provider_content).put(provider_inspector::put_proxy_provider_content),
         )
         .route(
             "/api/route-test",
