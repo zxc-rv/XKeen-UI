@@ -346,11 +346,11 @@ async fn apply_mihomo_hot_reload(
         (Some(socket), _) => {
             let socket_path = Path::new(MIHOMO_CONF_DIR).join(Path::new(socket).file_name().unwrap_or_default());
             match reqwest::Client::builder().unix_socket(socket_path).build() {
-                Ok(client) => (client, "http://127.0.0.1/configs".to_string()),
+                Ok(client) => (client, "http://127.0.0.1/configs?force=true".to_string()),
                 Err(error) => return api_error(error.to_string()),
             }
         }
-        (None, Some(port)) => (state.http_client.clone(), format!("http://127.0.0.1:{port}/configs")),
+        (None, Some(port)) => (state.http_client.clone(), format!("http://127.0.0.1:{port}/configs?force=true")),
         (None, None) => return api_error("external-controller не найден"),
     };
 

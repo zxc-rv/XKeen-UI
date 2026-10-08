@@ -328,7 +328,7 @@ export const DnsPanel = memo(function DnsPanel() {
           showToast(`Ошибка сохранения: ${saveResult.error}`, 'error')
           return
         }
-        await clashFetch(clashApiPort ?? '', 'configs', {
+        await clashFetch(clashApiPort ?? '', 'configs?force=true', {
           method: 'PUT',
           secret: clashApiSecret,
           unix: clashApiUnix,
@@ -366,7 +366,7 @@ export const DnsPanel = memo(function DnsPanel() {
         setup_filter: setupFilter,
       })
       if (result.success) {
-        await clashFetch(clashApiPort ?? '', 'configs', {
+        await clashFetch(clashApiPort ?? '', 'configs?force=true', {
           method: 'PUT',
           secret: clashApiSecret,
           unix: clashApiUnix,
@@ -402,7 +402,7 @@ export const DnsPanel = memo(function DnsPanel() {
       }
 
       try {
-        await clashFetch(clashApiPort ?? '', 'configs', {
+        await clashFetch(clashApiPort ?? '', 'configs?force=true', {
           method: 'PUT',
           secret: clashApiSecret,
           unix: clashApiUnix,
