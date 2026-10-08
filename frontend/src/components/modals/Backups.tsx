@@ -23,7 +23,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { apiCall } from '@/lib/api'
 import { useAppContext } from '@/lib/store'
 import { IconAlertTriangle, IconBox, IconBoxOff, IconChevronDown, IconPencil, IconPlus, IconRestore, IconTrash } from '@tabler/icons-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 type BackupContent = 'xkeen' | 'xkeen-ui' | 'xray' | 'mihomo'
 
@@ -95,6 +95,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
   const [dialogAction, setDialogAction] = useState<ConfirmAction | null>(null)
   const [renamingName, setRenamingName] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const renameSubmittingRef = useRef(false)
 
   const fetchBackups = useCallback(async () => {
     const result = await apiCall<BackupsResponse>('GET', 'backup')
@@ -148,11 +149,13 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
 
   const submitRename = useCallback(
     async (oldName: string) => {
+      if (renameSubmittingRef.current) return
       const newName = renameValue.trim()
       if (!newName || newName === stripBackupSuffix(oldName)) {
         cancelRename()
         return
       }
+      renameSubmittingRef.current = true
       const newFullName = `${newName}_${BACKUP_SUFFIX}`
       setPendingAction(`rename:${oldName}`)
       try {
@@ -167,6 +170,7 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
       } catch (error: any) {
         showToast(error.message ?? 'Не удалось переименовать бэкап', 'error')
       } finally {
+        renameSubmittingRef.current = false
         setPendingAction(null)
       }
     },
@@ -322,7 +326,10 @@ export function BackupsModal({ open, onOpenChange, onRefreshConfigs }: Props) {
                                 value={renameValue}
                                 onChange={(e) => setRenameValue(e.target.value)}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') void submitRename(backup.name)
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    e.currentTarget.blur()
+                                  }
                                   if (e.key === 'Escape') cancelRename()
                                 }}
                                 onBlur={() => void submitRename(backup.name)}
