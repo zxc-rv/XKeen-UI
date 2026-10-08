@@ -219,7 +219,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
               className="flex w-full items-center justify-between"
               render={
                 <div>
-                  Выберите версию для установки
+                  Выберите версию
                   <span className="flex items-center gap-1.5">
                     {repo && (
                       <Badge variant="outline" className="border-ring/40 bg-muted/50 h-5 rounded-full px-2 text-xs font-medium">
@@ -235,11 +235,6 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
                         )}
                       >
                         {source === 'github' ? 'GitHub' : 'jsDelivr'}
-                      </Badge>
-                    )}
-                    {!loading && releases.length > 0 && (
-                      <Badge variant="outline" className="h-6 w-6 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
-                        {releases.length}
                       </Badge>
                     )}
                   </span>
