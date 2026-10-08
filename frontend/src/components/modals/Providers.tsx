@@ -238,8 +238,8 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   }, [open, kind, loadProviders])
 
   const rows = useMemo(() => (kind === 'proxies' ? proxyProviders : ruleProviders), [kind, proxyProviders, ruleProviders])
-  const httpProviderNames = useMemo(
-    () => rows.filter((provider) => normalizeVehicleType(provider.vehicleType) === 'HTTP').map((provider) => provider.name),
+  const updatableProviderNames = useMemo(
+    () => rows.filter((provider) => normalizeVehicleType(provider.vehicleType) !== 'INLINE').map((provider) => provider.name),
     [rows]
   )
 
@@ -275,7 +275,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   }, [ruleProviders, filter, caseSensitive])
 
   async function updateProvider(name: string, vehicleType?: string) {
-    if (normalizeVehicleType(vehicleType) !== 'HTTP') return
+    if (normalizeVehicleType(vehicleType) === 'INLINE') return
     setUpdatingName(name)
     try {
       await clashFetch(clashApiPort, `providers/${kind}/${encodeURIComponent(name)}`, {
@@ -294,11 +294,11 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   }
 
   async function updateAllProviders() {
-    if (!httpProviderNames.length) return
+    if (!updatableProviderNames.length) return
     setUpdatingAll(true)
     try {
       await Promise.all(
-        httpProviderNames.map((name) =>
+        updatableProviderNames.map((name) =>
           clashFetch(clashApiPort, `providers/${kind}/${encodeURIComponent(name)}`, {
             method: 'PUT',
             secret: clashApiSecret,
@@ -419,7 +419,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                           size="icon-xs"
                           className="hover:bg-transparent! hover:text-blue-400"
                           onClick={updateAllProviders}
-                          disabled={loading || reloading || updatingAll || !httpProviderNames.length}
+                          disabled={loading || reloading || updatingAll || !updatableProviderNames.length}
                         >
                           {updatingAll ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
                         </Button>
@@ -436,6 +436,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                     ) : (
                       filteredProxyProviders.map((provider) => {
                         const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
+                        const isUpdatable = normalizeVehicleType(provider.vehicleType) !== 'INLINE'
                         const traffic = getTrafficSummary(provider.subscriptionInfo)
                         return (
                           <TableRow key={provider.name}>
@@ -478,7 +479,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                                 >
                                   {viewingName === provider.name ? <Spinner className="size-4" /> : <IconEye className="size-4" />}
                                 </Button>
-                                {isHttp ? (
+                                {isUpdatable ? (
                                   <Button
                                     variant="ghost"
                                     size="icon-xs"
@@ -512,7 +513,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                           size="icon-xs"
                           className="hover:bg-transparent! hover:text-blue-400"
                           onClick={updateAllProviders}
-                          disabled={loading || reloading || updatingAll || !httpProviderNames.length}
+                          disabled={loading || reloading || updatingAll || !updatableProviderNames.length}
                         >
                           {updatingAll ? <Spinner className="size-4" /> : <IconRefresh className="size-4" />}
                         </Button>
@@ -528,9 +529,8 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                       </TableRow>
                     ) : (
                       filteredRuleProviders.map((provider, index) => {
-                        const isHttp = normalizeVehicleType(provider.vehicleType) === 'HTTP'
+                        const isUpdatable = normalizeVehicleType(provider.vehicleType) !== 'INLINE'
                         const hasFormat = !!provider.format?.trim()
-                        const showUpdatedAt = normalizeVehicleType(provider.vehicleType) !== 'INLINE'
                         return (
                           <TableRow key={provider.name}>
                             <TableCell className="text-muted-foreground tabular-nums">{index + 1}</TableCell>
@@ -556,9 +556,9 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                             </TableCell>
                             <TableCell
                               className="tabular-nums"
-                              title={showUpdatedAt && provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}
+                              title={isUpdatable && provider.updatedAt ? formatDateTime(provider.updatedAt) : undefined}
                             >
-                              {showUpdatedAt ? formatRelativeTime(provider.updatedAt) : ''}
+                              {isUpdatable ? formatRelativeTime(provider.updatedAt) : ''}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex items-center justify-end gap-0.5">
@@ -571,7 +571,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                                 >
                                   {viewingName === provider.name ? <Spinner className="size-4" /> : <IconEye className="size-4" />}
                                 </Button>
-                                {isHttp ? (
+                                {isUpdatable ? (
                                   <Button
                                     variant="ghost"
                                     size="icon-xs"
