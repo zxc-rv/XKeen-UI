@@ -39,7 +39,7 @@ import {
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
-import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
+import { apiCall, buildClashHeaders, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
 import {
   runMassTask,
@@ -81,6 +81,9 @@ const BackupsModalContainer = memo(function BackupsModalContainer({ onRefreshCon
 })
 
 type ClashMode = 'rule' | 'global' | 'direct'
+type ApiResult = { success: boolean; error?: string }
+
+const isXkeenFile = (file: string) => file.startsWith('/opt/etc/xkeen')
 type ProvidersModalKind = 'rules' | 'proxies'
 
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
@@ -596,19 +599,9 @@ export function ConfigPanel({
     await executeSave(targets, cfg, content)
   }
 
-  function buildApplyUrl(file: string, core: string) {
-    let url = 'configs'
-    if (!file.startsWith('/opt/etc/xkeen')) {
-      if (core === 'mihomo') url += '?validate=mihomo'
-      else if (core === 'xray') url += '?validate=xray'
-    }
-    return url
-  }
-
   function restartActionFor(cfg: Config, content: string) {
     const lang = getFileLanguage(cfg.file)
-    const isXkeen = cfg.file.startsWith('/opt/etc/xkeen')
-    return !isXkeen && (lang === 'json' || lang === 'yaml') && !hasCriticalChanges(cfg.savedContent, content, lang)
+    return !isXkeenFile(cfg.file) && (lang === 'json' || lang === 'yaml') && !hasCriticalChanges(cfg.savedContent, content, lang)
       ? 'softRestart'
       : 'hardRestart'
   }
@@ -624,28 +617,48 @@ export function ConfigPanel({
       }
     }
 
-    const saveResult = await apiCall<{ success: boolean; error?: string }>(
+    const isHotReload = core === 'mihomo' && !isXkeenFile(cfg.file)
+    if (isHotReload && !activeClashApiPort && !activeClashApiUnix) {
+      throw new Error('external-controller не найден в config.yaml')
+    }
+
+    const validate = !isXkeenFile(cfg.file) && (core === 'mihomo' || core === 'xray') ? `?validate=${core}` : ''
+    const saveResult = await apiCall<ApiResult>(
       'PUT',
-      buildApplyUrl(cfg.file, core),
+      `configs${validate}`,
       { file: cfg.file, content },
-      { baseUrl }
+      {
+        baseUrl,
+        headers: isHotReload ? buildClashHeaders(activeClashApiPort, clashApiSecret, activeClashApiUnix) : undefined,
+      }
     )
     if (!saveResult.success) {
       throw new Error(
         saveResult.error === 'Validation failed'
-          ? `Ошибка валидации ${capitalize(currentCore)}: проверьте журнал`
+          ? `Ошибка валидации ${capitalize(core)}: проверьте журнал`
           : saveResult.error || 'Ошибка сохранения'
       )
     }
-    const action = restartActionFor(cfg, content)
-    const r = await apiCall<{ success: boolean; error?: string }>('POST', 'control', { action, core }, { baseUrl })
-    if (!r?.success) throw new Error(r?.error || 'ошибка перезапуска')
+
+    const action = isHotReload
+      ? hasCriticalChanges(cfg.savedContent, content, 'yaml')
+        ? 'hardRestart'
+        : null
+      : restartActionFor(cfg, content)
+    if (!action) return false
+
+    const restartResult = await apiCall<ApiResult>('POST', 'control', { action, core }, { baseUrl })
+    if (!restartResult?.success) throw new Error(restartResult?.error || 'ошибка перезапуска')
+    return true
   }
 
   async function executeApply(targets: string[], cfg: Config, content: string) {
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Применение...' })
-    const results = await runMassTask(targets, async (_id, baseUrl) => {
-      await applyToHost(baseUrl, cfg, content)
+    const isMihomoHotReload = currentCore === 'mihomo' && !isXkeenFile(cfg.file)
+    let localRestarted = false
+    const results = await runMassTask(targets, async (id, baseUrl) => {
+      const restarted = await applyToHost(baseUrl, cfg, content)
+      if (id === LOCAL_ROUTER_ID) localRestarted = restarted
     })
 
     const localOk = results.find((r) => r.id === LOCAL_ROUTER_ID)?.ok
@@ -669,9 +682,11 @@ export function ConfigPanel({
     }
 
     if (targets.includes(LOCAL_ROUTER_ID)) {
+      const nextStatus =
+        localOk === false && !(isMihomoHotReload && !localRestarted) ? 'stopped' : isRunning || localOk ? 'running' : 'stopped'
       dispatch({
         type: 'SET_SERVICE_STATUS',
-        status: localOk === false ? 'stopped' : isRunning || localOk ? 'running' : 'stopped',
+        status: nextStatus,
       })
       if (localOk !== false) syncClashApiPort(200)
     } else {
@@ -773,8 +788,8 @@ export function ConfigPanel({
 
   const isAnyGui = isRoutingGui || isLogGui
 
-  const coreConfigs = configs.filter((c) => !c.file.startsWith('/opt/etc/xkeen'))
-  const xkeenConfigs = configs.filter((c) => c.file.startsWith('/opt/etc/xkeen'))
+  const coreConfigs = configs.filter((c) => !isXkeenFile(c.file))
+  const xkeenConfigs = configs.filter((c) => isXkeenFile(c.file))
 
   const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768

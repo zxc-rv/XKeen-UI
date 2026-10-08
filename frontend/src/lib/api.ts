@@ -27,7 +27,7 @@ export async function apiCall<T = unknown>(
   method: string,
   endpoint: string,
   body?: unknown,
-  options?: { baseUrl?: string | null; timeoutMs?: number }
+  options?: { baseUrl?: string | null; timeoutMs?: number; headers?: Record<string, string> }
 ): Promise<T> {
   const isGet = method === 'GET'
   const timeoutMs = options?.timeoutMs ?? (options?.baseUrl ? REMOTE_FETCH_TIMEOUT_MS : undefined)
@@ -35,9 +35,11 @@ export async function apiCall<T = unknown>(
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null
 
   try {
+    const headers: Record<string, string> = { ...(options?.headers ?? {}) }
+    if (!isGet) headers['Content-Type'] = 'application/json'
     const res = await fetch(`${apiPrefix(options?.baseUrl)}/${endpoint}`, {
       method,
-      headers: !isGet ? { 'Content-Type': 'application/json' } : {},
+      headers,
       body: !isGet ? JSON.stringify(body) : undefined,
       signal: controller?.signal,
     })
