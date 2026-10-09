@@ -13,6 +13,7 @@ import {
   IconLoader2,
   IconLock,
   IconPlugX,
+  IconScaleOff,
 } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -43,6 +44,18 @@ interface ProxyInfo {
   icon?: string
 }
 
+interface SmartNodeRank {
+  Name: string
+  Rank: string
+  Weight: number
+}
+
+interface SmartNodeWeight {
+  rank: string
+  weight: number
+  order: number
+}
+
 type ClashMode = 'rule' | 'global' | 'direct'
 
 interface Props {
@@ -54,21 +67,49 @@ interface Props {
 }
 
 const NO_DELAY_TYPES = new Set(['reject', 'reject-drop', 'dns', 'pass', 'relay'])
-const SELECTOR_TYPES = new Set(['Selector', 'Fallback', 'URLTest', 'LoadBalance'])
-const AUTO_POLICY_TYPES = new Set(['Fallback', 'URLTest', 'LoadBalance'])
+const SELECTOR_TYPES = new Set(['Selector', 'Fallback', 'URLTest', 'LoadBalance', 'Smart'])
+const AUTO_POLICY_TYPES = new Set(['Fallback', 'URLTest', 'LoadBalance', 'Smart'])
 const COLLAPSE_SELECTORS_KEY = 'collapseSelectors'
-const NO_SORT_TYPES = new Set(['Dns', 'Compatible', 'Direct', 'Reject', 'RejectDrop', 'Pass', 'Fallback', 'URLTest', 'LoadBalance', 'Selector'])
+const NO_SORT_TYPES = new Set([
+  'Dns',
+  'Compatible',
+  'Direct',
+  'Reject',
+  'RejectDrop',
+  'Pass',
+  'Fallback',
+  'URLTest',
+  'LoadBalance',
+  'Selector',
+  'Smart',
+])
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
+const SMART_NOW_PLACEHOLDER = 'Smart - Select'
+const SMART_RANK_LABELS: Record<string, string> = {
+  MostUsed: 'часто',
+  OccasionalUsed: 'иногда',
+  RarelyUsed: 'редко',
+}
 
 interface SelectorsStore {
   testingAll: Record<string, boolean>
   testingSingle: Record<string, boolean>
+  smartNodes: Record<string, Record<string, SmartNodeWeight>>
 }
 
 const useSelectorsStore = create<SelectorsStore>(() => ({
   testingAll: {},
   testingSingle: {},
+  smartNodes: {},
 }))
+
+function isSmartType(type?: string): boolean {
+  return type?.toLowerCase() === 'smart'
+}
+
+function isSmartPlaceholder(name?: string | null): boolean {
+  return name === SMART_NOW_PLACEHOLDER
+}
 
 function GraveIcon({ className, size = 16 }: { className?: string; size?: number }) {
   return (
@@ -115,6 +156,12 @@ function shouldShowDelay(proxy?: ProxyInfo, isTesting = false): boolean {
   return getLastDelay(proxy) !== null || isTesting
 }
 
+function smartRankColor(rank: string): string {
+  if (rank === 'MostUsed') return 'text-green-400'
+  if (rank === 'OccasionalUsed') return 'text-yellow-400'
+  return 'text-muted-foreground'
+}
+
 function getProxyTransport(proxy?: Pick<ProxyInfo, 'udp' | 'xudp'>): string | null {
   if (!proxy) return null
   if (proxy.xudp) return 'XUDP'
@@ -127,11 +174,7 @@ function hasNConsecutiveTimeouts(proxy: ProxyInfo | undefined, n: number): boole
   return proxy.history.slice(-n).every((entry) => entry.delay === 0)
 }
 
-function sortProxyNames(
-  proxyNames: string[],
-  order: string,
-  proxies: Record<string, ProxyInfo | undefined>
-): string[] {
+function sortProxyNames(proxyNames: string[], order: string, proxies: Record<string, ProxyInfo | undefined>): string[] {
   if (order === 'default') return proxyNames
   const sortable: { name: string; index: number; delay: number | null }[] = []
   const nonSortable: { name: string; index: number }[] = []
@@ -171,6 +214,10 @@ function getChainData(proxies: Record<string, ProxyInfo | undefined>, startName?
 
   while (current && !visited.has(current)) {
     visited.add(current)
+    if (isSmartPlaceholder(current)) {
+      parts.push('Автовыбор', '')
+      break
+    }
     const proxy = proxies[current]
     parts.push(current, proxy?.icon ?? '')
     if (!proxy || !SELECTOR_TYPES.has(proxy.type) || !proxy.now) break
@@ -230,6 +277,7 @@ const ProxyCard = memo(function ProxyCard({
   const isActive = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.now === proxyName)
   const isFixed = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.fixed === proxyName)
   const isTestingSingle = useSelectorsStore((s) => !!s.testingSingle[proxyName])
+  const smartInfo = useSelectorsStore((s) => s.smartNodes[selectorName]?.[proxyName])
 
   const chainStr = useProxiesStore((s): string => {
     const p = s.proxies[proxyName] as ProxyInfo | undefined
@@ -244,6 +292,7 @@ const ProxyCard = memo(function ProxyCard({
   const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
   const selectionDisabled = lockSelection || isSelectionDisabled(autoPolicy, proxy)
   const transport = getProxyTransport(proxy)?.toLowerCase() ?? proxy.type.toLowerCase()
+  const smartLabel = smartInfo ? (SMART_RANK_LABELS[smartInfo.rank] ?? smartInfo.rank) : null
 
   return (
     <div
@@ -303,31 +352,39 @@ const ProxyCard = memo(function ProxyCard({
       <div className="flex items-center justify-between gap-1">
         <span className="text-muted-foreground text-xs">
           {proxy.type.toLowerCase()} / {transport}
+          {smartLabel && (
+            <Tooltip>
+              <TooltipTrigger render={<span className={cn('ml-1 font-medium', smartRankColor(smartInfo!.rank))}>· {smartLabel}</span>} />
+              <TooltipContent>Smart-вес: {smartInfo!.weight.toFixed(1)}%</TooltipContent>
+            </Tooltip>
+          )}
         </span>
 
         {canTest && (
           <Tooltip>
-            <TooltipTrigger render={
-              <span
-                className={cn(
-                  'shrink-0 cursor-pointer text-xs font-medium tabular-nums transition-opacity',
-                  delayColor(delay),
-                  isTestingSingle && 'opacity-40'
-                )}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!isTestingSingle) onTestSingle(proxyName)
-                }}
-              >
-                {isTestingSingle ? (
-                  <Spinner />
-                ) : hasHistory ? (
-                  delay || <GraveIcon size={14} />
-                ) : (
-                  <IconBoltFilled size={13} className="text-foreground" />
-                )}
-              </span>
-            } />
+            <TooltipTrigger
+              render={
+                <span
+                  className={cn(
+                    'shrink-0 cursor-pointer text-xs font-medium tabular-nums transition-opacity',
+                    delayColor(delay),
+                    isTestingSingle && 'opacity-40'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!isTestingSingle) onTestSingle(proxyName)
+                  }}
+                >
+                  {isTestingSingle ? (
+                    <Spinner />
+                  ) : hasHistory ? (
+                    delay || <GraveIcon size={14} />
+                  ) : (
+                    <IconBoltFilled size={13} className="text-foreground" />
+                  )}
+                </span>
+              }
+            />
             {proxy.history.length > 0 ? (
               <TooltipContent side="top" className="p-2">
                 <div className="flex min-w-35 flex-col gap-1">
@@ -365,9 +422,11 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
   fixedProxyName?: string
   onClearFixed?: () => Promise<void>
 }) {
-  const chainStr = useProxiesStore((s) =>
-    getChainData(s.proxies as Record<string, ProxyInfo | undefined>, (s.proxies[selectorName] as ProxyInfo | undefined)?.now)
-  )
+  const chainStr = useProxiesStore((s) => {
+    const now = (s.proxies[selectorName] as ProxyInfo | undefined)?.now
+    if (!now) return ''
+    return getChainData(s.proxies as Record<string, ProxyInfo | undefined>, now)
+  })
   const chain = useMemo(() => parseChain(chainStr), [chainStr])
   const [isClearingFixed, setIsClearingFixed] = useState(false)
 
@@ -400,17 +459,19 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
           )}
           {i === 0 && fixedProxyName === item.name && onClearFixed && (
             <Tooltip>
-              <TooltipTrigger render={
-                <button
-                  type="button"
-                  className="flex size-4 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:text-purple-300 disabled:opacity-50"
-                  onClick={handleClearFixed}
-                  disabled={isClearingFixed}
-                  aria-label="Снять фиксацию выбора"
-                >
-                  {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconLock size={17} />}
-                </button>
-              } />
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="flex size-4 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:text-purple-300 disabled:opacity-50"
+                    onClick={handleClearFixed}
+                    disabled={isClearingFixed}
+                    aria-label="Снять фиксацию выбора"
+                  >
+                    {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconLock size={17} />}
+                  </button>
+                }
+              />
               <TooltipContent>Снять фиксацию</TooltipContent>
             </Tooltip>
           )}
@@ -452,28 +513,30 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
       </div>
       {canTest && (
         <Tooltip>
-          <TooltipTrigger render={
-            <button
-              type="button"
-              data-slot="proxy-delay-test"
-              className={cn(
-                'ml-auto flex h-5 min-w-8 shrink-0 cursor-pointer items-center justify-center bg-transparent px-1.5 text-xs font-medium tabular-nums outline-hidden',
-                showDelay ? delayColorImportant(delay) : 'text-foreground!'
-              )}
-              style={showDelay ? undefined : { color: '#fff' }}
-              onMouseDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-              }}
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (!isTestingSingle) void onTestSingle(proxyName)
-              }}
-            >
-              {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBoltFilled className="size-3.5" />}
-            </button>
-          } />
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                data-slot="proxy-delay-test"
+                className={cn(
+                  'ml-auto flex h-5 min-w-8 shrink-0 cursor-pointer items-center justify-center bg-transparent px-1.5 text-xs font-medium tabular-nums outline-hidden',
+                  showDelay ? delayColorImportant(delay) : 'text-foreground!'
+                )}
+                style={showDelay ? undefined : { color: '#fff' }}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (!isTestingSingle) void onTestSingle(proxyName)
+                }}
+              >
+                {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBoltFilled className="size-3.5" />}
+              </button>
+            }
+          />
           <TooltipContent>Замерить отклик</TooltipContent>
         </Tooltip>
       )}
@@ -499,13 +562,18 @@ const SelectorCombobox = memo(function SelectorCombobox({
   visible: boolean
 }) {
   const selector = useProxiesStore((s) => s.proxies[selectorName] as ProxyInfo | undefined)
-  const value = selector?.now ?? null
+  const rawValue = selector?.now ?? null
+  const value = isSmartPlaceholder(rawValue) ? null : rawValue
   const selectedProxy = useProxiesStore((s) => (value ? (s.proxies[value] as ProxyInfo | undefined) : undefined))
   const isFixed = !!value && selector?.fixed === value
+  const isSmart = isSmartType(selector?.type)
   const disabledOptions = useProxiesStore(
     useShallow((s) =>
       Object.fromEntries(
-        options.map((proxyName) => [proxyName, lockSelection || isSelectionDisabled(autoPolicy, s.proxies[proxyName] as ProxyInfo | undefined)])
+        options.map((proxyName) => [
+          proxyName,
+          lockSelection || isSelectionDisabled(autoPolicy, s.proxies[proxyName] as ProxyInfo | undefined),
+        ])
       )
     )
   )
@@ -537,7 +605,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
         )}
         openBorderColor={isFixed ? '#c084fc' : undefined}
         openShadowColor={isFixed ? 'rgba(192,132,252,0.2)' : undefined}
-        placeholder={lockSelection ? 'Балансировка нагрузки' : 'Выберите прокси'}
+        placeholder={lockSelection || isSmart ? 'Автовыбор' : 'Выберите прокси'}
       >
         {selectedProxy?.icon && (
           <InputGroupAddon align="inline-start">
@@ -560,7 +628,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
               aria-disabled={disabledOptions[proxyName] || undefined}
               className={cn(
                 disabledOptions[proxyName] &&
-                'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
+                  'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
               )}
             >
               <CollapsedProxyOption proxyName={proxyName} disabled={!!disabledOptions[proxyName]} onTestSingle={onTestSingle} />
@@ -579,6 +647,7 @@ const SelectorRow = memo(function SelectorRow({
   onSelect,
   onTestSingle,
   onClearFixed,
+  onFlushSmart,
   collapsed,
   onToggleCollapse,
 }: {
@@ -587,6 +656,7 @@ const SelectorRow = memo(function SelectorRow({
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
   onClearFixed: (selectorName: string) => Promise<void>
+  onFlushSmart: (selectorName: string) => Promise<void>
   collapsed: boolean
   onToggleCollapse: (name: string) => void
 }) {
@@ -596,12 +666,15 @@ const SelectorRow = memo(function SelectorRow({
     const currentName = (s.proxies[selectorName] as ProxyInfo | undefined)?.now
     return currentName ? (s.proxies[currentName] as ProxyInfo | undefined) : undefined
   })
+  const smartNodesForGroup = useSelectorsStore((s) => s.smartNodes[selectorName])
+  const [isFlushingSmart, setIsFlushingSmart] = useState(false)
 
   if (!selector) return null
 
   const allProxies = selector.all ?? []
   const autoPolicy = AUTO_POLICY_TYPES.has(selector.type)
   const lockSelection = selector.type === 'LoadBalance'
+  const isSmart = isSmartType(selector.type)
   const selectedDelay = selectedProxy ? getLastDelay(selectedProxy) : null
   const showSelectedDelay = !!selectedProxy && selectedDelay !== null && selectedDelay > 0
 
@@ -615,11 +688,28 @@ const SelectorRow = memo(function SelectorRow({
     if (hideUnavailable) {
       result = result.filter((name) => !hasNConsecutiveTimeouts(allProxiesMap[name], hideCounter))
     }
-    if (sortOrder !== 'default') {
+    if (isSmart && sortOrder === 'default' && smartNodesForGroup) {
+      const hasWeights = result.some((name) => smartNodesForGroup[name] !== undefined)
+      if (hasWeights) {
+        const orderOf = (name: string) => smartNodesForGroup[name]?.order ?? Number.MAX_SAFE_INTEGER
+        result = [...result].sort((a, b) => orderOf(a) - orderOf(b))
+      }
+    } else if (sortOrder !== 'default') {
       result = sortProxyNames(result, sortOrder, allProxiesMap)
     }
     return result
-  }, [allProxies, hideUnavailable, hideCounter, sortOrder, allProxiesMap])
+  }, [allProxies, hideUnavailable, hideCounter, sortOrder, allProxiesMap, isSmart, smartNodesForGroup])
+
+  async function handleFlushSmart() {
+    if (isFlushingSmart) return
+    blurActiveElement()
+    setIsFlushingSmart(true)
+    try {
+      await onFlushSmart(selectorName)
+    } finally {
+      setIsFlushingSmart(false)
+    }
+  }
 
   return (
     <div className="border-border bg-input-background rounded-xl border p-4">
@@ -638,6 +728,25 @@ const SelectorRow = memo(function SelectorRow({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            {isSmart && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Сбросить smart-веса"
+                      onMouseDown={blurActiveElement}
+                      onClick={handleFlushSmart}
+                      disabled={isFlushingSmart}
+                    >
+                      {isFlushingSmart ? <IconLoader2 size={13} className="animate-spin" /> : <IconScaleOff size={13} />}
+                    </Button>
+                  }
+                />
+                <TooltipContent>Сбросить smart-веса</TooltipContent>
+              </Tooltip>
+            )}
             <Button
               variant="outline"
               size="icon-sm"
@@ -648,23 +757,28 @@ const SelectorRow = memo(function SelectorRow({
               {collapsed ? <IconChevronDown size={13} /> : <IconChevronUp size={13} />}
             </Button>
             <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  variant="outline"
-                  size={showSelectedDelay ? 'sm' : 'icon-sm'}
-                  className={cn(showSelectedDelay && 'px-2 text-xs font-medium tabular-nums', showSelectedDelay && delayColor(selectedDelay))}
-                  onClick={() => onTestAll(selectorName)}
-                  disabled={isTesting}
-                >
-                  {isTesting ? (
-                    <IconLoader2 size={13} className="animate-spin" />
-                  ) : showSelectedDelay ? (
-                    selectedDelay
-                  ) : (
-                    <IconBoltFilled size={13} />
-                  )}
-                </Button>
-              } />
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size={showSelectedDelay ? 'sm' : 'icon-sm'}
+                    className={cn(
+                      showSelectedDelay && 'px-2 text-xs font-medium tabular-nums',
+                      showSelectedDelay && delayColor(selectedDelay)
+                    )}
+                    onClick={() => onTestAll(selectorName)}
+                    disabled={isTesting}
+                  >
+                    {isTesting ? (
+                      <IconLoader2 size={13} className="animate-spin" />
+                    ) : showSelectedDelay ? (
+                      selectedDelay
+                    ) : (
+                      <IconBoltFilled size={13} />
+                    )}
+                  </Button>
+                }
+              />
               <TooltipContent>Замерить отклик</TooltipContent>
             </Tooltip>
           </div>
@@ -756,6 +870,49 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
     [clashApiPort, clashApiSecret, clashApiUnix]
   )
 
+  const fetchSmartWeights = useCallback(async () => {
+    try {
+      const data = await clashFetch<{ weights?: Record<string, SmartNodeRank[]> }>(clashApiPort, 'group/weights', {
+        secret: clashApiSecret,
+        unix: clashApiUnix ?? null,
+        retry: false,
+      })
+      const weights = data.weights
+      if (!weights || typeof weights !== 'object') return
+      const next: Record<string, Record<string, SmartNodeWeight>> = {}
+      for (const [group, items] of Object.entries(weights)) {
+        if (!Array.isArray(items) || items.length === 0) continue
+        const map: Record<string, SmartNodeWeight> = {}
+        items.forEach((item, index) => {
+          if (!item?.Name) return
+          map[item.Name] = {
+            rank: item.Rank ?? '',
+            weight: typeof item.Weight === 'number' ? item.Weight : 0,
+            order: index,
+          }
+        })
+        next[group] = map
+      }
+      useSelectorsStore.setState({ smartNodes: next })
+    } catch {
+      /* ядро без поддержки smart (нет GET /group/weights) */
+    }
+  }, [clashApiPort, clashApiSecret, clashApiUnix])
+
+  const flushSmartWeights = useCallback(async () => {
+    try {
+      await clashFetch(clashApiPort, 'cache/smart/flush', {
+        method: 'POST',
+        secret: clashApiSecret,
+        unix: clashApiUnix ?? null,
+        retry: false,
+      })
+      await fetchSmartWeights()
+    } catch {
+      /* */
+    }
+  }, [clashApiPort, clashApiSecret, clashApiUnix, fetchSmartWeights])
+
   const requestProxyDelay = useCallback(
     async (proxyName: string) => {
       try {
@@ -812,6 +969,14 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
     [selectorNames, collapsedSelectors]
   )
 
+  const hasSmartSelector = useProxiesStore(
+    useShallow((s) => Object.values(s.proxies).some((p: any) => typeof p?.type === 'string' && isSmartType(p.type) && !p.hidden))
+  )
+
+  useEffect(() => {
+    if (hasSmartSelector) void fetchSmartWeights()
+  }, [hasSmartSelector, fetchSmartWeights])
+
   useEffect(() => {
     localStorage.setItem(COLLAPSE_SELECTORS_KEY, JSON.stringify(persistedCollapsedSelectors))
   }, [persistedCollapsedSelectors])
@@ -859,27 +1024,27 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       useProxiesStore.setState((state) => ({
         proxies: { ...state.proxies, [selectorName]: { ...state.proxies[selectorName], now: proxyName } },
       }))
-        ; (async () => {
-          try {
-            await clashFetch(clashApiPort, `proxies/${encodeURIComponent(selectorName)}`, {
-              method: 'PUT',
-              secret: clashApiSecret,
-              unix: clashApiUnix ?? null,
-              body: { name: proxyName },
-            })
-            await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
-            const affected = getConnections()
-              .filter((conn) => conn.chains?.includes(selectorName))
-              .map((conn) => conn.id)
-            await Promise.all(
-              affected.map((id) =>
-                clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
-              )
+      ;(async () => {
+        try {
+          await clashFetch(clashApiPort, `proxies/${encodeURIComponent(selectorName)}`, {
+            method: 'PUT',
+            secret: clashApiSecret,
+            unix: clashApiUnix ?? null,
+            body: { name: proxyName },
+          })
+          await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
+          const affected = getConnections()
+            .filter((conn) => conn.chains?.includes(selectorName))
+            .map((conn) => conn.id)
+          await Promise.all(
+            affected.map((id) =>
+              clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
             )
-          } catch {
-            /* */
-          }
-        })()
+          )
+        } catch {
+          /* */
+        }
+      })()
     },
     [clashApiPort, clashApiSecret, clashApiUnix]
   )
@@ -962,6 +1127,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
             onSelect={selectProxy}
             onTestSingle={testSingle}
             onClearFixed={clearFixedSelection}
+            onFlushSmart={flushSmartWeights}
             collapsed={!!collapsedSelectors[name]}
             onToggleCollapse={toggleCollapse}
           />

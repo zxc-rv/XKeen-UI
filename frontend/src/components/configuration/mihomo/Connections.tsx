@@ -9,6 +9,7 @@ import {
   IconArrowDown,
   IconArrowsSort,
   IconArrowUp,
+  IconBan,
   IconCircleArrowRightFilled,
   IconFilter,
   IconLetterCase,
@@ -38,6 +39,7 @@ interface ConnectionMetadata {
   processPath: string
   remoteDestination: string
   sniffHost: string
+  smartBlock?: string
 }
 
 interface Connection {
@@ -439,12 +441,14 @@ const ConnectionRow = memo(function ConnectionRow({
   connId,
   onSelect,
   onClose,
+  onBlock,
   onApplyFilter,
   showSourceName,
 }: {
   connId: string
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
+  onBlock: (id: string, e: React.MouseEvent) => void
   onApplyFilter: (value: string) => void
   showSourceName: boolean
 }) {
@@ -456,6 +460,8 @@ const ConnectionRow = memo(function ConnectionRow({
     const host = getConnectionHost(c)
     return `${c.chains.join('|')}|${host}|${c.metadata.destinationPort}|${c.metadata.network}|${c.metadata.sourceIP}|${c.metadata.sourcePort}|${c.start}`
   })
+  const smartBlockState = useConnectionsStore((s) => s.map.get(connId)?.metadata.smartBlock)
+  const canSmartBlock = smartBlockState === 'normal'
 
   if (!displayKey) return null
 
@@ -572,19 +578,36 @@ const ConnectionRow = memo(function ConnectionRow({
         <TimeAgoCell isoString={conn.start} />
       </TableCell>
       <TableCell>
-        <Tooltip>
-          <TooltipTrigger render={
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
-              onClick={(e) => onClose(conn.id, e)}
-            >
-              <IconX className="size-3.5" />
-            </Button>
-          } />
-          <TooltipContent>Закрыть соединение</TooltipContent>
-        </Tooltip>
+        <span className="flex items-center justify-end">
+          {canSmartBlock && (
+            <Tooltip>
+              <TooltipTrigger render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground size-5 hover:bg-transparent! hover:text-amber-400"
+                  onClick={(e) => onBlock(conn.id, e)}
+                >
+                  <IconBan className="size-3.5" />
+                </Button>
+              } />
+              <TooltipContent>Smart: заблокировать узел для этого хоста</TooltipContent>
+            </Tooltip>
+          )}
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
+                onClick={(e) => onClose(conn.id, e)}
+              >
+                <IconX className="size-3.5" />
+              </Button>
+            } />
+            <TooltipContent>Закрыть соединение</TooltipContent>
+          </Tooltip>
+        </span>
       </TableCell>
     </TableRow>
   )
@@ -979,7 +1002,7 @@ const ConnectionsTableHead = memo(function ConnectionsTableHead({
             </TableHead>
           )
         })}
-        <TableHead className="w-10" />
+        <TableHead className="w-12" />
       </TableRow>
     </TableHeader>
   )
@@ -993,6 +1016,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   sortDirection,
   onSelect,
   onClose,
+  onBlock,
   onApplyFilter,
   showSourceName,
   caseSensitive,
@@ -1002,6 +1026,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   sortDirection: SortDirection
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
+  onBlock: (id: string, e: React.MouseEvent) => void
   onApplyFilter: (value: string) => void
   showSourceName: boolean
   caseSensitive: boolean
@@ -1062,6 +1087,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
             connId={id}
             onSelect={onSelect}
             onClose={onClose}
+            onBlock={onBlock}
             onApplyFilter={onApplyFilter}
             showSourceName={showSourceName}
           />
@@ -1217,6 +1243,23 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
     [clashApiPort, clashApiSecret, clashApiUnix, closeDialog, selectedId]
   )
 
+  const handleBlockConnection = useCallback(
+    async (id: string, e?: React.MouseEvent) => {
+      if (e) e.stopPropagation()
+      try {
+        await clashFetch(clashApiPort, `connections/smart/${id}`, {
+          method: 'DELETE',
+          secret: clashApiSecret,
+          unix: clashApiUnix ?? null,
+          retry: false,
+        })
+      } catch {
+        /* ядро без поддержки smart */
+      }
+    },
+    [clashApiPort, clashApiSecret, clashApiUnix]
+  )
+
   const handleSelectConnection = useCallback(
     (conn: Connection) => {
       clearDialogCloseTimer()
@@ -1259,6 +1302,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 sortDirection={sortDirection}
                 onSelect={handleSelectConnection}
                 onClose={handleCloseConnection}
+                onBlock={handleBlockConnection}
                 onApplyFilter={handleApplyFilter}
                 showSourceName={showSourceName}
                 caseSensitive={caseSensitive}
