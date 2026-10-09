@@ -94,7 +94,7 @@ function resolveProxyChain(proxies: Record<string, ProxyLite | undefined>, name:
   const chain = [name]
   const visited = new Set([name])
   let current = name
-  for (; ;) {
+  for (;;) {
     const info = proxies[current]
     if (!info?.now || visited.has(info.now)) break
     chain.push(info.now)
@@ -369,26 +369,26 @@ export function RouteTesterModal() {
     const uniqueOutbounds = Array.from(new Set(results.filter((r) => r.outbound).map((r) => r.outbound as string)))
     if (uniqueOutbounds.length === 0) return
     let cancelled = false
-      ; (async () => {
-        let data: { proxies?: Record<string, ProxyLite> } | null = null
-        try {
-          data = await clashFetch<{ proxies?: Record<string, ProxyLite> }>(clashApiPort ?? '', 'proxies', {
-            secret: clashApiSecret,
-            unix: clashApiUnix ?? null,
-            retry: false,
-          })
-        } catch {
-          data = null
-        }
-        if (cancelled) return
-        const proxies = data?.proxies ?? {}
-        const next: Record<string, string[]> = {}
-        for (const name of uniqueOutbounds) {
-          const chain = resolveProxyChain(proxies, name)
-          if (chain.length > 1) next[name] = chain
-        }
-        setChains(next)
-      })()
+    ;(async () => {
+      let data: { proxies?: Record<string, ProxyLite> } | null = null
+      try {
+        data = await clashFetch<{ proxies?: Record<string, ProxyLite> }>(clashApiPort ?? '', 'proxies', {
+          secret: clashApiSecret,
+          unix: clashApiUnix ?? null,
+          retry: false,
+        })
+      } catch {
+        data = null
+      }
+      if (cancelled) return
+      const proxies = data?.proxies ?? {}
+      const next: Record<string, string[]> = {}
+      for (const name of uniqueOutbounds) {
+        const chain = resolveProxyChain(proxies, name)
+        if (chain.length > 1) next[name] = chain
+      }
+      setChains(next)
+    })()
     return () => {
       cancelled = true
     }
@@ -441,11 +441,15 @@ export function RouteTesterModal() {
             Проверка маршрута
           </DialogTitle>
           <DialogDescription>
-            {loadingInit ? 'Загрузка данных ядра...' : core ? (
+            {loadingInit ? (
+              'Загрузка данных ядра...'
+            ) : core ? (
               <>
-                Активное ядро: <span className="font-semibold text-chart-2">{capitalize(core)}</span>
+                Активное ядро: <span className="text-chart-2 font-semibold">{capitalize(core)}</span>
               </>
-            ) : 'Не удалось определить активное ядро'}
+            ) : (
+              'Не удалось определить активное ядро'
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -462,7 +466,7 @@ export function RouteTesterModal() {
               }}
               placeholder={'По одному адресу на строку, например:\nyoutube.com\n1.1.1.1\nwww.google.com'}
               aria-label="Список целей для проверки маршрута"
-              className="min-h-24 max-h-72 resize-y text-[13px]!"
+              className="max-h-72 min-h-24 resize-y text-[13px]!"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className={cn('text-muted-foreground text-xs', overLimit && 'text-destructive')}>
@@ -490,7 +494,7 @@ export function RouteTesterModal() {
                   min={1}
                   max={65535}
                   inputMode="numeric"
-                  className="text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  className="[appearance:textfield] text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   value={port}
                   onChange={(e) => setPort(e.target.value)}
                 />
@@ -514,7 +518,7 @@ export function RouteTesterModal() {
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="text-muted-foreground text-xs tracking-wide">Сеть</span>
-              <ButtonGroup >
+              <ButtonGroup>
                 <Button type="button" variant={network === 'tcp' ? 'default' : 'outline'} onClick={() => setNetwork('tcp')}>
                   TCP
                 </Button>
@@ -540,7 +544,7 @@ export function RouteTesterModal() {
                 <Label className="text-muted-foreground text-xs tracking-wide">Inbound</Label>
                 <Select
                   value={inboundTag}
-                  items={{ [NO_INBOUND]: '— не задан —', ...Object.fromEntries(inboundTags.map((tag) => [tag, tag])) }}
+                  items={{ [NO_INBOUND]: 'Не задан', ...Object.fromEntries(inboundTags.map((tag) => [tag, tag])) }}
                   onValueChange={setInboundTag}
                 >
                   <SelectTrigger className="w-full text-sm">
@@ -548,7 +552,7 @@ export function RouteTesterModal() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value={NO_INBOUND}>— не задан —</SelectItem>
+                      <SelectItem value={NO_INBOUND}>Не задан</SelectItem>
                       {inboundTags.map((tag) => (
                         <SelectItem key={tag} value={tag}>
                           {tag}

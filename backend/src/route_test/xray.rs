@@ -1061,12 +1061,7 @@ impl<'a, R: Resolver> LazyIps<'a, R> {
                 match self.target {
                     Target::Ip(ip) => (vec![*ip], None),
                     Target::Domain(d) if self.should_resolve => match self.resolver.resolve(d).await {
-                        Ok((ips, src)) => {
-                            if matches!(src, DnsSource::Doh) {
-                                (self.warn)("резолв через DoH, у xray может отличаться".into());
-                            }
-                            (ips, Some(src))
-                        }
+                        Ok((ips, src)) => (ips, Some(src)),
                         Err(e) => {
                             (self.warn)(format!("не удалось разрешить {d}: {e}"));
                             (Vec::new(), None)
