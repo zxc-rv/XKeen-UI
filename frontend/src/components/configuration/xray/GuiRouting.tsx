@@ -73,6 +73,24 @@ interface AvailableTags {
   balancers: string[]
 }
 
+function collectTags(content: string | undefined, read: (json: any) => any[] | undefined): string[] {
+  try {
+    const items = content ? (read(parseJsonc(content)) ?? []) : []
+    return [...new Set<string>(items.filter((item) => item.tag).map((item) => item.tag))]
+  } catch {
+    return []
+  }
+}
+
+function readAvailable(configs: Config[], activeContent: string): AvailableTags {
+  const findContent = (name: string) => configs.find((config) => config.file.toLowerCase().includes(name))?.content
+  return {
+    outbounds: collectTags(findContent('outbound'), (json) => json.outbounds),
+    inbounds: collectTags(findContent('inbound'), (json) => json.inbounds),
+    balancers: collectTags(activeContent, (json) => json.routing?.balancers),
+  }
+}
+
 interface Props {
   editorRef: React.RefObject<CodeMirrorRef | null>
   configs: Config[]
@@ -83,18 +101,15 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   const { showToast, dispatch } = useAppActions()
   const { serviceStatus, currentCore } = useCoreRuntimeState()
   const autoApply = useSettings((s) => s.autoApply)
-  const [rules, setRules] = useState<Rule[]>([])
-  const [available, setAvailable] = useState<AvailableTags>({
-    outbounds: [],
-    inbounds: [],
-    balancers: [],
-  })
+  const getActiveContent = () => configs[activeConfigIndex]?.content ?? editorRef.current?.getValue() ?? ''
+  const [rules, setRules] = useState<Rule[]>(() => parseRules(getActiveContent()))
+  const [available, setAvailable] = useState<AvailableTags>(() => readAvailable(configs, getActiveContent()))
   const configsRef = useRef(configs)
   const activeConfigIndexRef = useRef(activeConfigIndex)
   const autoApplyRef = useRef(autoApply)
   const serviceStatusRef = useRef(serviceStatus)
   const currentCoreRef = useRef(currentCore)
-  const rulesRef = useRef<Rule[]>([])
+  const rulesRef = useRef<Rule[]>(rules)
   const cardRefs = useRef<(HTMLDivElement | null)[]>([])
   const cardRefHandlersRef = useRef<Record<number, (el: HTMLDivElement | null) => void>>({})
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -110,48 +125,12 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     return cardRefHandlersRef.current[index]
   }, [])
 
-  function loadAvailable() {
-    let outbounds: string[] = [],
-      inbounds: string[] = [],
-      balancers: string[] = []
-    try {
-      const c = configs.find((x) => x.file.toLowerCase().includes('outbound'))
-      if (c) {
-        const j = parseJsonc(c.content)
-        outbounds = j.outbounds?.filter((o: any) => o.tag).map((o: any) => o.tag) ?? []
-      }
-    } catch {
-      /* */
-    }
-    try {
-      const c = configs.find((x) => x.file.toLowerCase().includes('inbound'))
-      if (c) {
-        const j = parseJsonc(c.content)
-        inbounds = j.inbounds?.filter((i: any) => i.tag).map((i: any) => i.tag) ?? []
-      }
-    } catch {
-      /* */
-    }
-    try {
-      const content = configs[activeConfigIndex]?.content ?? editorRef.current?.getValue() ?? ''
-      const j = parseJsonc(content)
-      balancers = j.routing?.balancers?.filter((b: any) => b.tag).map((b: any) => b.tag) ?? []
-    } catch {
-      /* */
-    }
-    setAvailable({
-      outbounds: [...new Set(outbounds)],
-      inbounds: [...new Set(inbounds)],
-      balancers: [...new Set(balancers)],
-    })
-  }
-
   useEffect(() => {
-    const content = configs[activeConfigIndex]?.content ?? editorRef.current?.getValue() ?? ''
+    const content = getActiveContent()
     const parsed = parseRules(content)
     rulesRef.current = parsed
     setRules(parsed)
-    loadAvailable()
+    setAvailable(readAvailable(configs, content))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConfigIndex])
 
@@ -485,8 +464,9 @@ const RuleCard = memo(
             <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
               {rule.ruleTag && <span className="truncate text-sm">{rule.ruleTag}</span>}
               <TooltipProvider delayDuration={300}>
-                  <Tooltip>
-                    <TooltipTrigger render={
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
                       <button
                         onClick={() => {
                           setEditingName(true)
@@ -496,9 +476,10 @@ const RuleCard = memo(
                       >
                         <IconPencil size={16} />
                       </button>
-                    } />
-                    <TooltipContent>Редактировать название</TooltipContent>
-                  </Tooltip>
+                    }
+                  />
+                  <TooltipContent>Редактировать название</TooltipContent>
+                </Tooltip>
               </TooltipProvider>
             </div>
           )}
