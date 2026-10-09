@@ -524,7 +524,7 @@ export function ConfigPanel({
     configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
   }, [configActionsRef, switchTab])
 
-  async function executeSave(targets: string[], cfg: Config, content: string) {
+  async function executeSave(targets: string[], cfg: Config, content: string, targetIndex: number) {
     const results = await runMassTask(targets, async (_id, baseUrl) => {
       const result = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: cfg.file, content }, { baseUrl })
       if (!result.success) throw new Error(result.error || 'ошибка сохранения')
@@ -532,9 +532,14 @@ export function ConfigPanel({
 
     const localOk = results.find((r) => r.id === LOCAL_ROUTER_ID)?.ok
     if (targets.includes(LOCAL_ROUTER_ID) ? localOk : results.some((r) => r.ok)) {
-      editorRef.current?.setSavedContent(content)
-      dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
-      saveViewState(cfg.file, false)
+      const currentConfigs = configsRef.current
+      let finalIndex = currentConfigs.findIndex((c) => c.file === cfg.file)
+      if (finalIndex < 0) finalIndex = targetIndex
+      dispatch({ type: 'SAVE_CONFIG', index: finalIndex, content })
+      if (configsRef.current[activeIndexRef.current]?.file === cfg.file) {
+        editorRef.current?.setSavedContent(content)
+        saveViewState(cfg.file, false)
+      }
     }
 
     const summary = summarizeFanOut(results)
@@ -572,7 +577,8 @@ export function ConfigPanel({
   }
 
   async function saveCurrentConfig(force = false) {
-    const cfg = configsRef.current[activeIndexRef.current]
+    const targetIndex = activeIndexRef.current
+    const cfg = configsRef.current[targetIndex]
     if (!cfg || !editorRef.current) return
     const content = editorRef.current.getValue()
     if (!content.trim() && !cfg.file.endsWith('.lst')) return showToast('Конфигурация пустая', 'error')
@@ -591,12 +597,12 @@ export function ConfigPanel({
         title: 'Массовое сохранение',
         description: 'Конфиг будет сохранён на выбранных роутерах:',
         targets: targets.map(targetLabel),
-        action: () => void executeSave(targets, cfg, content),
+        action: () => void executeSave(targets, cfg, content, targetIndex),
       })
       return
     }
 
-    await executeSave(targets, cfg, content)
+    await executeSave(targets, cfg, content, targetIndex)
   }
 
   function restartActionFor(cfg: Config, content: string) {
@@ -652,7 +658,7 @@ export function ConfigPanel({
     return true
   }
 
-  async function executeApply(targets: string[], cfg: Config, content: string) {
+  async function executeApply(targets: string[], cfg: Config, content: string, targetIndex: number) {
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Применение...' })
     const isMihomoHotReload = currentCore === 'mihomo' && !isXkeenFile(cfg.file)
     let localRestarted = false
@@ -663,9 +669,14 @@ export function ConfigPanel({
 
     const localOk = results.find((r) => r.id === LOCAL_ROUTER_ID)?.ok
     if (targets.includes(LOCAL_ROUTER_ID) ? localOk : results.some((r) => r.ok)) {
-      editorRef.current?.setSavedContent(content)
-      dispatch({ type: 'SAVE_CONFIG', index: activeIndexRef.current, content })
-      saveViewState(cfg.file, false)
+      const currentConfigs = configsRef.current
+      let finalIndex = currentConfigs.findIndex((c) => c.file === cfg.file)
+      if (finalIndex < 0) finalIndex = targetIndex
+      dispatch({ type: 'SAVE_CONFIG', index: finalIndex, content })
+      if (configsRef.current[activeIndexRef.current]?.file === cfg.file) {
+        editorRef.current?.setSavedContent(content)
+        saveViewState(cfg.file, false)
+      }
     }
 
     const summary = summarizeFanOut(results)
@@ -695,7 +706,8 @@ export function ConfigPanel({
   }
 
   async function saveAndApply(force = false) {
-    const cfg = configsRef.current[activeIndexRef.current]
+    const targetIndex = activeIndexRef.current
+    const cfg = configsRef.current[targetIndex]
     if (!cfg || !editorRef.current) return
     const content = editorRef.current.getValue()
     if (!content.trim() && !cfg.file.endsWith('.lst')) return showToast('Файл пустой', 'error')
@@ -714,12 +726,12 @@ export function ConfigPanel({
         title: 'Массовое применение',
         description: 'Конфиг будет сохранён и применён на выбранных роутерах:',
         targets: targets.map(targetLabel),
-        action: () => void executeApply(targets, cfg, content),
+        action: () => void executeApply(targets, cfg, content, targetIndex),
       })
       return
     }
 
-    await executeApply(targets, cfg, content)
+    await executeApply(targets, cfg, content, targetIndex)
   }
 
   async function executeQuickBackup(targets: string[]) {
