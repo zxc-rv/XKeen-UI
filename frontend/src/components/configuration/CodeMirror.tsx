@@ -11,8 +11,9 @@ import { getFileLanguage } from '../../lib/api'
 import { configAutocompletion } from './editor/completion'
 import { editorHighlight, editorTheme, getLanguageExtension } from './editor/highlighting'
 import { SearchPanel } from './editor/search/SearchPanel'
-import { createSearchExtension, type SearchBridge, type SearchPanelHandle } from './editor/search/searchExtension'
+import { createSearchExtension } from './editor/search/searchExtension'
 import { baseSetup } from './editor/setup'
+import { useEditorSearch } from './editor/useEditorSearch'
 import type { EditorLanguage } from './editor/types'
 import { clamp, validateByLanguage } from './editor/validation'
 
@@ -82,12 +83,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   const suppressRef = useRef(false)
   const lastValidationRef = useRef<{ isValid: boolean; error?: string } | null>(null)
   const extensionsRef = useRef<Extension[]>([])
-  const [searchPanel, setSearchPanel] = useState<SearchPanelHandle | null>(null)
-  const searchBridgeRef = useRef<SearchBridge>({
-    open: (handle) => setSearchPanel(handle),
-    // A stale destroy (e.g. tab switch replacing the state) must not clear a newer panel.
-    close: (handle) => setSearchPanel((prev) => (prev === handle ? null : prev)),
-  })
+  const { searchPanel, bridge: searchBridge } = useEditorSearch(viewRef)
 
   useLayoutEffect(() => {
     onContentChangeRef.current = onContentChange
@@ -110,7 +106,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     (darkTheme: boolean): Extension[] => [
       ...baseSetup,
       configAutocompletion(() => ({ file: filenameRef.current, language: languageRef.current })),
-      createSearchExtension(searchBridgeRef.current),
+      createSearchExtension(searchBridge),
       Prec.highest(
         lineNumbers({
           formatNumber: (n) => String(n).padStart(3, '\u00a0'),
@@ -176,7 +172,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         runValidationRef.current(update.view, filenameRef.current)
       }),
     ],
-    []
+    [searchBridge]
   )
 
   const emitValidation = useCallback((isValid: boolean, error?: string) => {

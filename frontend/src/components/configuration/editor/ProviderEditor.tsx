@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom'
 import { editorHighlight, editorTheme, getLanguageExtension } from './highlighting'
 import { SearchPanel } from './search/SearchPanel'
 import { createSearchExtension } from './search/searchExtension'
-import { baseSetup } from './setup'
+import { baseSetupNoFold } from './setup'
 import { useEditorSearch } from './useEditorSearch'
 import { validateYaml } from './validation'
 
@@ -45,7 +45,7 @@ export function ProviderEditor({ content, language, onChange, onSave, onValidati
       state: EditorState.create({
         doc: initialContent,
         extensions: [
-          ...baseSetup,
+          ...baseSetupNoFold,
           Prec.highest(
             keymap.of([
               {

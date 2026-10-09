@@ -11,9 +11,10 @@ import { useEditorSearch } from './useEditorSearch'
 
 interface Props {
   content: string
+  language?: 'yaml' | 'text'
 }
 
-export function ReadOnlyYamlView({ content }: Props) {
+export function ReadOnlyYamlView({ content, language = 'yaml' }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const { searchPanel, bridge } = useEditorSearch(viewRef)
@@ -32,7 +33,7 @@ export function ReadOnlyYamlView({ content }: Props) {
           lineNumbers({ formatNumber: (lineNumber) => String(lineNumber).padStart(3, '\u00a0') }),
           indentationMarkers(),
           syntaxHighlighting(editorHighlight),
-          getLanguageExtension('yaml'),
+          getLanguageExtension(language),
           editorTheme(window.innerWidth < 768, document.documentElement.classList.contains('dark')),
         ],
       }),
@@ -44,7 +45,7 @@ export function ReadOnlyYamlView({ content }: Props) {
       viewRef.current = null
       view.destroy()
     }
-  }, [content, bridge])
+  }, [content, language, bridge])
 
   return (
     <div ref={containerRef} className="h-full w-full">

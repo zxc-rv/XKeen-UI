@@ -88,6 +88,9 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat('ru', { numeric: 'auto
 const isProvidersLoaded = (kind: ProvidersModalKind) =>
   useProxiesStore.getState()[kind === 'proxies' ? 'proxyProvidersLoaded' : 'ruleProvidersLoaded']
 
+const detectLanguage = (kind: ProvidersModalKind, content: string) =>
+  kind === 'proxies' || PAYLOAD_PATTERN.test(content) ? 'yaml' : 'text'
+
 const isUpdatable = (provider: Provider) => normalizeVehicleType(provider.vehicleType) !== 'INLINE'
 
 const isMrsFormat = (value?: string) => ['mrs', 'mrsrule'].includes(value?.trim().toLowerCase() ?? '')
@@ -271,7 +274,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
 
   const isViewEditable = !!viewContent && normalizeVehicleType(viewContent.vehicleType) === 'FILE' && !isMrsFormat(viewContent.format)
   const isViewDirty = isViewEditable && editContent !== viewContent?.content
-  const editorLanguage = kind === 'proxies' || PAYLOAD_PATTERN.test(editContent) ? 'yaml' : 'text'
+  const editorLanguage = detectLanguage(kind, editContent)
   const saveDisabled = !isViewDirty || saving || !!editError
   const saveHint = saving
     ? 'Сохранение…'
@@ -378,7 +381,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
       if (!response.success) throw new Error(response.error ?? 'Не удалось сохранить')
       setViewContent({ ...viewContent, content: editContent })
       providerContentCache.delete(`${kind}:${viewContent.name}`)
-      showToast(`Рулсет ${viewContent.name} сохранён`)
+      showToast(`Провайдер ${viewContent.name} сохранён`)
     } catch (error) {
       showToast(`Не удалось сохранить: ${describeError(error)}`, 'error')
       return
@@ -586,12 +589,8 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                     <TooltipContent side="left">{saveHint}</TooltipContent>
                   </Tooltip>
                 </>
-              ) : kind === 'proxies' ? (
-                <ReadOnlyYamlView content={visibleContent} />
               ) : (
-                <pre className="h-full scrollbar-thin overflow-auto p-4 font-mono text-xs leading-5 break-all whitespace-pre-wrap">
-                  {viewContent?.content}
-                </pre>
+                <ReadOnlyYamlView content={visibleContent} language={detectLanguage(kind, visibleContent)} />
               )}
             </div>
           </div>

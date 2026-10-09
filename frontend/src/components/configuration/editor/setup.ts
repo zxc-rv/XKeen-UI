@@ -22,21 +22,27 @@ import {
  * - `autocompletion()` + `completionKeymap` — see `editor/completion`;
  * - `searchKeymap` — see `editor/search`.
  */
-export const baseSetup: Extension[] = [
-  highlightActiveLineGutter(),
-  highlightSpecialChars(),
-  history(),
-  foldGutter(),
-  drawSelection(),
-  dropCursor(),
-  EditorState.allowMultipleSelections.of(true),
-  indentOnInput(),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-  bracketMatching(),
-  closeBrackets(),
-  rectangularSelection(),
-  crosshairCursor(),
-  highlightActiveLine(),
-  highlightSelectionMatches(),
-  keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...foldKeymap, ...lintKeymap]),
-]
+export function createBaseSetup(options: { fold?: boolean } = {}): Extension[] {
+  const { fold = true } = options
+  return [
+    highlightActiveLineGutter(),
+    highlightSpecialChars(),
+    history(),
+    ...(fold ? [foldGutter()] : []),
+    drawSelection(),
+    dropCursor(),
+    EditorState.allowMultipleSelections.of(true),
+    indentOnInput(),
+    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    bracketMatching(),
+    closeBrackets(),
+    rectangularSelection(),
+    crosshairCursor(),
+    highlightActiveLine(),
+    highlightSelectionMatches(),
+    keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...(fold ? [...foldKeymap] : []), ...lintKeymap]),
+  ]
+}
+
+export const baseSetup: Extension[] = createBaseSetup()
+export const baseSetupNoFold: Extension[] = createBaseSetup({ fold: false })
