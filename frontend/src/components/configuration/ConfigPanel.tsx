@@ -25,6 +25,8 @@ import {
   IconDeviceFloppy,
   IconDotsFilled,
   IconExternalLinkFilled,
+  IconEye,
+  IconEyeOff,
   IconFilePlus,
   IconFileText,
   IconFileUpload,
@@ -87,6 +89,7 @@ const isXkeenFile = (file: string) => file.startsWith('/opt/etc/xkeen')
 type ProvidersModalKind = 'rules' | 'proxies'
 
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
+const SHOW_HIDDEN_SELECTORS_KEY = 'showHiddenSelectors'
 
 interface Props {
   onOpenImport: () => void
@@ -330,6 +333,13 @@ export function ConfigPanel({
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['selectors']))
   const [mode, setMode] = useState<ClashMode>('rule')
   const [allSelectorsCollapsed, setAllSelectorsCollapsed] = useState(false)
+  const [showHiddenSelectors, setShowHiddenSelectors] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SHOW_HIDDEN_SELECTORS_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
@@ -888,6 +898,32 @@ export function ConfigPanel({
                       <Button
                         variant="outline"
                         size="icon"
+                        aria-label={showHiddenSelectors ? 'Скрыть скрытые селекторы' : 'Показывать скрытые селекторы'}
+                        aria-pressed={showHiddenSelectors}
+                        className={cn(showHiddenSelectors && 'border-[#60a5fa] text-blue-400')}
+                        onClick={() => {
+                          setShowHiddenSelectors((prev) => {
+                            try {
+                              localStorage.setItem(SHOW_HIDDEN_SELECTORS_KEY, prev ? '0' : '1')
+                            } catch {
+                              /* */
+                            }
+                            return !prev
+                          })
+                        }}
+                      >
+                        {showHiddenSelectors ? <IconEyeOff /> : <IconEye />}
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>{showHiddenSelectors ? 'Скрыть скрытые' : 'Показывать скрытые'}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon"
                         aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
                         onClick={() =>
                           window.dispatchEvent(
@@ -972,6 +1008,7 @@ export function ConfigPanel({
                         mode={mode}
                         clashApiSecret={clashApiSecret ?? null}
                         clashApiUnix={activeClashApiUnix ?? null}
+                        showHiddenSelectors={showHiddenSelectors}
                         onCollapsedStateChange={setAllSelectorsCollapsed}
                       />
                     </LazyBoundary>

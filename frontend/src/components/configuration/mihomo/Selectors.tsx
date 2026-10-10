@@ -63,6 +63,7 @@ interface Props {
   mode: ClashMode
   clashApiSecret: string | null
   clashApiUnix?: string | null
+  showHiddenSelectors?: boolean
   onCollapsedStateChange?: (collapsed: boolean) => void
 }
 
@@ -841,7 +842,7 @@ const SelectorRow = memo(function SelectorRow({
 })
 
 /* ====================== ОСНОВНОЙ КОМПОНЕНТ ====================== */
-export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUnix, onCollapsedStateChange }: Props) {
+export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUnix, showHiddenSelectors, onCollapsedStateChange }: Props) {
   const loading = useProxiesStore((s) => s.loading)
   const error = useProxiesStore((s) => s.error)
   const pingTestUrl = useSettings((s) => s.pingTestUrl)
@@ -953,7 +954,8 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
   const selectorNames = useProxiesStore(
     useShallow((s) => {
       const allSelectors = Object.values(s.proxies).filter((p: any) => {
-        if (!SELECTOR_TYPES.has(p.type) || p.hidden) return false
+        if (!SELECTOR_TYPES.has(p.type)) return false
+        if (p.hidden && !showHiddenSelectors) return false
         return mode === 'global' ? p.name === 'GLOBAL' : p.name !== 'GLOBAL'
       }) as ProxyInfo[]
       const globalProxy = s.proxies['GLOBAL'] as ProxyInfo | undefined
@@ -970,7 +972,11 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
   )
 
   const hasSmartSelector = useProxiesStore(
-    useShallow((s) => Object.values(s.proxies).some((p: any) => typeof p?.type === 'string' && isSmartType(p.type) && !p.hidden))
+    useShallow((s) =>
+      Object.values(s.proxies).some(
+        (p: any) => typeof p?.type === 'string' && isSmartType(p.type) && (showHiddenSelectors || !p.hidden)
+      )
+    )
   )
 
   useEffect(() => {
