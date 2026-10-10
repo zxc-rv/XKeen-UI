@@ -191,6 +191,11 @@ function sortProxyNames(proxyNames: string[], order: string, proxies: Record<str
     sortable.sort((a, b) => a.name.localeCompare(b.name))
   } else {
     sortable.sort((a, b) => {
+      const aTimeout = a.delay === 0
+      const bTimeout = b.delay === 0
+      if (aTimeout && bTimeout) return 0
+      if (aTimeout) return 1
+      if (bTimeout) return -1
       if (a.delay === null && b.delay === null) return 0
       if (a.delay === null) return 1
       if (b.delay === null) return -1
