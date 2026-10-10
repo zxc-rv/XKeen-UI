@@ -2,7 +2,6 @@ use crate::logger::log;
 use crate::types::*;
 use axum::extract::State;
 use axum::response::{IntoResponse, Json};
-use reqwest::{Method, StatusCode};
 use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
@@ -30,21 +29,19 @@ pub struct DnsStatusFields {
 }
 
 fn check_dns_mihomo() -> bool {
-    if let Some(config_path) = find_mihomo_config() {
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Ok(yaml) = yaml_rust2::YamlLoader::load_from_str(&content) {
-                if let Some(doc) = yaml.first() {
-                    if let Some(dns) = doc["dns"].as_hash() {
-                        let enable = dns
-                            .get(&yaml_rust2::Yaml::String("enable".into()))
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false);
-                        let listen = dns
-                            .get(&yaml_rust2::Yaml::String("listen".into()))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        return enable && listen == "0.0.0.0:53";
-                    }
+    if let Ok(content) = std::fs::read_to_string(MIHOMO_CONF) {
+        if let Ok(yaml) = yaml_rust2::YamlLoader::load_from_str(&content) {
+            if let Some(doc) = yaml.first() {
+                if let Some(dns) = doc["dns"].as_hash() {
+                    let enable = dns
+                        .get(&yaml_rust2::Yaml::String("enable".into()))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    let listen = dns
+                        .get(&yaml_rust2::Yaml::String("listen".into()))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    return enable && listen == "0.0.0.0:53";
                 }
             }
         }
@@ -126,14 +123,12 @@ async fn fetch_running_config(state: &AppState) -> Result<String, String> {
     Ok(config_str)
 }
 
-async fn req_rci(
-    state: &AppState, method: Method, path: &str, payload: serde_json::Value, ignore_not_found: bool,
-) -> Result<bool, String> {
+async fn post_rci_batch(state: &AppState, commands: &[serde_json::Value]) -> Result<serde_json::Value, String> {
     let mut req = state
         .http_client
-        .request(method.clone(), format!("http://127.0.0.1:79/rci/{path}"))
-        .json(&payload)
-        .timeout(Duration::from_secs(5));
+        .post("http://127.0.0.1:79/rci/")
+        .json(commands)
+        .timeout(Duration::from_secs(10));
 
     if let Some(ref token) = state.rci_token {
         req = req.header("X-Ndma-Tkn", token);
@@ -142,57 +137,82 @@ async fn req_rci(
     let response = req
         .send()
         .await
-        .map_err(|e| format!("Ошибка {method} RCI (/{path}): {e}"))?;
+        .map_err(|e| format!("Ошибка POST RCI batch: {e}"))?;
 
-    let status = response.status();
-    if ignore_not_found && status == StatusCode::NOT_FOUND {
-        return Ok(false);
-    }
-    if !status.is_success() {
+    if !response.status().is_success() {
+        let status = response.status();
         let err = response.text().await.unwrap_or_default();
-        return Err(format!("RCI вернул код {}, ответ: {}", status, err));
+        return Err(format!("RCI batch вернул {status}, ответ: {err}"));
     }
 
-    Ok(true)
+    response
+        .json()
+        .await
+        .map_err(|e| format!("Ошибка парсинга RCI batch: {e}"))
 }
 
-async fn run_rci_step(
-    state: &AppState, step: &str, method: Method, path: &str, payload: serde_json::Value,
-) -> Result<(), String> {
-    let optional_component = match path {
-        "dns-proxy/https/upstream" => Some("DoH"),
-        "dns-proxy/tls/upstream" => Some("DoT"),
+fn find_batch_error(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(items) = map.get("status").and_then(|s| s.as_array()) {
+                for item in items {
+                    if item.get("status").and_then(|s| s.as_str()) == Some("error") {
+                        let msg = item
+                            .get("message")
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("неизвестная ошибка RCI");
+                        let extra = format!(
+                            "{} {}",
+                            item.get("ident").and_then(|v| v.as_str()).unwrap_or(""),
+                            item.get("code").and_then(|v| v.as_str()).unwrap_or("")
+                        )
+                        .trim()
+                        .to_string();
+                        if extra.is_empty() {
+                            return Some(msg.to_string());
+                        }
+                        return Some(format!("{msg} ({extra})"));
+                    }
+                }
+            }
+            for v in map.values() {
+                if let Some(e) = find_batch_error(v) {
+                    return Some(e);
+                }
+            }
+            None
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                if let Some(e) = find_batch_error(item) {
+                    return Some(e);
+                }
+            }
+            None
+        }
         _ => None,
-    };
-
-    match req_rci(state, method.clone(), path, payload, optional_component.is_some()).await {
-        Ok(true) => Ok(()),
-        Ok(false) => {
-            log(
-                "WARN",
-                format!(
-                    "Не удалось очистить {} (компонент не установлен?)",
-                    optional_component.unwrap_or_default()
-                ),
-            );
-            Ok(())
-        }
-        Err(e) => {
-            log("ERROR", format!("DNS: '{step}' ({method} /{path}) — ошибка: {e}"));
-            Err(format!("{step}: {e}"))
-        }
     }
 }
 
-fn find_mihomo_config() -> Option<String> {
-    let dir = std::fs::read_dir(MIHOMO_CONF_DIR).ok()?;
-    for entry in dir.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("yaml") {
-            return path.to_str().map(String::from);
+fn check_batch_response(resp: &serde_json::Value, steps: &[&str], ignore: &[usize]) -> Result<(), String> {
+    let items = resp
+        .as_array()
+        .ok_or_else(|| "Некорректный ответ RCI batch".to_string())?;
+    for (i, item) in items.iter().enumerate() {
+        let step = steps.get(i).copied().unwrap_or("?");
+        if let Some(err) = find_batch_error(item) {
+            if ignore.contains(&i) {
+                log(
+                    "WARN",
+                    format!("DNS: '{step}' — пропущено (компонент не установлен?): {err}"),
+                );
+                continue;
+            }
+            log("ERROR", format!("DNS: '{step}' — ошибка: {err}"));
+            return Err(format!("{step}: {err}"));
         }
     }
-    None
+    Ok(())
 }
 
 pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
@@ -223,79 +243,62 @@ pub async fn post_dns(State(state): State<AppState>, Json(req): Json<DnsEnableRe
         }
     };
 
-    let mut steps: Vec<(&str, Method, &str, serde_json::Value)> = vec![
-        (
-            "Включение opkg dns-override",
-            Method::POST,
-            "opkg/dns-override",
-            json!({}),
-        ),
-        (
-            "Сохранение конфигурации",
-            Method::POST,
-            "system/configuration/save",
-            json!({}),
-        ),
-    ];
+    let mut steps: Vec<(&str, serde_json::Value)> = vec![];
+    let mut ignore: Vec<usize> = vec![];
 
     if req.setup_filter {
-        steps.insert(
-            0,
-            (
-                "Отключение HTTPS DNS-прокси",
-                Method::DELETE,
-                "dns-proxy/https/upstream",
-                json!({}),
-            ),
-        );
-        steps.insert(
-            1,
-            (
-                "Отключение TLS DNS-прокси",
-                Method::DELETE,
-                "dns-proxy/tls/upstream",
-                json!({}),
-            ),
-        );
-        steps.insert(
-            2,
-            (
-                "Сброс системных DNS-серверов",
-                Method::DELETE,
-                "ip/name-server",
-                json!({}),
-            ),
-        );
-        steps.insert(
-            3,
-            (
-                "Установка name-server на br0",
-                Method::POST,
-                "ip/name-server",
-                json!({"address": br0_ip, "port": 53}),
-            ),
-        );
+        ignore.push(steps.len());
+        steps.push((
+            "Отключение HTTPS DNS-прокси",
+            json!({"dns-proxy": {"https": {"upstream": [{"no": true}]}}}),
+        ));
+        ignore.push(steps.len());
+        steps.push((
+            "Отключение TLS DNS-прокси",
+            json!({"dns-proxy": {"tls": {"upstream": [{"no": true}]}}}),
+        ));
+        steps.push((
+            "Сброс системных DNS-серверов",
+            json!({"ip": {"name-server": [{"no": true}]}}),
+        ));
+        steps.push((
+            "Установка name-server на br0",
+            json!({"ip": {"name-server": [{"address": br0_ip}]}}),
+        ));
     }
+    steps.push((
+        "Включение opkg dns-override",
+        json!({"opkg": {"dns-override": {}}}),
+    ));
+    steps.push((
+        "Сохранение конфигурации",
+        json!({"system": {"configuration": {"save": {}}}}),
+    ));
 
-    for (step, method, path, payload) in &steps {
-        if let Err(e) = run_rci_step(&state, step, method.clone(), path, payload.clone()).await {
+    let step_names: Vec<&str> = steps.iter().map(|(s, _)| *s).collect();
+    let payload: Vec<serde_json::Value> = steps.into_iter().map(|(_, v)| v).collect();
+    match post_rci_batch(&state, &payload).await {
+        Ok(resp) => {
+            if let Err(e) = check_batch_response(&resp, &step_names, &ignore) {
+                return Json(DnsResponse {
+                    success: false,
+                    error: Some(e),
+                    status: None,
+                });
+            }
+        }
+        Err(e) => {
+            log("ERROR", e.clone());
             return Json(DnsResponse {
                 success: false,
                 error: Some(e),
                 status: None,
             });
         }
-        if step.contains("dns-override") {
-            tokio::time::sleep(Duration::from_millis(500)).await;
-        }
     }
 
-    if let Some(config_path) = find_mihomo_config() {
-        if let Err(e) = tokio::fs::write(&config_path, &req.config_content).await {
-            log("ERROR", format!("Ошибка записи config.yaml: {e}"));
-        }
-    } else {
-        log("ERROR", "config.yaml не найден, конфигурация не записана".into());
+    if let Err(e) = tokio::fs::write(MIHOMO_CONF, &req.config_content).await {
+        log("ERROR", format!("Ошибка записи {MIHOMO_CONF}: {e}"));
     }
 
     let message = if req.setup_filter {
@@ -312,21 +315,6 @@ pub async fn post_dns(State(state): State<AppState>, Json(req): Json<DnsEnableRe
 }
 
 pub async fn delete_dns(State(state): State<AppState>, Json(_req): Json<DnsDeleteReq>) -> impl IntoResponse {
-    let mut steps: Vec<(&str, Method, &str, serde_json::Value)> = vec![
-        (
-            "Отключение opkg dns-override",
-            Method::DELETE,
-            "opkg/dns-override",
-            json!({}),
-        ),
-        (
-            "Сохранение конфигурации",
-            Method::POST,
-            "system/configuration/save",
-            json!({}),
-        ),
-    ];
-
     let has_br0 = match fetch_running_config(&state).await {
         Ok(output) => {
             let br0_ip = get_br0_ip().unwrap_or_default();
@@ -335,37 +323,44 @@ pub async fn delete_dns(State(state): State<AppState>, Json(_req): Json<DnsDelet
         Err(_) => false,
     };
 
+    let mut steps: Vec<(&str, serde_json::Value)> = vec![(
+        "Отключение opkg dns-override",
+        json!({"opkg": {"dns-override": {"no": true}}}),
+    )];
     if has_br0 {
-        steps.insert(
-            1,
-            (
-                "Сброс системных DNS-серверов",
-                Method::DELETE,
-                "ip/name-server",
-                json!({}),
-            ),
-        );
-        steps.insert(
-            2,
-            (
-                "Установка name-server на 77.88.8.8",
-                Method::POST,
-                "ip/name-server",
-                json!({"address": "77.88.8.8", "port": 53}),
-            ),
-        );
+        steps.push((
+            "Сброс системных DNS-серверов",
+            json!({"ip": {"name-server": [{"no": true}]}}),
+        ));
+        steps.push((
+            "Установка name-server на 77.88.8.8",
+            json!({"ip": {"name-server": [{"address": "77.88.8.8"}]}}),
+        ));
     }
+    steps.push((
+        "Сохранение конфигурации",
+        json!({"system": {"configuration": {"save": {}}}}),
+    ));
 
-    for (step, method, path, payload) in &steps {
-        if let Err(e) = run_rci_step(&state, step, method.clone(), path, payload.clone()).await {
+    let step_names: Vec<&str> = steps.iter().map(|(s, _)| *s).collect();
+    let payload: Vec<serde_json::Value> = steps.into_iter().map(|(_, v)| v).collect();
+    match post_rci_batch(&state, &payload).await {
+        Ok(resp) => {
+            if let Err(e) = check_batch_response(&resp, &step_names, &[]) {
+                return Json(DnsResponse {
+                    success: false,
+                    error: Some(e),
+                    status: None,
+                });
+            }
+        }
+        Err(e) => {
+            log("ERROR", e.clone());
             return Json(DnsResponse {
                 success: false,
                 error: Some(e),
                 status: None,
             });
-        }
-        if step.contains("dns-override") {
-            tokio::time::sleep(Duration::from_millis(500)).await;
         }
     }
 
@@ -380,4 +375,56 @@ pub async fn delete_dns(State(state): State<AppState>, Json(_req): Json<DnsDelet
         error: None,
         status: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn batch_payload_enable_with_filter_shape() {
+        let br0_ip = "192.168.1.1";
+        let payload = vec![
+            json!({"dns-proxy": {"https": {"upstream": [{"no": true}]}}}),
+            json!({"dns-proxy": {"tls": {"upstream": [{"no": true}]}}}),
+            json!({"ip": {"name-server": [{"no": true}]}}),
+            json!({"ip": {"name-server": [{"address": br0_ip}]}}),
+            json!({"opkg": {"dns-override": {}}}),
+            json!({"system": {"configuration": {"save": {}}}}),
+        ];
+        assert_eq!(payload.len(), 6);
+        assert_eq!(payload[3]["ip"]["name-server"][0]["address"], json!(br0_ip));
+        assert_eq!(payload[5]["system"]["configuration"]["save"], json!({}));
+    }
+
+    #[test]
+    fn finds_nested_batch_error() {
+        let ok = json!([{}, {"status": [{"status": "message", "message": "saving (http/rci)."}]}]);
+        assert!(find_batch_error(&ok[0]).is_none());
+        assert!(find_batch_error(&ok[1]).is_none());
+
+        let nested = json!({"system": {"configuration": {"save": {"status": [{"status": "error", "code": "1", "ident": "X", "message": "boom"}]}}}});
+        assert_eq!(find_batch_error(&nested), Some("boom (X 1)".to_string()));
+    }
+
+    #[test]
+    fn check_ignores_optional_components() {
+        let steps = ["DoH", "DoT", "save"];
+        let one_error = json!([
+            {"status": [{"status": "error", "message": "no such command"}]},
+            {},
+            {},
+        ]);
+        assert!(check_batch_response(&one_error, &steps, &[]).is_err());
+        assert!(check_batch_response(&one_error, &steps, &[0]).is_ok());
+
+        let two_errors = json!([
+            {"status": [{"status": "error", "message": "absent"}]},
+            {"status": [{"status": "error", "message": "absent"}]},
+            {},
+        ]);
+        assert!(check_batch_response(&two_errors, &steps, &[0]).is_err());
+        assert!(check_batch_response(&two_errors, &steps, &[0, 1]).is_ok());
+    }
 }
