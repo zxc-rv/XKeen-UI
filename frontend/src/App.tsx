@@ -248,6 +248,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             pingTestUrl: data.clash_api?.ping_url ?? DEFAULT_PING_TEST_URL,
             pingTestTimeout: data.clash_api?.ping_timeout ?? DEFAULT_PING_TEST_TIMEOUT,
             showSourceName: data.clash_api?.show_source_name ?? false,
+            closeConnectionsOnApply: data.clash_api?.close_connections_on_apply ?? false,
             hideUnavailableProxies: data.clash_api?.hide_unavailable_proxies ?? false,
             hideUnavailableProxiesCounter: data.clash_api?.hide_unavailable_proxies_counter ?? 3,
             proxySortOrder: data.clash_api?.proxy_sort_order ?? 'default',

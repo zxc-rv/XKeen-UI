@@ -41,7 +41,7 @@ import {
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
-import { apiCall, buildClashHeaders, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
+import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
 import {
   runMassTask,
@@ -304,6 +304,7 @@ export function ConfigPanel({
   const guiRouting = useSettings((s) => s.guiRouting)
   const guiLog = useSettings((s) => s.guiLog)
   const multiRouter = useSettings((s) => s.multiRouter)
+  const closeConnsOnApply = useSettings((s) => s.closeConnectionsOnApply)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
   const getMassTargets = () => {
     if (!multiRouter) return [LOCAL_ROUTER_ID]
@@ -634,18 +635,18 @@ export function ConfigPanel({
     }
 
     const isHotReload = core === 'mihomo' && !isXkeenFile(cfg.file)
-    if (isHotReload && !activeClashApiPort && !activeClashApiUnix) {
-      throw new Error('external-controller не найден в config.yaml')
-    }
 
-    const validate = !isXkeenFile(cfg.file) && (core === 'mihomo' || core === 'xray') ? `?validate=${core}` : ''
+    let validate = ''
+    if (!isXkeenFile(cfg.file) && (core === 'mihomo' || core === 'xray')) {
+      validate = `?validate=${core}`
+      if (core === 'mihomo' && closeConnsOnApply) validate += '&closeConns=true'
+    }
     const saveResult = await apiCall<ApiResult>(
       'PUT',
       `configs${validate}`,
       { file: cfg.file, content },
       {
         baseUrl,
-        headers: isHotReload ? buildClashHeaders(activeClashApiPort, clashApiSecret, activeClashApiUnix) : undefined,
       }
     )
     if (!saveResult.success) {

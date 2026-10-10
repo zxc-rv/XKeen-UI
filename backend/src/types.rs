@@ -183,6 +183,7 @@ pub struct ClashApiSettings {
     pub hide_unavailable_proxies_counter: u32,
     pub proxy_sort_order: String,
     pub auto_dns: String,
+    pub close_connections_on_apply: bool,
 }
 
 impl Default for ClashApiSettings {
@@ -195,6 +196,7 @@ impl Default for ClashApiSettings {
             hide_unavailable_proxies_counter: 3,
             proxy_sort_order: "default".into(),
             auto_dns: "disabled".into(),
+            close_connections_on_apply: false,
         }
     }
 }

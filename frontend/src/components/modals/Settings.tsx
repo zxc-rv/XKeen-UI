@@ -85,6 +85,13 @@ const clashApiSettings: ToggleSetting[] = [
     title: 'Показывать имя источника',
     description: 'Отображать имя клиента Keenetic вместо IP-адреса. Требуется актуальная версия KeeneticOS',
   },
+  {
+    id: 'close-conns-on-apply',
+    key: 'closeConnectionsOnApply',
+    path: 'clash_api.close_connections_on_apply',
+    title: 'Автозакрытие при применении',
+    description: 'Закрывать все соединения после успешного применения конфига Mihomo',
+  },
 ]
 
 const pluginSettings: ToggleSetting[] = [
@@ -234,23 +241,24 @@ const RepoSourceField = memo(function RepoSourceField({
 }) {
   const [draft, setDraft] = useState(value)
 
-  const defaultUrl = repoKey === 'xrayRepo'
-    ? 'https://github.com/XTLS/Xray-core'
-    : 'https://github.com/MetaCubeX/mihomo'
+  const defaultUrl = repoKey === 'xrayRepo' ? 'https://github.com/XTLS/Xray-core' : 'https://github.com/MetaCubeX/mihomo'
 
-  const save = useCallback(async (overrideUrl?: string) => {
-    let url = (typeof overrideUrl === 'string' ? overrideUrl : draft).trim().replace(/\/+$/, '')
-    if (!url) {
-      showToast('URL репозитория не может быть пустым', 'error')
-      return
-    }
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url
-    if (url === value) {
-      setDraft(url)
-      return
-    }
-    if (await onSave(repoKey, url)) setDraft(url)
-  }, [draft, onSave, repoKey, showToast, value])
+  const save = useCallback(
+    async (overrideUrl?: string) => {
+      let url = (typeof overrideUrl === 'string' ? overrideUrl : draft).trim().replace(/\/+$/, '')
+      if (!url) {
+        showToast('URL репозитория не может быть пустым', 'error')
+        return
+      }
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+      if (url === value) {
+        setDraft(url)
+        return
+      }
+      if (await onSave(repoKey, url)) setDraft(url)
+    },
+    [draft, onSave, repoKey, showToast, value]
+  )
 
   return (
     <Field className="px-0 py-3">
@@ -274,11 +282,11 @@ const RepoSourceField = memo(function RepoSourceField({
               <InputGroupButton
                 aria-label="Вернуть значение по-умолчанию"
                 title="Вернуть значение по-умолчанию"
-                className=" text-muted-foreground hover:text-foreground hover:bg-transparent!"
+                className="text-muted-foreground hover:text-foreground hover:bg-transparent!"
                 onMouseDown={(e) => e.preventDefault()} // Блочим лишний onBlur инпута
                 onClick={() => void save(defaultUrl)}
               >
-                <IconArrowBackUp className='size-4.5' />
+                <IconArrowBackUp className="size-4.5" />
               </InputGroupButton>
             </InputGroupAddon>
           )}
@@ -421,7 +429,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
         </div>
 
         {custom && (
-          <InputGroup >
+          <InputGroup>
             <InputGroupAddon align="inline-start">{protocol}://</InputGroupAddon>
             <InputGroupInput
               value={host}
@@ -430,7 +438,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
               onBlur={() => void save()}
               placeholder="www.example.com/generate_204"
               aria-label="Свой URL пинга"
-              className='text-sm placeholder:text-sm pl-0!'
+              className="pl-0! text-sm placeholder:text-sm"
             />
           </InputGroup>
         )}
@@ -450,7 +458,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
             min={1}
             step={100}
             inputMode="numeric"
-            className="text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="[appearance:textfield] text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             value={timeout}
             onChange={(e) => setTimeout(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void save()}
@@ -503,7 +511,13 @@ function AuthSettingsField({
               <FieldDescription className="text-[13px]">Сбросить старый пароль и установить новый</FieldDescription>
             </FieldContent>
             <Popover open={resetOpen} onOpenChange={setResetOpen}>
-              <PopoverTrigger render={<Button variant="destructive" size="sm">Сбросить</Button>} />
+              <PopoverTrigger
+                render={
+                  <Button variant="destructive" size="sm">
+                    Сбросить
+                  </Button>
+                }
+              />
               <PopoverContent>
                 <PopoverHeader>
                   <PopoverTitle>Вас перекинет на страницу установки пароля. Продолжить?</PopoverTitle>
@@ -696,7 +710,11 @@ export function SettingsModal() {
                       <FieldLabel htmlFor="theme">Тема приложения</FieldLabel>
                       <FieldDescription className="text-[13px]">Ручной режим или синхронизация с системой</FieldDescription>
                     </FieldContent>
-                    <Select value={settings.theme} items={Object.fromEntries(themeOptions.map((o) => [o.value, o.label]))} onValueChange={setTheme}>
+                    <Select
+                      value={settings.theme}
+                      items={Object.fromEntries(themeOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setTheme}
+                    >
                       <SelectTrigger id="theme" className="w-34 text-sm">
                         <SelectValue />
                       </SelectTrigger>
@@ -721,7 +739,16 @@ export function SettingsModal() {
                       <FieldLabel htmlFor="timezone">Часовой пояс</FieldLabel>
                       <FieldDescription className="text-[13px]">Сдвиг времени для записей в журнале</FieldDescription>
                     </FieldContent>
-                    <Select value={String(settings.timezone)} items={Object.fromEntries(Array.from({ length: 27 }, (_, i) => { const v = String(i - 12); return [v, `UTC${i - 12 >= 0 ? '+' : ''}${v}`] }))} onValueChange={setTimezone}>
+                    <Select
+                      value={String(settings.timezone)}
+                      items={Object.fromEntries(
+                        Array.from({ length: 27 }, (_, i) => {
+                          const v = String(i - 12)
+                          return [v, `UTC${i - 12 >= 0 ? '+' : ''}${v}`]
+                        })
+                      )}
+                      onValueChange={setTimezone}
+                    >
                       <SelectTrigger id="timezone" className="w-30 text-sm">
                         <SelectValue />
                       </SelectTrigger>
@@ -782,12 +809,7 @@ export function SettingsModal() {
                       <FieldDescription className="text-[13px]">Порог таймаутов подряд для скрытия подключений (1–10)</FieldDescription>
                     </FieldContent>
                     <InputGroup className="w-15">
-                      <InputGroupInput
-                        id="hide-counter"
-                        readOnly
-                        className="text-sm"
-                        value={settings.hideUnavailableProxiesCounter}
-                      />
+                      <InputGroupInput id="hide-counter" readOnly className="text-sm" value={settings.hideUnavailableProxiesCounter} />
                       <InputGroupAddon align="inline-end" className="flex flex-col gap-0">
                         <InputGroupButton
                           aria-label="Увеличить"
@@ -810,9 +832,15 @@ export function SettingsModal() {
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
                       <FieldLabel htmlFor="proxy-sort">Сортировка</FieldLabel>
-                      <FieldDescription className="text-[13px]">Порядок отображения подключений в списке. Не влияет на fallback логику</FieldDescription>
+                      <FieldDescription className="text-[13px]">
+                        Порядок отображения подключений в списке. Не влияет на fallback логику
+                      </FieldDescription>
                     </FieldContent>
-                    <Select value={settings.proxySortOrder} items={Object.fromEntries(sortOrderOptions.map((o) => [o.value, o.label]))} onValueChange={setProxySortOrder}>
+                    <Select
+                      value={settings.proxySortOrder}
+                      items={Object.fromEntries(sortOrderOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setProxySortOrder}
+                    >
                       <SelectTrigger id="proxy-sort" className="w-39 text-sm">
                         <SelectValue />
                       </SelectTrigger>
@@ -839,8 +867,11 @@ export function SettingsModal() {
                 <Separator className="my-2" />
                 <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Соединения</p>
                 <FieldGroup className="gap-0!">
-                  {clashApiSettings.map((item) => (
-                    <SwitchSettingField key={item.id} item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
+                  {clashApiSettings.map((item, index) => (
+                    <Fragment key={item.id}>
+                      <SwitchSettingField item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
+                      {index < clashApiSettings.length - 1 && <Separator className="my-0" />}
+                    </Fragment>
                   ))}
                   <Separator className="my-0" />
                   <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">DNS</p>
@@ -865,9 +896,15 @@ export function SettingsModal() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="disabled" className="text-sm">Выкл</SelectItem>
-                          <SelectItem value="enabled" className="text-sm">Вкл</SelectItem>
-                          <SelectItem value="with_filter" className="text-sm">Вкл с автонастройкой</SelectItem>
+                          <SelectItem value="disabled" className="text-sm">
+                            Выкл
+                          </SelectItem>
+                          <SelectItem value="enabled" className="text-sm">
+                            Вкл
+                          </SelectItem>
+                          <SelectItem value="with_filter" className="text-sm">
+                            Вкл с автонастройкой
+                          </SelectItem>
                         </SelectGroup>
                       </SelectContent>
                     </Select>

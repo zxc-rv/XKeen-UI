@@ -1,7 +1,7 @@
 use crate::logger::log;
 use crate::types::*;
 use axum::extract::{Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -178,7 +178,7 @@ fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
 }
 
 pub async fn put_config(
-    State(state): State<AppState>, headers: HeaderMap, Query(params): Query<HashMap<String, String>>,
+    State(state): State<AppState>, Query(params): Query<HashMap<String, String>>,
     Json(req): Json<ConfigReq>,
 ) -> impl IntoResponse {
     let is_lst = match check_access(&req.file, &state) {
@@ -193,7 +193,11 @@ pub async fn put_config(
 
     if let Some(core_type) = params.get("validate") {
         if core_type == "mihomo" {
-            return apply_mihomo_hot_reload(&state, &headers, &req.file, &content).await;
+            let close_conns = params
+                .get("closeConns")
+                .map(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+                .unwrap_or(false);
+            return apply_mihomo_hot_reload(&state, &req.file, &content, close_conns).await;
         }
         if core_type == "xray" {
             let mut validate_files = Vec::new();
@@ -337,20 +341,74 @@ fn api_error(error: impl Into<String>) -> Json<ApiResponse<()>> {
     Json(ApiResponse { success: false, error: Some(error.into()), data: None })
 }
 
-async fn apply_mihomo_hot_reload(
-    state: &AppState, headers: &HeaderMap, file: &str, content: &str,
-) -> Json<ApiResponse<()>> {
-    let header = |name: &str| headers.get(name).and_then(|value| value.to_str().ok());
+struct MihomoApiCreds {
+    port: Option<u16>,
+    secret: Option<String>,
+    unix_path: Option<String>,
+}
 
-    let (client, url) = match (header("x-clash-unix"), header("x-clash-port").and_then(|port| port.parse::<u16>().ok())) {
-        (Some(socket), _) => {
-            let socket_path = Path::new(MIHOMO_CONF_DIR).join(Path::new(socket).file_name().unwrap_or_default());
-            match reqwest::Client::builder().unix_socket(socket_path).build() {
-                Ok(client) => (client, "http://127.0.0.1/configs?force=true".to_string()),
-                Err(error) => return api_error(error.to_string()),
+fn yaml_value_to_string(value: &yaml_rust2::Yaml) -> Option<String> {
+    match value {
+        yaml_rust2::Yaml::String(s) => Some(s.clone()),
+        yaml_rust2::Yaml::Integer(i) => Some(i.to_string()),
+        yaml_rust2::Yaml::Real(s) => Some(s.clone()),
+        yaml_rust2::Yaml::Boolean(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
+fn parse_mihomo_api_creds(yaml_content: &str) -> MihomoApiCreds {
+    let mut creds = MihomoApiCreds { port: None, secret: None, unix_path: None };
+    let Ok(docs) = yaml_rust2::YamlLoader::load_from_str(yaml_content) else {
+        return creds;
+    };
+    let Some(doc) = docs.first() else { return creds };
+    if let Some(unix_val) = yaml_value_to_string(&doc["external-controller-unix"]) {
+        let trimmed = unix_val.trim();
+        if !trimmed.is_empty() {
+            if let Some(name) = Path::new(trimmed)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .filter(|n| !n.is_empty())
+            {
+                creds.unix_path = Some(format!("{}/{}", MIHOMO_CONF_DIR, name));
             }
         }
-        (None, Some(port)) => (state.http_client.clone(), format!("http://127.0.0.1:{port}/configs?force=true")),
+    }
+    if let Some(controller) = yaml_value_to_string(&doc["external-controller"]) {
+        if let Some(port_str) = controller.trim().rsplit(':').next() {
+            let port_str = port_str.trim().trim_matches(|c| c == '"' || c == '\'');
+            if let Ok(port) = port_str.parse::<u16>() {
+                creds.port = Some(port);
+            }
+        }
+    }
+    if let Some(secret) = yaml_value_to_string(&doc["secret"]) {
+        let trimmed = secret.trim().to_string();
+        if !trimmed.is_empty() {
+            creds.secret = Some(trimmed);
+        }
+    }
+    creds
+}
+
+async fn apply_mihomo_hot_reload(
+    state: &AppState, file: &str, content: &str, close_conns: bool,
+) -> Json<ApiResponse<()>> {
+    let main_config = format!("{}/config.yaml", MIHOMO_CONF_DIR);
+    let creds_source = tokio::fs::read_to_string(&main_config).await.unwrap_or_default();
+    let creds = parse_mihomo_api_creds(&creds_source);
+
+    enum Target {
+        Unix { client: reqwest::Client },
+        Tcp { port: u16, secret: Option<String> },
+    }
+    let target = match (creds.unix_path, creds.port) {
+        (Some(socket_path), _) => match reqwest::Client::builder().unix_socket(socket_path).build() {
+            Ok(client) => Target::Unix { client },
+            Err(error) => return api_error(error.to_string()),
+        },
+        (None, Some(port)) => Target::Tcp { port, secret: creds.secret.clone() },
         (None, None) => return api_error("external-controller не найден"),
     };
 
@@ -359,8 +417,23 @@ async fn apply_mihomo_hot_reload(
         return api_error(format!("Write error: {error}"));
     }
 
-    let mut request = client.put(url).json(&serde_json::json!({})).timeout(Duration::from_secs(15));
-    if let Some(secret) = header("x-clash-secret") {
+    let (client, configs_url, conns_url, secret) = match &target {
+        Target::Unix { client } => (
+            client.clone(),
+            "http://127.0.0.1/configs?force=true".to_string(),
+            "http://127.0.0.1/connections".to_string(),
+            None,
+        ),
+        Target::Tcp { port, secret } => (
+            state.http_client.clone(),
+            format!("http://127.0.0.1:{port}/configs?force=true"),
+            format!("http://127.0.0.1:{port}/connections"),
+            secret.clone(),
+        ),
+    };
+
+    let mut request = client.put(configs_url).json(&serde_json::json!({})).timeout(Duration::from_secs(15));
+    if let Some(secret) = secret.as_deref() {
         request = request.bearer_auth(secret);
     }
     let response = match request.send().await {
@@ -374,6 +447,15 @@ async fn apply_mihomo_hot_reload(
 
     let status = response.status();
     if status == StatusCode::NO_CONTENT {
+        if close_conns {
+            let mut req = client.delete(conns_url).timeout(Duration::from_secs(15));
+            if let Some(secret) = secret.as_deref() {
+                req = req.bearer_auth(secret);
+            }
+            if let Err(error) = req.send().await {
+                log("ERROR", format!("Ошибка Mihomo: {error}"));
+            }
+        }
         return api_ok();
     }
 

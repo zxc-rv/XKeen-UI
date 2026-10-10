@@ -30,6 +30,7 @@ export interface AppSettings {
   pingTestUrl: string
   pingTestTimeout: number
   showSourceName: boolean
+  closeConnectionsOnApply: boolean
   hideUnavailableProxies: boolean
   hideUnavailableProxiesCounter: number
   proxySortOrder: ProxySortOrder
