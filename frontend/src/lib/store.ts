@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
-import { clashFetch } from './api'
+import { apiCall, clashFetch } from './api'
 import { getStoredTheme } from './theme'
 import {
   DEFAULT_MIHOMO_REPO,
@@ -551,6 +551,7 @@ export interface DnsStatus {
   dnsOverride: boolean
   dnsMihomo: boolean
   providerIgnored: boolean
+  portListener?: string
 }
 
 interface DnsStatusStore {
@@ -571,6 +572,16 @@ export function setDnsStatus(status: DnsStatus | null): void {
 
 export function setDnsStatusLoading(loading: boolean): void {
   useDnsStatusStore.setState({ loading })
+}
+
+export async function fetchDnsStatus(): Promise<void> {
+  setDnsStatusLoading(true)
+  try {
+    const data = await apiCall<{ success: boolean; status?: DnsStatus }>('GET', 'dns')
+    if (data.success && data.status) setDnsStatus(data.status)
+  } finally {
+    setDnsStatusLoading(false)
+  }
 }
 
 export function bumpDnsRefresh(): void {

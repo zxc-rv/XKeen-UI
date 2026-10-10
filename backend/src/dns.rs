@@ -4,6 +4,7 @@ use axum::extract::State;
 use axum::response::{IntoResponse, Json};
 use serde::Deserialize;
 use serde_json::json;
+use std::collections::{BTreeSet, HashSet};
 use std::time::Duration;
 
 #[derive(Deserialize)]
@@ -26,34 +27,24 @@ pub struct DnsStatusFields {
     pub dns_override: bool,
     pub dns_mihomo: bool,
     pub provider_ignored: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port_listener: Option<String>,
 }
 
 fn check_dns_mihomo() -> bool {
-    if let Ok(content) = std::fs::read_to_string(MIHOMO_CONF) {
-        if let Ok(yaml) = yaml_rust2::YamlLoader::load_from_str(&content) {
-            if let Some(doc) = yaml.first() {
-                if let Some(dns) = doc["dns"].as_hash() {
-                    let enable = dns
-                        .get(&yaml_rust2::Yaml::String("enable".into()))
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    let listen = dns
-                        .get(&yaml_rust2::Yaml::String("listen".into()))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
-                    return enable && listen == "0.0.0.0:53";
-                }
-            }
-        }
-    }
-    false
+    let Ok(content) = std::fs::read_to_string(MIHOMO_CONF) else { return false };
+    let Ok(documents) = yaml_rust2::YamlLoader::load_from_str(&content) else { return false };
+    documents.first().is_some_and(|document| {
+        document["dns"]["enable"].as_bool().unwrap_or(false) && document["dns"]["listen"].as_str() == Some("0.0.0.0:53")
+    })
 }
 
-fn parse_dns_status(output: &str) -> DnsStatusFields {
+fn parse_dns_status(output: &str, port_listener: Option<String>) -> DnsStatusFields {
     DnsStatusFields {
         dns_override: output.contains("opkg dns-override"),
         dns_mihomo: check_dns_mihomo(),
         provider_ignored: output.contains("ip no name-servers"),
+        port_listener,
     }
 }
 
@@ -194,17 +185,17 @@ fn find_batch_error(value: &serde_json::Value) -> Option<String> {
     }
 }
 
-fn check_batch_response(resp: &serde_json::Value, steps: &[&str], ignore: &[usize]) -> Result<(), String> {
+fn check_batch_response(resp: &serde_json::Value, steps: &[&str], ignore: &[(usize, &str)]) -> Result<(), String> {
     let items = resp
         .as_array()
         .ok_or_else(|| "Некорректный ответ RCI batch".to_string())?;
     for (i, item) in items.iter().enumerate() {
         let step = steps.get(i).copied().unwrap_or("?");
         if let Some(err) = find_batch_error(item) {
-            if ignore.contains(&i) {
+            if let Some((_, component)) = ignore.iter().find(|(idx, _)| *idx == i) {
                 log(
                     "WARN",
-                    format!("DNS: '{step}' — пропущено (компонент не установлен?): {err}"),
+                    format!("Не удалось очистить {component} (компонент не установлен?)"),
                 );
                 continue;
             }
@@ -215,13 +206,55 @@ fn check_batch_response(resp: &serde_json::Value, steps: &[&str], ignore: &[usiz
     Ok(())
 }
 
+fn port_53_inodes(table: &str, protocol: &str) -> Vec<u64> {
+    let only_listening = protocol.starts_with("tcp");
+    table
+        .lines()
+        .skip(1)
+        .map(|line| line.split_whitespace().collect::<Vec<_>>())
+        .filter(|fields| fields.len() >= 10 && fields[1].ends_with(":0035") && (!only_listening || fields[3] == "0A"))
+        .filter_map(|fields| fields[9].parse::<u64>().ok())
+        .filter(|inode| *inode != 0)
+        .collect()
+}
+
+fn port_53_listener() -> Option<String> {
+    let mut sockets = HashSet::new();
+    for protocol in ["tcp", "udp", "tcp6", "udp6"] {
+        let table = std::fs::read_to_string(format!("/proc/net/{protocol}")).unwrap_or_default();
+        sockets.extend(port_53_inodes(&table, protocol).into_iter().map(|inode| format!("socket:[{inode}]")));
+    }
+    if sockets.is_empty() {
+        return None;
+    }
+
+    let mut names = BTreeSet::new();
+    for process in std::fs::read_dir("/proc").ok()?.flatten() {
+        let Ok(descriptors) = std::fs::read_dir(process.path().join("fd")) else { continue };
+        let is_listener = descriptors.flatten().any(|descriptor| {
+            std::fs::read_link(descriptor.path()).is_ok_and(|link| sockets.contains(link.to_string_lossy().as_ref()))
+        });
+        if is_listener {
+            let name = std::fs::read_to_string(process.path().join("comm")).unwrap_or_default();
+            names.insert(name.trim().to_string());
+        }
+    }
+    if names.is_empty() {
+        names.insert("unknown".to_string());
+    }
+    Some(names.into_iter().collect::<Vec<_>>().join(", "))
+}
+
 pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
     match fetch_running_config(&state).await {
-        Ok(output) => Json(DnsResponse {
-            success: true,
-            error: None,
-            status: Some(parse_dns_status(&output)),
-        }),
+        Ok(output) => {
+            let port_listener = tokio::task::spawn_blocking(port_53_listener).await.ok().flatten();
+            Json(DnsResponse {
+                success: true,
+                error: None,
+                status: Some(parse_dns_status(&output, port_listener)),
+            })
+        }
         Err(e) => Json(DnsResponse {
             success: false,
             error: Some(e),
@@ -244,15 +277,15 @@ pub async fn post_dns(State(state): State<AppState>, Json(req): Json<DnsEnableRe
     };
 
     let mut steps: Vec<(&str, serde_json::Value)> = vec![];
-    let mut ignore: Vec<usize> = vec![];
+    let mut ignore: Vec<(usize, &str)> = vec![];
 
     if req.setup_filter {
-        ignore.push(steps.len());
+        ignore.push((steps.len(), "DoH"));
         steps.push((
             "Отключение HTTPS DNS-прокси",
             json!({"dns-proxy": {"https": {"upstream": [{"no": true}]}}}),
         ));
-        ignore.push(steps.len());
+        ignore.push((steps.len(), "DoT"));
         steps.push((
             "Отключение TLS DNS-прокси",
             json!({"dns-proxy": {"tls": {"upstream": [{"no": true}]}}}),
@@ -417,14 +450,60 @@ mod tests {
             {},
         ]);
         assert!(check_batch_response(&one_error, &steps, &[]).is_err());
-        assert!(check_batch_response(&one_error, &steps, &[0]).is_ok());
+        assert!(check_batch_response(&one_error, &steps, &[(0, "DoH")]).is_ok());
 
         let two_errors = json!([
             {"status": [{"status": "error", "message": "absent"}]},
             {"status": [{"status": "error", "message": "absent"}]},
             {},
         ]);
-        assert!(check_batch_response(&two_errors, &steps, &[0]).is_err());
-        assert!(check_batch_response(&two_errors, &steps, &[0, 1]).is_ok());
+        assert!(check_batch_response(&two_errors, &steps, &[(0, "DoH")]).is_err());
+        assert!(check_batch_response(&two_errors, &steps, &[(0, "DoH"), (1, "DoT")]).is_ok());
+    }
+
+    #[test]
+    fn handles_real_missing_component_response() {
+        // Ответ роутера при опечатке tlss вместо tls: успех — message внутри
+        // массивов/вложенных объектов, ошибка — в соседнем поле status.
+        let resp = json!([
+            {"ip": {"name-server": [{"status": [{"status": "message", "code": "22544390", "ident": "Dns::Manager", "message": "static IPv4 name server list cleared."}]}]}},
+            {"dns-proxy": {"tlss": {"upstream": [{}], "status": [{"status": "error", "code": "1179781", "ident": "Core::Configurator", "message": "not found: \"dns-proxy/tlss/upstream\" [admin]."}]}}},
+            {"dns-proxy": {"https": {"upstream": [{"status": [{"status": "message", "code": "22610920", "ident": "Dns::Secure::ManagerDoh", "message": "DNS-over-HTTPS name servers cleared."}]}]}}},
+            {"system": {"configuration": {"save": {"status": [{"status": "message", "code": "8912996", "ident": "Core::System::StartupConfig", "message": "saving (http/rci)."}]}}}}
+        ]);
+        let steps = ["name-server", "tls-upstream", "https-upstream", "save"];
+
+        // message-статусы ошибкой не считаются, ошибка DoT-компонента игнорируется.
+        assert!(check_batch_response(&resp, &steps, &[(1, "DoT")]).is_ok());
+
+        // Без игнора — ошибка с именем шага и текстом роутера.
+        let err = check_batch_response(&resp, &steps, &[]).unwrap_err();
+        assert!(err.contains("tls-upstream"), "unexpected: {err}");
+        assert!(err.contains("not found"), "unexpected: {err}");
+    }
+
+    const TABLE_HEADER: &str = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n";
+
+    fn table_row(local: &str, state: &str, inode: u64) -> String {
+        format!("   0: {local} 00000000:0000 {state} 00000000:00000000 00:00000000 00000000     0        0 {inode} 1 0000000000000000 100 0 0 10 0\n")
+    }
+
+    #[test]
+    fn parses_tcp_listening_port_53() {
+        let table = [
+            TABLE_HEADER.to_string(),
+            table_row("00000000:0035", "0A", 12345),
+            table_row("0100007F:0035", "0A", 0),
+            table_row("0100007F:01BB", "0A", 99999),
+            table_row("0100007F:0035", "01", 555),
+        ]
+        .concat();
+        assert_eq!(port_53_inodes(&table, "tcp"), vec![12345]);
+    }
+
+    #[test]
+    fn parses_udp_ignores_state() {
+        let table = [TABLE_HEADER.to_string(), table_row("00000000:0035", "07", 777), table_row("00000000:0035", "01", 888)].concat();
+        assert_eq!(port_53_inodes(&table, "udp6"), vec![777, 888]);
     }
 }

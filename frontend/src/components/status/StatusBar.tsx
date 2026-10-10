@@ -24,18 +24,10 @@ import {
   IconSettings,
   IconAlertCircle,
 } from '@tabler/icons-react'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
 import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
-import {
-  syncClashApiPort,
-  getAppState,
-  useAppContext,
-  bumpDnsRefresh,
-  setDnsStatus,
-  setDnsStatusLoading,
-  useDnsStatusStore,
-} from '../../lib/store'
+import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh, fetchDnsStatus, useDnsStatusStore } from '../../lib/store'
 import { cn } from '../../lib/utils'
 
 type SystemStats = { memoryUsed: number; memoryTotal: number; cpuUsage: number }
@@ -90,26 +82,9 @@ export function StatusBar({
   const [dnsWarningOpen, setDnsWarningOpen] = useState(false)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
 
-  const fetchDnsStatus = useCallback(async () => {
-    try {
-      setDnsStatusLoading(true)
-      const data = await apiCall<{ success: boolean; status?: { dnsOverride: boolean; dnsMihomo: boolean; providerIgnored: boolean } }>(
-        'GET',
-        'dns'
-      )
-      if (data.success && data.status) {
-        setDnsStatus(data.status)
-        return data.status.dnsOverride && data.status.dnsMihomo
-      }
-    } catch {
-      // ignore
-    }
-    return false
-  }, [])
-
   useEffect(() => {
-    if (currentCore === 'mihomo') fetchDnsStatus()
-  }, [fetchDnsStatus, currentCore])
+    if (currentCore === 'mihomo') fetchDnsStatus().catch(() => {})
+  }, [currentCore])
 
   useEffect(() => {
     const interval = setInterval(() => {

@@ -23,17 +23,18 @@ import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons
 import * as jsyaml from 'js-yaml'
 import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { apiCall, clashFetch } from '../../../lib/api'
-import { useAppContext, useDnsStatusStore, setDnsStatus, setDnsStatusLoading } from '../../../lib/store'
+import { apiCall, capitalize, clashFetch } from '../../../lib/api'
+import { useAppContext, useDnsStatusStore, fetchDnsStatus } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
-
-import type { DnsStatus } from '../../../lib/store'
 
 const SETUP_FILTER_STORAGE_KEY = 'dnsSetupFilter'
 
-interface DnsStatusResponse {
-  success: boolean
-  status?: DnsStatus
+/// Имя слушателя 53 порта с заглавной буквы: mihomo -> Mihomo, ndnproxy -> Ndnproxy.
+function formatPortListener(listener: string): string {
+  return listener
+    .split(',')
+    .map((name) => capitalize(name.trim()))
+    .join(', ')
 }
 
 function DnsSettingLabel({ children, tooltip }: { children: string; tooltip: string }) {
@@ -230,17 +231,15 @@ export const DnsPanel = memo(function DnsPanel() {
 
   const showMihomoSettings = useMemo(() => !!dnsStatus && dnsStatus.dnsMihomo, [dnsStatus])
 
+  const portListener = dnsStatus?.portListener
+  const isMihomoListeningPort = !!portListener?.toLowerCase().includes('mihomo')
+  const portListenerLabel = dnsStatus ? formatPortListener(portListener ?? 'Нет слушателя') : 'Неизвестно'
+
   const fetchStatus = useCallback(async () => {
-    setDnsStatusLoading(true)
     try {
-      const data = await apiCall<DnsStatusResponse>('GET', 'dns')
-      if (data.success && data.status) {
-        setDnsStatus(data.status)
-      }
+      await fetchDnsStatus()
     } catch {
       showToast('Ошибка получения статуса DNS', 'error')
-    } finally {
-      setDnsStatusLoading(false)
     }
   }, [showToast])
 
@@ -337,6 +336,8 @@ export const DnsPanel = memo(function DnsPanel() {
         await refreshConfigs()
       }
 
+      // Порядок обязателен: сначала reload михомо (отпускает :53),
+      // только потом DELETE dns (KeeneticOS забирает порт). Параллелить нельзя — bind упадёт.
       const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', {})
       if (result.success) {
         showToast('Управление DNS отключено')
@@ -442,7 +443,7 @@ export const DnsPanel = memo(function DnsPanel() {
         <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
           <legend className="px-1 text-sm font-medium">Статус DNS</legend>
           <div className="flex flex-col gap-3 pt-1">
-            {!isLoading && dnsStatus && !dnsStatus.providerIgnored && (
+            {dnsStatus && !dnsStatus.providerIgnored && (
               <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
                 <IconAlertCircle className="size-4.5" />
                 <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
@@ -450,37 +451,32 @@ export const DnsPanel = memo(function DnsPanel() {
                 </AlertDescription>
               </Alert>
             )}
-            {isLoading ? (
-              <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                <Spinner /> Загрузка...
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">DNS Override</Label>
+                <Badge variant={dnsStatus?.dnsOverride ? 'emerald' : 'rose'}>{dnsStatus?.dnsOverride ? 'Активно' : 'Неактивно'}</Badge>
               </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm">DNS Override</Label>
-                  <Badge variant={dnsStatus?.dnsOverride ? 'emerald' : 'rose'}>{dnsStatus?.dnsOverride ? 'Активно' : 'Неактивно'}</Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm">DNS Mihomo</Label>
-                  <Badge variant={dnsStatus?.dnsMihomo ? 'emerald' : 'rose'}>{dnsStatus?.dnsMihomo ? 'Активно' : 'Неактивно'}</Badge>
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor="dns-toggle" className="text-sm font-medium">
-                      Включить управление DNS
-                    </Label>
-                    <p className="text-muted-foreground text-xs">Передача управления DNS от KeeneticOS к Mihomo</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {isToggling && <Spinner className="text-muted-foreground" />}
-                    <Switch id="dns-toggle" checked={isAllActive} onCheckedChange={handleToggleEnable} disabled={isToggling || isLoading} />
-                  </div>
-                </div>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">DNS Mihomo</Label>
+                <Badge variant={dnsStatus?.dnsMihomo ? 'emerald' : 'rose'}>{dnsStatus?.dnsMihomo ? 'Активно' : 'Неактивно'}</Badge>
               </div>
-            )}
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Слушатель 53 порта</Label>
+                <Badge variant={isMihomoListeningPort ? 'emerald' : 'rose'}>{portListenerLabel}</Badge>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="dns-toggle" className="text-sm font-medium">
+                    Включить управление DNS
+                  </Label>
+                  <p className="text-muted-foreground text-xs">Передача управления DNS от KeeneticOS к Mihomo</p>
+                </div>
+                <Switch id="dns-toggle" checked={isAllActive} onCheckedChange={handleToggleEnable} disabled={isToggling || isLoading} />
+              </div>
+            </div>
           </div>
         </fieldset>
 
