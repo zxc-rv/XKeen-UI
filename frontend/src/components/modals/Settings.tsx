@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -224,6 +224,21 @@ const ProxySettingsField = memo(function ProxySettingsField({
 
 type RepoSourceKey = 'xrayRepo' | 'mihomoRepo'
 
+const GITHUB_REPO_PREFIX = 'https://github.com/'
+
+function normalizeGitHubRepoUrl(raw: string): string | null {
+  let url = raw.trim().replace(/\/+$/, '')
+  if (!url) return null
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+  url = url.replace(/^http:\/\/github\.com\//i, GITHUB_REPO_PREFIX)
+  const match = url.match(/^https:\/\/github\.com\/([^/\s?#]+)\/([^/\s?#]+)(?:[/?#].*)?$/i)
+  if (!match) return null
+  const owner = match[1]
+  let repo = match[2].replace(/\.git$/i, '')
+  if (!owner || !repo) return null
+  return `${GITHUB_REPO_PREFIX}${owner}/${repo}`
+}
+
 const RepoSourceField = memo(function RepoSourceField({
   repoKey,
   label,
@@ -243,14 +258,20 @@ const RepoSourceField = memo(function RepoSourceField({
 
   const defaultUrl = repoKey === 'xrayRepo' ? 'https://github.com/XTLS/Xray-core' : 'https://github.com/MetaCubeX/mihomo'
 
+  const invalid = normalizeGitHubRepoUrl(draft) === null
+
   const save = useCallback(
     async (overrideUrl?: string) => {
-      let url = (typeof overrideUrl === 'string' ? overrideUrl : draft).trim().replace(/\/+$/, '')
-      if (!url) {
+      const raw = (typeof overrideUrl === 'string' ? overrideUrl : draft).trim().replace(/\/+$/, '')
+      if (!raw) {
         showToast('URL репозитория не может быть пустым', 'error')
         return
       }
-      if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+      const url = normalizeGitHubRepoUrl(raw)
+      if (!url) {
+        showToast('Некорректный URL', 'error')
+        return
+      }
       if (url === value) {
         setDraft(url)
         return
@@ -275,6 +296,7 @@ const RepoSourceField = memo(function RepoSourceField({
             onKeyDown={(e) => e.key === 'Enter' && void save()}
             onBlur={() => void save()}
             placeholder={defaultUrl}
+            aria-invalid={invalid}
             className="text-sm placeholder:text-sm"
           />
           {draft !== defaultUrl && (
@@ -292,6 +314,7 @@ const RepoSourceField = memo(function RepoSourceField({
           )}
         </InputGroup>
       </Field>
+      {invalid && <FieldError>Некорректный URL</FieldError>}
     </Field>
   )
 })
@@ -701,7 +724,7 @@ export function SettingsModal() {
           </div>
 
           <ScrollArea className="min-h-0 flex-1">
-            <div className="pr-2">
+            <div className="pr-2 pl-1">
               <TabsContent value="general">
                 <FieldGroup className="gap-0!">
                   <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Оформление</p>
@@ -924,7 +947,7 @@ export function SettingsModal() {
                   <RepoSourceField
                     repoKey="xrayRepo"
                     label="Источник Xray"
-                    description="Репозиторий GitHub, из которого скачивается и проверяется ядро Xray"
+                    description="Репозиторий GitHub, с которого скачивается и проверяется ядро Xray"
                     value={settings.xrayRepo}
                     onSave={saveRepoSource}
                     showToast={showToast}
@@ -933,7 +956,7 @@ export function SettingsModal() {
                   <RepoSourceField
                     repoKey="mihomoRepo"
                     label="Источник Mihomo"
-                    description="Репозиторий GitHub, из которого скачивается и проверяется ядро Mihomo"
+                    description="Репозиторий GitHub, с которого скачивается и проверяется ядро Mihomo"
                     value={settings.mihomoRepo}
                     onSave={saveRepoSource}
                     showToast={showToast}
