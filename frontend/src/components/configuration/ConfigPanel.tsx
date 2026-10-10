@@ -1231,7 +1231,9 @@ function hasCriticalChanges(oldContent: string, newContent: string, language: st
     if (language === 'yaml') {
       const o = jsyaml.load(oldContent) as Record<string, unknown>
       const n = jsyaml.load(newContent) as Record<string, unknown>
-      return ['listeners', 'redir-port', 'tproxy-port'].some((f) => JSON.stringify(o?.[f]) !== JSON.stringify(n?.[f]))
+      return ['listeners', 'redir-port', 'tproxy-port', 'external-controller', 'external-controller-unix', 'secret'].some(
+        (f) => JSON.stringify(o?.[f]) !== JSON.stringify(n?.[f])
+      )
     }
     if (language === 'json') {
       const o = parseJsonc(oldContent)
