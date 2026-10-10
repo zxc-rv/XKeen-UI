@@ -943,11 +943,11 @@ export function SettingsModal() {
                       <Separator className="my-0" />
                     </Fragment>
                   ))}
-                  <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Источники</p>
+                  <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Источники обновлений</p>
                   <RepoSourceField
                     repoKey="xrayRepo"
                     label="Источник Xray"
-                    description="Репозиторий GitHub, с которого скачивается и проверяется ядро Xray"
+                    description="Репозиторий GitHub, с которого загружаются/проверяются обновления Xray"
                     value={settings.xrayRepo}
                     onSave={saveRepoSource}
                     showToast={showToast}
@@ -956,7 +956,7 @@ export function SettingsModal() {
                   <RepoSourceField
                     repoKey="mihomoRepo"
                     label="Источник Mihomo"
-                    description="Репозиторий GitHub, с которого скачивается и проверяется ядро Mihomo"
+                    description="Репозиторий GitHub, с которого загружаются/проверяются обновления Mihomo"
                     value={settings.mihomoRepo}
                     onSave={saveRepoSource}
                     showToast={showToast}
