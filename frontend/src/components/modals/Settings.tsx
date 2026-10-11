@@ -323,6 +323,7 @@ const PING_URL_PRESETS = [
   'www.google.com/generate_204',
   'www.youtube.com/generate_204',
   'www.gstatic.com/generate_204',
+  'connectivitycheck.gstatic.com/generate_204',
   'cp.cloudflare.com/generate_204',
 ] as const
 
