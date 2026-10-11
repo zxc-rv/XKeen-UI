@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroupAddon } from '@/components/ui/input-group'
+import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -304,7 +305,7 @@ const ProxyCard = memo(function ProxyCard({
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 rounded-sm border px-3 py-2.5 text-sm transition-all',
+        'flex flex-col gap-3 rounded-md border px-3 py-2.5 text-sm transition-all',
         selectionDisabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer',
         isFixed
           ? 'border-purple-400 bg-linear-to-b from-purple-500/25 to-purple-500/15'
@@ -471,7 +472,7 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
             <img
               src={item.icon}
               alt=""
-              className="size-4 shrink-0 rounded-sm object-contain"
+              className="size-4 shrink-0 object-contain"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
           )}
@@ -630,7 +631,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
             <img
               src={selectedProxy.icon}
               alt=""
-              className="size-4 shrink-0 rounded-sm object-contain"
+              className="size-4 shrink-0 object-contain"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
           </InputGroupAddon>
@@ -686,6 +687,7 @@ const SelectorRow = memo(function SelectorRow({
   })
   const smartNodesForGroup = useSelectorsStore((s) => s.smartNodes[selectorName])
   const [isFlushingSmart, setIsFlushingSmart] = useState(false)
+  const [flushConfirmOpen, setFlushConfirmOpen] = useState(false)
 
   if (!selector) return null
 
@@ -718,7 +720,8 @@ const SelectorRow = memo(function SelectorRow({
     return result
   }, [allProxies, hideUnavailable, hideCounter, sortOrder, allProxiesMap, isSmart, smartNodesForGroup])
 
-  async function handleFlushSmart() {
+  async function handleFlushSmartConfirm() {
+    setFlushConfirmOpen(false)
     if (isFlushingSmart) return
     blurActiveElement()
     setIsFlushingSmart(true)
@@ -747,23 +750,35 @@ const SelectorRow = memo(function SelectorRow({
 
           <div className="flex shrink-0 items-center gap-2">
             {isSmart && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      aria-label="Сбросить smart-веса"
-                      onMouseDown={blurActiveElement}
-                      onClick={handleFlushSmart}
-                      disabled={isFlushingSmart}
-                    >
-                      {isFlushingSmart ? <IconLoader2 size={13} className="animate-spin" /> : <IconScaleOff size={13} />}
+              <Popover open={flushConfirmOpen} onOpenChange={setFlushConfirmOpen}>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <PopoverTrigger
+                        render={
+                          <Button variant="outline" size="icon-sm" aria-label="Сбросить smart-веса" disabled={isFlushingSmart}>
+                            {isFlushingSmart ? <IconLoader2 size={13} className="animate-spin" /> : <IconScaleOff size={13} />}
+                          </Button>
+                        }
+                      />
+                    }
+                  />
+                  {!flushConfirmOpen && <TooltipContent>Сбросить smart-веса</TooltipContent>}
+                </Tooltip>
+                <PopoverContent>
+                  <PopoverHeader>
+                    <PopoverTitle>Вы уверены, что хотите сбросить smart-веса?</PopoverTitle>
+                  </PopoverHeader>
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setFlushConfirmOpen(false)}>
+                      Нет
                     </Button>
-                  }
-                />
-                <TooltipContent>Сбросить smart-веса</TooltipContent>
-              </Tooltip>
+                    <Button size="sm" variant="destructive" onClick={() => void handleFlushSmartConfirm()}>
+                      Да
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             )}
             <Button
               variant="outline"
@@ -990,9 +1005,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   const hasSmartSelector = useProxiesStore(
     useShallow((s) =>
-      Object.values(s.proxies).some(
-        (p: any) => typeof p?.type === 'string' && isSmartType(p.type) && (showHiddenSelectors || !p.hidden)
-      )
+      Object.values(s.proxies).some((p: any) => typeof p?.type === 'string' && isSmartType(p.type) && (showHiddenSelectors || !p.hidden))
     )
   )
 
