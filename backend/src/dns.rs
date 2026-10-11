@@ -1,6 +1,6 @@
 use crate::logger::log;
 use crate::types::*;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Json};
 use serde::Deserialize;
 use serde_json::json;
@@ -16,6 +16,19 @@ pub struct DnsEnableReq {
 
 #[derive(Deserialize)]
 pub struct DnsDeleteReq {}
+
+#[derive(Deserialize)]
+pub struct DnsStatusQuery {
+    #[serde(default, rename = "noDelay")]
+    pub no_delay: Option<String>,
+}
+
+fn is_no_delay_requested(value: &Option<String>) -> bool {
+    value.as_deref().is_some_and(|v| {
+        let v = v.to_ascii_lowercase();
+        matches!(v.as_str(), "" | "1" | "true" | "yes")
+    })
+}
 
 fn default_true() -> bool {
     true
@@ -245,9 +258,12 @@ fn port_53_listener() -> Option<String> {
     Some(names.into_iter().collect::<Vec<_>>().join(", "))
 }
 
-pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn get_dns(State(state): State<AppState>, Query(params): Query<DnsStatusQuery>) -> impl IntoResponse {
     match fetch_running_config(&state).await {
         Ok(output) => {
+            if !is_no_delay_requested(&params.no_delay) {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
             let port_listener = tokio::task::spawn_blocking(port_53_listener).await.ok().flatten();
             Json(DnsResponse {
                 success: true,
@@ -329,6 +345,8 @@ pub async fn post_dns(State(state): State<AppState>, Json(req): Json<DnsEnableRe
             });
         }
     }
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
 
     if let Err(e) = tokio::fs::write(MIHOMO_CONF, &req.config_content).await {
         log("ERROR", format!("Ошибка записи {MIHOMO_CONF}: {e}"));
@@ -463,8 +481,6 @@ mod tests {
 
     #[test]
     fn handles_real_missing_component_response() {
-        // Ответ роутера при опечатке tlss вместо tls: успех — message внутри
-        // массивов/вложенных объектов, ошибка — в соседнем поле status.
         let resp = json!([
             {"ip": {"name-server": [{"status": [{"status": "message", "code": "22544390", "ident": "Dns::Manager", "message": "static IPv4 name server list cleared."}]}]}},
             {"dns-proxy": {"tlss": {"upstream": [{}], "status": [{"status": "error", "code": "1179781", "ident": "Core::Configurator", "message": "not found: \"dns-proxy/tlss/upstream\" [admin]."}]}}},
@@ -473,10 +489,8 @@ mod tests {
         ]);
         let steps = ["name-server", "tls-upstream", "https-upstream", "save"];
 
-        // message-статусы ошибкой не считаются, ошибка DoT-компонента игнорируется.
         assert!(check_batch_response(&resp, &steps, &[(1, "DoT")]).is_ok());
 
-        // Без игнора — ошибка с именем шага и текстом роутера.
         let err = check_batch_response(&resp, &steps, &[]).unwrap_err();
         assert!(err.contains("tls-upstream"), "unexpected: {err}");
         assert!(err.contains("not found"), "unexpected: {err}");

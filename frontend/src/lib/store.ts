@@ -575,10 +575,10 @@ export function setDnsStatusLoading(loading: boolean): void {
   useDnsStatusStore.setState({ loading })
 }
 
-export async function fetchDnsStatus(): Promise<void> {
+export async function fetchDnsStatus(options?: { noDelay?: boolean }): Promise<void> {
   setDnsStatusLoading(true)
   try {
-    const data = await apiCall<{ success: boolean; status?: DnsStatus }>('GET', 'dns')
+    const data = await apiCall<{ success: boolean; status?: DnsStatus }>('GET', options?.noDelay ? 'dns?noDelay=true' : 'dns')
     if (data.success && data.status) {
       setDnsStatus(data.status)
       const s = data.status

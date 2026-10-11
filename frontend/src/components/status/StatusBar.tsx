@@ -83,7 +83,7 @@ export function StatusBar({
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
 
   useEffect(() => {
-    if (currentCore === 'mihomo') fetchDnsStatus().catch(() => {})
+    if (currentCore === 'mihomo') fetchDnsStatus({ noDelay: true }).catch(() => {})
   }, [currentCore])
 
   const prevServiceStatusRef = useRef(serviceStatus)
@@ -130,7 +130,10 @@ export function StatusBar({
 
   async function startService() {
     setPending('Запуск...')
-    const result = await apiCall<any>('POST', 'control', { action: 'start' })
+    const result = await apiCall<any>('POST', 'control', { action: 'start' }).catch((e) => ({
+      success: false,
+      error: e instanceof Error ? e.message : String(e),
+    }))
     showToast(result.success ? 'XKeen запущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     if (!result.success) {
       dispatch({ type: 'SET_SERVICE_STATUS', status: 'stopped' })
@@ -139,10 +142,34 @@ export function StatusBar({
     }
     syncClashApiPort()
     if (settings.autoDns !== 'disabled' && state.currentCore === 'mihomo') {
-      await applyAutoDns(settings.autoDns === 'with_filter')
-      const { clashApiPort, clashApiSecret, clashApiUnix } = getAppState()
-      await clashFetch(clashApiPort ?? '', 'configs', { method: 'PUT', secret: clashApiSecret, unix: clashApiUnix, body: {} })
-      bumpDnsRefresh()
+      try {
+        await applyAutoDns(settings.autoDns === 'with_filter')
+        const { clashApiPort, clashApiSecret, clashApiUnix } = getAppState()
+        // Даём михомо полсекунды подняться после старта, дальше ретраим PUT:
+        // на медленном железе слипа может не хватить (502).
+        await new Promise((r) => setTimeout(r, 500))
+        let lastError: unknown = null
+        for (let attempt = 0; attempt < 4; attempt++) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt))
+          try {
+            await clashFetch(clashApiPort ?? '', 'configs', {
+              method: 'PUT',
+              secret: clashApiSecret,
+              unix: clashApiUnix,
+              body: {},
+            })
+            lastError = null
+            break
+          } catch (e) {
+            lastError = e
+          }
+        }
+        if (lastError) throw lastError
+        bumpDnsRefresh()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        showToast(`XKeen запущен, но авто-включение DNS не удалось: ${msg}`, 'error')
+      }
     }
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
     onRefreshStatus()
@@ -179,6 +206,7 @@ export function StatusBar({
       stopResult.success ? 'XKeen остановлен' : `${stopResult.output || stopResult.error}`,
       stopResult.success ? 'success' : 'error'
     )
+    fetchDnsStatus().catch(() => {})
     onRefreshStatus()
   }
 
