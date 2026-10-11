@@ -443,11 +443,11 @@ export const DnsPanel = memo(function DnsPanel() {
         <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
           <legend className="px-1 text-sm font-medium">Статус DNS</legend>
           <div className="flex flex-col gap-3 pt-1">
-            {dnsStatus && !dnsStatus.providerIgnored && (
+            {dnsStatus && dnsStatus.hasProviderNameservers && (
               <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
                 <IconAlertCircle className="size-4.5" />
                 <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
-                  Игнорирование DNS провайдера не определено. Могут возникнуть утечки.
+                  Найдены активные DNS провайдера. Рекомендуется включить игнорирование, иначе могут возникнуть утечки.
                 </AlertDescription>
               </Alert>
             )}

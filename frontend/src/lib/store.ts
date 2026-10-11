@@ -551,7 +551,7 @@ export function syncClashApiPort(delayMs = 0): void {
 export interface DnsStatus {
   dnsOverride: boolean
   dnsMihomo: boolean
-  providerIgnored: boolean
+  hasProviderNameservers: boolean
   portListener?: string
 }
 

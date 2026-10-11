@@ -39,7 +39,7 @@ fn default_true() -> bool {
 pub struct DnsStatusFields {
     pub dns_override: bool,
     pub dns_mihomo: bool,
-    pub provider_ignored: bool,
+    pub has_provider_nameservers: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port_listener: Option<String>,
 }
@@ -52,12 +52,31 @@ fn check_dns_mihomo() -> bool {
     })
 }
 
-fn parse_dns_status(output: &str, port_listener: Option<String>) -> DnsStatusFields {
+fn parse_dns_status(output: &str, has_provider_nameservers: bool, port_listener: Option<String>) -> DnsStatusFields {
     DnsStatusFields {
         dns_override: output.contains("opkg dns-override"),
         dns_mihomo: check_dns_mihomo(),
-        provider_ignored: output.contains("ip no name-servers"),
+        has_provider_nameservers,
         port_listener,
+    }
+}
+
+/// Есть ли среди name-серверов выданные провайдером (service "Dhcp...").
+/// Рекурсивный обход терпит любую обёртку ответа RCI вокруг массива server.
+fn has_dhcp_nameserver(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Object(map) => {
+            if map
+                .get("service")
+                .and_then(|s| s.as_str())
+                .is_some_and(|s| s.starts_with("Dhcp"))
+            {
+                return true;
+            }
+            map.values().any(has_dhcp_nameserver)
+        }
+        serde_json::Value::Array(items) => items.iter().any(has_dhcp_nameserver),
+        _ => false,
     }
 }
 
@@ -259,8 +278,16 @@ fn port_53_listener() -> Option<String> {
 }
 
 pub async fn get_dns(State(state): State<AppState>, Query(params): Query<DnsStatusQuery>) -> impl IntoResponse {
-    match fetch_running_config(&state).await {
+    let (running, name_servers) = tokio::join!(fetch_running_config(&state), fetch_rci(&state, "ip/name-server"));
+    match running {
         Ok(output) => {
+            let has_provider_nameservers = match &name_servers {
+                Ok(data) => has_dhcp_nameserver(data),
+                Err(e) => {
+                    log("WARN", format!("Не удалось получить ip name-server: {e}"));
+                    true
+                }
+            };
             if !is_no_delay_requested(&params.no_delay) {
                 tokio::time::sleep(Duration::from_millis(500)).await;
             }
@@ -268,7 +295,7 @@ pub async fn get_dns(State(state): State<AppState>, Query(params): Query<DnsStat
             Json(DnsResponse {
                 success: true,
                 error: None,
-                status: Some(parse_dns_status(&output, port_listener)),
+                status: Some(parse_dns_status(&output, has_provider_nameservers, port_listener)),
             })
         }
         Err(e) => Json(DnsResponse {
@@ -519,5 +546,40 @@ mod tests {
     fn parses_udp_ignores_state() {
         let table = [TABLE_HEADER.to_string(), table_row("00000000:0035", "07", 777), table_row("00000000:0035", "01", 888)].concat();
         assert_eq!(port_53_inodes(&table, "udp6"), vec![777, 888]);
+    }
+
+    #[test]
+    fn no_delay_flag_parsing() {
+        assert!(!is_no_delay_requested(&None));
+        assert!(!is_no_delay_requested(&Some("0".into())));
+        assert!(!is_no_delay_requested(&Some("false".into())));
+        assert!(is_no_delay_requested(&Some(String::new())));
+        assert!(is_no_delay_requested(&Some("1".into())));
+        assert!(is_no_delay_requested(&Some("true".into())));
+        assert!(is_no_delay_requested(&Some("TRUE".into())));
+        assert!(is_no_delay_requested(&Some("yes".into())));
+    }
+
+    #[test]
+    fn detects_dhcp_nameservers() {
+        let resp = json!([{"show": {"ip": {"name-server": {"server": [
+            {"address": "192.168.1.1", "domain": "", "global": 0, "service": "Dns::Manager", "interface": ""},
+            {"address": "62.112.106.130", "domain": "", "global": 65280, "service": "Dhcp::Client-GigabitEthernet1", "interface": "GigabitEthernet1"},
+            {"address": "62.112.113.170", "domain": "", "global": 65280, "service": "Dhcp::Client-GigabitEthernet1", "interface": "GigabitEthernet1"},
+        ]}}}}]);
+        assert!(has_dhcp_nameserver(&resp));
+
+        let static_only = json!([{"show": {"ip": {"name-server": {"server": [
+            {"address": "192.168.1.1", "domain": "", "global": 0, "service": "Dns::Manager", "interface": ""},
+            {"address": "77.88.8.8", "domain": "", "global": 0, "service": "Dns::Manager", "interface": ""},
+        ]}}}}]);
+        assert!(!has_dhcp_nameserver(&static_only));
+
+        assert!(!has_dhcp_nameserver(&json!([])));
+        assert!(!has_dhcp_nameserver(&json!({})));
+        assert!(!has_dhcp_nameserver(&json!([{"show": {"ip": {}}}])));
+
+        // service не строка — не считаем
+        assert!(!has_dhcp_nameserver(&json!([{"service": 42}])));
     }
 }
