@@ -90,10 +90,10 @@ export function StatusBar({
   useEffect(() => {
     const prev = prevServiceStatusRef.current
     prevServiceStatusRef.current = serviceStatus
-    if (prev === 'pending' && serviceStatus === 'running') {
+    if (prev === 'pending' && serviceStatus === 'running' && currentCore === 'mihomo') {
       fetchDnsStatus().catch(() => {})
     }
-  }, [serviceStatus])
+  }, [serviceStatus, currentCore])
 
   useEffect(() => {
     const interval = setInterval(() => {
