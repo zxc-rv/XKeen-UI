@@ -7,6 +7,7 @@ import type { ToastMessage } from '../../lib/types'
 function AlertItem({ alert }: { alert: ToastMessage }) {
   const { dispatch } = useAppActions()
   const isError = alert.type === 'error'
+  const isWarning = alert.type === 'warning'
 
   return (
     <m.div
@@ -20,10 +21,23 @@ function AlertItem({ alert }: { alert: ToastMessage }) {
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
       className="max-w-100px w-full"
     >
-      <Alert variant={isError ? 'destructive' : 'default'} className="relative overflow-hidden">
-        {isError ? <IconAlertCircle className="size-4.5" /> : <IconCircleCheck className="size-4.5" />}
-        <AlertTitle className="pb-1">{alert.title}</AlertTitle>
-        {alert.body && <AlertDescription>{alert.body}</AlertDescription>}
+      <Alert
+        variant={isError ? 'destructive' : 'default'}
+        className={
+          isWarning ? 'relative overflow-hidden text-yellow-600 dark:text-amber-400' : 'relative overflow-hidden'
+        }
+      >
+        {isError || isWarning ? (
+          <IconAlertCircle className={isWarning ? 'size-4.5 text-yellow-600 dark:text-amber-400' : 'size-4.5'} />
+        ) : (
+          <IconCircleCheck className="size-4.5" />
+        )}
+        <AlertTitle className={isWarning ? 'pb-1 text-yellow-600 dark:text-amber-400' : 'pb-1'}>{alert.title}</AlertTitle>
+        {alert.body && (
+          <AlertDescription className={isWarning ? 'text-yellow-600/90 dark:text-amber-400/90' : undefined}>
+            {alert.body}
+          </AlertDescription>
+        )}
         <AlertAction className="flex items-center gap-1">
           {alert.action && (
             <a

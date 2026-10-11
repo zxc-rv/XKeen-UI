@@ -151,7 +151,7 @@ const useStore = create<StoreState>((set) => ({
 
 type ShowToastFn = (
   message: string | { title: string; body: string; persistent?: boolean; id?: string; action?: { url: string } },
-  type?: 'success' | 'error'
+  type?: 'success' | 'error' | 'warning'
 ) => void
 
 type CoreState = Omit<
@@ -224,14 +224,15 @@ const selectCoreStateWithConfigsAndSettings = (s: StoreState): CoreStateWithConf
 
 export function showToast(
   message: string | { title: string; body: string; persistent?: boolean; id?: string; action?: { url: string } },
-  type: 'success' | 'error' = 'success'
+  type: 'success' | 'error' | 'warning' = 'success'
 ) {
   const dispatch = useStore.getState().dispatch
   const id = typeof message === 'string' ? Math.random().toString(36).slice(2) : (message.id ?? Math.random().toString(36).slice(2))
   if (typeof message !== 'string' && message.id) dispatch({ type: 'REMOVE_TOAST', id: message.id })
+  const defaultTitle = type === 'error' ? 'Ошибка' : type === 'warning' ? 'Предупреждение' : 'Успех'
   const toast: ToastMessage =
     typeof message === 'string'
-      ? { id, title: type === 'error' ? 'Ошибка' : 'Успех', body: message, type }
+      ? { id, title: defaultTitle, body: message, type }
       : {
           id,
           title: message.title,
@@ -578,7 +579,24 @@ export async function fetchDnsStatus(): Promise<void> {
   setDnsStatusLoading(true)
   try {
     const data = await apiCall<{ success: boolean; status?: DnsStatus }>('GET', 'dns')
-    if (data.success && data.status) setDnsStatus(data.status)
+    if (data.success && data.status) {
+      setDnsStatus(data.status)
+      const s = data.status
+      const listener = (s.portListener ?? '').toLowerCase()
+      if (s.dnsOverride && s.dnsMihomo && !listener.includes('mihomo')) {
+        showToast(
+          {
+            title: 'Предупреждение',
+            body: 'Mihomo не является слушателем 53 порта, проверьте настройки DNS и перезапустите XKeen',
+            id: 'dns-port-listener-warning',
+            persistent: true,
+          },
+          'warning'
+        )
+      } else {
+        useStore.getState().dispatch({ type: 'REMOVE_TOAST', id: 'dns-port-listener-warning' })
+      }
+    }
   } finally {
     setDnsStatusLoading(false)
   }

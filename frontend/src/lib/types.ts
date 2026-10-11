@@ -85,7 +85,7 @@ export interface ToastMessage {
   id: string
   title: string
   body: string
-  type: 'success' | 'error'
+  type: 'success' | 'error' | 'warning'
   persistent?: boolean
   action?: ToastAction
 }
