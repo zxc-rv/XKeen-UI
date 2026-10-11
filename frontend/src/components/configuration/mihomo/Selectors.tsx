@@ -22,7 +22,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
-import { fetchClashProxies, getConnections, useProxiesStore, useSettings } from '../../../lib/store'
+import { fetchClashProxies, getConnections, showToast, useProxiesStore, useSettings } from '../../../lib/store'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL } from '../../../lib/types'
 
 interface ProxyHistory {
@@ -935,19 +935,23 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
     }
   }, [clashApiPort, clashApiSecret, clashApiUnix])
 
-  const flushSmartWeights = useCallback(async () => {
-    try {
-      await clashFetch(clashApiPort, 'cache/smart/flush', {
-        method: 'POST',
-        secret: clashApiSecret,
-        unix: clashApiUnix ?? null,
-        retry: false,
-      })
-      await fetchSmartWeights()
-    } catch {
-      /* */
-    }
-  }, [clashApiPort, clashApiSecret, clashApiUnix, fetchSmartWeights])
+  const flushSmartWeights = useCallback(
+    async (selectorName?: string) => {
+      try {
+        await clashFetch(clashApiPort, 'cache/smart/flush', {
+          method: 'POST',
+          secret: clashApiSecret,
+          unix: clashApiUnix ?? null,
+          retry: false,
+        })
+        await fetchSmartWeights()
+        showToast(selectorName ? `Smart-веса для «${selectorName}» сброшены` : 'Smart-веса сброшены')
+      } catch {
+        showToast('Не удалось сбросить smart-веса', 'error')
+      }
+    },
+    [clashApiPort, clashApiSecret, clashApiUnix, fetchSmartWeights]
+  )
 
   const requestProxyDelay = useCallback(
     async (proxyName: string) => {
