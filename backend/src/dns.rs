@@ -61,8 +61,6 @@ fn parse_dns_status(output: &str, has_provider_nameservers: bool, port_listener:
     }
 }
 
-/// Есть ли среди name-серверов выданные провайдером (service "Dhcp...").
-/// Рекурсивный обход терпит любую обёртку ответа RCI вокруг массива server.
 fn has_dhcp_nameserver(value: &serde_json::Value) -> bool {
     match value {
         serde_json::Value::Object(map) => {
@@ -291,7 +289,14 @@ pub async fn get_dns(State(state): State<AppState>, Query(params): Query<DnsStat
             if !is_no_delay_requested(&params.no_delay) {
                 tokio::time::sleep(Duration::from_millis(500)).await;
             }
-            let port_listener = tokio::task::spawn_blocking(port_53_listener).await.ok().flatten();
+            let mut port_listener = tokio::task::spawn_blocking(port_53_listener).await.ok().flatten();
+            for delay_ms in [1000, 2000] {
+                if port_listener.is_some() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                port_listener = tokio::task::spawn_blocking(port_53_listener).await.ok().flatten();
+            }
             Json(DnsResponse {
                 success: true,
                 error: None,
