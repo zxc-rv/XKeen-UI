@@ -24,7 +24,7 @@ import {
   IconSettings,
   IconAlertCircle,
 } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
 import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
 import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh, fetchDnsStatus, useDnsStatusStore } from '../../lib/store'
@@ -85,6 +85,15 @@ export function StatusBar({
   useEffect(() => {
     if (currentCore === 'mihomo') fetchDnsStatus().catch(() => {})
   }, [currentCore])
+
+  const prevServiceStatusRef = useRef(serviceStatus)
+  useEffect(() => {
+    const prev = prevServiceStatusRef.current
+    prevServiceStatusRef.current = serviceStatus
+    if (prev === 'pending' && serviceStatus === 'running') {
+      fetchDnsStatus().catch(() => {})
+    }
+  }, [serviceStatus])
 
   useEffect(() => {
     const interval = setInterval(() => {
