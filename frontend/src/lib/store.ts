@@ -479,12 +479,19 @@ async function preloadIcons(urls: string[]) {
 export async function fetchClashProxies(port: string, secret?: string | null, silent = false, unix?: string | null): Promise<void> {
   if (!silent) useProxiesStore.setState({ loading: true, error: false })
   try {
-    const [proxiesData, providersData] = await Promise.all([
-      clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix }),
-      clashFetch<{ providers?: Record<string, ProxyProvider> }>(port, 'providers/proxies', { secret, unix }).catch(() => ({
-        providers: undefined,
-      })),
-    ])
+    const fetchPair = () =>
+      Promise.all([
+        clashFetch<{ proxies?: Record<string, unknown> }>(port, 'proxies', { secret, unix }),
+        clashFetch<{ providers?: Record<string, ProxyProvider> }>(port, 'providers/proxies', { secret, unix }).catch(() => ({
+          providers: undefined,
+        })),
+      ])
+    let [proxiesData, providersData] = await fetchPair()
+    for (const delay of [500, 1000]) {
+      if (proxiesData.proxies && Object.keys(proxiesData.proxies).length > 0) break
+      await new Promise((r) => setTimeout(r, delay))
+      ;[proxiesData, providersData] = await fetchPair()
+    }
 
     if (proxiesData.proxies) {
       const proxies = { ...proxiesData.proxies }
@@ -575,10 +582,10 @@ export function setDnsStatusLoading(loading: boolean): void {
   useDnsStatusStore.setState({ loading })
 }
 
-export async function fetchDnsStatus(options?: { noDelay?: boolean }): Promise<void> {
+export async function fetchDnsStatus(): Promise<void> {
   setDnsStatusLoading(true)
   try {
-    const data = await apiCall<{ success: boolean; status?: DnsStatus }>('GET', options?.noDelay ? 'dns?noDelay=true' : 'dns')
+    const data = await apiCall<{ success: boolean; status?: DnsStatus }>('GET', 'dns')
     if (data.success && data.status) {
       setDnsStatus(data.status)
       const s = data.status

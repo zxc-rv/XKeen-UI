@@ -631,9 +631,16 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run {
             log("INFO", format!("Перезапуск {}...", core_cap));
+            let log_len = fs::metadata(error_log_path()).await.map(|m| m.len()).unwrap_or(0) as usize;
             if let Err(e) = crate::controller::soft_restart(&req.core).await {
                 log("ERROR", format!("{}", e));
                 return response(false, Some(format!("{}", e)));
+            }
+            if req.core == "mihomo" {
+                if let Err(e) = crate::controller::wait_mihomo_ready(log_len).await {
+                    log("ERROR", format!("{}", e));
+                    return response(false, Some(format!("{}", e)));
+                }
             }
         }
     } else {

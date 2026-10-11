@@ -83,7 +83,7 @@ export function StatusBar({
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
 
   useEffect(() => {
-    if (currentCore === 'mihomo') fetchDnsStatus({ noDelay: true }).catch(() => {})
+    if (currentCore === 'mihomo') fetchDnsStatus().catch(() => {})
   }, [currentCore])
 
   const prevServiceStatusRef = useRef(serviceStatus)
@@ -145,26 +145,12 @@ export function StatusBar({
       try {
         await applyAutoDns(settings.autoDns === 'with_filter')
         const { clashApiPort, clashApiSecret, clashApiUnix } = getAppState()
-        // Даём михомо полсекунды подняться после старта, дальше ретраим PUT:
-        // на медленном железе слипа может не хватить (502).
-        await new Promise((r) => setTimeout(r, 500))
-        let lastError: unknown = null
-        for (let attempt = 0; attempt < 4; attempt++) {
-          if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt))
-          try {
-            await clashFetch(clashApiPort ?? '', 'configs', {
-              method: 'PUT',
-              secret: clashApiSecret,
-              unix: clashApiUnix,
-              body: {},
-            })
-            lastError = null
-            break
-          } catch (e) {
-            lastError = e
-          }
-        }
-        if (lastError) throw lastError
+        await clashFetch(clashApiPort ?? '', 'configs', {
+          method: 'PUT',
+          secret: clashApiSecret,
+          unix: clashApiUnix,
+          body: {},
+        })
         bumpDnsRefresh()
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
@@ -172,6 +158,7 @@ export function StatusBar({
       }
     }
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
+    syncClashApiPort(200)
     onRefreshStatus()
   }
 
@@ -190,6 +177,15 @@ export function StatusBar({
 
   async function disableDnsAndStop() {
     setPending('Остановка...')
+    const stopResult = await apiCall<any>('POST', 'control', { action: 'stop' })
+    showToast(
+      stopResult.success ? 'XKeen остановлен' : `${stopResult.output || stopResult.error}`,
+      stopResult.success ? 'success' : 'error'
+    )
+    if (!stopResult.success) {
+      onRefreshStatus()
+      return
+    }
     try {
       await persistDnsEnabled(false)
       const result = await apiCall<{ success: boolean; error?: string }>('DELETE', 'dns', {})
@@ -201,12 +197,6 @@ export function StatusBar({
     } catch {
       showToast('Ошибка отключения DNS', 'error')
     }
-    const stopResult = await apiCall<any>('POST', 'control', { action: 'stop' })
-    showToast(
-      stopResult.success ? 'XKeen остановлен' : `${stopResult.output || stopResult.error}`,
-      stopResult.success ? 'success' : 'error'
-    )
-    fetchDnsStatus().catch(() => {})
     onRefreshStatus()
   }
 
@@ -216,7 +206,7 @@ export function StatusBar({
     showToast(result.success ? 'XKeen перезапущен' : `${result.output || result.error}`, result.success ? 'success' : 'error')
     dispatch({ type: 'SET_SERVICE_STATUS', status: result.success ? 'running' : 'stopped' })
     if (result.success) {
-      syncClashApiPort()
+      syncClashApiPort(200)
     }
     onRefreshStatus()
   }
@@ -440,7 +430,7 @@ export function StatusBar({
             <AlertDialogTitle className="flex items-center gap-2">
               <IconAlertCircle size={18} className="text-amber-400" /> Внимание
             </AlertDialogTitle>
-            <AlertDialogDescription>Перед остановкой XKeen будет отключено управление DNS. Продолжить?</AlertDialogDescription>
+            <AlertDialogDescription>После остановки XKeen будет отключено управление DNS. Продолжить?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setDnsWarningOpen(false)}>Отмена</AlertDialogCancel>

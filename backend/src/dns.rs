@@ -1,6 +1,6 @@
 use crate::logger::log;
 use crate::types::*;
-use axum::extract::{Query, State};
+use axum::extract::State;
 use axum::response::{IntoResponse, Json};
 use serde::Deserialize;
 use serde_json::json;
@@ -16,19 +16,6 @@ pub struct DnsEnableReq {
 
 #[derive(Deserialize)]
 pub struct DnsDeleteReq {}
-
-#[derive(Deserialize)]
-pub struct DnsStatusQuery {
-    #[serde(default, rename = "noDelay")]
-    pub no_delay: Option<String>,
-}
-
-fn is_no_delay_requested(value: &Option<String>) -> bool {
-    value.as_deref().is_some_and(|v| {
-        let v = v.to_ascii_lowercase();
-        matches!(v.as_str(), "" | "1" | "true" | "yes")
-    })
-}
 
 fn default_true() -> bool {
     true
@@ -67,7 +54,7 @@ fn has_dhcp_nameserver(value: &serde_json::Value) -> bool {
             if map
                 .get("service")
                 .and_then(|s| s.as_str())
-                .is_some_and(|s| s.starts_with("Dhcp"))
+                .is_some_and(|s| s.get(..4).is_some_and(|p| p.eq_ignore_ascii_case("dhcp")))
             {
                 return true;
             }
@@ -275,7 +262,7 @@ fn port_53_listener() -> Option<String> {
     Some(names.into_iter().collect::<Vec<_>>().join(", "))
 }
 
-pub async fn get_dns(State(state): State<AppState>, Query(params): Query<DnsStatusQuery>) -> impl IntoResponse {
+pub async fn get_dns(State(state): State<AppState>) -> impl IntoResponse {
     let (running, name_servers) = tokio::join!(fetch_running_config(&state), fetch_rci(&state, "ip/name-server"));
     match running {
         Ok(output) => {
@@ -286,9 +273,6 @@ pub async fn get_dns(State(state): State<AppState>, Query(params): Query<DnsStat
                     true
                 }
             };
-            if !is_no_delay_requested(&params.no_delay) {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-            }
             let mut port_listener = tokio::task::spawn_blocking(port_53_listener).await.ok().flatten();
             for delay_ms in [1000, 2000] {
                 if port_listener.is_some() {
@@ -554,18 +538,6 @@ mod tests {
     }
 
     #[test]
-    fn no_delay_flag_parsing() {
-        assert!(!is_no_delay_requested(&None));
-        assert!(!is_no_delay_requested(&Some("0".into())));
-        assert!(!is_no_delay_requested(&Some("false".into())));
-        assert!(is_no_delay_requested(&Some(String::new())));
-        assert!(is_no_delay_requested(&Some("1".into())));
-        assert!(is_no_delay_requested(&Some("true".into())));
-        assert!(is_no_delay_requested(&Some("TRUE".into())));
-        assert!(is_no_delay_requested(&Some("yes".into())));
-    }
-
-    #[test]
     fn detects_dhcp_nameservers() {
         let resp = json!([{"show": {"ip": {"name-server": {"server": [
             {"address": "192.168.1.1", "domain": "", "global": 0, "service": "Dns::Manager", "interface": ""},
@@ -583,8 +555,6 @@ mod tests {
         assert!(!has_dhcp_nameserver(&json!([])));
         assert!(!has_dhcp_nameserver(&json!({})));
         assert!(!has_dhcp_nameserver(&json!([{"show": {"ip": {}}}])));
-
-        // service не строка — не считаем
         assert!(!has_dhcp_nameserver(&json!([{"service": 42}])));
     }
 }

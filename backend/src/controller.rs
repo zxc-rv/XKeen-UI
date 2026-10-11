@@ -6,11 +6,14 @@ use nix::sys::resource::{Resource, setrlimit};
 use nix::sys::signal::{Signal, kill};
 use nix::unistd::{Gid, Pid, setgid, setsid};
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::fs::Permissions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use tokio::fs::{self, set_permissions};
 use tokio::process::Command;
+
+const CORE_NAMES: [&str; 2] = ["xray", "mihomo"];
 
 #[derive(Deserialize)]
 pub struct ControlReq {
@@ -71,25 +74,23 @@ async fn resolve_init_file(state: &AppState) -> Result<String, String> {
 
 pub async fn run_init_command(state: &AppState, args: &[&str]) -> Result<(), String> {
     let path = resolve_init_file(state).await?;
-    let result = if let Ok(f) = std::fs::OpenOptions::new()
+    let mut command = Command::new(&path);
+    command.args(args);
+    if let Ok(file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(error_log_path())
     {
-        Command::new(&path)
-            .args(args)
-            .stdout(f.try_clone().unwrap())
-            .stderr(f)
-            .status()
-            .await
-    } else {
-        Command::new(&path).args(args).status().await
-    };
-    if let Err(e) = result {
-        *state.init_file.write().unwrap() = None;
-        return Err(format!("{}: {}", path, e));
+        command.stdout(file.try_clone().unwrap()).stderr(file);
     }
-    Ok(())
+    match command.status().await {
+        Ok(status) if status.success() => Ok(()),
+        Ok(status) => Err(format!("{}: {}", path, status)),
+        Err(error) => {
+            *state.init_file.write().unwrap() = None;
+            Err(format!("{}: {}", path, error))
+        }
+    }
 }
 
 fn get_core_info(name: &str) -> CoreInfo {
@@ -118,6 +119,17 @@ pub fn get_pid(name: &str) -> Vec<i32> {
             let comm = std::fs::read_to_string(path.join("comm")).ok()?;
             (comm.trim_end_matches('\n') == name).then_some(pid)
         })
+        .collect()
+}
+
+fn running_cores() -> HashSet<&'static str> {
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return HashSet::new();
+    };
+    entries
+        .flatten()
+        .filter_map(|entry| std::fs::read_to_string(entry.path().join("comm")).ok())
+        .filter_map(|comm| CORE_NAMES.into_iter().find(|name| *name == comm.trim_end()))
         .collect()
 }
 
@@ -174,35 +186,19 @@ pub async fn soft_restart(core: &str) -> Result<(), String> {
 }
 
 pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
+    let running = tokio::task::spawn_blocking(running_cores).await.unwrap_or_default();
     let mut current_core = state.core.read().unwrap().clone();
-    let core_name = current_core.name.clone();
 
-    if tokio::task::spawn_blocking(move || get_pid(&core_name))
-        .await
-        .unwrap_or_default()
-        .is_empty()
-    {
-        let alt_core = if current_core.name == "mihomo" {
-            "xray"
-        } else {
-            "mihomo"
-        };
-        let alt_string = alt_core.to_string();
+    if !running.contains(current_core.name.as_str()) {
+        let alt_core = if current_core.name == "mihomo" { "xray" } else { "mihomo" };
 
-        current_core = if !tokio::task::spawn_blocking(move || get_pid(&alt_string))
-            .await
-            .unwrap_or_default()
-            .is_empty()
-        {
+        current_core = if running.contains(alt_core) {
             get_core_info(alt_core)
         } else {
-            let configuration = {
-                let path = state.init_file.read().unwrap().clone();
-                if let Some(p) = path {
-                    tokio::fs::read_to_string(p).await.unwrap_or_default()
-                } else {
-                    String::new()
-                }
+            let path = state.init_file.read().unwrap().clone();
+            let configuration = match path {
+                Some(path) => fs::read_to_string(path).await.unwrap_or_default(),
+                None => String::new(),
             };
             get_core_info(if configuration.contains("name_client=\"mihomo\"") {
                 "mihomo"
@@ -213,33 +209,13 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
         *state.core.write().unwrap() = current_core.clone();
     }
 
-    let ((xray_exists, xray_running), (mihomo_exists, mihomo_running)) = tokio::join!(
-        async {
-            let exists = tokio::fs::metadata("/opt/sbin/xray").await.is_ok();
-            let running = exists
-                && tokio::task::spawn_blocking(|| !get_pid("xray").is_empty())
-                    .await
-                    .unwrap_or(false);
-            (exists, running)
-        },
-        async {
-            let exists = tokio::fs::metadata("/opt/sbin/mihomo").await.is_ok();
-            let running = exists
-                && tokio::task::spawn_blocking(|| !get_pid("mihomo").is_empty())
-                    .await
-                    .unwrap_or(false);
-            (exists, running)
-        }
-    );
-
     let mut available_cores = Vec::new();
-    if xray_exists {
-        available_cores.push("xray".to_string());
+    for name in CORE_NAMES {
+        if fs::metadata(format!("/opt/sbin/{name}")).await.is_ok() {
+            available_cores.push(name);
+        }
     }
-    if mihomo_exists {
-        available_cores.push("mihomo".to_string());
-    }
-    let running_status = xray_running || mihomo_running;
+    let running_status = available_cores.iter().any(|name| running.contains(name));
 
     Json(
         serde_json::json!({ "success": true, "cores": available_cores, "currentCore": current_core.name, "running": running_status }),
@@ -261,6 +237,42 @@ async fn check_core_config(core: &str) -> Result<(), String> {
             );
         }
     }
+    Ok(())
+}
+
+pub async fn error_log_length() -> usize {
+    fs::metadata(error_log_path())
+        .await
+        .map(|metadata| metadata.len() as usize)
+        .unwrap_or(0)
+}
+
+pub async fn wait_mihomo_ready(start_offset: usize) -> Result<(), String> {
+    const MARKER: &[u8] = b"Initial configuration complete";
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
+    while tokio::time::Instant::now() < deadline {
+        let content = fs::read(error_log_path()).await.unwrap_or_default();
+        let fresh = content.get(start_offset..).unwrap_or(&content);
+        if fresh.windows(MARKER.len()).any(|window| window.eq_ignore_ascii_case(MARKER)) {
+            return Ok(());
+        }
+        if tokio::task::spawn_blocking(|| get_pid("mihomo"))
+            .await
+            .unwrap_or_default()
+            .is_empty()
+        {
+            return Err("Mihomo завершился при запуске".into());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+    if tokio::task::spawn_blocking(|| get_pid("mihomo"))
+        .await
+        .unwrap_or_default()
+        .is_empty()
+    {
+        return Err("Mihomo не сообщил о готовности за 15с".into());
+    }
+    log("WARN", "Маркер готовности не найден, но процесс жив".into());
     Ok(())
 }
 
@@ -312,9 +324,11 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 });
             }
 
-            if req.core != "xray" {
+            let is_mihomo = req.core == "mihomo";
+            if is_mihomo {
                 _ = fs::write(error_log_path(), b"").await;
             }
+            let log_offset = if is_mihomo { error_log_length().await } else { 0 };
 
             if let Err(e) = run_init_command(&state, &["start", "on"]).await {
                 return Json(ApiResponse {
@@ -323,9 +337,18 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                     data: None,
                 });
             }
+            if is_mihomo {
+                if let Err(e) = wait_mihomo_ready(log_offset).await {
+                    return Json(ApiResponse {
+                        success: false,
+                        error: Some(e),
+                        data: None,
+                    });
+                }
+            }
         }
         "softRestart" => {
-            if let Err(e) = soft_restart(&req.core).await {
+            if let Err(e) = soft_restart("xray").await {
                 return Json(ApiResponse {
                     success: false,
                     error: Some(e),
@@ -365,12 +388,26 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 _ => &[arg],
             };
 
+            let mihomo_boot =
+                cur_name == "mihomo" && (a == "hardRestart" || (a == "start" && get_pid("mihomo").is_empty()));
+            let boot_log_offset = if mihomo_boot { error_log_length().await } else { 0 };
+
             if let Err(e) = run_init_command(&state, args).await {
                 return Json(ApiResponse {
                     success: false,
                     error: Some(e),
                     data: None,
                 });
+            }
+
+            if mihomo_boot {
+                if let Err(e) = wait_mihomo_ready(boot_log_offset).await {
+                    return Json(ApiResponse {
+                        success: false,
+                        error: Some(e),
+                        data: None,
+                    });
+                }
             }
         }
         _ => {

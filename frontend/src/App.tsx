@@ -310,7 +310,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
         })
         dispatch({ type: 'SET_SERVICE_STATUS', status: data.running ? 'running' : 'stopped' })
         if (result.success && mihomoYamlEmpty) await loadConfigs(core)
-        else if (result.success) syncClashApiPort()
+        else if (result.success) syncClashApiPort(200)
       }
     },
     [dispatch, showToast, loadConfigs]
