@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -157,10 +158,10 @@ function shouldShowDelay(proxy?: ProxyInfo, isTesting = false): boolean {
   return getLastDelay(proxy) !== null || isTesting
 }
 
-function smartRankColor(rank: string): string {
-  if (rank === 'MostUsed') return 'text-green-400'
-  if (rank === 'OccasionalUsed') return 'text-yellow-400'
-  return 'text-muted-foreground'
+function smartRankVariant(rank: string): 'emerald' | 'amber' | 'secondary' {
+  if (rank === 'MostUsed') return 'emerald'
+  if (rank === 'OccasionalUsed') return 'amber'
+  return 'secondary'
 }
 
 function getProxyTransport(proxy?: Pick<ProxyInfo, 'udp' | 'xudp'>): string | null {
@@ -356,15 +357,26 @@ const ProxyCard = memo(function ProxyCard({
       </div>
 
       <div className="flex items-center justify-between gap-1">
-        <span className="text-muted-foreground text-xs">
-          {proxy.type.toLowerCase()} / {transport}
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <Badge variant="outline" className="h-4.5 rounded-sm px-1.5 text-[10px]">
+            {proxy.type.toLowerCase()}
+          </Badge>
+          <Badge variant="outline" className="h-4.5 rounded-sm px-1.5 text-[10px]">
+            {transport}
+          </Badge>
           {smartLabel && (
             <Tooltip>
-              <TooltipTrigger render={<span className={cn('ml-1 font-medium', smartRankColor(smartInfo!.rank))}>· {smartLabel}</span>} />
+              <TooltipTrigger
+                render={
+                  <Badge variant={smartRankVariant(smartInfo!.rank)} className="h-4.5 rounded-sm px-1.5 text-[10px]">
+                    {smartLabel}
+                  </Badge>
+                }
+              />
               <TooltipContent>Smart-вес: {smartInfo!.weight.toFixed(1)}%</TooltipContent>
             </Tooltip>
           )}
-        </span>
+        </div>
 
         {canTest && (
           <Tooltip>
