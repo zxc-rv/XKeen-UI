@@ -36,6 +36,8 @@ interface ProxyInfo {
   udp: boolean
   uot?: boolean
   xudp?: boolean
+  smux?: boolean
+  tfo?: boolean
   alive: boolean
   hidden?: boolean
   now?: string
@@ -163,12 +165,6 @@ function smartRankVariant(rank: string): 'emerald' | 'amber' | 'secondary' {
   if (rank === 'MostUsed') return 'emerald'
   if (rank === 'OccasionalUsed') return 'amber'
   return 'secondary'
-}
-
-function getProxyTransport(proxy?: Pick<ProxyInfo, 'udp' | 'xudp'>): string | null {
-  if (!proxy) return null
-  if (proxy.xudp) return 'XUDP'
-  return proxy.udp ? 'UDP' : 'TCP'
 }
 
 function hasNConsecutiveTimeouts(proxy: ProxyInfo | undefined, n: number): boolean {
@@ -299,8 +295,8 @@ const ProxyCard = memo(function ProxyCard({
   const hasHistory = hasDelayHistory(proxy)
   const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
   const selectionDisabled = lockSelection || isSelectionDisabled(autoPolicy, proxy)
-  const transport = getProxyTransport(proxy)?.toLowerCase() ?? proxy.type.toLowerCase()
   const smartLabel = smartInfo ? (SMART_RANK_LABELS[smartInfo.rank] ?? smartInfo.rank) : null
+  const showTcpOnly = proxy.udp === false
 
   return (
     <div
@@ -362,9 +358,21 @@ const ProxyCard = memo(function ProxyCard({
           <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
             {proxy.type.toLowerCase()}
           </Badge>
-          <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
-            {transport}
-          </Badge>
+          {showTcpOnly && (
+            <Badge variant="destructive" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
+              tcp only
+            </Badge>
+          )}
+          {proxy.smux && (
+            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
+              smux
+            </Badge>
+          )}
+          {proxy.tfo && (
+            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
+              tfo
+            </Badge>
+          )}
           {smartLabel && (
             <Tooltip>
               <TooltipTrigger
