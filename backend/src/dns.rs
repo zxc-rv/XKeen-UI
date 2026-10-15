@@ -229,7 +229,11 @@ fn port_53_inodes(table: &str, protocol: &str) -> Vec<u64> {
         .lines()
         .skip(1)
         .map(|line| line.split_whitespace().collect::<Vec<_>>())
-        .filter(|fields| fields.len() >= 10 && fields[1].ends_with(":0035") && (!only_listening || fields[3] == "0A"))
+        .filter(|fields| {
+            fields.len() >= 10
+                && fields[1].ends_with(":0035")
+                && if only_listening { fields[3] == "0A" } else { fields[2].ends_with(":0000") }
+        })
         .filter_map(|fields| fields[9].parse::<u64>().ok())
         .filter(|inode| *inode != 0)
         .collect()
@@ -513,28 +517,34 @@ mod tests {
     }
 
     const TABLE_HEADER: &str = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n";
+    const UNCONNECTED_REMOTE: &str = "00000000:0000";
 
-    fn table_row(local: &str, state: &str, inode: u64) -> String {
-        format!("   0: {local} 00000000:0000 {state} 00000000:00000000 00:00000000 00000000     0        0 {inode} 1 0000000000000000 100 0 0 10 0\n")
+    fn table_row(local: &str, remote: &str, state: &str, inode: u64) -> String {
+        format!("   0: {local} {remote} {state} 00000000:00000000 00:00000000 00000000     0        0 {inode} 1 0000000000000000 100 0 0 10 0\n")
     }
 
     #[test]
     fn parses_tcp_listening_port_53() {
         let table = [
             TABLE_HEADER.to_string(),
-            table_row("00000000:0035", "0A", 12345),
-            table_row("0100007F:0035", "0A", 0),
-            table_row("0100007F:01BB", "0A", 99999),
-            table_row("0100007F:0035", "01", 555),
+            table_row("00000000:0035", UNCONNECTED_REMOTE, "0A", 12345),
+            table_row("0100007F:0035", UNCONNECTED_REMOTE, "0A", 0),
+            table_row("0100007F:01BB", UNCONNECTED_REMOTE, "0A", 99999),
+            table_row("0100007F:0035", UNCONNECTED_REMOTE, "01", 555),
         ]
         .concat();
         assert_eq!(port_53_inodes(&table, "tcp"), vec![12345]);
     }
 
     #[test]
-    fn parses_udp_ignores_state() {
-        let table = [TABLE_HEADER.to_string(), table_row("00000000:0035", "07", 777), table_row("00000000:0035", "01", 888)].concat();
-        assert_eq!(port_53_inodes(&table, "udp6"), vec![777, 888]);
+    fn parses_udp_only_unconnected() {
+        let table = [
+            TABLE_HEADER.to_string(),
+            table_row("00000000:0035", UNCONNECTED_REMOTE, "07", 777),
+            table_row("0100007F:0035", "0100007F:DDB0", "01", 888),
+        ]
+        .concat();
+        assert_eq!(port_53_inodes(&table, "udp6"), vec![777]);
     }
 
     #[test]

@@ -23,17 +23,16 @@ import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons
 import * as jsyaml from 'js-yaml'
 import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { apiCall, capitalize, clashFetch } from '../../../lib/api'
+import { apiCall, clashFetch } from '../../../lib/api'
 import { useAppContext, useDnsStatusStore, fetchDnsStatus } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
 
 const SETUP_FILTER_STORAGE_KEY = 'dnsSetupFilter'
 
-/// Имя слушателя 53 порта с заглавной буквы: mihomo -> Mihomo, ndnproxy -> Ndnproxy.
 function formatPortListener(listener: string): string {
   return listener
     .split(',')
-    .map((name) => capitalize(name.trim()))
+    .map((name) => name.trim())
     .join(', ')
 }
 
