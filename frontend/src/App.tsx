@@ -336,17 +336,25 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
 
   const importTemplate = useCallback(
     async (url: string) => {
+      const appState = getAppState()
       const activeIndex = configActionsRef.current.getActiveIndex()
-      const active = getAppState().configs[activeIndex]
-      if (active?.isDirty && !confirm('Несохраненные изменения будут потеряны. Продолжить?')) throw new Error('Отменено')
+      let targetIndex = activeIndex
+      if (appState.currentCore === 'mihomo') {
+        targetIndex = appState.configs.findIndex((c) => c.file.endsWith('/config.yaml') || c.file === 'config.yaml')
+        if (targetIndex === -1) throw new Error('Файл config.yaml не найден')
+      }
+      if (appState.configs[targetIndex]?.isDirty && !confirm('Несохраненные изменения будут потеряны. Продолжить?'))
+        throw new Error('Отменено')
       const res = await fetch(url)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const content = await res.text()
-      if (editorRef.current) {
+      if (targetIndex !== activeIndex) configActionsRef.current.switchTab(targetIndex)
+      setTimeout(() => {
+        if (!editorRef.current) return
         editorRef.current.setValue(content)
-        dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: activeIndex, isDirty: true, content })
-      }
-      showToast('Шаблон импортирован')
+        dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: targetIndex, isDirty: true, content })
+        showToast('Шаблон импортирован')
+      }, 0)
     },
     [dispatch, showToast]
   )
