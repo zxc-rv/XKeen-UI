@@ -446,7 +446,8 @@ export const DnsPanel = memo(function DnsPanel() {
               <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
                 <IconAlertCircle className="size-4.5" />
                 <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
-                  Найдены активные DNS провайдера. Рекомендуется включить игнорирование, иначе могут возникнуть утечки.
+                  Найдены активные DNS провайдера. Перед включением управления DNS рекомендуется включить галочку «игнорировать DNS
+                  интернет-провайдера» в веб-конфигураторе Keenetic, в противном случае могут возникнуть утечки.
                 </AlertDescription>
               </Alert>
             )}
