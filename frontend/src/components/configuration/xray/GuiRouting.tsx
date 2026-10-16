@@ -641,7 +641,7 @@ const RuleCard = memo(
           <Select value={outboundValue} onValueChange={changeOutboundValue}>
             <SelectTrigger
               popper
-              className="flex-1 border-blue-500/40 text-[13px] transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
+              className="min-w-0 flex-1 border-blue-500/40 text-[13px] transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
             >
               <SelectValue placeholder="Выберите outbound..." />
             </SelectTrigger>
