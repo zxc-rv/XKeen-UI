@@ -64,3 +64,9 @@ lto = true
 strip = true
 codegen-units = 1
 panic = "abort"
+
+[profile.fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
