@@ -70,18 +70,44 @@ export function createSearchExtension(bridge: SearchBridge, options: SearchExten
   ]
 }
 
-export const openReplacePanel = (view: EditorView): boolean => {
+/**
+ * Like `openSearchPanel`, but with a bare cursor (empty selection) it seeds the query with
+ * the word under the cursor, Monaco-style — no need to precisely select the word first.
+ * A non-empty selection keeps CodeMirror's own seeding; a cursor on whitespace seeds nothing.
+ */
+export const openSeededSearchPanel = (view: EditorView): boolean => {
+  const sel = view.state.selection.main
+  if (!sel.empty) return openSearchPanel(view)
+  const word = view.state.wordAt(sel.head)
+  if (!word || word.from === word.to) return openSearchPanel(view)
   openSearchPanel(view)
+  updateQuery(view, { search: view.state.sliceDoc(word.from, word.to) })
+  jumpToNearestMatch(view)
+  return true
+}
+
+export const openReplacePanel = (view: EditorView): boolean => {
+  openSeededSearchPanel(view)
   view.dispatch({ effects: setReplaceVisible.of(true) })
+  return true
+}
+
+/**
+ * Close the search panel and reset its replace row, so the next open starts fresh.
+ * `replaceVisibleField` lives in editor state and would otherwise stay `true` after close.
+ */
+export const closeAndResetSearchPanel = (view: EditorView): boolean => {
+  if (!closeSearchPanel(view)) return false
+  view.dispatch({ effects: setReplaceVisible.of(false) })
   return true
 }
 
 /** Search-only bindings — no replace shortcuts, for read-only views. */
 export const searchOnlyKeymap: readonly KeyBinding[] = [
-  { key: 'Mod-f', run: openSearchPanel, scope: 'editor search-panel' },
+  { key: 'Mod-f', run: openSeededSearchPanel, scope: 'editor search-panel' },
   { key: 'F3', run: findNext, shift: findPrevious, scope: 'editor search-panel', preventDefault: true },
   { key: 'Mod-g', run: findNext, shift: findPrevious, scope: 'editor search-panel', preventDefault: true },
-  { key: 'Escape', run: closeSearchPanel, scope: 'editor search-panel' },
+  { key: 'Escape', run: closeAndResetSearchPanel, scope: 'editor search-panel' },
   { key: 'Mod-Shift-l', run: selectSelectionMatches },
   { key: 'Mod-Alt-g', run: gotoLine },
   { key: 'Mod-d', run: selectNextOccurrence, preventDefault: true },

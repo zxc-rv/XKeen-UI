@@ -1,4 +1,4 @@
-import { openSearchPanel } from '@codemirror/search'
+import { openSeededSearchPanel } from './search/searchExtension'
 import type { EditorView } from '@codemirror/view'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { SearchBridge, SearchPanelHandle } from './search/searchExtension'
@@ -18,7 +18,7 @@ export function useEditorSearch(viewRef: RefObject<EditorView | null>) {
       if (!hasModifier || event.altKey || event.shiftKey || event.code !== 'KeyF' || event.defaultPrevented) return
       if (mountedViewRefs.at(-1) !== viewRef || !viewRef.current) return
       event.preventDefault()
-      openSearchPanel(viewRef.current)
+      openSeededSearchPanel(viewRef.current)
     }
     mountedViewRefs.push(viewRef)
     window.addEventListener('keydown', handleKeyDown)

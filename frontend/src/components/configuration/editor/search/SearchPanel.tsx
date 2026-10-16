@@ -1,14 +1,14 @@
-import { closeSearchPanel, findNext, findPrevious, getSearchQuery, replaceAll, replaceNext, selectMatches } from '@codemirror/search'
+import { findNext, findPrevious, getSearchQuery, replaceAll, replaceNext, selectMatches } from '@codemirror/search'
 import type { SearchQuery } from '@codemirror/search'
 import { runScopeHandlers } from '@codemirror/view'
 import type { ViewUpdate } from '@codemirror/view'
 import { IconArrowDown, IconArrowUp, IconChevronRight, IconX } from '@tabler/icons-react'
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { MatchIndex, MAX_MATCHES, replaceVisibleField, setReplaceVisible, updateQuery, jumpToNearestMatch } from './searchExtension'
+import { MatchIndex, MAX_MATCHES, closeAndResetSearchPanel, replaceVisibleField, setReplaceVisible, updateQuery, jumpToNearestMatch } from './searchExtension'
 import type { SearchPanelHandle } from './searchExtension'
 
 interface Props {
@@ -57,26 +57,67 @@ export function SearchPanel({ handle, replaceEnabled = true }: Props) {
   const replaceInputRef = useRef<HTMLInputElement>(null)
   const lastFieldRef = useRef<HTMLInputElement | null>(null)
 
+  const focusSearchField = useCallback(() => {
+    const el = searchInputRef.current
+    if (!el) return
+    el.focus()
+    el.select()
+    lastFieldRef.current = el
+  }, [])
+
+  const focusReplaceField = useCallback((): boolean => {
+    const el = replaceInputRef.current
+    if (!el) return false
+    el.focus()
+    el.select()
+    lastFieldRef.current = el
+    return true
+  }, [])
+
   useEffect(() => {
     const sync = (update: ViewUpdate | null) => {
       const s = update?.state ?? handle.view.state
       setState({ query: getSearchQuery(s), replaceVisible: s.field(replaceVisibleField) })
       setCounts(matchIndexRef.current.compute(s))
+      if (!update) return
+      for (const tr of update.transactions) {
+        let wantsReplace = false
+        for (const effect of tr.effects) {
+          if (effect.is(setReplaceVisible) && effect.value === true) {
+            wantsReplace = true
+            break
+          }
+        }
+        if (!wantsReplace) continue
+        // Already visible + Ctrl+H produces no state change, so focus right away.
+        // Hidden -> visible: the input isn't rendered yet; the effect below focuses it.
+        focusReplaceField()
+        break
+      }
     }
     sync(null)
     handle.listeners.add(sync)
     return () => {
       handle.listeners.delete(sync)
     }
-  }, [handle])
+  }, [handle, focusReplaceField])
 
   useLayoutEffect(() => {
-    const input = searchInputRef.current
-    if (!input) return
-    input.focus()
-    input.select()
-    lastFieldRef.current = input
-  }, [handle])
+    // The replace row resets on close, so a mounted panel with `replaceVisible === true`
+    // was always opened via Ctrl+H — focus the replace field. Otherwise focus search.
+    if (replaceEnabled && handle.view.state.field(replaceVisibleField)) {
+      if (!focusReplaceField()) focusSearchField()
+    } else {
+      focusSearchField()
+    }
+  }, [handle, replaceEnabled, focusReplaceField, focusSearchField])
+
+  const prevReplaceVisibleRef = useRef(state.replaceVisible)
+  useLayoutEffect(() => {
+    if (!prevReplaceVisibleRef.current && state.replaceVisible) focusReplaceField()
+    else if (prevReplaceVisibleRef.current && !state.replaceVisible) focusSearchField()
+    prevReplaceVisibleRef.current = state.replaceVisible
+  }, [state.replaceVisible, focusReplaceField, focusSearchField])
 
   const refocusField = () => {
     const el = lastFieldRef.current ?? searchInputRef.current
@@ -117,7 +158,7 @@ export function SearchPanel({ handle, replaceEnabled = true }: Props) {
     refocusField()
   }
   const handleClose = () => {
-    closeSearchPanel(view)
+    closeAndResetSearchPanel(view)
     view.focus()
   }
 
@@ -130,6 +171,58 @@ export function SearchPanel({ handle, replaceEnabled = true }: Props) {
     if (mod && !event.altKey && !event.shiftKey && event.code === 'KeyF' && target instanceof HTMLInputElement) {
       event.preventDefault()
       target.select()
+      return
+    }
+
+    // Tab / Shift+Tab cycles only between the two text fields, skipping buttons and toggles.
+    // (`key` is layout-independent for Tab; Ctrl+Tab is reserved by the browser, so Ctrl is excluded.)
+    if (event.key === 'Tab' && !event.altKey && !event.metaKey && !event.ctrlKey) {
+      event.preventDefault()
+      const searchEl = searchInputRef.current
+      const replaceEl = replaceInputRef.current
+      if (!replaceEnabled || !state.replaceVisible || !replaceEl || !searchEl) {
+        if (searchEl) {
+          searchEl.focus()
+          lastFieldRef.current = searchEl
+        }
+        return
+      }
+      const active = target instanceof HTMLElement ? target : document.activeElement
+      if (active === searchEl) {
+        replaceEl.focus()
+        replaceEl.select()
+        lastFieldRef.current = replaceEl
+      } else if (active === replaceEl) {
+        searchEl.focus()
+        searchEl.select()
+        lastFieldRef.current = searchEl
+      } else if (event.shiftKey) {
+        // Tabbing backwards from a button enters the cycle at its end.
+        replaceEl.focus()
+        replaceEl.select()
+        lastFieldRef.current = replaceEl
+      } else {
+        searchEl.focus()
+        searchEl.select()
+        lastFieldRef.current = searchEl
+      }
+      return
+    }
+
+    // Ctrl+H shows the replace row and moves focus into the replace field (same for
+    // the macOS fallback Cmd/Ctrl+Alt+F). Handled here so focus follows even when the
+    // row is already visible and no state change follows.
+    if (
+      replaceEnabled &&
+      mod &&
+      !event.shiftKey &&
+      ((event.code === 'KeyH' && !event.altKey) || (event.code === 'KeyF' && event.altKey))
+    ) {
+      event.preventDefault()
+      if (!state.replaceVisible) view.dispatch({ effects: setReplaceVisible.of(true) })
+      // Already mounted: focus right away. Newly shown: the row isn't rendered yet,
+      // the replaceVisible effect above focuses it after render.
+      focusReplaceField()
       return
     }
 
