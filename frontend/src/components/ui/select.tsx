@@ -36,11 +36,13 @@ function SelectTrigger({
   className,
   size = 'default',
   popper = false,
+  hideIcon = false,
   children,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
   size?: 'sm' | 'default'
   popper?: boolean
+  hideIcon?: boolean
 }) {
   return (
     <SelectPrimitive.Trigger
@@ -48,15 +50,17 @@ function SelectTrigger({
       data-size={size}
       data-popper={popper ? '' : undefined}
       className={cn(
-        "bg-input-background hover:bg-input-background-hover data-popper:data-popup-open:hover:bg-input-background flex w-fit cursor-pointer items-center justify-between gap-1.5 rounded-md border py-2 pr-2 pl-2.5 text-sm whitespace-nowrap shadow-xs transition-[background-color,border-color,box-shadow] duration-200 outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 data-popper:data-popup-open:border-[#60a5fa] data-popper:data-popup-open:[box-shadow:0_0_0_3px rgba(59,130,246,0.15)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "bg-input-background hover:bg-input-background-hover data-popper:data-popup-open:hover:bg-input-background data-popper:data-popup-open:[box-shadow:0_0_0_3px rgba(59,130,246,0.15)] flex w-fit cursor-pointer items-center justify-between gap-1.5 rounded-md border py-2 pr-2 pl-2.5 text-sm whitespace-nowrap shadow-xs transition-[background-color,border-color,box-shadow] duration-200 outline-none disabled:cursor-not-allowed disabled:opacity-50 data-popper:data-popup-open:border-[#60a5fa] data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon>
-        <IconSelector className="text-muted-foreground pointer-events-none size-4" />
-      </SelectPrimitive.Icon>
+      {!hideIcon && (
+        <SelectPrimitive.Icon>
+          <IconSelector className="text-muted-foreground pointer-events-none size-4" />
+        </SelectPrimitive.Icon>
+      )}
     </SelectPrimitive.Trigger>
   )
 }
@@ -93,15 +97,13 @@ function SelectContent({
             'border-border bg-input-background text-popover-foreground relative z-50 max-h-(--available-height) min-w-(--anchor-width) origin-(--transform-origin) overflow-hidden rounded-md border shadow-md',
             position === 'popper'
               ? 'data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-open:slide-in-from-top-2 data-[side=bottom]:data-closed:slide-out-to-top-2 data-[side=top]:data-open:slide-in-from-bottom-2 data-[side=top]:data-closed:slide-out-to-bottom-2 duration-200'
-              : 'transition duration-200 ease-out data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0',
+              : 'transition duration-200 ease-out data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0',
             className
           )}
           {...props}
         >
           <SelectScrollUpArrow />
-          <SelectPrimitive.List>
-            {children}
-          </SelectPrimitive.List>
+          <SelectPrimitive.List>{children}</SelectPrimitive.List>
           <SelectScrollDownArrow />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>
@@ -111,7 +113,11 @@ function SelectContent({
 
 function SelectLabel({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.GroupLabel>) {
   return (
-    <SelectPrimitive.GroupLabel data-slot="select-label" className={cn('text-muted-foreground px-2 py-1.5 text-xs', className)} {...props} />
+    <SelectPrimitive.GroupLabel
+      data-slot="select-label"
+      className={cn('text-muted-foreground px-2 py-1.5 text-xs', className)}
+      {...props}
+    />
   )
 }
 
@@ -150,7 +156,7 @@ function SelectScrollUpArrow({ className, ...props }: React.ComponentProps<typeo
     <SelectPrimitive.ScrollUpArrow
       data-slot="select-scroll-up-arrow"
       className={cn(
-        "z-10 inset-x-0 top-0 flex cursor-default items-center justify-center py-1 bg-gradient-to-b from-(--color-input-background) to-transparent [&_svg:not([class*='size-'])]:size-4",
+        "inset-x-0 top-0 z-10 flex cursor-default items-center justify-center bg-gradient-to-b from-(--color-input-background) to-transparent py-1 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -165,7 +171,7 @@ function SelectScrollDownArrow({ className, ...props }: React.ComponentProps<typ
     <SelectPrimitive.ScrollDownArrow
       data-slot="select-scroll-down-arrow"
       className={cn(
-        "z-10 inset-x-0 bottom-0 flex cursor-default items-center justify-center py-1 bg-gradient-to-t from-(--color-input-background) to-transparent [&_svg:not([class*='size-'])]:size-4",
+        "inset-x-0 bottom-0 z-10 flex cursor-default items-center justify-center bg-gradient-to-t from-(--color-input-background) to-transparent py-1 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

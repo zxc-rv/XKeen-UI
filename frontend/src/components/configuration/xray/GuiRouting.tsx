@@ -483,9 +483,36 @@ const RuleCard = memo(
               </TooltipProvider>
             </div>
           )}
+          {availableToAdd.length > 0 && (
+            <Select
+              value=""
+              onValueChange={(v) => {
+                if (v) addField(v as FieldName)
+              }}
+            >
+              <SelectTrigger
+                popper
+                hideIcon
+                aria-label="Добавить условие"
+                className="text-muted-foreground hover:text-foreground border-border ml-auto h-8 shrink-0 gap-1.5 rounded-md border border-dashed bg-transparent px-2 text-xs transition-colors focus:ring-0 sm:pl-1.5"
+              >
+                <IconPlus size={13} />
+                <span className="hidden sm:inline">Добавить условие</span>
+              </SelectTrigger>
+              <SelectContent position="popper" align="end">
+                <SelectGroup>
+                  {availableToAdd.map((f) => (
+                    <SelectItem key={f} value={f} className="cursor-pointer text-sm">
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          )}
           <button
             onClick={() => onDelete(index)}
-            className="text-ring hover:text-destructive hover:bg-destructive/20 ml-auto shrink-0 rounded-md p-1 transition-colors"
+            className="text-ring hover:text-destructive hover:bg-destructive/20 shrink-0 rounded-md p-1 transition-colors"
           >
             <IconX size={23} className="cursor-pointer" />
           </button>
@@ -506,7 +533,8 @@ const RuleCard = memo(
               >
                 <SelectTrigger
                   popper
-                  className="border-border bg-input-background hover:bg-muted flex h-9 w-fit shrink-0 items-center justify-between gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors focus:ring-0 [&>svg]:opacity-50"
+                  hideIcon
+                  className="border-border bg-input-background hover:bg-muted flex h-9 w-fit shrink-0 items-center justify-between gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors focus:ring-0"
                 >
                   <SelectValue placeholder={fieldName} />
                 </SelectTrigger>
@@ -587,35 +615,6 @@ const RuleCard = memo(
             </div>
           )
         })}
-
-        {/* Add condition */}
-        {availableToAdd.length > 0 && (
-          <Select
-            value=""
-            onValueChange={(v) => {
-              if (v) addField(v as FieldName)
-            }}
-          >
-            <SelectTrigger
-              popper
-              className="text-muted-foreground hover:text-foreground border-border flex h-auto min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed bg-transparent px-3 py-2 text-xs tracking-wide transition-colors focus:ring-0 [&>svg]:hidden"
-            >
-              <span className="flex gap-1">
-                <IconPlus size={13} />
-                Добавить условие
-              </span>
-            </SelectTrigger>
-            <SelectContent position="popper">
-              <SelectGroup>
-                {availableToAdd.map((f) => (
-                  <SelectItem key={f} value={f} className="cursor-pointer text-sm">
-                    {f}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        )}
 
         {/* Outbound row */}
         <div className="flex items-center gap-2">
