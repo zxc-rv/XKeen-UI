@@ -533,7 +533,6 @@ const RuleCard = memo(
               >
                 <SelectTrigger
                   popper
-                  hideIcon
                   className="border-border bg-input-background hover:bg-muted flex h-9 w-fit shrink-0 items-center justify-between gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors focus:ring-0"
                 >
                   <SelectValue placeholder={fieldName} />
