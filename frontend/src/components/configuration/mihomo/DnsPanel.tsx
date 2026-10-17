@@ -8,7 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
-import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle } from '@tabler/icons-react'
+import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle, IconX } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
@@ -28,6 +28,7 @@ import { useAppContext, useDnsStatusStore, fetchDnsStatus } from '../../../lib/s
 import type { Config } from '../../../lib/types'
 
 const SETUP_FILTER_STORAGE_KEY = 'dnsSetupFilter'
+const FAKE_IP_WARNING_STORAGE_KEY = 'dnsFakeIpFilterWarningDismissed'
 
 function formatPortListener(listener: string): string {
   return listener
@@ -213,6 +214,7 @@ export const DnsPanel = memo(function DnsPanel() {
   const [isToggling, setIsToggling] = useState(false)
   const [enableDialogOpen, setEnableDialogOpen] = useState(false)
   const [setupFilter, setSetupFilter] = useState(() => localStorage.getItem(SETUP_FILTER_STORAGE_KEY) !== 'false')
+  const [fakeIpWarningDismissed, setFakeIpWarningDismissed] = useState(() => localStorage.getItem(FAKE_IP_WARNING_STORAGE_KEY) === 'true')
   const [disableOpen, setDisableOpen] = useState(false)
   const [config, setConfig] = useState<DnsConfig>(DEFAULT_DNS_CONFIG)
   const [isApplying, setIsApplying] = useState(false)
@@ -229,6 +231,12 @@ export const DnsPanel = memo(function DnsPanel() {
   const isAllActive = useMemo(() => !!dnsStatus && dnsStatus.dnsOverride && dnsStatus.dnsMihomo, [dnsStatus])
 
   const showMihomoSettings = useMemo(() => !!dnsStatus && dnsStatus.dnsMihomo, [dnsStatus])
+
+  const showFakeIpWarning =
+    config.enhancedMode === 'fake-ip' &&
+    config.fakeIpFilterMode !== 'whitelist' &&
+    config.fakeIpFilterMode !== 'rule' &&
+    !fakeIpWarningDismissed
 
   const portListener = dnsStatus?.portListener
   const isMihomoListeningPort = !!portListener?.toLowerCase().includes('mihomo')
@@ -436,6 +444,11 @@ export const DnsPanel = memo(function DnsPanel() {
     setConfig((prev) => ({ ...prev, ...patch }))
   }, [])
 
+  const dismissFakeIpWarning = useCallback(() => {
+    setFakeIpWarningDismissed(true)
+    localStorage.setItem(FAKE_IP_WARNING_STORAGE_KEY, 'true')
+  }, [])
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
@@ -484,6 +497,34 @@ export const DnsPanel = memo(function DnsPanel() {
           <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
             <legend className="px-1 text-sm font-medium">Mihomo DNS</legend>
             <div className="flex flex-col gap-4 pt-1">
+              {showFakeIpWarning && (
+                <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
+                  <IconAlertCircle className="size-4.5" />
+                  <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
+                    Потенциально проблемная конфигурация DNS. Для режима <strong>fake-ip</strong> рекомендуется использовать режим фильтра{' '}
+                    <strong>whitelist</strong> либо <strong>rule</strong>, в противном случае возникнут проблемы с трафиком, проходящим мимо
+                    ядра Mihomo.{' '}
+                    <a
+                      href="https://wiki.metacubex.one/ru/config/dns/#fake-ip-filter-mode"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      Подробнее...
+                    </a>
+                  </AlertDescription>
+                  <AlertAction>
+                    <button
+                      type="button"
+                      onClick={dismissFakeIpWarning}
+                      aria-label="Скрыть предупреждение"
+                      className="rounded-md p-1 opacity-70 hover:opacity-100"
+                    >
+                      <IconX size={18} />
+                    </button>
+                  </AlertAction>
+                </Alert>
+              )}
               <div className="grid gap-2">
                 <DnsSettingLabel tooltip="Redir-host - реальные IP в ответах. Медленнее, лучше совместимость, рекомендуется \nFake-ip - поддельные IP в ответах. Быстрее, не совместимо с исключениями/политиками XKeen, для продвинутых пользователей">
                   Enhanced Mode
