@@ -392,6 +392,8 @@ fn parse_mihomo_api_creds(yaml_content: &str) -> MihomoApiCreds {
     creds
 }
 
+const HOT_RELOAD_UNAVAILABLE: &str = "Hot reload unavailable";
+
 async fn apply_mihomo_hot_reload(
     state: &AppState, file: &str, content: &str, close_conns: bool,
 ) -> Json<ApiResponse<()>> {
@@ -399,56 +401,35 @@ async fn apply_mihomo_hot_reload(
     let creds_source = tokio::fs::read_to_string(&main_config).await.unwrap_or_default();
     let creds = parse_mihomo_api_creds(&creds_source);
 
-    enum Target {
-        Unix { client: reqwest::Client },
-        Tcp { port: u16, secret: Option<String> },
-    }
-    let target = match (creds.unix_path, creds.port) {
-        (Some(socket_path), _) => match reqwest::Client::builder().unix_socket(socket_path).build() {
-            Ok(client) => Target::Unix { client },
-            Err(error) => return api_error(error.to_string()),
-        },
-        (None, Some(port)) => Target::Tcp { port, secret: creds.secret.clone() },
-        (None, None) => return api_error("external-controller не найден"),
-    };
-
     let previous = tokio::fs::read_to_string(file).await.ok();
     if let Err(error) = tokio::fs::write(file, content).await {
         return api_error(format!("Write error: {error}"));
     }
 
-    let (client, configs_url, conns_url, secret) = match &target {
-        Target::Unix { client } => (
-            client.clone(),
-            "http://127.0.0.1/configs?force=true".to_string(),
-            "http://127.0.0.1/connections".to_string(),
-            None,
-        ),
-        Target::Tcp { port, secret } => (
-            state.http_client.clone(),
-            format!("http://127.0.0.1:{port}/configs?force=true"),
-            format!("http://127.0.0.1:{port}/connections"),
-            secret.clone(),
-        ),
+    let (client, base_url, secret) = match (creds.unix_path, creds.port) {
+        (Some(socket_path), _) => match reqwest::Client::builder().unix_socket(socket_path).build() {
+            Ok(client) => (client, "http://127.0.0.1".to_string(), None),
+            Err(_) => return api_error(HOT_RELOAD_UNAVAILABLE),
+        },
+        (None, Some(port)) => (state.http_client.clone(), format!("http://127.0.0.1:{port}"), creds.secret),
+        (None, None) => return api_error(HOT_RELOAD_UNAVAILABLE),
     };
 
-    let mut request = client.put(configs_url).json(&serde_json::json!({})).timeout(Duration::from_secs(15));
+    let mut request = client
+        .put(format!("{base_url}/configs?force=true"))
+        .json(&serde_json::json!({}))
+        .timeout(Duration::from_secs(15));
     if let Some(secret) = secret.as_deref() {
         request = request.bearer_auth(secret);
     }
-    let response = match request.send().await {
-        Ok(response) => response,
-        Err(error) => {
-            let message = format!("Ошибка Mihomo: {error}");
-            log("ERROR", message.clone());
-            return api_error(message);
-        }
+    let Ok(response) = request.send().await else {
+        return api_error(HOT_RELOAD_UNAVAILABLE);
     };
 
     let status = response.status();
     if status == StatusCode::NO_CONTENT {
         if close_conns {
-            let mut req = client.delete(conns_url).timeout(Duration::from_secs(15));
+            let mut req = client.delete(format!("{base_url}/connections")).timeout(Duration::from_secs(15));
             if let Some(secret) = secret.as_deref() {
                 req = req.bearer_auth(secret);
             }
@@ -459,18 +440,17 @@ async fn apply_mihomo_hot_reload(
         return api_ok();
     }
 
+    if status != StatusCode::BAD_REQUEST {
+        return api_error(HOT_RELOAD_UNAVAILABLE);
+    }
+
     let body = response.text().await.unwrap_or_default();
     let message = serde_json::from_str::<MihomoError>(&body).map_or(body, |error| error.message);
     let detail = match message.trim() {
         "" => format!("Mihomo вернул {status}"),
         trimmed => trimmed.chars().take(2000).collect(),
     };
-
-    let message = format!("Ошибка Mihomo: {detail}");
-    log("ERROR", message.clone());
-    if matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
-        return api_error(message);
-    }
+    log("ERROR", format!("Ошибка Mihomo: {detail}"));
 
     if let Some(old) = previous {
         _ = tokio::fs::write(file, old).await;

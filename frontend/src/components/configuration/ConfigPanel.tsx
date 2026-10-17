@@ -85,6 +85,8 @@ const BackupsModalContainer = memo(function BackupsModalContainer({ onRefreshCon
 type ClashMode = 'rule' | 'global' | 'direct'
 type ApiResult = { success: boolean; error?: string }
 
+const HOT_RELOAD_UNAVAILABLE = 'Hot reload unavailable'
+
 const isXkeenFile = (file: string) => file.startsWith('/opt/etc/xkeen')
 type ProvidersModalKind = 'rules' | 'proxies'
 
@@ -649,7 +651,8 @@ export function ConfigPanel({
         baseUrl,
       }
     )
-    if (!saveResult.success) {
+    const hotReloadUnavailable = saveResult.error === HOT_RELOAD_UNAVAILABLE
+    if (!saveResult.success && !hotReloadUnavailable) {
       throw new Error(
         saveResult.error === 'Validation failed'
           ? `Ошибка валидации ${capitalize(core)}: проверьте журнал`
@@ -657,11 +660,15 @@ export function ConfigPanel({
       )
     }
 
-    const action = isHotReload
-      ? hasCriticalChanges(cfg.savedContent, content, 'yaml')
-        ? 'hardRestart'
-        : null
-      : restartActionFor(cfg, content)
+    if (hotReloadUnavailable) showToast('Clash API недоступен, выполняем полный рестарт', 'warning')
+
+    const action = hotReloadUnavailable
+      ? 'hardRestart'
+      : isHotReload
+        ? hasCriticalChanges(cfg.savedContent, content, 'yaml')
+          ? 'hardRestart'
+          : null
+        : restartActionFor(cfg, content)
     if (!action) return false
 
     const restartResult = await apiCall<ApiResult>('POST', 'control', { action, core }, { baseUrl })
@@ -1231,9 +1238,23 @@ function hasCriticalChanges(oldContent: string, newContent: string, language: st
     if (language === 'yaml') {
       const o = jsyaml.load(oldContent) as Record<string, unknown>
       const n = jsyaml.load(newContent) as Record<string, unknown>
-      return ['listeners', 'redir-port', 'tproxy-port', 'external-controller', 'external-controller-tls', 'external-controller-unix', 'external-controller-pipe', 'external-controller-cors', 'external-controller-routing-mark', 'external-ui', 'external-ui-url', 'external-ui-name', 'external-doh-server', 'secret', 'tls'].some(
-        (f) => JSON.stringify(o?.[f]) !== JSON.stringify(n?.[f])
-      )
+      return [
+        'listeners',
+        'redir-port',
+        'tproxy-port',
+        'external-controller',
+        'external-controller-tls',
+        'external-controller-unix',
+        'external-controller-pipe',
+        'external-controller-cors',
+        'external-controller-routing-mark',
+        'external-ui',
+        'external-ui-url',
+        'external-ui-name',
+        'external-doh-server',
+        'secret',
+        'tls',
+      ].some((f) => JSON.stringify(o?.[f]) !== JSON.stringify(n?.[f]))
     }
     if (language === 'json') {
       const o = parseJsonc(oldContent)
