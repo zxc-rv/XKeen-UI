@@ -66,6 +66,7 @@ import type { CodeMirrorRef } from './CodeMirror'
 
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
 const GuiLog = lazyLoad(() => import('./xray/GuiLog'), 'GuiLog')
+const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds')
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
@@ -305,6 +306,7 @@ export function ConfigPanel({
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
   const guiRouting = useSettings((s) => s.guiRouting)
   const guiLog = useSettings((s) => s.guiLog)
+  const guiOutbounds = useSettings((s) => s.guiOutbounds)
   const multiRouter = useSettings((s) => s.multiRouter)
   const closeConnsOnApply = useSettings((s) => s.closeConnectionsOnApply)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
@@ -789,7 +791,7 @@ export function ConfigPanel({
 
   function isGuiActive(cfg: Config) {
     const f = cfg.file.toLowerCase()
-    return (f.includes('routing') && guiRouting) || (f.includes('log') && guiLog)
+    return (f.includes('routing') && guiRouting) || (f.includes('log') && guiLog) || (f.includes('outbound') && guiOutbounds)
   }
 
   const fileForGui = activeConfig?.file
@@ -816,7 +818,19 @@ export function ConfigPanel({
     }
   }, [guiLog, fileForGui, contentForGui])
 
-  const isAnyGui = isRoutingGui || isLogGui
+  // Аутбаунды живут не только в файлах с "outbound" в имени — импорт подключений ищет первый файл
+  // с массивом outbounds. Поэтому гейт по содержимому, с приоритетом Routing/Log GUI.
+  const isOutboundsGui = useMemo(() => {
+    if (!guiOutbounds || !fileForGui || isRoutingGui || isLogGui) return false
+    try {
+      const j = parseJsonc(contentForGui || '')
+      return Array.isArray(j?.outbounds)
+    } catch {
+      return false
+    }
+  }, [guiOutbounds, fileForGui, contentForGui, isRoutingGui, isLogGui])
+
+  const isAnyGui = isRoutingGui || isLogGui || isOutboundsGui
 
   const coreConfigs = configs.filter((c) => !isXkeenFile(c.file))
   const xkeenConfigs = configs.filter((c) => isXkeenFile(c.file))
@@ -1004,6 +1018,9 @@ export function ConfigPanel({
             )}
             {isEditorMounted && activeConfig && isLogGui && (
               <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            )}
+            {isEditorMounted && activeConfig && isOutboundsGui && (
+              <GuiOutbounds editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
             )}
 
             {isMihomo && (

@@ -7,8 +7,9 @@ mod dns;
 mod frontend_embedder;
 mod geo;
 mod logger;
-mod route_test;
+mod outbounds;
 mod provider_inspector;
+mod route_test;
 mod settings;
 mod system;
 mod types;
@@ -500,6 +501,8 @@ async fn main() {
             "/api/route-test",
             get(route_test::get_route_test_meta).post(route_test::post_route_test),
         )
+        .route("/api/outbound/ping", post(outbounds::post_outbound_ping))
+        .route("/api/outbound/ping/history", get(outbounds::get_outbound_ping_history))
         .route("/api/device-list", get(api_relay::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))

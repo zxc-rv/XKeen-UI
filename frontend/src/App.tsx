@@ -238,6 +238,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           settings: {
             autoApply: data.gui.auto_apply,
             guiRouting: data.gui.routing,
+            guiOutbounds: data.gui.outbounds ?? false,
             guiLog: data.gui.log,
             autoCheckUI: data.updater.auto_check_ui ?? true,
             autoCheckCore: data.updater.auto_check_core ?? true,

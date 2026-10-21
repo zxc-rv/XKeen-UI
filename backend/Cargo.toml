@@ -32,6 +32,11 @@ reqwest = { version = "0.12", default-features = false, features = [
   "stream",
   "blocking",
 ] }
+# Для пинга аутбаундов: HTTP CONNECT через абстрактный unix-сокет инбаунда xray + TLS вручную
+# (reqwest не умеет SOCKS/HTTP-прокси поверх unix-сокета).
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
 rust-embed = { version = "8", features = ["axum"] }
 rustix = { version = "1.1", features = ["fs"] }
 serde = { version = "1", features = ["derive"] }

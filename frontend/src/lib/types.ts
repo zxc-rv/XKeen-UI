@@ -20,6 +20,7 @@ export interface AppSettings {
   theme: ThemeMode
   autoApply: boolean
   guiRouting: boolean
+  guiOutbounds: boolean
   guiLog: boolean
   autoCheckUI: boolean
   autoCheckCore: boolean

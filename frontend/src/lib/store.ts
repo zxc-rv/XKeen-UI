@@ -25,6 +25,7 @@ const initialSettings: AppSettings = {
   theme: getStoredTheme(),
   autoApply: false,
   guiRouting: false,
+  guiOutbounds: false,
   guiLog: false,
   autoCheckUI: true,
   autoCheckCore: true,

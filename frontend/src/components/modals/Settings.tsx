@@ -35,14 +35,21 @@ const guiSettings: ToggleSetting[] = [
     key: 'guiRouting',
     path: 'gui.routing',
     title: 'Routing',
-    description: 'Визуализация правил роутинга для Xray',
+    description: 'Визуализация правил роутинга для Xray JSON',
+  },
+  {
+    id: 'gui-outbounds',
+    key: 'guiOutbounds',
+    path: 'gui.outbounds',
+    title: 'Outbounds',
+    description: 'Визуализация подключений для Xray JSON',
   },
   {
     id: 'gui-log',
     key: 'guiLog',
     path: 'gui.log',
     title: 'Log',
-    description: 'Визуализация настроек логирования для Xray',
+    description: 'Визуализация настроек логирования для Xray JSON',
   },
   {
     id: 'auto-apply',
@@ -341,11 +348,17 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
   pingTimeout,
   onSave,
   showToast,
+  label = 'URL теста',
+  urlDescription = 'Адрес для ручного пинг-теста селекторов Mihomo и аутбаундов Xray',
+  timeoutDescription = 'В мс, используется для ручного пинг-теста подключений',
 }: {
   pingUrl: string
   pingTimeout: number
   onSave: (url: string, timeout: number) => Promise<boolean>
   showToast: (msg: string, type?: 'success' | 'error') => void
+  label?: string
+  urlDescription?: string
+  timeoutDescription?: string
 }) {
   const [initial] = useState(() => parsePingUrl(pingUrl))
   const [protocol, setProtocol] = useState(initial.protocol)
@@ -391,8 +404,8 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
     <FieldGroup className="gap-0!">
       <Field className="px-0 py-3">
         <FieldContent>
-          <FieldLabel>URL пинга</FieldLabel>
-          <FieldDescription className="text-[13px]">Адрес для ручного пинг-теста через Clash API</FieldDescription>
+          <FieldLabel>{label}</FieldLabel>
+          <FieldDescription className="text-[13px]">{urlDescription}</FieldDescription>
         </FieldContent>
         <div className="flex items-center gap-2">
           <Select
@@ -473,7 +486,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
       <Field className="px-0 py-3">
         <FieldContent>
           <FieldLabel htmlFor="ping-test-timeout">Таймаут</FieldLabel>
-          <FieldDescription className="text-[13px]">В мс, используется для ручного пинг-теста подключений</FieldDescription>
+          <FieldDescription className="text-[13px]">{timeoutDescription}</FieldDescription>
         </FieldContent>
         <InputGroup className="max-w-40">
           <InputGroupInput
@@ -788,6 +801,15 @@ export function SettingsModal() {
                       </SelectContent>
                     </Select>
                   </Field>
+                  <Separator className="my-2" />
+                  <p className="text-muted-foreground pt-1 pb-1 text-xs font-medium tracking-wider uppercase">Пинг-тест</p>
+                  <PingTestSettingsField
+                    key={`${settings.pingTestUrl}\x00${settings.pingTestTimeout}`}
+                    pingUrl={settings.pingTestUrl}
+                    pingTimeout={settings.pingTestTimeout}
+                    onSave={savePingTestSettings}
+                    showToast={showToast}
+                  />
                 </FieldGroup>
               </TabsContent>
 
@@ -795,7 +817,7 @@ export function SettingsModal() {
                 <Alert className="my-2 border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
                   <IconAlertCircle className="size-4.5" />
                   <AlertDescription className="text-xs leading-4.25 tracking-wide text-yellow-600 dark:text-amber-400">
-                    Функция экспериментальная. Перед включением сделайте бэкап конфигураций. Несовместимо с комментариями.
+                    При включении визуализации JSON-коментарии будут утеряны, рекомендуется создать бэкап конфигураций.
                   </AlertDescription>
                 </Alert>
 
@@ -879,14 +901,6 @@ export function SettingsModal() {
                       </SelectContent>
                     </Select>
                   </Field>
-                  <Separator className="my-0" />
-                  <PingTestSettingsField
-                    key={`${settings.pingTestUrl}\x00${settings.pingTestTimeout}`}
-                    pingUrl={settings.pingTestUrl}
-                    pingTimeout={settings.pingTestTimeout}
-                    onSave={savePingTestSettings}
-                    showToast={showToast}
-                  />
                 </FieldGroup>
                 <Separator className="my-2" />
                 <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Соединения</p>

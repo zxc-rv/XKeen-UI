@@ -130,12 +130,24 @@ pub struct CoreInfo {
     pub is_json: bool,
 }
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GuiSettings {
     pub routing: bool,
+    pub outbounds: bool,
     pub log: bool,
     pub auto_apply: bool,
+}
+
+impl Default for GuiSettings {
+    fn default() -> Self {
+        Self {
+            routing: false,
+            outbounds: false,
+            log: false,
+            auto_apply: false,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

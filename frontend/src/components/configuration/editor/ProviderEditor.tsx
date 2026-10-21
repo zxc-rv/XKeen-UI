@@ -1,9 +1,10 @@
 import { indentWithTab } from '@codemirror/commands'
 import { syntaxHighlighting } from '@codemirror/language'
-import { setDiagnostics } from '@codemirror/lint'
+import { setDiagnostics, type Diagnostic } from '@codemirror/lint'
 import { Compartment, EditorState, Prec } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
+import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { editorHighlight, editorTheme, getLanguageExtension } from './highlighting'
@@ -13,7 +14,7 @@ import { baseSetupNoFold } from './setup'
 import { useEditorSearch } from './useEditorSearch'
 import { validateYaml } from './validation'
 
-export type ProviderEditorLanguage = 'yaml' | 'text'
+export type ProviderEditorLanguage = 'yaml' | 'text' | 'json'
 
 interface Props {
   content: string
@@ -24,9 +25,29 @@ interface Props {
 }
 
 function validateView(view: EditorView, language: ProviderEditorLanguage) {
-  const { diagnostics, error } = language === 'yaml' ? validateYaml(view.state.doc.toString()) : { diagnostics: [], error: undefined }
-  view.dispatch(setDiagnostics(view.state, diagnostics))
-  return error
+  const doc = view.state.doc
+  const result =
+    language === 'yaml'
+      ? validateYaml(doc.toString())
+      : language === 'json'
+        ? validateJson(doc.toString(), doc.length)
+        : { diagnostics: [], error: undefined }
+  view.dispatch(setDiagnostics(view.state, result.diagnostics))
+  return result.error
+}
+
+/** Валидация JSON: ошибки парсера превращаются в подсветку прямо в редакторе. */
+function validateJson(text: string, docLength: number): { diagnostics: Diagnostic[]; error?: string } {
+  const errors: ParseError[] = []
+  parseJsonc(text, errors, { allowTrailingComma: true })
+  if (errors.length === 0) return { diagnostics: [] }
+  const diagnostics: Diagnostic[] = errors.map((e) => {
+    const from = Math.max(0, Math.min(e.offset, docLength))
+    const to = Math.min(from + Math.max(e.length, 1), docLength)
+    const line = text.slice(0, e.offset).split('\n').length
+    return { from, to, severity: 'error' as const, message: `Синтаксическая ошибка JSON (строка ${line})` }
+  })
+  return { diagnostics, error: 'Синтаксическая ошибка JSON' }
 }
 
 export function ProviderEditor({ content, language, onChange, onSave, onValidationChange }: Props) {
