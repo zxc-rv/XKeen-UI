@@ -63,55 +63,56 @@ export function TemplateModal({ onImport }: { onImport: (url: string) => Promise
 
   return (
     <Dialog open={modals.showTemplateModal} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="flex max-h-[80vh] max-w-140! flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
-            <IconFileText size={24} className="text-chart-2" />
-            Импорт шаблона
-            <span className="text-muted-foreground text-sm font-normal"></span>
-          </DialogTitle>
-          <DialogDescription className="flex w-full items-center justify-between">
-            <span>
-              Выберите готовый шаблон конфигурации для <span className="text-chart-2 font-semibold">{capitalize(currentCore)}</span>
-            </span>
-            {!loading && <Badge className="h-6 w-6 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">{templates.length}</Badge>}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="w-full max-w-140! p-0!">
+        <div className="flex max-h-[90dvh] flex-col gap-4 overflow-hidden p-6">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
+              <IconFileText size={24} className="text-chart-2" />
+              Импорт шаблона
+            </DialogTitle>
+            <DialogDescription className="flex w-full items-center justify-between">
+              <span>
+                Выберите готовый шаблон конфигурации для <span className="text-chart-2 font-semibold">{capitalize(currentCore)}</span>
+              </span>
+              {!loading && <Badge className="h-6 w-6 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">{templates.length}</Badge>}
+            </DialogDescription>
+          </DialogHeader>
 
-        <ScrollArea className="flex-1">
-          {loading ? (
-            <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-12">
-              <Spinner className="text-chart-2 size-10" />
-              <span className="text-xs">Загрузка шаблонов...</span>
-            </div>
-          ) : templates.length === 0 ? (
-            <p className="text-muted-foreground py-12 text-center text-sm">Нет доступных шаблонов</p>
-          ) : (
-            <RadioGroup value={selectedUrl} onValueChange={setSelectedUrl} className="gap-1.5 py-1">
-              {templates.map((template, i) => (
-                <div
-                  key={i}
-                  onClick={() => setSelectedUrl(template.url)}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3.5 transition-all',
-                    selectedUrl === template.url
-                      ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
-                      : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] from-blue-500/15 to-blue-500/5 hover:border-[#60a5fa] hover:bg-linear-to-b'
-                  )}
-                >
-                  <RadioGroupItem value={template.url} id={`tpl-${i}`} className="shrink-0" />
-                  <span className="text-sm font-medium">{template.name}</span>
-                </div>
-              ))}
-            </RadioGroup>
-          )}
-        </ScrollArea>
+          <ScrollArea className="h-125 min-h-0" hideScrollbar>
+            {loading ? (
+              <div className="text-muted-foreground flex min-h-125 flex-col items-center justify-center gap-3">
+                <Spinner className="text-chart-2 size-10" />
+                <span className="text-sm tracking-normal">Загрузка шаблонов...</span>
+              </div>
+            ) : templates.length === 0 ? (
+              <p className="text-muted-foreground flex min-h-125 items-center justify-center text-sm">Нет доступных шаблонов</p>
+            ) : (
+              <RadioGroup value={selectedUrl} onValueChange={setSelectedUrl} className="gap-1.5 px-0.5 py-1">
+                {templates.map((template, i) => (
+                  <div
+                    key={i}
+                    onClick={() => setSelectedUrl(template.url)}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3.5 transition-all',
+                      selectedUrl === template.url
+                        ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
+                        : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] from-blue-500/15 to-blue-500/5 hover:border-[#60a5fa] hover:bg-linear-to-b'
+                    )}
+                  >
+                    <RadioGroupItem value={template.url} id={`tpl-${i}`} className="shrink-0" />
+                    <span className="text-sm font-medium">{template.name}</span>
+                  </div>
+                ))}
+              </RadioGroup>
+            )}
+          </ScrollArea>
 
-        <DialogFooter className="shrink-0">
-          <Button onClick={handleImport} disabled={!selectedUrl || importing} className="w-full">
-            {importing ? 'Загрузка...' : 'Импортировать'}
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="shrink-0">
+            <Button onClick={handleImport} disabled={!selectedUrl || importing} className="w-full">
+              {importing ? 'Загрузка...' : 'Импортировать'}
+            </Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )
