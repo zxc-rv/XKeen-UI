@@ -211,8 +211,9 @@ async fn ping_outbound(outbound: &serde_json::Value, url: &str, budget: Duration
 /// Одноразовый HTTP-сервер конфига на абстрактном unix-сокете для remote-лоадера Xray
 /// (`xray run -c '@name'`, `main/confloader/external::FetchHTTPContent`): тот делает
 /// ровно один GET и ждёт статус 200 с JSON-телом; клиент живёт не дольше 30 c.
-/// Ждём подключения до общего дедлайна пинга — дольше держать сокет незачем.
-async fn serve_config(listener: UnixListener, config: Vec<u8>, deadline: Instant) {
+/// Ждём подключения до общего дедлайна (пинга или валидации) — дольше держать сокет незачем.
+/// Переиспользуется также в `configs.rs` для валидации конфигов без временных файлов.
+pub(crate) async fn serve_config(listener: UnixListener, config: Vec<u8>, deadline: Instant) {
     let (mut stream, _) = tokio::select! {
         accepted = listener.accept() => match accepted {
             Ok(stream) => stream,
