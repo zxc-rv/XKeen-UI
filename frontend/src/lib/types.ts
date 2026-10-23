@@ -14,6 +14,8 @@ export interface Config {
 
 export type ProxySortOrder = 'default' | 'name' | 'ping'
 
+export type PingMode = 'single' | 'double' | 'double_keep_alive'
+
 export type AutoDnsMode = 'disabled' | 'enabled' | 'with_filter'
 
 export interface AppSettings {
@@ -32,7 +34,7 @@ export interface AppSettings {
   pingTestTimeout: number
   showSourceName: boolean
   closeConnectionsOnApply: boolean
-  doublePing: boolean
+  pingMode: PingMode
   hideUnavailableProxies: boolean
   hideUnavailableProxiesCounter: number
   proxySortOrder: ProxySortOrder

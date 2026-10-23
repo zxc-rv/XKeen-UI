@@ -186,6 +186,14 @@ impl Default for LogSettings {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PingMode {
+    Single,
+    Double,
+    DoubleKeepAlive,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ClashApiSettings {
@@ -197,7 +205,7 @@ pub struct ClashApiSettings {
     pub proxy_sort_order: String,
     pub auto_dns: String,
     pub close_connections_on_apply: bool,
-    pub double_ping: bool,
+    pub ping_mode: PingMode,
 }
 
 impl Default for ClashApiSettings {
@@ -211,7 +219,7 @@ impl Default for ClashApiSettings {
             proxy_sort_order: "default".into(),
             auto_dns: "disabled".into(),
             close_connections_on_apply: false,
-            double_ping: true,
+            ping_mode: PingMode::DoubleKeepAlive,
         }
     }
 }

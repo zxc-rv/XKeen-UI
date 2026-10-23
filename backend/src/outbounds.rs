@@ -22,13 +22,14 @@
 //! Абстрактный сокет вместо случайного TCP-порта, потому что socks-инбаунд Xray слушает
 //! только TCP, а HTTP-инбаунд умеет unix (`Network = [TCP, UNIX]`) — и порты в принципе
 //! не занимаются (нет гонки за эфемерный порт). Через полученный прокси отправляется
-//! HEAD-запрос на URL (для https — CONNECT-туннель, TLS через rustls руками). По умолчанию
-//! замеряется один запрос целиком, включая рукопожатие. С включённым «двойным пингом» первый
-//! запрос прогревочный (DNS и TCP/TLS до цели), замеряется второй: по тому же TLS-соединению
-//! для https, по новому соединению с прокси для http. Запуск ядра ограничен `STARTUP_TIMEOUT`,
+//! HEAD-запрос на URL через inbound `tunnel` (сырая труба до хоста цели; для https TLS через
+//! rustls руками). По умолчанию замеряется один запрос целиком, включая рукопожатие. С
+//! включённым «двойным пингом» первый запрос прогревочный (DNS и TCP/TLS до цели), замеряется
+//! второй по тому же соединению (keep-alive); без keep-alive второй запрос открывает новое
+//! соединение, и замер включает его установку (DNS при этом уже прогрет). Запуск ядра ограничен `STARTUP_TIMEOUT`,
 //! а таймаут из настроек отсчитывается отдельно для каждого запроса.
 
-use crate::types::{AppState};
+use crate::types::{AppState, PingMode};
 use axum::extract::{Json, State};
 use axum::response::IntoResponse;
 use chrono::SecondsFormat;
@@ -100,12 +101,11 @@ pub struct OutboundPingReq {
     pub timeout_ms: Option<u64>,
 }
 
-#[derive(Clone, Copy)]
 struct PingParams<'a> {
-    url: &'a str,
+    target: Url,
     budget: Duration,
     label: &'a str,
-    double_ping: bool,
+    mode: PingMode,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -126,12 +126,12 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
         .unwrap_or_default()
         .to_string();
 
-    let (settings_url, settings_timeout, double_ping) = {
+    let (settings_url, settings_timeout, mode) = {
         let settings = state.settings.read().unwrap();
         (
             settings.clash_api.ping_url.clone(),
             u64::from(settings.clash_api.ping_timeout),
-            settings.clash_api.double_ping,
+            settings.clash_api.ping_mode,
         )
     };
     let url = request
@@ -141,6 +141,13 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
         .filter(|url| !url.is_empty())
         .unwrap_or(&settings_url)
         .to_string();
+    let target = match Url::parse(&url) {
+        Ok(target) if target.host_str().is_some() => target,
+        Ok(_) => return Json(serde_json::json!({ "success": false, "error": "В URL пинга нет хоста" })),
+        Err(error) => {
+            return Json(serde_json::json!({ "success": false, "error": format!("Некорректный URL пинга: {error}") }));
+        }
+    };
     let timeout_ms = request
         .timeout_ms
         .unwrap_or(settings_timeout)
@@ -154,10 +161,10 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
 
     let _guard = PING_LOCK.lock().await;
     let params = PingParams {
-        url: &url,
+        target,
         budget: Duration::from_millis(timeout_ms),
         label: &label,
-        double_ping,
+        mode,
     };
     let result = ping_outbound(&request.outbound, params).await;
     if !tag.is_empty() {
@@ -180,7 +187,7 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
 type PingResult = Result<PingReply, String>;
 
 /// Уникальное основание имени абстрактных сокетов одного запуска: два сокета на пинг —
-/// выдача конфига (`-cfg`) и HTTP-прокси инбаунд xray (`-px`).
+/// выдача конфига (`-cfg`) и tunnel-инбаунд xray (`-px`).
 fn unique_socket_base() -> String {
     format!(
         "xkeen-ui-ping-{}-{}",
@@ -202,14 +209,17 @@ async fn ping_outbound(outbound: &serde_json::Value, params: PingParams<'_>) -> 
     let socket_name = format!("{base}-px");
 
     // Единственный outbound в тестовом конфиге — присланный фронтендом. Инбаунд без тега.
-    // Прокси — HTTP (не socks): socks-инбаунд Xray слушает только TCP (`proxy/socks/server.go
-    // ::Network`, unix не объявляет), а HTTP-инбаунд умеет (`Network = [TCP, UNIX]`, dsWorker
-    // создаётся при PortList == nil) — значит listen `@name` даёт абстрактный unix-сокет.
+    // Вместо прокси — `tunnel` с фиксированным адресом цели: клиенту не нужны ни CONNECT, ни
+    // абсолютный URI, а keep-alive работает одинаково для http и https. `listen` с `@name`
+    // даёт абстрактный unix-сокет.
+    let host = params.target.host_str().ok_or("В URL пинга нет хоста")?;
+    let port = params.target.port_or_known_default().unwrap_or(80);
     let config = serde_json::to_vec(&serde_json::json!({
         "log": { "access": "none", "loglevel": "warning" },
         "inbounds": [{
-            "protocol": "http",
-            "listen": format!("@{socket_name}")
+            "protocol": "tunnel",
+            "listen": format!("@{socket_name}"),
+            "settings": { "rewriteAddress": host.trim_matches(['[', ']']), "rewritePort": port }
         }],
         "outbounds": [outbound]
     }))
@@ -339,10 +349,7 @@ async fn ping_via_child(
         });
     }
 
-    let stream = UnixStream::connect(format!("\0{socket_name}"))
-        .await
-        .map_err(|e| format!("Не удалось подключиться к прокси xray: {e}"))?;
-    execute_request(stream, socket_name, params).await
+    execute_request(socket_name, params).await
 }
 
 /// TLS-конфиг с публичными корневыми сертификатами (как у reqwest: rustls) — строится один раз.
@@ -356,61 +363,37 @@ static TLS_CONFIG: LazyLock<Arc<rustls::ClientConfig>> = LazyLock::new(|| {
     )
 });
 
-async fn execute_request(mut stream: UnixStream, socket_name: &str, params: PingParams<'_>) -> PingResult {
-    let PingParams { url, budget, label, double_ping } = params;
-    let target = Url::parse(url).map_err(|e| format!("Некорректный URL пинга: {e}"))?;
-    let scheme = target.scheme();
-    let host = target.host_str().ok_or("В URL пинга нет хоста")?.to_string();
-    let port = target.port_or_known_default().unwrap_or(80);
+async fn execute_request(socket_name: &str, params: PingParams<'_>) -> PingResult {
+    let target = &params.target;
+    let host = target.host_str().ok_or("В URL пинга нет хоста")?;
+    let host_header = target.port().map_or_else(|| host.to_string(), |port| format!("{host}:{port}"));
     let mut path = target.path().to_string();
-    if path.is_empty() {
-        path = "/".into();
+    if let Some(query) = target.query() {
+        path = format!("{path}?{query}");
     }
-    if let Some(q) = target.query() {
-        path = format!("{path}?{q}");
-    }
+    let connection = if params.mode == PingMode::DoubleKeepAlive { "keep-alive" } else { "close" };
+    let request = format!("HEAD {path} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: XKeen-UI\r\nConnection: {connection}\r\n\r\n");
 
-    let started = Instant::now();
-    let (status, elapsed) = if scheme == "https" {
-        let connect_request = format!("CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n");
-        let connection = if double_ping { "keep-alive" } else { "close" };
-        let request = format!("HEAD {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: XKeen-UI\r\nConnection: {connection}\r\n\r\n");
-        let (mut tls, status) = within(budget, label, async {
-            write_all(&mut stream, &connect_request).await?;
-            let connect_status = parse_status(&read_headers(&mut stream).await?)?;
-            if !(200..300).contains(&connect_status) {
-                return Err(format!("Xray не открыл CONNECT-туннель (код {connect_status})"));
+    let connect_plain = move || async move {
+        UnixStream::connect(format!("\0{socket_name}"))
+            .await
+            .map_err(|e| format!("Не удалось подключиться к туннелю xray: {e}"))
+    };
+    let (status, elapsed) = if target.scheme() == "https" {
+        let server_name = rustls::pki_types::ServerName::try_from(host.trim_matches(['[', ']']).to_string())
+            .map_err(|e| format!("Некорректный хост для TLS: {e}"))?;
+        let connect_tls = move || {
+            let server_name = server_name.clone();
+            async move {
+                TlsConnector::from(TLS_CONFIG.clone())
+                    .connect(server_name, connect_plain().await?)
+                    .await
+                    .map_err(|e| format!("TLS-рукопожатие не удалось: {e}"))
             }
-            let server_name = rustls::pki_types::ServerName::try_from(host.clone())
-                .map_err(|e| format!("Некорректный хост для TLS: {e}"))?;
-            let mut tls = TlsConnector::from(TLS_CONFIG.clone())
-                .connect(server_name, stream)
-                .await
-                .map_err(|e| format!("TLS-рукопожатие не удалось: {e}"))?;
-            let status = head(&mut tls, &request).await?;
-            Ok((tls, status))
-        })
-        .await?;
-        if double_ping {
-            reject_server_error(status)?;
-            measure_head(&mut tls, &request, budget, label).await?
-        } else {
-            (status, started.elapsed())
-        }
+        };
+        probe(connect_tls, &request, &params).await?
     } else {
-        let request = format!(
-            "HEAD http://{host}:{port}{path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: XKeen-UI\r\nConnection: close\r\n\r\n"
-        );
-        let status = within(budget, label, head(&mut stream, &request)).await?;
-        if double_ping {
-            reject_server_error(status)?;
-            let mut second = UnixStream::connect(format!("\0{socket_name}"))
-                .await
-                .map_err(|e| format!("Не удалось подключиться к прокси xray: {e}"))?;
-            measure_head(&mut second, &request, budget, label).await?
-        } else {
-            (status, started.elapsed())
-        }
+        probe(connect_plain, &request, &params).await?
     };
 
     reject_server_error(status)?;
@@ -418,6 +401,41 @@ async fn execute_request(mut stream: UnixStream, socket_name: &str, params: Ping
         latency_ms: (elapsed.as_secs_f64() * 1000.0).round().max(1.0) as u64,
         status,
     })
+}
+
+async fn probe<S, F, Fut>(connect: F, request: &str, params: &PingParams<'_>) -> Result<(u16, Duration), String>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<S, String>>,
+{
+    let (mut tunnel, status, elapsed) = open_and_head(&connect, request, params).await?;
+    if params.mode == PingMode::Single {
+        return Ok((status, elapsed));
+    }
+    reject_server_error(status)?;
+    if params.mode == PingMode::DoubleKeepAlive {
+        return measure_head(&mut tunnel, request, params.budget, params.label).await;
+    }
+    drop(tunnel);
+    let (_, status, elapsed) = open_and_head(&connect, request, params).await?;
+    Ok((status, elapsed))
+}
+
+async fn open_and_head<S, F, Fut>(connect: &F, request: &str, params: &PingParams<'_>) -> Result<(S, u16, Duration), String>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<S, String>>,
+{
+    let started = Instant::now();
+    let (tunnel, status) = within(params.budget, params.label, async {
+        let mut tunnel = connect().await?;
+        let status = head(&mut tunnel, request).await?;
+        Ok((tunnel, status))
+    })
+    .await?;
+    Ok((tunnel, status, started.elapsed()))
 }
 
 async fn within<T>(budget: Duration, label: &str, future: impl Future<Output = Result<T, String>>) -> Result<T, String> {
@@ -528,24 +546,26 @@ mod tests {
             "protocol": "freedom",
             "settings": {},
         });
-        for double_ping in [false, true] {
+        for mode in PING_MODES {
             let params = PingParams {
-                url: "https://cp.cloudflare.com/generate_204",
+                target: Url::parse("https://cp.cloudflare.com/generate_204").unwrap(),
                 budget: Duration::from_millis(8000),
                 label: "8 с",
-                double_ping,
+                mode,
             };
             let res = ping_outbound(&outbound, params).await;
-            eprintln!("RESULT (double_ping={double_ping}): {res:?}");
+            eprintln!("RESULT ({mode:?}): {res:?}");
         }
     }
 
-    fn test_params(url: &str, double_ping: bool) -> PingParams<'_> {
+    const PING_MODES: [PingMode; 3] = [PingMode::Single, PingMode::Double, PingMode::DoubleKeepAlive];
+
+    fn test_params(url: &str, mode: PingMode) -> PingParams<'static> {
         PingParams {
-            url,
+            target: Url::parse(url).unwrap(),
             budget: Duration::from_secs(5),
             label: "5 с",
-            double_ping,
+            mode,
         }
     }
 
@@ -567,10 +587,9 @@ mod tests {
                 };
                 tokio::spawn(async move {
                     let mut buffer = [0u8; 2048];
-                    _ = socket.read(&mut buffer).await;
-                    _ = socket
-                        .write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
-                        .await;
+                    while socket.read(&mut buffer).await.is_ok_and(|read| read > 0) {
+                        _ = socket.write_all(b"HTTP/1.1 204 No Content\r\n\r\n").await;
+                    }
                 });
             }
         });
@@ -585,8 +604,8 @@ mod tests {
         let port = spawn_no_content_server().await;
         let outbound = serde_json::json!({ "protocol": "freedom", "settings": {} });
         let url = format!("http://127.0.0.1:{port}/");
-        for double_ping in [false, true] {
-            let reply = ping_outbound(&outbound, test_params(&url, double_ping)).await.unwrap();
+        for mode in PING_MODES {
+            let reply = ping_outbound(&outbound, test_params(&url, mode)).await.unwrap();
             assert_eq!(reply.status, 204);
             assert!(reply.latency_ms >= 1);
         }
@@ -598,9 +617,9 @@ mod tests {
             return;
         }
         let outbound = serde_json::json!({ "tag": "dead", "protocol": "freedom", "settings": {} });
-        for double_ping in [false, true] {
-            let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", double_ping)).await;
-            assert!(result.unwrap_err().contains("503"));
+        for mode in PING_MODES {
+            let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", mode)).await;
+            assert!(result.is_err());
         }
     }
 
@@ -610,7 +629,7 @@ mod tests {
             return;
         }
         let outbound = serde_json::json!({ "tag": "broken", "protocol": "nonsense" });
-        let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", false)).await;
+        let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", PingMode::Single)).await;
         assert!(result.unwrap_err().contains("nonsense"));
     }
 
