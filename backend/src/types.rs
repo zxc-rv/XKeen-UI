@@ -197,12 +197,13 @@ pub struct ClashApiSettings {
     pub proxy_sort_order: String,
     pub auto_dns: String,
     pub close_connections_on_apply: bool,
+    pub double_ping: bool,
 }
 
 impl Default for ClashApiSettings {
     fn default() -> Self {
         Self {
-            ping_url: "https://www.gstatic.com/generate_204".into(),
+            ping_url: "http://www.gstatic.com/generate_204".into(),
             ping_timeout: 5000,
             show_source_name: false,
             hide_unavailable_proxies: false,
@@ -210,6 +211,7 @@ impl Default for ClashApiSettings {
             proxy_sort_order: "default".into(),
             auto_dns: "disabled".into(),
             close_connections_on_apply: false,
+            double_ping: true,
         }
     }
 }

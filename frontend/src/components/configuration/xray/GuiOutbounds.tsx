@@ -77,7 +77,7 @@ function extractMeta(ob: Outbound): OutboundMeta {
   const fpDefault = security === 'tls' || security === 'reality' ? 'chrome' : undefined
   const fingerprint = tls.fingerprint ?? reality.fingerprint ?? fpDefault
 
-  // mux: поле аутбаунда (vless/vmess) с enabled/concurrency
+  // mux: поле аутбаунда
   const muxObj = ob.mux ?? (s.muxEnabled != null ? { enabled: s.muxEnabled } : undefined)
 
   // freedom: доменная стратегия может задаваться и в settings, и в streamSettings.sockopt
@@ -551,7 +551,7 @@ const OutboundCard = memo(function OutboundCard({
                     disabled={isTesting || !tag}
                     aria-label="Проверить подключение"
                     className={cn(
-                      'text-muted-foreground rounded-md p-1 transition-colors disabled:cursor-not-allowed',
+                      'text-muted-foreground cursor-pointer rounded-md p-1 transition-colors disabled:cursor-not-allowed',
                       !tag && 'opacity-40'
                     )}
                   >

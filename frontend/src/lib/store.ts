@@ -37,6 +37,7 @@ const initialSettings: AppSettings = {
   pingTestTimeout: DEFAULT_PING_TEST_TIMEOUT,
   showSourceName: false,
   closeConnectionsOnApply: false,
+  doublePing: true,
   hideUnavailableProxies: false,
   hideUnavailableProxiesCounter: 3,
   proxySortOrder: 'default',

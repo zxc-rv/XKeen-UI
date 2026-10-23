@@ -22,8 +22,11 @@
 //! Абстрактный сокет вместо случайного TCP-порта, потому что socks-инбаунд Xray слушает
 //! только TCP, а HTTP-инбаунд умеет unix (`Network = [TCP, UNIX]`) — и порты в принципе
 //! не занимаются (нет гонки за эфемерный порт). Через полученный прокси отправляется
-//! HEAD-запрос на URL (для https — CONNECT-туннель, TLS через rustls руками), замеряется
-//! время до ответа. Весь путь (запуск ядра + запрос) ограничен таймаутом — по умолчанию 5 секунд.
+//! HEAD-запрос на URL (для https — CONNECT-туннель, TLS через rustls руками). По умолчанию
+//! замеряется один запрос целиком, включая рукопожатие. С включённым «двойным пингом» первый
+//! запрос прогревочный (DNS и TCP/TLS до цели), замеряется второй: по тому же TLS-соединению
+//! для https, по новому соединению с прокси для http. Запуск ядра ограничен `STARTUP_TIMEOUT`,
+//! а таймаут из настроек отсчитывается отдельно для каждого запроса.
 
 use crate::types::{AppState};
 use axum::extract::{Json, State};
@@ -31,6 +34,7 @@ use axum::response::IntoResponse;
 use chrono::SecondsFormat;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::process::Stdio;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -47,6 +51,9 @@ static PING_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 const MIN_TIMEOUT_MS: u64 = 500;
 const MAX_TIMEOUT_MS: u64 = 30_000;
+
+/// Лимит на запуск xray и готовность inbound — в таймаут пинга не входит.
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Шаг опроса готовности абстрактного сокета (xray обычно стартует за 0.1–1 c).
 const READINESS_POLL: Duration = Duration::from_millis(25);
@@ -96,6 +103,14 @@ pub struct OutboundPingReq {
     pub timeout_ms: Option<u64>,
 }
 
+#[derive(Clone, Copy)]
+struct PingParams<'a> {
+    url: &'a str,
+    budget: Duration,
+    label: &'a str,
+    double_ping: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct PingReply {
     latency_ms: u64,
@@ -114,9 +129,13 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
         .unwrap_or_default()
         .to_string();
 
-    let (settings_url, settings_timeout) = {
+    let (settings_url, settings_timeout, double_ping) = {
         let settings = state.settings.read().unwrap();
-        (settings.clash_api.ping_url.clone(), u64::from(settings.clash_api.ping_timeout))
+        (
+            settings.clash_api.ping_url.clone(),
+            u64::from(settings.clash_api.ping_timeout),
+            settings.clash_api.double_ping,
+        )
     };
     let url = request
         .url
@@ -137,7 +156,13 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
     };
 
     let _guard = PING_LOCK.lock().await;
-    let result = ping_outbound(&request.outbound, &url, Duration::from_millis(timeout_ms), &label).await;
+    let params = PingParams {
+        url: &url,
+        budget: Duration::from_millis(timeout_ms),
+        label: &label,
+        double_ping,
+    };
+    let result = ping_outbound(&request.outbound, params).await;
     if !tag.is_empty() {
         let (delay, error) = match &result {
             Ok(reply) => (reply.latency_ms, None),
@@ -170,8 +195,8 @@ fn unique_socket_base() -> String {
     )
 }
 
-async fn ping_outbound(outbound: &serde_json::Value, url: &str, budget: Duration, label: &str) -> PingResult {
-    let deadline = Instant::now() + budget;
+async fn ping_outbound(outbound: &serde_json::Value, params: PingParams<'_>) -> PingResult {
+    let startup_deadline = Instant::now() + STARTUP_TIMEOUT;
 
     // Абстрактный unix-сокет с уникальным именем: портов вообще нет — нет и TOCTOU-гонки
     // за эфемерный порт между биндом инбаунда и исходящими соединениями xray.
@@ -198,9 +223,9 @@ async fn ping_outbound(outbound: &serde_json::Value, url: &str, budget: Duration
     // Имя ведёт себя как путь — ведущий `\0` собирается tokio в абстрактный адрес.
     let listener = UnixListener::bind(format!("\0{config_socket}"))
         .map_err(|e| format!("Не удалось открыть сокет выдачи конфига: {e}"))?;
-    let config_task = tokio::spawn(serve_config(listener, config, deadline));
+    let config_task = tokio::spawn(serve_config(listener, config, startup_deadline));
 
-    let result = run_ping(&config_socket, &socket_name, url, deadline, label).await;
+    let result = run_ping(&config_socket, &socket_name, startup_deadline, params).await;
 
     // Конфиг уже выдан (или xray умер): сервер больше не нужен, абстрактное имя
     // освобождается при закрытии листенера.
@@ -238,7 +263,7 @@ pub(crate) async fn serve_config(listener: UnixListener, config: Vec<u8>, deadli
 }
 
 /// Жизненный цикл одноразового xray: запуск → ожидание готовности → запрос → kill.
-async fn run_ping(config_socket: &str, socket_name: &str, url: &str, deadline: Instant, label: &str) -> PingResult {
+async fn run_ping(config_socket: &str, socket_name: &str, startup_deadline: Instant, params: PingParams<'_>) -> PingResult {
     let mut cmd = Command::new("xray");
     // `-format json` обязателен: автоопределение формата (`core::GetFormat`) смотрит на
     // расширение аргумента, а у абстрактного сокета его нет (`Failed to get format of @…`).
@@ -263,7 +288,7 @@ async fn run_ping(config_socket: &str, socket_name: &str, url: &str, deadline: I
         }
         buf
     });
-    let result = ping_via_child(&mut child, socket_name, url, deadline, label, output_task).await;
+    let result = ping_via_child(&mut child, socket_name, startup_deadline, params, output_task).await;
 
     // Гарантированно убиваем и забираем zombie, даже если выше случился таймаут/ошибка.
     _ = child.kill().await;
@@ -272,12 +297,12 @@ async fn run_ping(config_socket: &str, socket_name: &str, url: &str, deadline: I
 }
 
 async fn ping_via_child(
-    child: &mut Child, socket_name: &str, url: &str, deadline: Instant, label: &str,
+    child: &mut Child, socket_name: &str, startup_deadline: Instant, params: PingParams<'_>,
     output_task: tokio::task::JoinHandle<Vec<u8>>,
 ) -> PingResult {
     let mut stream = None;
     let mut failure = None;
-    while Instant::now() < deadline {
+    while Instant::now() < startup_deadline {
         match child.try_wait() {
             Ok(Some(status)) => {
                 let buffer = match tokio::time::timeout(Duration::from_millis(500), output_task).await {
@@ -310,13 +335,10 @@ async fn ping_via_child(
     }
 
     let Some(stream) = stream else {
-        return Err(failure.unwrap_or_else(|| format!("Не удалось дождаться запуска xray (таймаут {label})")));
+        return Err(failure.unwrap_or_else(|| format!("xray не запустился за {} с", STARTUP_TIMEOUT.as_secs())));
     };
 
-    let remaining = deadline.saturating_duration_since(Instant::now());
-    tokio::time::timeout(remaining, execute_request(stream, url))
-        .await
-        .unwrap_or_else(|_| Err(format!("Таймаут {label}")))
+    execute_request(stream, socket_name, params).await
 }
 
 /// TLS-конфиг с публичными корневыми сертификатами (как у reqwest: rustls) — строится один раз.
@@ -330,7 +352,8 @@ static TLS_CONFIG: LazyLock<Arc<rustls::ClientConfig>> = LazyLock::new(|| {
     )
 });
 
-async fn execute_request(mut stream: UnixStream, url: &str) -> PingResult {
+async fn execute_request(mut stream: UnixStream, socket_name: &str, params: PingParams<'_>) -> PingResult {
+    let PingParams { url, budget, label, double_ping } = params;
     let target = Url::parse(url).map_err(|e| format!("Некорректный URL пинга: {e}"))?;
     let scheme = target.scheme();
     let host = target.host_str().ok_or("В URL пинга нет хоста")?.to_string();
@@ -344,46 +367,79 @@ async fn execute_request(mut stream: UnixStream, url: &str) -> PingResult {
     }
 
     let started = Instant::now();
-    let status = if scheme == "https" {
-        // CONNECT-туннель через HTTP-прокси xray, дальше TLS и HTTP руками.
-        let connect_req = format!("CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n");
-        write_all(&mut stream, &connect_req).await?;
-        let connect_headers = read_headers(&mut stream).await?;
-        let connect_status = parse_status(&connect_headers)?;
-        if !(200..300).contains(&connect_status) {
-            return Err(format!("Xray не открыл CONNECT-туннель (код {connect_status})"));
+    let (status, elapsed) = if scheme == "https" {
+        let connect_request = format!("CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n");
+        let connection = if double_ping { "keep-alive" } else { "close" };
+        let request = format!("HEAD {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: XKeen-UI\r\nConnection: {connection}\r\n\r\n");
+        let (mut tls, status) = within(budget, label, async {
+            write_all(&mut stream, &connect_request).await?;
+            let connect_status = parse_status(&read_headers(&mut stream).await?)?;
+            if !(200..300).contains(&connect_status) {
+                return Err(format!("Xray не открыл CONNECT-туннель (код {connect_status})"));
+            }
+            let server_name = rustls::pki_types::ServerName::try_from(host.clone())
+                .map_err(|e| format!("Некорректный хост для TLS: {e}"))?;
+            let mut tls = TlsConnector::from(TLS_CONFIG.clone())
+                .connect(server_name, stream)
+                .await
+                .map_err(|e| format!("TLS-рукопожатие не удалось: {e}"))?;
+            let status = head(&mut tls, &request).await?;
+            Ok((tls, status))
+        })
+        .await?;
+        if double_ping {
+            reject_server_error(status)?;
+            measure_head(&mut tls, &request, budget, label).await?
+        } else {
+            (status, started.elapsed())
         }
-
-        let server_name = rustls::pki_types::ServerName::try_from(host.clone())
-            .map_err(|e| format!("Некорректный хост для TLS: {e}"))?;
-        let tls_connector = TlsConnector::from(TLS_CONFIG.clone());
-        let mut tls = tls_connector
-            .connect(server_name, stream)
-            .await
-            .map_err(|e| format!("TLS-рукопожатие не удалось: {e}"))?;
-
-        let req = format!("HEAD {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: XKeen-UI\r\nConnection: close\r\n\r\n");
-        write_all(&mut tls, &req).await?;
-        let headers = read_headers(&mut tls).await?;
-        parse_status(&headers)?
     } else {
-        // HTTP-прокси по правилам: абсолютный URI в request-line, домен резолвит outbound.
-        let req = format!(
+        let request = format!(
             "HEAD http://{host}:{port}{path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: XKeen-UI\r\nConnection: close\r\n\r\n"
         );
-        write_all(&mut stream, &req).await?;
-        let headers = read_headers(&mut stream).await?;
-        parse_status(&headers)?
+        let status = within(budget, label, head(&mut stream, &request)).await?;
+        if double_ping {
+            reject_server_error(status)?;
+            let mut second = UnixStream::connect(format!("\0{socket_name}"))
+                .await
+                .map_err(|e| format!("Не удалось подключиться к прокси xray: {e}"))?;
+            measure_head(&mut second, &request, budget, label).await?
+        } else {
+            (status, started.elapsed())
+        }
     };
 
-    let elapsed = started.elapsed();
-    if status >= 500 {
-        return Err(format!("Ошибка на пути до цели (HTTP {status})"));
-    }
+    reject_server_error(status)?;
     Ok(PingReply {
         latency_ms: (elapsed.as_secs_f64() * 1000.0).round().max(1.0) as u64,
         status,
     })
+}
+
+async fn within<T>(budget: Duration, label: &str, future: impl Future<Output = Result<T, String>>) -> Result<T, String> {
+    tokio::time::timeout(budget, future)
+        .await
+        .unwrap_or_else(|_| Err(format!("Таймаут {label}")))
+}
+
+async fn head<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S, request: &str) -> Result<u16, String> {
+    write_all(stream, request).await?;
+    parse_status(&read_headers(stream).await?)
+}
+
+async fn measure_head<S: AsyncRead + AsyncWrite + Unpin>(
+    stream: &mut S, request: &str, budget: Duration, label: &str,
+) -> Result<(u16, Duration), String> {
+    let started = Instant::now();
+    let status = within(budget, label, head(stream, request)).await?;
+    Ok((status, started.elapsed()))
+}
+
+fn reject_server_error(status: u16) -> Result<u16, String> {
+    if status >= 500 {
+        return Err(format!("Ошибка на пути до цели (HTTP {status})"));
+    }
+    Ok(status)
 }
 
 async fn write_all<S: AsyncWrite + Unpin>(s: &mut S, buf: &str) -> Result<(), String> {
@@ -468,14 +524,25 @@ mod tests {
             "protocol": "freedom",
             "settings": {},
         });
-        let res = ping_outbound(
-            &outbound,
-            "https://cp.cloudflare.com/generate_204",
-            Duration::from_millis(8000),
-            "8 с",
-        )
-        .await;
-        eprintln!("RESULT: {res:?}");
+        for double_ping in [false, true] {
+            let params = PingParams {
+                url: "https://cp.cloudflare.com/generate_204",
+                budget: Duration::from_millis(8000),
+                label: "8 с",
+                double_ping,
+            };
+            let res = ping_outbound(&outbound, params).await;
+            eprintln!("RESULT (double_ping={double_ping}): {res:?}");
+        }
+    }
+
+    fn test_params(url: &str, double_ping: bool) -> PingParams<'_> {
+        PingParams {
+            url,
+            budget: Duration::from_secs(5),
+            label: "5 с",
+            double_ping,
+        }
     }
 
     async fn xray_available() -> bool {
@@ -513,11 +580,12 @@ mod tests {
         }
         let port = spawn_no_content_server().await;
         let outbound = serde_json::json!({ "protocol": "freedom", "settings": {} });
-        let reply = ping_outbound(&outbound, &format!("http://127.0.0.1:{port}/"), Duration::from_secs(5), "5 с")
-            .await
-            .unwrap();
-        assert_eq!(reply.status, 204);
-        assert!(reply.latency_ms >= 1);
+        let url = format!("http://127.0.0.1:{port}/");
+        for double_ping in [false, true] {
+            let reply = ping_outbound(&outbound, test_params(&url, double_ping)).await.unwrap();
+            assert_eq!(reply.status, 204);
+            assert!(reply.latency_ms >= 1);
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -526,8 +594,10 @@ mod tests {
             return;
         }
         let outbound = serde_json::json!({ "tag": "dead", "protocol": "freedom", "settings": {} });
-        let result = ping_outbound(&outbound, "http://127.0.0.1:1/", Duration::from_secs(5), "5 с").await;
-        assert!(result.unwrap_err().contains("503"));
+        for double_ping in [false, true] {
+            let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", double_ping)).await;
+            assert!(result.unwrap_err().contains("503"));
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -536,7 +606,7 @@ mod tests {
             return;
         }
         let outbound = serde_json::json!({ "tag": "broken", "protocol": "nonsense" });
-        let result = ping_outbound(&outbound, "http://127.0.0.1:1/", Duration::from_secs(5), "5 с").await;
+        let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", false)).await;
         assert!(result.unwrap_err().contains("nonsense"));
     }
 

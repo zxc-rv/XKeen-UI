@@ -101,6 +101,16 @@ const clashApiSettings: ToggleSetting[] = [
   },
 ]
 
+const pingTestToggles: ToggleSetting[] = [
+  {
+    id: 'double-ping',
+    key: 'doublePing',
+    path: 'clash_api.double_ping',
+    title: 'Двойной пинг',
+    description: 'Делать два запроса и отбрасывать результат первого, чтобы убрать влияние рукопожатия и DNS-разрешения. Только для Xray.',
+  },
+]
+
 const pluginSettings: ToggleSetting[] = [
   {
     id: 'multi-router',
@@ -810,6 +820,10 @@ export function SettingsModal() {
                     onSave={savePingTestSettings}
                     showToast={showToast}
                   />
+                  <Separator />
+                  {pingTestToggles.map((item) => (
+                    <SwitchSettingField key={item.id} item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />
+                  ))}
                 </FieldGroup>
               </TabsContent>
 
