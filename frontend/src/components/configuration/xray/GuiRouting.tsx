@@ -265,7 +265,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   )
 
   return (
-    <div ref={scrollRef} className="absolute inset-4 flex scrollbar-thin flex-col gap-2 overflow-y-auto">
+    <div ref={scrollRef} className="absolute inset-4 flex scrollbar-thin flex-col gap-2 overflow-y-auto pb-1">
       <div className="flex flex-col gap-2">
         {rules.map((rule, index) => (
           <RuleCard

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import { IconBoltFilled, IconCode, IconDeviceFloppy, IconGripVertical, IconTrash } from '@tabler/icons-react'
+import { IconBoltFilled, IconCode, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { useAppActions } from '../../../lib/store'
@@ -141,7 +141,7 @@ interface Props {
 }
 
 export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
-  const { showToast } = useAppActions()
+  const { showToast, dispatch } = useAppActions()
   const [outbounds, setOutbounds] = useState<Outbound[]>(() => parseOutbounds(configs[activeConfigIndex]?.content ?? ''))
   // История замеров тегов (последние 10 на тег) — с бэкенда, дополняется замерами в этой сессии.
   const [history, setHistory] = useState<Record<string, PingEntry[]>>({})
@@ -326,7 +326,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-2 overflow-y-auto">
+      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-2 overflow-y-auto pb-1">
         {outbounds.length === 0 ? (
           <div className="text-muted-foreground mt-6 flex flex-col items-center gap-1 text-sm">
             <span>Аутбаунды не найдены</span>
@@ -355,6 +355,14 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
             })}
           </div>
         )}
+
+        {/* Кнопка добавления подключения — открывает модалку импорта */}
+        <button
+          onClick={() => dispatch({ type: 'SHOW_MODAL', modal: 'showImportModal', show: true })}
+          className="text-muted-foreground border-ring/60 hover:border-chart-2 mt-1 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-2.5 text-sm font-medium transition-colors hover:border-solid hover:text-[#60a5fa]"
+        >
+          <IconPlus size={17} /> Добавить подключение
+        </button>
       </div>
 
       {/* Модалка редактирования JSON аутбаунда */}
@@ -365,14 +373,11 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
         }}
       >
         <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,700px)]">
-          <div className="flex h-[60dvh] flex-col gap-4 overflow-hidden md:h-[55dvh]">
+          <div className="flex h-[54dvh] flex-col gap-4 overflow-hidden md:h-[50dvh]">
             <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
                 <IconCode size={20} className="text-chart-2" />
                 {editing?.tag || `#${(editing?.index ?? 0) + 1}`}
-                <Badge variant="outline" className="border-chart-2/30 text-chart-2 rounded-md px-1.5 text-[10px] tracking-wider">
-                  outbound
-                </Badge>
               </DialogTitle>
             </DialogHeader>
             <div className="border-border bg-input-background relative min-h-0 flex-1 overflow-hidden rounded-xl border">
@@ -382,6 +387,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
                     key={editing.key}
                     content={editContent}
                     language="json"
+                    lineWrap={false}
                     onChange={setEditContent}
                     onSave={() => saveEdit()}
                     onValidationChange={setEditError}
@@ -391,13 +397,14 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
                       render={
                         <span className="absolute right-3 bottom-3 z-10">
                           <Button
-                            size="icon"
+                            size="sm"
                             variant="ghost"
-                            className="border-border/60 bg-background/40 hover:bg-background/70 supports-backdrop-filter:bg-background/40 shadow-lg shadow-black/20 backdrop-blur-xl backdrop-saturate-150"
+                            className="border-border/60 bg-background/40 hover:bg-background/70 supports-backdrop-filter:bg-background/40 shadow-lg shadow-black/20 backdrop-blur-xl backdrop-saturate-150 gap-1.5 px-3"
                             onClick={() => saveEdit()}
                             disabled={draftSaveDisabled}
                           >
                             <IconDeviceFloppy />
+                            <span className="text-xs font-medium">Сохранить</span>
                           </Button>
                         </span>
                       }

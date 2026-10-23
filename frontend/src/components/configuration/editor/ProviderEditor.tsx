@@ -22,6 +22,8 @@ interface Props {
   onChange: (value: string) => void
   onSave: () => void
   onValidationChange: (error?: string) => void
+  /** Перенос длинных строк в редакторе (по умолчанию включён). */
+  lineWrap?: boolean
 }
 
 function validateView(view: EditorView, language: ProviderEditorLanguage) {
@@ -50,13 +52,14 @@ function validateJson(text: string, docLength: number): { diagnostics: Diagnosti
   return { diagnostics, error: 'Синтаксическая ошибка JSON' }
 }
 
-export function ProviderEditor({ content, language, onChange, onSave, onValidationChange }: Props) {
+export function ProviderEditor({ content, language, onChange, onSave, onValidationChange, lineWrap = true }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const languageCompartmentRef = useRef(new Compartment())
   const latestRef = useRef({ language, onChange, onSave, onValidationChange })
   latestRef.current = { language, onChange, onSave, onValidationChange }
   const [initialContent] = useState(content)
+  const lineWrapCompartmentRef = useRef(new Compartment())
   const { searchPanel, bridge } = useEditorSearch(viewRef)
 
   useEffect(() => {
@@ -80,7 +83,7 @@ export function ProviderEditor({ content, language, onChange, onSave, onValidati
             ])
           ),
           keymap.of([indentWithTab]),
-          EditorView.lineWrapping,
+          lineWrapCompartmentRef.current.of(lineWrap ? EditorView.lineWrapping : []),
           createSearchExtension(bridge),
           lineNumbers({ formatNumber: (lineNumber) => String(lineNumber).padStart(3, '\u00a0') }),
           indentationMarkers(),
@@ -103,6 +106,12 @@ export function ProviderEditor({ content, language, onChange, onSave, onValidati
       view.destroy()
     }
   }, [initialContent, bridge])
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    view.dispatch({ effects: lineWrapCompartmentRef.current.reconfigure(lineWrap ? EditorView.lineWrapping : []) })
+  }, [lineWrap])
 
   useEffect(() => {
     const view = viewRef.current
