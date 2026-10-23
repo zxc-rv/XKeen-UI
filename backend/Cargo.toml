@@ -32,8 +32,6 @@ reqwest = { version = "0.12", default-features = false, features = [
   "stream",
   "blocking",
 ] }
-# Для пинга аутбаундов: HTTP CONNECT через абстрактный unix-сокет инбаунда xray + TLS вручную
-# (reqwest не умеет SOCKS/HTTP-прокси поверх unix-сокета).
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "1"
@@ -56,11 +54,10 @@ tower-http = { version = "0.7", features = ["fs", "cors", "set-header"] }
 urlencoding = "2.1"
 uuid = { version = "1", features = ["v4"] }
 yaml-rust2 = { version = "0.13", default-features = false }
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 semver = "1.0.28"
 
 [dev-dependencies]
-# Только для тестов (idle_cache.rs): tokio::time::pause/advance и #[tokio::test(start_paused = true)].
 tokio = { version = "1", features = ["test-util"] }
 
 [profile.release]

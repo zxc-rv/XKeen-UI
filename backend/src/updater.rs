@@ -559,22 +559,29 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         let mut out = File::create(out_path)?;
         if is_zip {
             let mut archive = zip::ZipArchive::new(rdr)?;
-            let mut entry: Option<String> = None;
-            for i in 0..archive.len() {
-                if let Ok(f) = archive.by_index(i) {
-                    let base = f.name().rsplit('/').next().unwrap_or(f.name()).to_string();
-                    if !f.is_dir() && base.eq_ignore_ascii_case(core) {
-                        entry = Some(f.name().to_string());
-                        break;
+            let mut entry: Option<String>;
+            let entry_for = |archive: &mut zip::ZipArchive<R>| -> Option<String> {
+                for i in 0..archive.len() {
+                    if let Ok(f) = archive.by_index(i) {
+                        if f.is_dir() {
+                            continue;
+                        }
+                        let Ok(name) = f.name() else { continue };
+                        let base = name.rsplit('/').next().unwrap_or(&name).to_string();
+                        if base.eq_ignore_ascii_case(core) {
+                            return Some(name.to_string());
+                        }
                     }
                 }
-            }
+                None
+            };
+            entry = entry_for(&mut archive);
             if entry.is_none() {
                 let mut files: Vec<String> = Vec::new();
                 for i in 0..archive.len() {
                     if let Ok(f) = archive.by_index(i) {
-                        if !f.is_dir() {
-                            files.push(f.name().to_string());
+                        if let Ok(name) = f.name() {
+                            files.push(name.to_string());
                         }
                     }
                 }

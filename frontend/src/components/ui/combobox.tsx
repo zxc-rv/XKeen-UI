@@ -29,7 +29,7 @@ function Combobox<Value, Multiple extends boolean | undefined = false>({
   const open = isControlled ? openProp : uncontrolledOpen
 
   const handleOpenChange = React.useCallback(
-    (nextOpen: boolean, eventDetails: ComboboxPrimitive.Root.ChangeEventDetails) => {
+    (nextOpen: boolean, eventDetails: ComboboxPrimitive.Root.OpenChangeEventDetails) => {
       if (!isControlled) setUncontrolledOpen(nextOpen)
       onOpenChange?.(nextOpen, eventDetails)
     },
