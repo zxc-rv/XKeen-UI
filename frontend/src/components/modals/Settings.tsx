@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX, IconArrowBackUp } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
@@ -299,40 +300,50 @@ const RepoSourceField = memo(function RepoSourceField({
   )
 
   return (
-    <Field className="px-0 py-3">
-      <FieldContent>
-        <FieldLabel htmlFor={`${repoKey}-input`}>{label}</FieldLabel>
-        <FieldDescription className="text-[13px] text-wrap!">{description}</FieldDescription>
-      </FieldContent>
-      <Field orientation="horizontal" className="gap-2">
-        <InputGroup className="flex-1">
-          <InputGroupInput
-            id={`${repoKey}-input`}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void save()}
-            onBlur={() => void save()}
-            placeholder={defaultUrl}
-            aria-invalid={invalid}
-            className="text-sm placeholder:text-sm"
-          />
-          {draft !== defaultUrl && (
-            <InputGroupAddon align="inline-end">
-              <InputGroupButton
-                aria-label="Вернуть значение по-умолчанию"
-                title="Вернуть значение по-умолчанию"
-                className="text-muted-foreground hover:text-foreground hover:bg-transparent!"
-                onMouseDown={(e) => e.preventDefault()} // Блочим лишний onBlur инпута
-                onClick={() => void save(defaultUrl)}
-              >
-                <IconArrowBackUp className="size-4.5" />
-              </InputGroupButton>
-            </InputGroupAddon>
-          )}
-        </InputGroup>
+    <TooltipProvider delayDuration={500}>
+      <Field className="px-0 py-3">
+        <FieldContent>
+          <FieldLabel htmlFor={`${repoKey}-input`}>{label}</FieldLabel>
+          <FieldDescription className="text-[13px] text-wrap!">{description}</FieldDescription>
+        </FieldContent>
+        <Field orientation="horizontal" className="gap-2">
+          <InputGroup className="flex-1">
+            <InputGroupInput
+              id={`${repoKey}-input`}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void save()}
+              onBlur={() => void save()}
+              placeholder={defaultUrl}
+              aria-invalid={invalid}
+              className="text-sm placeholder:text-sm"
+            />
+            {draft !== defaultUrl && (
+              <InputGroupAddon align="inline-end">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <InputGroupButton
+                        aria-label="Вернуть значение по-умолчанию"
+                        className="text-muted-foreground hover:text-foreground hover:bg-transparent!"
+                        onMouseDown={(e) => e.preventDefault()} // Блочим лишний onBlur инпута
+                        onClick={() => void save(defaultUrl)}
+                      >
+                        <IconArrowBackUp className="size-4.5" />
+                      </InputGroupButton>
+                    }
+                  />
+                  <TooltipContent side="top" sideOffset={4}>
+                    Вернуть значение по-умолчанию
+                  </TooltipContent>
+                </Tooltip>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
+        </Field>
+        {invalid && <FieldError>Некорректный URL</FieldError>}
       </Field>
-      {invalid && <FieldError>Некорректный URL</FieldError>}
-    </Field>
+    </TooltipProvider>
   )
 })
 
