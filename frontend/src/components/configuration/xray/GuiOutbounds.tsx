@@ -1,10 +1,11 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import { IconBoltFilled, IconCode, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash } from '@tabler/icons-react'
+import { IconBoltFilled, IconCode, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { useAppActions } from '../../../lib/store'
@@ -15,6 +16,10 @@ import type { CodeMirrorRef } from '../CodeMirror'
 import { ProviderEditor } from '../editor/ProviderEditor'
 
 type Outbound = Record<string, any>
+
+type GenerateConfigForCore = (uri: string, core: string, existingConfig: string) => { type: string; content: string }
+
+const OUTBOUND_LINK_PREFIXES = ['ss://', 'vless://', 'vmess://', 'hysteria2://', 'hy2://', 'trojan://']
 
 interface PingEntry {
   time: string
@@ -141,11 +146,13 @@ interface Props {
 }
 
 export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
-  const { showToast, dispatch } = useAppActions()
+  const { showToast } = useAppActions()
   const [outbounds, setOutbounds] = useState<Outbound[]>(() => parseOutbounds(configs[activeConfigIndex]?.content ?? ''))
   // История замеров тегов (последние 10 на тег) — с бэкенда, дополняется замерами в этой сессии.
   const [history, setHistory] = useState<Record<string, PingEntry[]>>({})
   const [testing, setTesting] = useState<Record<string, boolean>>({})
+  const [link, setLink] = useState('')
+  const [isPingingAll, setIsPingingAll] = useState(false)
   const outboundsRef = useRef<Outbound[]>(outbounds)
   // «Чистый» список аутбаундов: актуален на момент открытия вкладки/последней синхронизации.
   // Если drag-перестановка вернула всё на прежние места, в редактор не пишем — конфиг не станет dirty.
@@ -153,6 +160,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
   const inFlightRef = useRef<Set<string>>(new Set())
   const cardRefs = useRef<(HTMLDivElement | null)[]>([])
   const cardRefHandlersRef = useRef<Record<number, (el: HTMLDivElement | null) => void>>({})
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   // Модалка редактирования JSON аутбаунда
   const [editing, setEditing] = useState<{ index: number; tag: string; key: number } | null>(null)
@@ -181,7 +189,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
   }, [activeConfigIndex, configs])
 
   useEffect(() => {
-    apiCall<{ success?: boolean; history?: Record<string, PingEntry[]> }>('GET', 'outbound/ping/history')
+    apiCall<{ success?: boolean; history?: Record<string, PingEntry[]> }>('GET', 'healthcheck')
       .then((r) => r.history && setHistory(r.history))
       .catch(() => {})
   }, [])
@@ -253,7 +261,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
       try {
         const r = await apiCall<{ success: boolean; latency_ms?: number; error?: string }>(
           'POST',
-          'outbound/ping',
+          'healthcheck',
           { outbound },
           { timeoutMs: 30000 }
         )
@@ -272,6 +280,67 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
     },
     [showToast]
   )
+
+  const handlePingAll = useCallback(async () => {
+    // Служебные аутбаунды и объекты без тега не пингуем — бэкенд фильтрует так же.
+    const targets = outboundsRef.current.filter(
+      (outbound) => outbound.protocol !== 'blackhole' && outbound.protocol !== 'dns' && typeof outbound.tag === 'string' && outbound.tag
+    )
+    if (targets.length === 0) return
+    setIsPingingAll(true)
+    // Спиннер на каждой пингуемой карточке, пока идёт общий замер.
+    setTesting((prev) => {
+      const next = { ...prev }
+      for (const { tag } of targets) next[tag] = true
+      return next
+    })
+    try {
+      const r = await apiCall<{
+        success: boolean
+        error?: string
+        results?: { tag: string; success: boolean; latency_ms?: number; error?: string }[]
+      }>('POST', 'healthcheck/all', { outbounds: targets }, { timeoutMs: 45000 })
+      if (!r.success) {
+        showToast(`Тест всех: ${r.error ?? 'ошибка запроса'}`, 'error')
+        return
+      }
+      const time = new Date().toISOString()
+      setHistory((prev) => {
+        const next = { ...prev }
+        for (const result of r.results ?? []) {
+          const delay = result.success ? (result.latency_ms ?? 0) : 0
+          const error = result.success ? undefined : result.error
+          next[result.tag] = [...(next[result.tag] ?? []), { time, delay, error }].slice(-10)
+        }
+        return next
+      })
+    } catch (e: any) {
+      showToast(`Тест всех: ${e?.message ?? 'ошибка запроса'}`, 'error')
+    } finally {
+      setTesting((prev) => {
+        const next = { ...prev }
+        for (const { tag } of targets) next[tag] = false
+        return next
+      })
+      setIsPingingAll(false)
+    }
+  }, [showToast])
+
+  const addOutbound = useCallback(() => {
+    try {
+      const { generateConfigForCore } = window as unknown as { generateConfigForCore: GenerateConfigForCore }
+      const outbound = JSON.parse(generateConfigForCore(link.trim(), 'xray', editorRef.current?.getValue() ?? '').content)
+      const list = [...outboundsRef.current, outbound]
+      outboundsRef.current = list
+      setOutbounds(list)
+      syncToEditor(list)
+      setLink('')
+      showToast(`Outbound «${outbound.tag}» добавлен`)
+      setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50)
+    } catch (e: any) {
+      showToast(e.message, 'error')
+    }
+  }, [link, editorRef, syncToEditor, showToast])
 
   const openEdit = useCallback((index: number) => {
     const ob = outboundsRef.current[index]
@@ -320,49 +389,76 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
     [syncToEditor, showToast]
   )
 
+  const isValidLink = OUTBOUND_LINK_PREFIXES.some((prefix) => link.trim().toLowerCase().startsWith(prefix))
   const isDraftDirty = editing != null && editContent !== editOriginal
   const draftSaveDisabled = !isDraftDirty || !!editError
   const draftSaveHint = editError ? `Исправьте ошибки JSON: ${editError}` : !isDraftDirty ? 'Нет изменений' : 'Сохранить (Ctrl+S)'
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-2 overflow-y-auto pb-1">
-        {outbounds.length === 0 ? (
-          <div className="text-muted-foreground mt-6 flex flex-col items-center gap-1 text-sm">
-            <span>Аутбаунды не найдены</span>
-            <span className="text-muted-foreground/60 text-xs">Добавьте подключение через «Утилиты → Добавить подключение»</span>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {outbounds.map((ob, index) => {
-              const tag: string = typeof ob?.tag === 'string' ? ob.tag : ''
-              const key = tag || `#${index + 1}`
-              return (
-                <div key={key} ref={getCardRef(index)}>
-                  <OutboundCard
-                    index={index}
-                    outbound={ob}
-                    isDragging={draggingIndex === index}
-                    entries={history[tag] ?? []}
-                    isTesting={!!testing[tag]}
-                    onPing={handlePing}
-                    onEdit={openEdit}
-                    onRemove={handleRemove}
-                    onDragStart={startDrag}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        )}
+      <div className="absolute inset-4 -mb-2 flex flex-col">
+        <div ref={scrollRef} className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-2 overflow-y-auto pb-0.5">
+          {outbounds.length === 0 ? (
+            <div className="text-muted-foreground mt-6 flex flex-col items-center gap-1 text-sm">
+              <span>Аутбаунды не найдены</span>
+              <span className="text-muted-foreground/60 text-xs">Добавьте подключение через «Утилиты → Добавить подключение»</span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {outbounds.map((ob, index) => {
+                const tag: string = typeof ob?.tag === 'string' ? ob.tag : ''
+                return (
+                  <div key={index} ref={getCardRef(index)}>
+                    <OutboundCard
+                      index={index}
+                      outbound={ob}
+                      isDragging={draggingIndex === index}
+                      entries={history[tag] ?? []}
+                      isTesting={!!testing[tag]}
+                      onPing={handlePing}
+                      onEdit={openEdit}
+                      onRemove={handleRemove}
+                      onDragStart={startDrag}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
-        {/* Кнопка добавления подключения — открывает модалку импорта */}
-        <button
-          onClick={() => dispatch({ type: 'SHOW_MODAL', modal: 'showImportModal', show: true })}
-          className="text-muted-foreground border-ring/60 hover:border-chart-2 mt-1 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-2.5 text-sm font-medium transition-colors hover:border-solid hover:text-[#60a5fa]"
-        >
-          <IconPlus size={17} /> Добавить подключение
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 rounded-xl p-0">
+          <InputGroup className="min-w-40 flex-1">
+            <InputGroupInput
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && isValidLink) addOutbound()
+              }}
+              placeholder="vless://..."
+              className="tracking-wide"
+            />
+
+            {link && (
+              <InputGroupAddon align="inline-end">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => setLink('')}
+                  className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                >
+                  <IconX size={13} />
+                </Button>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
+          <Button variant="outline" disabled={!isValidLink} onClick={addOutbound}>
+            <IconPlus /> Добавить
+          </Button>
+          <Button variant="outline" disabled={isPingingAll || outbounds.length === 0} onClick={handlePingAll}>
+            {isPingingAll ? <Spinner className="size-4" /> : <IconBoltFilled />} Тест всех
+          </Button>
+        </div>
       </div>
 
       {/* Модалка редактирования JSON аутбаунда */}
@@ -399,7 +495,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="border-border/60 bg-background/40 hover:bg-background/70 supports-backdrop-filter:bg-background/40 shadow-lg shadow-black/20 backdrop-blur-xl backdrop-saturate-150 gap-1.5 px-3"
+                            className="border-border/60 bg-background/40 hover:bg-background/70 supports-backdrop-filter:bg-background/40 gap-1.5 px-3 shadow-lg shadow-black/20 backdrop-blur-xl backdrop-saturate-150"
                             onClick={() => saveEdit()}
                             disabled={draftSaveDisabled}
                           >
@@ -460,9 +556,8 @@ const OutboundCard = memo(function OutboundCard({
 
   return (
     <div
-      style={{ background: 'var(--color-input-background)' }}
       className={cn(
-        'flex flex-col gap-3 rounded-xl border p-3 transition-all duration-150 select-none',
+        'bg-input-background flex flex-col gap-3 rounded-xl border p-3 transition-all duration-150 select-none',
         isDragging ? 'scale-[0.99] border-[#60a5fa] opacity-80' : 'border-border'
       )}
     >
@@ -506,7 +601,7 @@ const OutboundCard = memo(function OutboundCard({
                 aria-label="Редактировать JSON"
                 className="text-muted-foreground/60 hover:text-muted-foreground rounded-md transition-colors"
               >
-                <IconCode size={16} />
+                <IconCode size={18} />
               </button>
             }
           />

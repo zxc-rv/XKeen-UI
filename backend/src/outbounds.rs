@@ -28,13 +28,20 @@
 //! второй по тому же соединению (keep-alive); без keep-alive второй запрос открывает новое
 //! соединение, и замер включает его установку (DNS при этом уже прогрет). Запуск ядра ограничен `STARTUP_TIMEOUT`,
 //! а таймаут из настроек отсчитывается отдельно для каждого запроса.
+//!
+//! Эндпоинт «тест всех» (`/api/healthcheck/all`) — один процесс xray на весь список:
+//! на каждый аутбаунд свой tagged tunnel-инбаунд на отдельном абстрактном сокете плюс
+//! правило маршрутизации `inboundTag → outboundTag` (первый outbound в Xray — дефолтный,
+//! поэтому без правил весь трафик ушёл бы в первый аутбаунд). Замеры по всем сокетам
+//! идут параллельно, у каждого свой бюджет из одного таймаута.
 
 use crate::types::{AppState, PingMode};
 use axum::extract::{Json, State};
 use axum::response::IntoResponse;
 use chrono::SecondsFormat;
+use futures_util::future::join_all;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::future::Future;
 use std::process::Stdio;
 use std::sync::{Arc, LazyLock};
@@ -46,8 +53,9 @@ use tokio::sync::{Mutex, oneshot};
 use tokio_rustls::TlsConnector;
 use reqwest::Url;
 
-/// На Keenetic-железе параллельный запуск нескольких xray — лишняя нагрузка, пинги обрабатываем
-/// по одному.
+/// На Keenetic-железе параллельный запуск нескольких xray — лишняя нагрузка: одиночные
+/// пинги и «тест всех» обрабатываем по одному запуску ядра (внутри «теста всех» замеры
+/// параллельные, но это один процесс xray).
 static PING_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 const MIN_TIMEOUT_MS: u64 = 500;
@@ -86,7 +94,7 @@ async fn record_ping_history(tag: &str, delay: u64, error: Option<String>) {
     }
 }
 
-pub async fn get_outbound_ping_history() -> impl IntoResponse {
+pub async fn get_healthcheck_history() -> impl IntoResponse {
     let history = PING_HISTORY.lock().await;
     Json(serde_json::json!({ "success": true, "history": &*history }))
 }
@@ -95,6 +103,16 @@ pub async fn get_outbound_ping_history() -> impl IntoResponse {
 pub struct OutboundPingReq {
     /// Ровно тот объект outbound, который выбрал пользователь во вкладке фронтенда.
     pub outbound: serde_json::Value,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct HealthcheckAllReq {
+    /// Аутбаунды активного конфига — проверяются параллельно одним процессом xray.
+    pub outbounds: Vec<serde_json::Value>,
     #[serde(default)]
     pub url: Option<String>,
     #[serde(default)]
@@ -114,7 +132,7 @@ struct PingReply {
     status: u16,
 }
 
-pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Json<OutboundPingReq>) -> impl IntoResponse {
+pub async fn post_healthcheck(State(state): State<AppState>, Json(request): Json<OutboundPingReq>) -> impl IntoResponse {
     if !request.outbound.is_object() {
         return Json(serde_json::json!({ "success": false, "error": "Outbound не является объектом" }));
     }
@@ -126,46 +144,12 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
         .unwrap_or_default()
         .to_string();
 
-    let (settings_url, settings_timeout, mode) = {
-        let settings = state.settings.read().unwrap();
-        (
-            settings.clash_api.ping_url.clone(),
-            u64::from(settings.clash_api.ping_timeout),
-            settings.clash_api.ping_mode,
-        )
-    };
-    let url = request
-        .url
-        .as_deref()
-        .map(str::trim)
-        .filter(|url| !url.is_empty())
-        .unwrap_or(&settings_url)
-        .to_string();
-    let target = match Url::parse(&url) {
-        Ok(target) if target.host_str().is_some() => target,
-        Ok(_) => return Json(serde_json::json!({ "success": false, "error": "В URL пинга нет хоста" })),
-        Err(error) => {
-            return Json(serde_json::json!({ "success": false, "error": format!("Некорректный URL пинга: {error}") }));
-        }
-    };
-    let timeout_ms = request
-        .timeout_ms
-        .unwrap_or(settings_timeout)
-        .clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
-
-    let label = if timeout_ms % 1000 == 0 {
-        format!("{} с", timeout_ms / 1000)
-    } else {
-        format!("{timeout_ms} мс")
+    let params = match resolve_ping_params(&state, request.url.as_deref(), request.timeout_ms) {
+        Ok(params) => params,
+        Err(error) => return Json(serde_json::json!({ "success": false, "error": error })),
     };
 
     let _guard = PING_LOCK.lock().await;
-    let params = PingParams {
-        target,
-        budget: Duration::from_millis(timeout_ms),
-        label: &label,
-        mode,
-    };
     let result = ping_outbound(&request.outbound, params).await;
     if !tag.is_empty() {
         let (delay, error) = match &result {
@@ -182,6 +166,72 @@ pub async fn post_outbound_ping(State(state): State<AppState>, Json(request): Js
         })),
         Err(error) => Json(serde_json::json!({ "success": false, "error": error })),
     }
+}
+
+/// «Тест всех»: список аутбаундов → один процесс xray, замеры по всем параллельно.
+/// Ответ — по одному элементу на тег; системная ошибка запуска размножается на все замеры.
+pub async fn post_healthcheck_all(State(state): State<AppState>, Json(request): Json<HealthcheckAllReq>) -> impl IntoResponse {
+    let params = match resolve_ping_params(&state, request.url.as_deref(), request.timeout_ms) {
+        Ok(params) => params,
+        Err(error) => return Json(serde_json::json!({ "success": false, "error": error })),
+    };
+
+    let _guard = PING_LOCK.lock().await;
+    let results = ping_all(&request.outbounds, params).await;
+    let mut reply = Vec::with_capacity(results.len());
+    for (tag, result) in results {
+        match result {
+            Ok(measured) => {
+                record_ping_history(&tag, measured.latency_ms, None).await;
+                reply.push(serde_json::json!({
+                    "tag": tag,
+                    "success": true,
+                    "latency_ms": measured.latency_ms,
+                }));
+            }
+            Err(error) => {
+                record_ping_history(&tag, 0, Some(error.clone())).await;
+                reply.push(serde_json::json!({
+                    "tag": tag,
+                    "success": false,
+                    "latency_ms": 0,
+                    "error": error,
+                }));
+            }
+        }
+    }
+    Json(serde_json::json!({ "success": true, "results": reply }))
+}
+
+/// URL цели и бюджет замера: приоритет у значений из запроса, иначе — настройки clash_api.
+/// Метка таймаута «живёт» дольше запроса — строка отдаётся с временем `'static`.
+fn resolve_ping_params(state: &AppState, url: Option<&str>, timeout_ms: Option<u64>) -> Result<PingParams<'static>, String> {
+    let (settings_url, settings_timeout, mode) = {
+        let settings = state.settings.read().unwrap();
+        (
+            settings.clash_api.ping_url.clone(),
+            u64::from(settings.clash_api.ping_timeout),
+            settings.clash_api.ping_mode,
+        )
+    };
+    let url = url.map(str::trim).filter(|url| !url.is_empty()).unwrap_or(&settings_url);
+    let target = match Url::parse(url) {
+        Ok(target) if target.host_str().is_some() => target,
+        Ok(_) => return Err("В URL пинга нет хоста".into()),
+        Err(error) => return Err(format!("Некорректный URL пинга: {error}")),
+    };
+    let timeout_ms = timeout_ms.unwrap_or(settings_timeout).clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
+    let label = if timeout_ms % 1000 == 0 {
+        format!("{} с", timeout_ms / 1000)
+    } else {
+        format!("{timeout_ms} мс")
+    };
+    Ok(PingParams {
+        target,
+        budget: Duration::from_millis(timeout_ms),
+        label: String::leak(label),
+        mode,
+    })
 }
 
 type PingResult = Result<PingReply, String>;
@@ -208,9 +258,10 @@ async fn ping_outbound(outbound: &serde_json::Value, params: PingParams<'_>) -> 
     let config_socket = format!("{base}-cfg");
     let socket_name = format!("{base}-px");
 
-    // Единственный outbound в тестовом конфиге — присланный фронтендом. Инбаунд без тега.
-    // Вместо прокси — `tunnel` с фиксированным адресом цели: клиенту не нужны ни CONNECT, ни
-    // абсолютный URI, а keep-alive работает одинаково для http и https. `listen` с `@name`
+    // Единственный outbound в тестовом конфиге — присланный фронтендом. Инбаунд без тега:
+    // первый outbound в Xray становится дефолтным, и весь трафик инбаунда уходит в него.
+    // Вместо прокси — `tunnel` с фиксированным адресом цели: клиенту не нужны ни CONNECT,
+    // ни абсолютный URI, а keep-alive работает одинаково для http и https. `listen` с `@name`
     // даёт абстрактный unix-сокет.
     let host = params.target.host_str().ok_or("В URL пинга нет хоста")?;
     let port = params.target.port_or_known_default().unwrap_or(80);
@@ -237,6 +288,135 @@ async fn ping_outbound(outbound: &serde_json::Value, params: PingParams<'_>) -> 
     // освобождается при закрытии листенера.
     config_task.abort();
     result
+}
+
+/// Параллельный пинг всех присланных аутбаундов одним процессом xray: на каждый аутбаунд —
+/// свой tunnel-инбаунд на отдельном абстрактном сокете и правило `inboundTag → outboundTag`.
+/// Возвращает замер по каждому непустому тегу; ошибка запуска размножается на все замеры.
+async fn ping_all(outbounds: &[serde_json::Value], params: PingParams<'_>) -> Vec<(String, PingResult)> {
+    // История и ответ ключуются тегом — пингуем только объекты с непустым тегом.
+    let mut items: Vec<(String, serde_json::Value)> = outbounds
+        .iter()
+        .filter(|outbound| outbound.is_object())
+        .map(|outbound| {
+            (
+                outbound
+                    .get("tag")
+                    .and_then(|tag| tag.as_str())
+                    .map(str::trim)
+                    .unwrap_or_default()
+                    .to_string(),
+                outbound.clone(),
+            )
+        })
+        .filter(|(tag, _)| !tag.is_empty())
+        .collect();
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    let host = params.target.host_str().unwrap_or_default().to_string();
+    let port = params.target.port_or_known_default().unwrap_or(80);
+
+    let startup_deadline = Instant::now() + STARTUP_TIMEOUT;
+    let base = unique_socket_base();
+    let config_socket = format!("{base}-cfg");
+
+    let mut inbounds = Vec::with_capacity(items.len());
+    let mut rules = Vec::with_capacity(items.len());
+    let mut sockets = Vec::with_capacity(items.len());
+    let mut used_tags: HashSet<String> = HashSet::new();
+    for (index, (tag, outbound)) in items.iter_mut().enumerate() {
+        let socket = format!("{base}-px-{index}");
+        let inbound_tag = format!("chk-in-{index}");
+        inbounds.push(serde_json::json!({
+            "tag": inbound_tag,
+            "protocol": "tunnel",
+            "listen": format!("@{socket}"),
+            "settings": { "rewriteAddress": host, "rewritePort": port }
+        }));
+        // Первый outbound в Xray — дефолтный, поэтому направление в «свой» аутбаунд задаём
+        // правилом маршрутизации по тегу инбаунда; сам тег аутбаунда в тестовом конфиге
+        // делаем уникальным — дубликаты Xray отвергнет целиком.
+        let mut outbound_tag = tag.clone();
+        let mut suffix = 0;
+        while !used_tags.insert(outbound_tag.clone()) {
+            suffix += 1;
+            outbound_tag = format!("{tag}-{suffix}");
+        }
+        outbound["tag"] = serde_json::Value::String(outbound_tag.clone());
+        rules.push(serde_json::json!({
+            "type": "field",
+            "inboundTag": [inbound_tag],
+            "outboundTag": outbound_tag,
+        }));
+        sockets.push(socket);
+    }
+
+    // Системная ошибка одинакова для всех замеров списка.
+    let all_failed = |message: String| {
+        items
+            .iter()
+            .map(|(tag, _)| (tag.clone(), Err(message.clone()) as PingResult))
+            .collect::<Vec<_>>()
+    };
+
+    let mut outbounds_list = vec![serde_json::json!({ "tag": "chk-default", "protocol": "blackhole", "settings": {} })];
+    outbounds_list.extend(items.iter().map(|(_, outbound)| outbound.clone()));
+    let config = match serde_json::to_vec(&serde_json::json!({
+        "log": { "access": "none", "loglevel": "warning" },
+        "inbounds": inbounds,
+        "outbounds": outbounds_list,
+        "routing": { "rules": rules },
+    })) {
+        Ok(config) => config,
+        Err(error) => return all_failed(error.to_string()),
+    };
+
+    // Конфиговыдающий сервер готовим ДО запуска xray: тот читает конфиг сразу на старте.
+    let listener = match UnixListener::bind(format!("\0{config_socket}")) {
+        Ok(listener) => listener,
+        Err(error) => return all_failed(format!("Не удалось открыть сокет выдачи конфига: {error}")),
+    };
+    let config_task = tokio::spawn(serve_config(listener, config, startup_deadline));
+
+    let results = match start_xray(&config_socket).await {
+        Ok((mut child, ready, output_task)) => {
+            let measurements = match wait_xray_ready(&mut child, startup_deadline, ready, output_task).await {
+                Ok(()) => {
+                    // Замеры по всем tunnel-инбаундам параллельно, у каждого свой бюджет.
+                    let futures = sockets.iter().map(|socket| {
+                        execute_request(
+                            socket,
+                            PingParams {
+                                target: params.target.clone(),
+                                budget: params.budget,
+                                label: params.label,
+                                mode: params.mode,
+                            },
+                        )
+                    });
+                    join_all(futures).await
+                }
+                Err(error) => vec![Err(error); items.len()],
+            };
+            // Гарантированно убиваем и забираем zombie, даже если выше случился таймаут/ошибка.
+            _ = child.kill().await;
+            _ = child.wait().await;
+            measurements
+        }
+        Err(error) => vec![Err(error); items.len()],
+    };
+
+    // Конфиг уже выдан (или xray умер): сервер больше не нужен, абстрактное имя
+    // освобождается при закрытии листенера.
+    config_task.abort();
+
+    items
+        .into_iter()
+        .zip(results)
+        .map(|((tag, _), result)| (tag, result))
+        .collect()
 }
 
 /// Одноразовый HTTP-сервер конфига на абстрактном unix-сокете для remote-лоадера Xray
@@ -270,6 +450,21 @@ pub(crate) async fn serve_config(listener: UnixListener, config: Vec<u8>, deadli
 
 /// Жизненный цикл одноразового xray: запуск → ожидание готовности → запрос → kill.
 async fn run_ping(config_socket: &str, socket_name: &str, startup_deadline: Instant, params: PingParams<'_>) -> PingResult {
+    let (mut child, ready, output_task) = start_xray(config_socket).await?;
+    let result = match wait_xray_ready(&mut child, startup_deadline, ready, output_task).await {
+        Ok(()) => execute_request(socket_name, params).await,
+        Err(error) => Err(error),
+    };
+
+    // Гарантированно убиваем и забираем zombie, даже если выше случился таймаут/ошибка.
+    _ = child.kill().await;
+    _ = child.wait().await;
+    result
+}
+
+/// Запуск xray с конфигом из `config_socket`: процесс + канал готовности + задача сбора
+/// вывода (для текста ошибки при раннем завершении).
+async fn start_xray(config_socket: &str) -> Result<(Child, oneshot::Receiver<()>, tokio::task::JoinHandle<Vec<u8>>), String> {
     let mut cmd = Command::new("xray");
     // `-format json` обязателен: автоопределение формата (`core::GetFormat`) смотрит на
     // расширение аргумента, а у абстрактного сокета его нет (`Failed to get format of @…`).
@@ -282,12 +477,7 @@ async fn run_ping(config_socket: &str, socket_name: &str, startup_deadline: Inst
     let mut child = cmd.spawn().map_err(|e| format!("Не удалось запустить xray: {e}"))?;
     let (ready_sender, ready_receiver) = oneshot::channel();
     let output_task = tokio::spawn(collect_output(child.stdout.take(), child.stderr.take(), ready_sender));
-    let result = ping_via_child(&mut child, socket_name, startup_deadline, params, ready_receiver, output_task).await;
-
-    // Гарантированно убиваем и забираем zombie, даже если выше случился таймаут/ошибка.
-    _ = child.kill().await;
-    _ = child.wait().await;
-    result
+    Ok((child, ready_receiver, output_task))
 }
 
 /// Читает вывод xray фоново: в буфер для текста ошибки и до строки `... started` — сигнал
@@ -321,10 +511,14 @@ async fn collect_output(stdout: Option<ChildStdout>, stderr: Option<ChildStderr>
     buffer
 }
 
-async fn ping_via_child(
-    child: &mut Child, socket_name: &str, startup_deadline: Instant, params: PingParams<'_>,
-    ready: oneshot::Receiver<()>, output_task: tokio::task::JoinHandle<Vec<u8>>,
-) -> PingResult {
+/// Запуск → ожидание готовности: в строке лога `core: Xray … started` ядро отчитывается
+/// уже после старта всех inbound. Ранний exit — ошибка с последней строкой вывода.
+async fn wait_xray_ready(
+    child: &mut Child,
+    startup_deadline: Instant,
+    ready: oneshot::Receiver<()>,
+    output_task: tokio::task::JoinHandle<Vec<u8>>,
+) -> Result<(), String> {
     let exit = tokio::select! {
         Ok(()) = ready => None,
         status = child.wait() => Some(status),
@@ -349,7 +543,7 @@ async fn ping_via_child(
         });
     }
 
-    execute_request(socket_name, params).await
+    Ok(())
 }
 
 /// TLS-конфиг с публичными корневыми сертификатами (как у reqwest: rustls) — строится один раз.
@@ -559,6 +753,45 @@ mod tests {
     }
 
     const PING_MODES: [PingMode; 3] = [PingMode::Single, PingMode::Double, PingMode::DoubleKeepAlive];
+
+    // Параллельный «тест всех»: один процесс xray, инбаунд+правило на каждый аутбаунд,
+    // дубликат тега переименовывается, уникальный живёт под своим именем.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn e2e_ping_all_parallel() {
+        if !xray_available().await {
+            return;
+        }
+        let port = spawn_no_content_server().await;
+        let outbounds = vec![
+            serde_json::json!({ "tag": "a", "protocol": "freedom", "settings": {} }),
+            serde_json::json!({ "tag": "a", "protocol": "freedom", "settings": {} }),
+            serde_json::json!({ "tag": "b", "protocol": "freedom", "settings": {} }),
+        ];
+        let results = ping_all(&outbounds, test_params(&format!("http://127.0.0.1:{port}/"), PingMode::Single)).await;
+        assert_eq!(results.len(), 3);
+        for (tag, result) in results {
+            let reply = result.unwrap_or_else(|error| panic!("«{tag}»: {error}"));
+            assert_eq!(reply.status, 204);
+            assert!(reply.latency_ms >= 1);
+        }
+    }
+
+    // Битый аутбаунд не валит запуск ядра всю пачку: ошибка возвращается по его тегу.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn e2e_ping_all_reports_broken_outbound_individually() {
+        if !xray_available().await {
+            return;
+        }
+        let port = spawn_no_content_server().await;
+        let outbounds = vec![
+            serde_json::json!({ "tag": "broken", "protocol": "nonsense" }),
+            serde_json::json!({ "tag": "good", "protocol": "freedom", "settings": {} }),
+        ];
+        let results = ping_all(&outbounds, test_params(&format!("http://127.0.0.1:{port}/"), PingMode::Single)).await;
+        assert_eq!(results.len(), 2);
+        assert!(results[0].1.as_ref().unwrap_err().contains("nonsense"));
+        assert_eq!(results[1].1.as_ref().unwrap().status, 204);
+    }
 
     fn test_params(url: &str, mode: PingMode) -> PingParams<'static> {
         PingParams {

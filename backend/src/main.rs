@@ -501,8 +501,11 @@ async fn main() {
             "/api/route-test",
             get(route_test::get_route_test_meta).post(route_test::post_route_test),
         )
-        .route("/api/outbound/ping", post(outbounds::post_outbound_ping))
-        .route("/api/outbound/ping/history", get(outbounds::get_outbound_ping_history))
+        .route(
+            "/api/healthcheck",
+            get(outbounds::get_healthcheck_history).post(outbounds::post_healthcheck),
+        )
+        .route("/api/healthcheck/all", post(outbounds::post_healthcheck_all))
         .route("/api/device-list", get(api_relay::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))
