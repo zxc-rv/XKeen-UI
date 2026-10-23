@@ -38,10 +38,10 @@ use std::future::Future;
 use std::process::Stdio;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
-use tokio::process::{Child, Command};
-use tokio::sync::Mutex;
+use tokio::process::{Child, ChildStderr, ChildStdout, Command};
+use tokio::sync::{Mutex, oneshot};
 use tokio_rustls::TlsConnector;
 use reqwest::Url;
 
@@ -54,9 +54,6 @@ const MAX_TIMEOUT_MS: u64 = 30_000;
 
 /// Лимит на запуск xray и готовность inbound — в таймаут пинга не входит.
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// Шаг опроса готовности абстрактного сокета (xray обычно стартует за 0.1–1 c).
-const READINESS_POLL: Duration = Duration::from_millis(25);
 
 /// История замеров — только в памяти (на диск не сохраняется, после рестарта сервиса
 /// начинается с нуля): тег аутбаунда → последние N замеров.
@@ -209,11 +206,10 @@ async fn ping_outbound(outbound: &serde_json::Value, params: PingParams<'_>) -> 
     // ::Network`, unix не объявляет), а HTTP-инбаунд умеет (`Network = [TCP, UNIX]`, dsWorker
     // создаётся при PortList == nil) — значит listen `@name` даёт абстрактный unix-сокет.
     let config = serde_json::to_vec(&serde_json::json!({
-        "log": { "loglevel": "none" },
+        "log": { "access": "none", "loglevel": "warning" },
         "inbounds": [{
             "protocol": "http",
-            "listen": format!("@{socket_name}"),
-            "settings": {}
+            "listen": format!("@{socket_name}")
         }],
         "outbounds": [outbound]
     }))
@@ -274,21 +270,9 @@ async fn run_ping(config_socket: &str, socket_name: &str, startup_deadline: Inst
     cmd.kill_on_drop(true);
 
     let mut child = cmd.spawn().map_err(|e| format!("Не удалось запустить xray: {e}"))?;
-    let mut output = child.stdout.take();
-    let mut error = child.stderr.take();
-    // Ошибки Xray (в т.ч. кривой конфиг) падают и в stdout, и в stderr — читаем оба
-    // в один буфер фоново, чтобы вне ветки смерти процесса не блокировать опрос готовности.
-    let output_task = tokio::spawn(async move {
-        let mut buf = Vec::new();
-        if let Some(s) = output.as_mut() {
-            _ = s.read_to_end(&mut buf).await;
-        }
-        if let Some(s) = error.as_mut() {
-            _ = s.read_to_end(&mut buf).await;
-        }
-        buf
-    });
-    let result = ping_via_child(&mut child, socket_name, startup_deadline, params, output_task).await;
+    let (ready_sender, ready_receiver) = oneshot::channel();
+    let output_task = tokio::spawn(collect_output(child.stdout.take(), child.stderr.take(), ready_sender));
+    let result = ping_via_child(&mut child, socket_name, startup_deadline, params, ready_receiver, output_task).await;
 
     // Гарантированно убиваем и забираем zombie, даже если выше случился таймаут/ошибка.
     _ = child.kill().await;
@@ -296,48 +280,68 @@ async fn run_ping(config_socket: &str, socket_name: &str, startup_deadline: Inst
     result
 }
 
+/// Читает вывод xray фоново: в буфер для текста ошибки и до строки `... started` — сигнал
+/// готовности (`core: Xray … started` пишется на уровне warning уже после старта всех inbound).
+async fn collect_output(stdout: Option<ChildStdout>, stderr: Option<ChildStderr>, ready: oneshot::Sender<()>) -> Vec<u8> {
+    let read_stdout = async {
+        let mut buffer = Vec::new();
+        let Some(stdout) = stdout else {
+            return buffer;
+        };
+        let mut ready = Some(ready);
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            buffer.extend_from_slice(line.as_bytes());
+            buffer.push(b'\n');
+            if line.trim_end().ends_with("started") {
+                _ = ready.take().map(|sender| sender.send(()));
+            }
+        }
+        buffer
+    };
+    let read_stderr = async {
+        let mut buffer = Vec::new();
+        if let Some(mut stderr) = stderr {
+            _ = stderr.read_to_end(&mut buffer).await;
+        }
+        buffer
+    };
+    let (mut buffer, error_buffer) = tokio::join!(read_stdout, read_stderr);
+    buffer.extend(error_buffer);
+    buffer
+}
+
 async fn ping_via_child(
     child: &mut Child, socket_name: &str, startup_deadline: Instant, params: PingParams<'_>,
-    output_task: tokio::task::JoinHandle<Vec<u8>>,
+    ready: oneshot::Receiver<()>, output_task: tokio::task::JoinHandle<Vec<u8>>,
 ) -> PingResult {
-    let mut stream = None;
-    let mut failure = None;
-    while Instant::now() < startup_deadline {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let buffer = match tokio::time::timeout(Duration::from_millis(500), output_task).await {
-                    Ok(Ok(buffer)) => buffer,
-                    _ => Vec::new(),
-                };
-                let output = String::from_utf8_lossy(&buffer);
-                failure = Some(
-                    output
-                        .lines()
-                        .rev()
-                        .find(|line| !line.trim().is_empty())
-                        .map_or_else(|| format!("xray завершился ({status})"), |line| line.chars().take(500).collect()),
-                );
-                break;
-            }
-            Ok(None) => {}
-            Err(error) => {
-                failure = Some(error.to_string());
-                break;
-            }
+    let exit = tokio::select! {
+        Ok(()) = ready => None,
+        status = child.wait() => Some(status),
+        _ = tokio::time::sleep_until(startup_deadline.into()) => {
+            return Err(format!("xray не запустился за {} с", STARTUP_TIMEOUT.as_secs()));
         }
-        match UnixStream::connect(format!("\0{socket_name}")).await {
-            Ok(connected) => {
-                stream = Some(connected);
-                break;
-            }
-            Err(_) => tokio::time::sleep(READINESS_POLL).await,
-        }
-    }
-
-    let Some(stream) = stream else {
-        return Err(failure.unwrap_or_else(|| format!("xray не запустился за {} с", STARTUP_TIMEOUT.as_secs())));
     };
 
+    if let Some(status) = exit {
+        let buffer = match tokio::time::timeout(Duration::from_millis(500), output_task).await {
+            Ok(Ok(buffer)) => buffer,
+            _ => Vec::new(),
+        };
+        let output = String::from_utf8_lossy(&buffer);
+        return Err(match status {
+            Ok(status) => output
+                .lines()
+                .rev()
+                .find(|line| !line.trim().is_empty())
+                .map_or_else(|| format!("xray завершился ({status})"), |line| line.chars().take(500).collect()),
+            Err(error) => error.to_string(),
+        });
+    }
+
+    let stream = UnixStream::connect(format!("\0{socket_name}"))
+        .await
+        .map_err(|e| format!("Не удалось подключиться к прокси xray: {e}"))?;
     execute_request(stream, socket_name, params).await
 }
 
