@@ -534,10 +534,10 @@ export const DnsPanel = memo(function DnsPanel() {
                   items={{ 'redir-host': 'redir-host', 'fake-ip': 'fake-ip' }}
                   onValueChange={(v) => updateConfig({ enhancedMode: v })}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger popper className="w-full">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper">
                     <SelectGroup>
                       <SelectItem value="redir-host">redir-host</SelectItem>
                       <SelectItem value="fake-ip">fake-ip</SelectItem>
@@ -563,10 +563,10 @@ export const DnsPanel = memo(function DnsPanel() {
                       items={{ blacklist: 'blacklist', whitelist: 'whitelist', rule: 'rule' }}
                       onValueChange={(v) => updateConfig({ fakeIpFilterMode: v })}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger popper className="w-full">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent position="popper">
                         <SelectGroup>
                           <SelectItem value="blacklist">blacklist</SelectItem>
                           <SelectItem value="whitelist">whitelist</SelectItem>
