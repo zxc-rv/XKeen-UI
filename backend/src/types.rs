@@ -211,7 +211,7 @@ pub struct ClashApiSettings {
 impl Default for ClashApiSettings {
     fn default() -> Self {
         Self {
-            ping_url: "http://www.gstatic.com/generate_204".into(),
+            ping_url: "http://cp.cloudflare.com/generate_204".into(),
             ping_timeout: 5000,
             show_source_name: false,
             hide_unavailable_proxies: false,

@@ -1,4 +1,4 @@
-export const DEFAULT_PING_TEST_URL = 'http://www.gstatic.com/generate_204'
+export const DEFAULT_PING_TEST_URL = 'http://cp.cloudflare.com/generate_204'
 export const DEFAULT_PING_TEST_TIMEOUT = 5000
 export const DEFAULT_XRAY_REPO = 'https://github.com/XTLS/Xray-core'
 export const DEFAULT_MIHOMO_REPO = 'https://github.com/MetaCubeX/mihomo'
