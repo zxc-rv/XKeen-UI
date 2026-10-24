@@ -708,6 +708,7 @@ const SelectorRow = memo(function SelectorRow({
   const isSmart = isSmartType(selector.type)
   const selectedDelay = selectedProxy ? getLastDelay(selectedProxy) : null
   const showSelectedDelay = !!selectedProxy && selectedDelay !== null && selectedDelay > 0
+  const selectedDigits = showSelectedDelay && selectedDelay ? String(selectedDelay).length : 0
 
   const hideUnavailable = useSettings((s) => s.hideUnavailableProxies)
   const hideCounter = useSettings((s) => s.hideUnavailableProxiesCounter)
@@ -805,11 +806,12 @@ const SelectorRow = memo(function SelectorRow({
                 render={
                   <Button
                     variant="outline"
-                    size={showSelectedDelay ? 'sm' : 'icon-sm'}
+                    size={selectedDigits === 0 ? 'icon-sm' : 'sm'}
                     className={cn(
-                      showSelectedDelay && 'px-2 text-xs font-medium tabular-nums',
-                      showSelectedDelay && delayColor(selectedDelay)
+                      selectedDigits > 0 && 'min-w-8 justify-center px-0 text-xs font-medium tabular-nums',
+                      selectedDigits > 0 && delayColor(selectedDelay)
                     )}
+                    style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 1rem)` } : undefined}
                     onClick={() => onTestAll(selectorName)}
                     disabled={isTesting}
                   >
