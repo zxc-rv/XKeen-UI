@@ -17,6 +17,8 @@ import { ProviderEditor } from '../editor/ProviderEditor'
 
 type Outbound = Record<string, any>
 
+const XRAY_START_ERROR = 'Не удалось запустить Xray, проверьте журнал'
+
 type GenerateConfigForCore = (uri: string, core: string, existingConfig: string) => { type: string; content: string }
 
 const OUTBOUND_LINK_PREFIXES = ['ss://', 'vless://', 'vmess://', 'hysteria2://', 'hy2://', 'trojan://']
@@ -265,11 +267,13 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
           { outbound },
           { timeoutMs: 30000 }
         )
-        const delay = r.success ? (r.latency_ms ?? 0) : 0
-        const error = r.success ? undefined : r.error
+        if (!r.success) {
+          showToast(r.error ?? XRAY_START_ERROR, 'error')
+          return
+        }
         setHistory((prev) => ({
           ...prev,
-          [tag]: [...(prev[tag] ?? []), { time: new Date().toISOString(), delay, error }].slice(-10),
+          [tag]: [...(prev[tag] ?? []), { time: new Date().toISOString(), delay: r.latency_ms ?? 0, error: r.error }].slice(-10),
         }))
       } catch (e: any) {
         showToast(`Пинг «${tag}»: ${e?.message ?? 'ошибка запроса'}`, 'error')
@@ -301,7 +305,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
         results?: { tag: string; success: boolean; latency_ms?: number; error?: string }[]
       }>('POST', 'healthcheck/all', { outbounds: targets }, { timeoutMs: 45000 })
       if (!r.success) {
-        showToast(`Тест всех: ${r.error ?? 'ошибка запроса'}`, 'error')
+        showToast(r.error ?? XRAY_START_ERROR, 'error')
         return
       }
       const time = new Date().toISOString()
