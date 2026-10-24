@@ -5,10 +5,10 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import { IconBoltFilled, IconCode, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
+import { IconBolt, IconCode, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
-import { useAppActions } from '../../../lib/store'
+import { appendPingEntries, clearPingHistory, useAppActions, usePingHistoryStore, type PingEntry } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
 import { cn, copyText } from '../../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
@@ -22,12 +22,6 @@ const XRAY_START_ERROR = 'Не удалось запустить Xray, пров�
 type GenerateConfigForCore = (uri: string, core: string, existingConfig: string) => { type: string; content: string }
 
 const OUTBOUND_LINK_PREFIXES = ['ss://', 'vless://', 'vmess://', 'hysteria2://', 'hy2://', 'trojan://']
-
-interface PingEntry {
-  time: string
-  delay: number
-  error?: string
-}
 
 interface OutboundMeta {
   protocol: string
@@ -150,8 +144,7 @@ interface Props {
 export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
   const { showToast } = useAppActions()
   const [outbounds, setOutbounds] = useState<Outbound[]>(() => parseOutbounds(configs[activeConfigIndex]?.content ?? ''))
-  // История замеров тегов (последние 10 на тег) — с бэкенда, дополняется замерами в этой сессии.
-  const [history, setHistory] = useState<Record<string, PingEntry[]>>({})
+  const history = usePingHistoryStore((state) => state.history)
   const [testing, setTesting] = useState<Record<string, boolean>>({})
   const [link, setLink] = useState('')
   const [isPingingAll, setIsPingingAll] = useState(false)
@@ -189,12 +182,6 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
     setOutbounds(list)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConfigIndex, configs])
-
-  useEffect(() => {
-    apiCall<{ success?: boolean; history?: Record<string, PingEntry[]> }>('GET', 'healthcheck')
-      .then((r) => r.history && setHistory(r.history))
-      .catch(() => {})
-  }, [])
 
   /** Записывает список аутбаундов обратно в активный конфиг в редакторе. */
   const syncToEditor = useCallback(
@@ -271,10 +258,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
           showToast(r.error ?? XRAY_START_ERROR, 'error')
           return
         }
-        setHistory((prev) => ({
-          ...prev,
-          [tag]: [...(prev[tag] ?? []), { time: new Date().toISOString(), delay: r.latency_ms ?? 0, error: r.error }].slice(-10),
-        }))
+        appendPingEntries([{ tag, delay: r.latency_ms ?? 0, error: r.error }])
       } catch (e: any) {
         showToast(`Пинг «${tag}»: ${e?.message ?? 'ошибка запроса'}`, 'error')
       } finally {
@@ -308,16 +292,13 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
         showToast(r.error ?? XRAY_START_ERROR, 'error')
         return
       }
-      const time = new Date().toISOString()
-      setHistory((prev) => {
-        const next = { ...prev }
-        for (const result of r.results ?? []) {
-          const delay = result.success ? (result.latency_ms ?? 0) : 0
-          const error = result.success ? undefined : result.error
-          next[result.tag] = [...(next[result.tag] ?? []), { time, delay, error }].slice(-10)
-        }
-        return next
-      })
+      appendPingEntries(
+        (r.results ?? []).map(({ tag, success, latency_ms, error }) => ({
+          tag,
+          delay: success ? (latency_ms ?? 0) : 0,
+          error: success ? undefined : error,
+        }))
+      )
     } catch (e: any) {
       showToast(`Тест всех: ${e?.message ?? 'ошибка запроса'}`, 'error')
     } finally {
@@ -387,7 +368,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
       outboundsRef.current = list
       setOutbounds(list)
       syncToEditor(list)
-      if (tag) setHistory((prev) => ({ ...prev, [tag]: [] }))
+      if (tag) clearPingHistory(tag)
       showToast(tag ? `Outbound «${tag}» удалён` : 'Outbound удалён')
     },
     [syncToEditor, showToast]
@@ -401,7 +382,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
   return (
     <TooltipProvider delayDuration={500}>
       <div className="absolute inset-4 -mb-2 flex flex-col">
-        <div ref={scrollRef} className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-2 overflow-y-auto pb-0.5">
+        <div ref={scrollRef} className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-2 overflow-y-auto pb-2">
           {outbounds.length === 0 ? (
             <div className="text-muted-foreground mt-6 flex flex-col items-center gap-1 text-sm">
               <span>Аутбаунды не найдены</span>
@@ -460,7 +441,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
             <IconPlus /> Добавить
           </Button>
           <Button variant="outline" disabled={isPingingAll || outbounds.length === 0} onClick={handlePingAll}>
-            {isPingingAll ? <Spinner className="size-4" /> : <IconBoltFilled />} Тест всех
+            {isPingingAll ? <Spinner className="size-4" /> : <IconBolt />} Тест всех
           </Button>
         </div>
       </div>
@@ -547,6 +528,7 @@ const OutboundCard = memo(function OutboundCard({
   const tag: string = typeof outbound?.tag === 'string' ? outbound.tag : ''
   const meta = useMemo(() => extractMeta(outbound), [outbound])
   const last = entries.length > 0 ? entries[entries.length - 1] : null
+  const digits = last?.delay ? String(last.delay).length : 0
   const [confirmOpen, setConfirmOpen] = useState(false)
   const { showToast } = useAppActions()
 
@@ -566,7 +548,7 @@ const OutboundCard = memo(function OutboundCard({
       )}
     >
       {/* Header */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <div
           className={cn(
             'text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none rounded p-1 transition-colors',
@@ -575,9 +557,9 @@ const OutboundCard = memo(function OutboundCard({
           onMouseDown={(e) => onDragStart(e, index)}
           onTouchStart={(e) => onDragStart(e, index)}
         >
-          <IconGripVertical size={19} />
+          <IconGripVertical size={16} />
         </div>
-        <Badge variant="outline" className="h-6 w-6 rounded-md border-blue-500/20 bg-blue-500/10 p-3.5 px-4 text-blue-400">
+        <Badge variant="outline" className="mr-1 size-7 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
           #{index + 1}
         </Badge>
         <span className={cn('truncate text-sm', !tag && 'text-muted-foreground italic')}>{tag || 'без тега'}</span>
@@ -597,82 +579,87 @@ const OutboundCard = memo(function OutboundCard({
             <TooltipContent side="top">Скопировать адрес</TooltipContent>
           </Tooltip>
         )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                onClick={() => onEdit(index)}
-                aria-label="Редактировать JSON"
-                className="text-muted-foreground/60 hover:text-muted-foreground rounded-md transition-colors"
-              >
-                <IconCode size={18} />
-              </button>
-            }
-          />
-          <TooltipContent>Редактировать JSON</TooltipContent>
-        </Tooltip>
-        <Popover open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <Tooltip>
             <TooltipTrigger
               render={
-                <PopoverTrigger
-                  aria-label="Удалить outbound"
-                  disabled={isDragging}
-                  className="text-muted-foreground/60 rounded-md transition-colors hover:text-red-400"
-                >
-                  <IconTrash size={16} />
-                </PopoverTrigger>
+                <Button variant="outline" size="icon-sm" onClick={() => onEdit(index)} aria-label="Редактировать JSON">
+                  <IconCode />
+                </Button>
               }
             />
-            <TooltipContent>Удалить подключение</TooltipContent>
+            <TooltipContent>Редактировать JSON</TooltipContent>
           </Tooltip>
-          <PopoverContent align="start" sideOffset={6} className="max-w-72">
-            <PopoverHeader>
-              <PopoverTitle>Удалить подключение «{tag || `#${index + 1}`}» из конфига?</PopoverTitle>
-            </PopoverHeader>
-            <div className="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setConfirmOpen(false)}>
-                Нет
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => {
-                  setConfirmOpen(false)
-                  onRemove(index)
-                }}
-              >
-                Да
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <Popover open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Удалить outbound"
+                        disabled={isDragging}
+                        className="hover:text-red-400"
+                      />
+                    }
+                  >
+                    <IconTrash size={16} />
+                  </PopoverTrigger>
+                }
+              />
+              <TooltipContent>Удалить подключение</TooltipContent>
+            </Tooltip>
+            <PopoverContent align="end" sideOffset={6} className="max-w-72">
+              <PopoverHeader>
+                <PopoverTitle>Удалить подключение «{tag || `#${index + 1}`}» из конфига?</PopoverTitle>
+              </PopoverHeader>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => setConfirmOpen(false)}>
+                  Нет
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    setConfirmOpen(false)
+                    onRemove(index)
+                  }}
+                >
+                  Да
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           {meta.protocol !== 'blackhole' && meta.protocol !== 'dns' && (
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <button
+                  <Button
+                    variant="outline"
+                    size={digits === 0 ? 'icon-sm' : 'sm'}
                     onClick={() => !isTesting && tag && onPing(tag, outbound)}
                     disabled={isTesting || !tag}
                     aria-label="Проверить подключение"
                     className={cn(
-                      'text-muted-foreground cursor-pointer rounded-md p-1 transition-colors disabled:cursor-not-allowed',
+                      'disabled:pointer-events-auto disabled:cursor-not-allowed',
+                      digits > 0 && 'min-w-8 justify-center px-0 text-xs tabular-nums',
+                      isTesting && 'disabled:opacity-100',
                       !tag && 'opacity-40'
                     )}
+                    style={digits > 0 ? { width: `calc(${digits}ch + 1.25rem)` } : undefined}
                   >
                     {isTesting ? (
                       <Spinner className="size-4" />
                     ) : entries.length === 0 ? (
-                      <IconBoltFilled size={15} />
+                      <IconBolt />
                     ) : !last!.delay ? (
                       <GraveIcon size={15} className="text-red-400!" />
                     ) : (
-                      <span className={cn('text-xs font-medium tracking-wide tabular-nums', delayColor(last!.delay))}>
-                        {last!.delay} мс
-                      </span>
+                      <span className={cn('text-xs font-medium tracking-wide tabular-nums', delayColor(last!.delay))}>{last!.delay}</span>
                     )}
-                  </button>
+                  </Button>
                 }
               />
               {entries.length > 0 ? (
@@ -692,7 +679,7 @@ const OutboundCard = memo(function OutboundCard({
                   </div>
                 </TooltipContent>
               ) : (
-                <TooltipContent>Замерить отклик</TooltipContent>
+                <TooltipContent>Протестировать подключение</TooltipContent>
               )}
             </Tooltip>
           )}
@@ -736,7 +723,7 @@ const OutboundCard = memo(function OutboundCard({
 
 function MetaChip({ className, onClick, children }: { className?: string; onClick?: () => void; children: React.ReactNode }) {
   return (
-    <span onClick={onClick} className={cn('rounded-sm border-none px-2 py-0.5 text-xs font-medium tracking-wide', className)}>
+    <span onClick={onClick} className={cn('rounded-sm border-none px-2 py-0.75 text-xs font-medium tracking-wide', className)}>
       {children}
     </span>
   )

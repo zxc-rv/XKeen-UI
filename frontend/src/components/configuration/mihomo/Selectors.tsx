@@ -8,7 +8,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import {
-  IconBoltFilled,
+  IconBolt,
   IconChevronDown,
   IconChevronUp,
   IconCircleArrowRightFilled,
@@ -410,7 +410,7 @@ const ProxyCard = memo(function ProxyCard({
                   ) : hasHistory ? (
                     delay || <GraveIcon size={14} />
                   ) : (
-                    <IconBoltFilled size={13} className="text-foreground" />
+                    <IconBolt size={13} className="text-foreground" />
                   )}
                 </span>
               }
@@ -563,7 +563,7 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
                   if (!isTestingSingle) void onTestSingle(proxyName)
                 }}
               >
-                {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBoltFilled className="size-3.5" />}
+                {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBolt className="size-3.5" />}
               </button>
             }
           />
@@ -818,7 +818,7 @@ const SelectorRow = memo(function SelectorRow({
                     ) : showSelectedDelay ? (
                       selectedDelay
                     ) : (
-                      <IconBoltFilled size={13} />
+                      <IconBolt size={13} />
                     )}
                   </Button>
                 }

@@ -314,6 +314,7 @@ export function useSettings<T>(selector: (settings: AppSettings) => T): T {
 // ─── Connections hook — WS sync ────────────────────────────────────────────────
 
 export const useToasts = () => useStore((s) => s.toasts)
+export const useCurrentCore = () => useStore((s) => s.currentCore)
 export const useWsConnected = () => useStore((s) => s.wsConnected)
 export const getConnections = (): Connection[] => useStore.getState().connections
 
@@ -613,6 +614,42 @@ export async function fetchDnsStatus(): Promise<void> {
 
 export function bumpDnsRefresh(): void {
   useDnsStatusStore.setState((s) => ({ token: s.token + 1 }))
+}
+
+// ─── История замеров аутбаундов (GuiOutbounds) ───────────────────────────────
+
+export interface PingEntry {
+  time: string
+  delay: number
+  error?: string
+}
+
+const PING_HISTORY_KEEP = 10
+
+export const usePingHistoryStore = create<{ history: Record<string, PingEntry[]> }>(() => ({ history: {} }))
+
+export async function fetchPingHistory(): Promise<void> {
+  try {
+    const data = await apiCall<{ history?: Record<string, PingEntry[]> }>('GET', 'healthcheck')
+    if (data.history) usePingHistoryStore.setState({ history: data.history })
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearPingHistory(tag: string): void {
+  usePingHistoryStore.setState(({ history }) => ({ history: { ...history, [tag]: [] } }))
+}
+
+export function appendPingEntries(results: { tag: string; delay: number; error?: string }[]): void {
+  const time = new Date().toISOString()
+  usePingHistoryStore.setState(({ history }) => {
+    const next = { ...history }
+    for (const { tag, delay, error } of results) {
+      next[tag] = [...(next[tag] ?? []), { time, delay, error }].slice(-PING_HISTORY_KEEP)
+    }
+    return { history: next }
+  })
 }
 
 // ─── Global tick for timeAgo refresh (every 1s) ────────────────────────────────

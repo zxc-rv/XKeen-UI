@@ -24,9 +24,11 @@ import { listMihomoTakenNames, replaceMihomoProvider, replaceMihomoProxy } from 
 import {
   fetchClashProxies,
   fetchClashRuleProviders,
+  fetchPingHistory,
   getAppState,
   syncClashApiPort,
   useAppActions,
+  useCurrentCore,
   useModalContext,
   useSettings,
 } from './lib/store'
@@ -112,6 +114,8 @@ const ModalManager = memo(function ModalManager({
 function AppContent({ onLogout }: { onLogout: () => void }) {
   const { dispatch, showToast } = useAppActions()
   const multiRouter = useSettings((s) => s.multiRouter)
+  const guiOutbounds = useSettings((s) => s.guiOutbounds)
+  const activeCore = useCurrentCore()
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
     switchTab: () => {},
@@ -279,6 +283,10 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
 
     init()
   }, [checkStatus, loadConfigs, dispatch, showToast, checkVersion])
+
+  useEffect(() => {
+    if (activeCore === 'xray' && guiOutbounds) fetchPingHistory()
+  }, [activeCore, guiOutbounds])
 
   const onlineTargetsKey = useRoutersStore((s) => [LOCAL_ROUTER_ID, ...s.routers.map(routerId)].join('|'))
   useEffect(() => {

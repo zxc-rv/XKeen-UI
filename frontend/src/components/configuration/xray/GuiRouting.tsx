@@ -1,7 +1,8 @@
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconCheck, IconGripVertical, IconPencil, IconPlus, IconX } from '@tabler/icons-react'
+import { IconCheck, IconGripVertical, IconPencil, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { forwardRef, memo, useCallback, useEffect, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
@@ -418,14 +419,13 @@ const RuleCard = memo(
     return (
       <div
         ref={ref}
-        style={{ background: 'var(--color-input-background)' }}
         className={cn(
-          'flex flex-col gap-2 rounded-xl border p-3 transition-all duration-150 select-none',
+          'bg-input-background flex flex-col gap-2 rounded-xl border p-3 transition-all duration-150 select-none',
           isDragging ? 'scale-[0.99] border-[#60a5fa] opacity-80' : 'border-border'
         )}
       >
         {/* Header */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <div
             className={cn(
               'text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none rounded p-1 transition-colors',
@@ -434,9 +434,9 @@ const RuleCard = memo(
             onMouseDown={(e) => onDragStart(e, index)}
             onTouchStart={(e) => onDragStart(e, index)}
           >
-            <IconGripVertical size={19} />
+            <IconGripVertical size={16} />
           </div>
-          <Badge variant="outline" className="h-6 w-6 rounded-md border-blue-500/20 bg-blue-500/10 p-3.5 px-4 text-blue-400">
+          <Badge variant="outline" className="mr-1 size-7 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
             #{index + 1}
           </Badge>
           {editingName ? (
@@ -461,7 +461,7 @@ const RuleCard = memo(
               </button>
             </div>
           ) : (
-            <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               {rule.ruleTag && <span className="truncate text-sm">{rule.ruleTag}</span>}
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
@@ -493,6 +493,7 @@ const RuleCard = memo(
               <SelectTrigger
                 popper
                 hideIcon
+                size="sm"
                 aria-label="Добавить условие"
                 className="text-muted-foreground hover:text-foreground border-border ml-auto h-8 shrink-0 gap-1.5 rounded-md border border-dashed bg-transparent px-2 text-xs transition-colors focus:ring-0 sm:pl-1.5"
               >
@@ -510,12 +511,14 @@ const RuleCard = memo(
               </SelectContent>
             </Select>
           )}
-          <button
+          <Button
             onClick={() => onDelete(index)}
-            className="text-ring hover:text-destructive hover:bg-destructive/20 shrink-0 rounded-md p-1 transition-colors"
+            variant="outline"
+            size="icon-sm"
+            className="hover:text-destructive hover:bg-destructive/20 shrink-0 rounded-md p-1 transition-colors"
           >
-            <IconX size={23} className="cursor-pointer" />
-          </button>
+            <IconTrash size={16} className="cursor-pointer" />
+          </Button>
         </div>
 
         {/* Condition fields */}
