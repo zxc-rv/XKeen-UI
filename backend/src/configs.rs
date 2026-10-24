@@ -1,5 +1,5 @@
 use crate::logger::log;
-use crate::outbounds::serve_config;
+use crate::healthchecker::serve_config;
 use crate::types::*;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;

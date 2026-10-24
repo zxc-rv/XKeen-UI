@@ -97,7 +97,7 @@ async fn record_ping_history(tag: &str, delay: u64, error: Option<String>) {
     }
 }
 
-pub async fn get_healthcheck_history() -> impl IntoResponse {
+pub async fn get_healthcheck() -> impl IntoResponse {
     let history = PING_HISTORY.lock().await;
     Json(serde_json::json!({ "success": true, "history": &*history }))
 }

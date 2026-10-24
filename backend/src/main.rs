@@ -7,7 +7,7 @@ mod dns;
 mod frontend_embedder;
 mod geo;
 mod logger;
-mod outbounds;
+mod healthchecker;
 mod provider_inspector;
 mod route_test;
 mod settings;
@@ -503,9 +503,9 @@ async fn main() {
         )
         .route(
             "/api/healthcheck",
-            get(outbounds::get_healthcheck_history).post(outbounds::post_healthcheck),
+            get(healthchecker::get_healthcheck).post(healthchecker::post_healthcheck),
         )
-        .route("/api/healthcheck/all", post(outbounds::post_healthcheck_all))
+        .route("/api/healthcheck/all", post(healthchecker::post_healthcheck_all))
         .route("/api/device-list", get(api_relay::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/geo", get(geo::get_geo))
