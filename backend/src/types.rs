@@ -132,6 +132,7 @@ pub struct CoreInfo {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct GuiSettings {
     pub routing: bool,
     pub outbounds: bool,
@@ -139,16 +140,6 @@ pub struct GuiSettings {
     pub auto_apply: bool,
 }
 
-impl Default for GuiSettings {
-    fn default() -> Self {
-        Self {
-            routing: false,
-            outbounds: false,
-            log: false,
-            auto_apply: false,
-        }
-    }
-}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]

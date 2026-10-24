@@ -48,21 +48,19 @@ pub fn find_init_file(log_enabled: bool) -> Option<String> {
             .map(String::from)
     });
 
-    if log_enabled {
-        if let Some(p) = &final_path {
+    if log_enabled
+        && let Some(p) = &final_path {
             println!("{} [INFO] Defined initd_file ({}): {}", crate::logger::ts(), source, p);
         }
-    }
 
     final_path
 }
 
 async fn resolve_init_file(state: &AppState) -> Result<String, String> {
-    if let Some(path) = state.init_file.read().unwrap().clone() {
-        if Path::new(&path).exists() {
+    if let Some(path) = state.init_file.read().unwrap().clone()
+        && Path::new(&path).exists() {
             return Ok(path);
         }
-    }
     let new_path = tokio::task::spawn_blocking(|| find_init_file(false))
         .await
         .map_err(|e| e.to_string())?
@@ -228,7 +226,7 @@ async fn check_core_config(core: &str) -> Result<(), String> {
         let has_json = std::fs::read_dir(XRAY_CONF_DIR)
             .map(|dir| {
                 dir.flatten()
-                    .any(|e| e.path().extension().map_or(false, |x| x == "json"))
+                    .any(|e| e.path().extension().is_some_and(|x| x == "json"))
             })
             .unwrap_or(false);
         if !has_json {
@@ -317,7 +315,7 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                     success: false,
                     error: Some(format!(
                         "Не удалось запустить {}{}",
-                        &req.core[..1].to_uppercase(),
+                        req.core[..1].to_uppercase(),
                         &req.core[1..]
                     )),
                     data: None,
@@ -337,15 +335,14 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                     data: None,
                 });
             }
-            if is_mihomo {
-                if let Err(e) = wait_mihomo_ready(log_offset).await {
+            if is_mihomo
+                && let Err(e) = wait_mihomo_ready(log_offset).await {
                     return Json(ApiResponse {
                         success: false,
                         error: Some(e),
                         data: None,
                     });
                 }
-            }
         }
         "softRestart" => {
             if let Err(e) = soft_restart("xray").await {
@@ -364,20 +361,19 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
             };
 
             let cur_name = state.core.read().unwrap().name.clone();
-            if a == "start" || a == "hardRestart" {
-                if let Err(e) = check_core_config(&cur_name).await {
+            if (a == "start" || a == "hardRestart")
+                && let Err(e) = check_core_config(&cur_name).await {
                     log("ERROR", e);
                     return Json(ApiResponse {
                         success: false,
                         error: Some(format!(
                             "Не удалось запустить {}{}",
-                            &cur_name[..1].to_uppercase(),
+                            cur_name[..1].to_uppercase(),
                             &cur_name[1..]
                         )),
                         data: None,
                     });
                 }
-            }
             if cur_name == "mihomo" && (a == "start" || a == "hardRestart") {
                 _ = fs::write(error_log_path(), b"").await;
             }
@@ -400,15 +396,14 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 });
             }
 
-            if mihomo_boot {
-                if let Err(e) = wait_mihomo_ready(boot_log_offset).await {
+            if mihomo_boot
+                && let Err(e) = wait_mihomo_ready(boot_log_offset).await {
                     return Json(ApiResponse {
                         success: false,
                         error: Some(e),
                         data: None,
                     });
                 }
-            }
         }
         _ => {
             return Json(ApiResponse {

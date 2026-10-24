@@ -309,14 +309,13 @@ async fn build_http_response(upstream: reqwest::Response) -> Response {
 pub(crate) async fn resolve_clash_target(
     port_override: Option<String>, secret_override: Option<String>, unix_override: Option<String>,
 ) -> Result<ClashTarget, String> {
-    if let Some(u) = unix_override {
-        if let Some(path) = sanitize_unix_name(&u) {
+    if let Some(u) = unix_override
+        && let Some(path) = sanitize_unix_name(&u) {
             if tokio::fs::metadata(&path).await.is_ok() {
                 return Ok(ClashTarget::Unix { path });
             }
             return Err("Unix сокет не найден на диске".into());
         }
-    }
 
     if let Some(port) = port_override {
         return Ok(ClashTarget::Tcp {

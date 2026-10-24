@@ -83,11 +83,10 @@ fn get_br0_ip() -> Result<String, String> {
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
         let line = line.trim();
-        if let Some(rest) = line.strip_prefix("inet ") {
-            if let Some(ip) = rest.split('/').next() {
+        if let Some(rest) = line.strip_prefix("inet ")
+            && let Some(ip) = rest.split('/').next() {
                 return Ok(ip.to_string());
             }
-        }
     }
     Err("Не удалось получить IP адрес br0".into())
 }

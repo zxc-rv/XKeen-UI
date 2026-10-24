@@ -53,8 +53,8 @@ pub fn process_log_line(line: String, tz: i32) -> String {
         }
     } else {
         let bytes = out.as_bytes();
-        if bytes.len() > 19 && bytes[4] == b'/' && out.is_char_boundary(19) {
-            if let Ok(t) = NaiveDateTime::parse_from_str(&out[..19], "%Y/%m/%d %H:%M:%S") {
+        if bytes.len() > 19 && bytes[4] == b'/' && out.is_char_boundary(19)
+            && let Ok(t) = NaiveDateTime::parse_from_str(&out[..19], "%Y/%m/%d %H:%M:%S") {
                 let rest = &out[19..];
                 let rest_bytes = rest.as_bytes();
                 let trim_micros = rest_bytes.len() >= 10
@@ -67,7 +67,6 @@ pub fn process_log_line(line: String, tz: i32) -> String {
                     format!("{}{}", formatted_ts, rest)
                 };
             }
-        }
     }
 
     out = ANSI_RE

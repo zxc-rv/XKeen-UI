@@ -21,15 +21,12 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
 
     json_merge(&mut file_json, patch);
 
-    if let serde_json::Value::Object(ref mut map) = file_json {
-        if let Some(legacy) = map.remove("timezoneOffset") {
-            if !patch_sets_tz {
-                if let Some(log) = map.entry("log").or_insert(serde_json::json!({})).as_object_mut() {
+    if let serde_json::Value::Object(ref mut map) = file_json
+        && let Some(legacy) = map.remove("timezoneOffset")
+            && !patch_sets_tz
+                && let Some(log) = map.entry("log").or_insert(serde_json::json!({})).as_object_mut() {
                     log.insert("timezone".into(), legacy);
                 }
-            }
-        }
-    }
 
     let mut settings: AppSettings = match serde_json::from_value(file_json.clone()) {
         Ok(s) => s,

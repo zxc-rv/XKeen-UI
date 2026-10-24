@@ -40,7 +40,7 @@ fn get_client_ip(headers: &HeaderMap, addr: SocketAddr) -> String {
         .unwrap_or_else(|| addr.ip().to_string())
 }
 
-fn get_session_cookie<'a>(headers: &'a HeaderMap) -> Option<&'a str> {
+fn get_session_cookie(headers: &HeaderMap) -> Option<&str> {
     headers
         .get("cookie")?
         .to_str()
@@ -55,11 +55,10 @@ fn is_session_valid(session_ids: &[String], cookie: &str) -> bool {
         if id == cookie {
             return true;
         }
-        if let Some((uid, exp_str)) = id.split_once(':') {
-            if uid == cookie {
+        if let Some((uid, exp_str)) = id.split_once(':')
+            && uid == cookie {
                 return exp_str.parse::<u64>().unwrap_or(0) > ts;
             }
-        }
         false
     })
 }
@@ -98,7 +97,7 @@ fn clear_cookie_header() -> HeaderMap {
 pub async fn get_login_info(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
     let authenticated =
-        get_session_cookie(&headers).map_or(false, |cookie| is_session_valid(&s.auth.session_ids, cookie));
+        get_session_cookie(&headers).is_some_and(|cookie| is_session_valid(&s.auth.session_ids, cookie));
     Json(serde_json::json!({
         "enabled": s.auth.enabled,
         "has_password": s.auth.password_hash.is_some(),
@@ -287,7 +286,7 @@ pub async fn auth_middleware(state: AppState, request: Request, next: Next) -> R
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    let is_valid = get_session_cookie(request.headers()).map_or(false, |c| is_session_valid(&session_ids, c));
+    let is_valid = get_session_cookie(request.headers()).is_some_and(|c| is_session_valid(&session_ids, c));
     if !is_valid {
         return StatusCode::UNAUTHORIZED.into_response();
     }

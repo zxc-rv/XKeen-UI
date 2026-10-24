@@ -16,7 +16,10 @@ const RULE_PROVIDERS: &str = "rule-providers";
 const PROXY_PROVIDERS: &str = "proxy-providers";
 const MAX_PROVIDER_FILE_BYTES: usize = 10 * 1024 * 1024;
 
-static MIHOMO_YAML_CACHE: LazyLock<RwLock<Option<(SystemTime, Arc<Vec<Yaml>>)>>> = LazyLock::new(|| RwLock::new(None));
+/// Тип, скрываемый за `MIHOMO_YAML_CACHE`.
+type YamlCache = Option<(SystemTime, Arc<Vec<Yaml>>)>;
+
+static MIHOMO_YAML_CACHE: LazyLock<RwLock<YamlCache>> = LazyLock::new(|| RwLock::new(None));
 
 pub(crate) async fn load_mihomo_yaml() -> Result<Arc<Vec<Yaml>>, String> {
     let mtime = tokio::fs::metadata(MIHOMO_CONFIG_PATH)

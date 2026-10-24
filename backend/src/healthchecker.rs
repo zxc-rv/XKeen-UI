@@ -241,7 +241,7 @@ fn resolve_ping_params(state: &AppState, url: Option<&str>, timeout_ms: Option<u
         Err(error) => return Err(format!("Некорректный URL пинга: {error}")),
     };
     let timeout_ms = timeout_ms.unwrap_or(settings_timeout).clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
-    let label = if timeout_ms % 1000 == 0 {
+    let label = if timeout_ms.is_multiple_of(1000) {
         format!("{} с", timeout_ms / 1000)
     } else {
         format!("{timeout_ms} мс")

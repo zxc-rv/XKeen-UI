@@ -90,16 +90,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let debug = state.debug;
     let count = WS_COUNTER.fetch_add(1, Ordering::SeqCst);
     if debug {
-        println!(
-            "{} {}",
-            ts(),
-            format!("[INFO] WS-{} Connected (Total: {})", count, count + 1)
-        );
+        println!("{} [INFO] WS-{} Connected (Total: {})", ts(), count, count + 1);
     }
 
     {
         let mut guard = state.log_watcher.lock().await;
-        let need_spawn = guard.as_ref().map_or(true, |h| h.is_finished());
+        let need_spawn = guard.as_ref().is_none_or(|h| h.is_finished());
         if need_spawn {
             if debug {
                 println!("{} [INFO] 🚀 Starting log watcher...", ts());
@@ -108,13 +104,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             let handle = tokio::spawn(async move {
                 let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel::<String>(32);
                 let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
-                    if let Ok(e) = res {
-                        if e.kind.is_modify() {
+                    if let Ok(e) = res
+                        && e.kind.is_modify() {
                             for path in e.paths {
                                 let _ = mpsc_tx.try_send(path.to_string_lossy().to_string());
                             }
                         }
-                    }
                 })
                 .unwrap();
 
@@ -212,9 +207,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     if !l.is_empty() {
                         let content = l.join("\n");
                         if tx.send(Message::Text(serde_json::json!({"type": t, "content": content}).to_string().into())).await.is_err() { break; }
-                    } else if t == "clear" {
-                         if tx.send(Message::Text(serde_json::json!({"type": "clear"}).to_string().into())).await.is_err() { break; }
-                    }
+                    } else if t == "clear"
+                         && tx.send(Message::Text(serde_json::json!({"type": "clear"}).to_string().into())).await.is_err() { break; }
                 }
             }
         }
@@ -222,11 +216,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let count_after = WS_COUNTER.fetch_sub(1, Ordering::SeqCst);
     if debug {
-        println!(
-            "{} {}",
-            ts(),
-            format!("[INFO] WS Disconnected. Remaining: {}", count_after - 1)
-        );
+        println!("{} [INFO] WS Disconnected. Remaining: {}", ts(), count_after - 1);
     }
 
     if count_after == 1 {

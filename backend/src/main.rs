@@ -121,8 +121,8 @@ fn setup_process_logging() {
     install_panic_logger();
     install_crash_signal_handlers();
 
-    if !stdio_is_interactive() {
-        if let Err(e) = redirect_stderr_to_process_log() {
+    if !stdio_is_interactive()
+        && let Err(e) = redirect_stderr_to_process_log() {
             eprintln!(
                 "{} {}: {}",
                 " Не удалось перенаправить stderr в".red().bold(),
@@ -130,7 +130,6 @@ fn setup_process_logging() {
                 e
             );
         }
-    }
 }
 
 fn stdio_is_interactive() -> bool {
@@ -246,7 +245,7 @@ fn fatal_signal_message(sig: i32) -> &'static [u8] {
 async fn main() {
     if std::env::args().any(|arg| arg == "-v" || arg == "-V" || arg == "--version") {
         let xkeen_config_path = XKEEN_CONF;
-        let rci_token = std::fs::read_to_string(&xkeen_config_path)
+        let rci_token = std::fs::read_to_string(xkeen_config_path)
             .ok()
             .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
             .and_then(|json| json.get("xkeen")?.get("rci_token")?.as_str().map(String::from));
@@ -417,7 +416,7 @@ async fn main() {
     let log_tx_arc = Arc::new(log_tx);
 
     let xkeen_config_path = XKEEN_CONF;
-    let rci_token = std::fs::read_to_string(&xkeen_config_path)
+    let rci_token = std::fs::read_to_string(xkeen_config_path)
         .ok()
         .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
         .and_then(|json| json.get("xkeen")?.get("rci_token")?.as_str().map(String::from));

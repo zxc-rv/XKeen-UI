@@ -147,7 +147,7 @@ pub(crate) fn parse_domain_and_match(mut buf: &[u8], dom_low: &str) -> bool {
     }
     match domain_type {
         0 => dom_low.contains(value),
-        1 => Regex::new(value).map_or(false, |re: regex_lite::Regex| re.is_match(dom_low)),
+        1 => Regex::new(value).is_ok_and(|re: regex_lite::Regex| re.is_match(dom_low)),
         2 => {
             dom_low == value
                 || (dom_low.len() > value.len()
@@ -203,10 +203,10 @@ pub fn list_geo_files(cache_arc: Arc<RwLock<crate::types::GeoCache>>) -> Result<
 
     for entry in std::fs::read_dir(XRAY_ASSET_DIR).map_err(|e| e.to_string())?.flatten() {
         let path = entry.path();
-        if !entry.file_type().map_or(false, |ft| ft.is_file()) {
+        if !entry.file_type().is_ok_and(|ft| ft.is_file()) {
             continue;
         }
-        if path.extension().map_or(true, |ext| ext != "dat") {
+        if path.extension().is_none_or(|ext| ext != "dat") {
             continue;
         }
 

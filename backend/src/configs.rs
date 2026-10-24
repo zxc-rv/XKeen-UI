@@ -45,9 +45,9 @@ async fn collect_configs(paths: &[String], is_mihomo: bool) -> Vec<ConfigItem> {
                     while let Ok(Some(entry)) = entries.next_entry().await {
                         let entry_path = entry.path();
                         let matches = if is_mihomo {
-                            entry_path.extension().map_or(false, |e| e == "yaml" || e == "yml")
+                            entry_path.extension().is_some_and(|e| e == "yaml" || e == "yml")
                         } else {
-                            entry_path.extension().map_or(false, |e| e == "json")
+                            entry_path.extension().is_some_and(|e| e == "json")
                         };
                         if matches {
                             match tokio::fs::read_to_string(&entry_path).await {
@@ -118,14 +118,13 @@ pub async fn get_configs(
         while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            if path.extension().map_or(false, |e| e == "lst") || name == "xkeen.json" {
-                if let Ok(content) = tokio::fs::read_to_string(&path).await {
+            if (path.extension().is_some_and(|e| e == "lst") || name == "xkeen.json")
+                && let Ok(content) = tokio::fs::read_to_string(&path).await {
                     lst_configs.push(ConfigItem {
                         file: path.to_string_lossy().into(),
                         content,
                     });
                 }
-            }
         }
     }
 
@@ -208,7 +207,7 @@ pub async fn put_config(
                 let mut found_current = false;
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     let path = entry.path();
-                    if path.extension().map_or(false, |e| e == "json") {
+                    if path.extension().is_some_and(|e| e == "json") {
                         let path_str = path.to_string_lossy().into_owned();
                         let file_content = if path_str == req.file {
                             found_current = true;
@@ -309,6 +308,7 @@ const VALIDATION_TIMEOUT: Duration = Duration::from_secs(30);
 /// - Валидируется весь набор файлов: несколько `-c` мержатся в порядке аргументов
 ///   ровно как файлы из `-confdir` — тот читает директорию через `readConfDir`/
 ///   `os.ReadDir` (по алфавиту), поэтому и `-c` передаём в порядке имён файлов.
+///
 /// Отличие от локальных файлов: remote-JSON декодируется строгим парсером
 /// (`DecodeJSONConfigStrict`, infra/conf/serial) — конфиги с комментариями
 /// (JSON5/JSONC) будут отклонены. Это фундаментальное ограничение remote-лоадера,
@@ -494,24 +494,22 @@ fn parse_mihomo_api_creds(yaml_content: &str) -> MihomoApiCreds {
     let Some(doc) = docs.first() else { return creds };
     if let Some(unix_val) = yaml_value_to_string(&doc["external-controller-unix"]) {
         let trimmed = unix_val.trim();
-        if !trimmed.is_empty() {
-            if let Some(name) = Path::new(trimmed)
+        if !trimmed.is_empty()
+            && let Some(name) = Path::new(trimmed)
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .filter(|n| !n.is_empty())
             {
                 creds.unix_path = Some(format!("{}/{}", MIHOMO_CONF_DIR, name));
             }
-        }
     }
-    if let Some(controller) = yaml_value_to_string(&doc["external-controller"]) {
-        if let Some(port_str) = controller.trim().rsplit(':').next() {
+    if let Some(controller) = yaml_value_to_string(&doc["external-controller"])
+        && let Some(port_str) = controller.trim().rsplit(':').next() {
             let port_str = port_str.trim().trim_matches(|c| c == '"' || c == '\'');
             if let Ok(port) = port_str.parse::<u16>() {
                 creds.port = Some(port);
             }
         }
-    }
     if let Some(secret) = yaml_value_to_string(&doc["secret"]) {
         let trimmed = secret.trim().to_string();
         if !trimmed.is_empty() {
