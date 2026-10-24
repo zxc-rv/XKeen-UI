@@ -439,11 +439,16 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
               </InputGroupAddon>
             )}
           </InputGroup>
-          <Button variant="outline" disabled={!isValidLink} onClick={addOutbound}>
-            <IconPlus /> Добавить
+          <Button variant="outline" disabled={!isValidLink} onClick={addOutbound} aria-label="Добавить подключение">
+            <IconPlus /> <span className="hidden sm:inline">Добавить</span>
           </Button>
-          <Button variant="outline" disabled={isPingingAll || outbounds.length === 0} onClick={handlePingAll}>
-            {isPingingAll ? <Spinner className="size-4" /> : <IconBolt />} Тест всех
+          <Button
+            variant="outline"
+            disabled={isPingingAll || outbounds.length === 0}
+            onClick={handlePingAll}
+            aria-label="Тест всех подключений"
+          >
+            {isPingingAll ? <Spinner className="size-4" /> : <IconBolt />} <span className="hidden sm:inline">Тест всех</span>
           </Button>
         </div>
       </div>
