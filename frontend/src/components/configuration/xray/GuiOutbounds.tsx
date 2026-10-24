@@ -270,9 +270,11 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
   )
 
   const handlePingAll = useCallback(async () => {
-    // Служебные аутбаунды и объекты без тега не пингуем — бэкенд фильтрует так же.
+    // Служебные аутбаунды (blackhole/dns/loopback) и объекты без тега не пингуем —
+    // бэкенд фильтрует так же.
     const targets = outboundsRef.current.filter(
-      (outbound) => outbound.protocol !== 'blackhole' && outbound.protocol !== 'dns' && typeof outbound.tag === 'string' && outbound.tag
+      (outbound) =>
+        outbound.protocol !== 'blackhole' && outbound.protocol !== 'dns' && outbound.protocol !== 'loopback' && typeof outbound.tag === 'string' && outbound.tag
     )
     if (targets.length === 0) return
     setIsPingingAll(true)
@@ -632,7 +634,7 @@ const OutboundCard = memo(function OutboundCard({
               </div>
             </PopoverContent>
           </Popover>
-          {meta.protocol !== 'blackhole' && meta.protocol !== 'dns' && (
+          {meta.protocol !== 'blackhole' && meta.protocol !== 'dns' && meta.protocol !== 'loopback' && (
             <Tooltip>
               <TooltipTrigger
                 render={
