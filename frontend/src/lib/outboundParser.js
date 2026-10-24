@@ -149,6 +149,8 @@ const protocols = {
       insecure: params.insecure === '1' || params.allowInsecure === '1',
       obfs: params.obfs,
       obfsPassword: params['obfs-password'],
+      obfsMinPacketSize: +(params.minpacketsize || params['obfs-min-packet-size']) || undefined,
+      obfsMaxPacketSize: +(params.maxpacketsize || params['obfs-max-packet-size']) || undefined,
       fingerprint: params.fp || params.fingerprint,
       alpn: params.alpn?.split(','),
       up: params.up,
@@ -262,6 +264,8 @@ function convertToMihomoYaml(proxyConfig) {
     if (settings.insecure) common['skip-cert-verify'] = true
     if (settings.obfs) common.obfs = settings.obfs
     if (settings.obfsPassword) common['obfs-password'] = settings.obfsPassword
+    if (settings.obfsMinPacketSize) common['obfs-min-packet-size'] = settings.obfsMinPacketSize
+    if (settings.obfsMaxPacketSize) common['obfs-max-packet-size'] = settings.obfsMaxPacketSize
     if (settings.fingerprint) common['client-fingerprint'] = settings.fingerprint
     if (settings.alpn) common.alpn = settings.alpn
     if (settings.up) common.up = settings.up
@@ -373,8 +377,21 @@ const parseHysteria2Xray = (uri) => {
     version: 2,
   }
   if (streamSettings.tlsSettings) streamSettings.tlsSettings.alpn = streamSettings.tlsSettings.alpn || ['h3']
+  const udpMasks = [...(streamSettings.finalmask?.udp || [])]
+  if (['salamander', 'gecko'].includes(params.obfs)) {
+    const minSize = params.minpacketsize || params['obfs-min-packet-size']
+    const maxSize = params.maxpacketsize || params['obfs-max-packet-size']
+    udpMasks.push({
+      type: 'salamander',
+      settings: {
+        password: params['obfs-password'],
+        packetSize: params.obfs === 'gecko' && minSize && maxSize ? `${minSize}-${maxSize}` : undefined,
+      },
+    })
+  }
   streamSettings.finalmask = {
     ...streamSettings.finalmask,
+    udp: udpMasks.length ? udpMasks : undefined,
     quicParams: { congestion: 'bbr', bbrProfile: 'standard', ...streamSettings.finalmask?.quicParams },
   }
 
