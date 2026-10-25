@@ -24,6 +24,7 @@ import {
   IconSettings,
   IconAlertCircle,
 } from '@tabler/icons-react'
+import { CoreLogo } from '../CoreLogo'
 import { useEffect, useRef, useState } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
 import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
@@ -350,7 +351,7 @@ export function StatusBar({
                 <TooltipTrigger
                   render={
                     <Button variant="outline" onClick={onOpenCoreManage} disabled={isPending}>
-                      <IconCpu data-icon="inline-start" className="size-4.5" />
+                      <CoreLogo core={currentCore} data-icon="inline-start" />
                       <span className="text-[13px]">{capitalize(currentCore)}</span>
                       {coreVersions[currentCore] && (
                         <span className="text-muted-foreground/60 mt-0.5 text-xs">{coreVersions[currentCore]}</span>
