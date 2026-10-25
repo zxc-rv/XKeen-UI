@@ -5,7 +5,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import { IconBolt, IconCode, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
+import { IconBolt, IconCodeDots, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { appendPingEntries, clearPingHistory, useAppActions, usePingHistoryStore, type PingEntry } from '../../../lib/store'
@@ -274,7 +274,11 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
     // бэкенд фильтрует так же.
     const targets = outboundsRef.current.filter(
       (outbound) =>
-        outbound.protocol !== 'blackhole' && outbound.protocol !== 'dns' && outbound.protocol !== 'loopback' && typeof outbound.tag === 'string' && outbound.tag
+        outbound.protocol !== 'blackhole' &&
+        outbound.protocol !== 'dns' &&
+        outbound.protocol !== 'loopback' &&
+        typeof outbound.tag === 'string' &&
+        outbound.tag
     )
     if (targets.length === 0) return
     setIsPingingAll(true)
@@ -463,8 +467,8 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
         <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,700px)]">
           <div className="flex h-[54dvh] flex-col gap-4 overflow-hidden md:h-[50dvh]">
             <DialogHeader className="shrink-0">
-              <DialogTitle className="flex items-center gap-2 pr-8 pb-3">
-                <IconCode size={20} className="text-chart-2" />
+              <DialogTitle className="flex items-center gap-2">
+                <IconCodeDots size={24} className="text-chart-2" />
                 {editing?.tag || `#${(editing?.index ?? 0) + 1}`}
               </DialogTitle>
             </DialogHeader>
@@ -591,7 +595,7 @@ const OutboundCard = memo(function OutboundCard({
             <TooltipTrigger
               render={
                 <Button variant="outline" size="icon-sm" onClick={() => onEdit(index)} aria-label="Редактировать JSON">
-                  <IconCode />
+                  <IconCodeDots className="size-4.5" />
                 </Button>
               }
             />
