@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { Kbd, KbdGroup } from '@/components/ui/kbd'
-import { IconBolt, IconCode, IconCodeDots, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
+import { IconBolt, IconCode, IconCodeDots, IconDeviceFloppy, IconGripVertical, IconLinkPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { appendPingEntries, clearPingHistory, useAppActions, usePingHistoryStore, type PingEntry } from '../../../lib/store'
@@ -446,8 +446,8 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
               </InputGroupAddon>
             )}
           </InputGroup>
-          <Button variant="outline" disabled={!isValidLink} onClick={addOutbound} aria-label="Добавить подключение">
-            <IconPlus /> <span className="hidden sm:inline">Добавить</span>
+          <Button disabled={!isValidLink} onClick={addOutbound} aria-label="Добавить подключение">
+            <IconLinkPlus /> <span className="hidden sm:inline">Добавить</span>
           </Button>
           <Button
             variant="outline"
