@@ -54,6 +54,7 @@ export function LogPanel() {
   const autoScrollRef = useRef(true)
   const linesRef = useRef<string[]>([])
   const scrollTickingRef = useRef(false)
+  const lastScrollTopRef = useRef(0)
 
   useEffect(() => {
     return () => {
@@ -157,8 +158,10 @@ export function LogPanel() {
     const el = logRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.clientHeight <= el.scrollTop + 40
-    autoScrollRef.current = atBottom
-    setShowScrollBtn(!atBottom)
+    if (atBottom) autoScrollRef.current = true
+    else if (el.scrollTop < lastScrollTopRef.current) autoScrollRef.current = false
+    lastScrollTopRef.current = el.scrollTop
+    setShowScrollBtn(!autoScrollRef.current)
   }, [])
 
   function handleScroll() {
@@ -286,19 +289,25 @@ export function LogPanel() {
     const el = logRef.current
     if (!el) return
 
-    let rTicking = false
-    const ro = new ResizeObserver(() => {
-      if (autoScrollRef.current && !rTicking) {
-        rTicking = true
-        requestAnimationFrame(() => {
-          scrollToBottom()
-          rTicking = false
-        })
-      }
-    })
+    let frameRequested = false
+    const stickToBottom = () => {
+      if (!autoScrollRef.current || frameRequested) return
+      frameRequested = true
+      requestAnimationFrame(() => {
+        scrollToBottom()
+        frameRequested = false
+      })
+    }
 
-    ro.observe(el)
-    return () => ro.disconnect()
+    const resizeObserver = new ResizeObserver(stickToBottom)
+    resizeObserver.observe(el)
+    document.fonts.addEventListener('loadingdone', stickToBottom)
+    document.fonts.ready.then(stickToBottom)
+
+    return () => {
+      resizeObserver.disconnect()
+      document.fonts.removeEventListener('loadingdone', stickToBottom)
+    }
   }, [scrollToBottom])
 
   return (
