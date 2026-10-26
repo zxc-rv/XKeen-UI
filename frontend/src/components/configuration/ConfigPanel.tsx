@@ -845,7 +845,7 @@ export function ConfigPanel({
   ]
 
   return (
-    <TooltipProvider delayDuration={500}>
+    <TooltipProvider delayDuration={700} timeout={0}>
       <>
         <div className="border-border bg-card flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
           <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>

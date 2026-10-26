@@ -22,7 +22,7 @@ function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root
 
 function TooltipTrigger({ children, render, ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
   return (
-    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" render={render} {...props}>
+    <TooltipPrimitive.Trigger data-slot="tooltip-trigger" render={render} onFocus={(event) => event.preventBaseUIHandler()} {...props}>
       {children}
     </TooltipPrimitive.Trigger>
   )
@@ -49,7 +49,7 @@ function TooltipContent({ className, sideOffset = 0, side, align, alignOffset, c
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
           className={cn(
-            'bg-foreground text-background z-50 w-fit origin-(--transform-origin) rounded-md px-3 py-1.5 text-xs data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
+            'bg-foreground text-background data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-50 w-fit origin-(--transform-origin) rounded-md px-3 py-1.5 text-xs',
             className
           )}
           {...props}
