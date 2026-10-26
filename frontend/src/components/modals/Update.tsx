@@ -166,6 +166,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
       status: 'pending',
       pendingText: 'Обновление...',
     })
+    let reloading = false
     try {
       const selectedRelease = releases.find((r) => r.version === selectedVersion)
       const res = await fetch('/api/update', {
@@ -182,6 +183,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
       if (data.success) {
         showToast(`Установлен ${coreLabel} ${selectedVersion}`)
         if (updateModalCore === 'self') {
+          reloading = true
           setTimeout(() => location.reload(), 100)
           return
         }
@@ -192,7 +194,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
     } catch {
       showToast('Ошибка установки', 'error')
     } finally {
-      if (updateModalCore !== 'self') {
+      if (!reloading) {
         setInstalling(false)
         apiCall<any>('GET', 'control')
           .then((data) => {
