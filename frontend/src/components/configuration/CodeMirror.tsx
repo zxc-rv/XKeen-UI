@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom'
 import { getFileLanguage } from '../../lib/api'
 import { configAutocompletion } from './editor/completion'
 import { editorHighlight, editorTheme, getLanguageExtension } from './editor/highlighting'
+import { formatWithPrettier } from './editor/format'
 import { SearchPanel } from './editor/search/SearchPanel'
 import { createSearchExtension } from './editor/search/searchExtension'
 import { baseSetup } from './editor/setup'
@@ -206,49 +207,12 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     if (!content.trim()) return
 
     try {
-      const cursorOffset = view.state.selection.main.head
-      let text: string
-      let newCursor: number
-
-      if (language === 'json') {
-        const [prettier, prettierBabel, prettierEstree] = await Promise.all([
-          import('prettier'),
-          import('prettier/plugins/babel'),
-          import('prettier/plugins/estree'),
-        ])
-        const result = await prettier.formatWithCursor(content, {
-          cursorOffset,
-          parser: 'json',
-          plugins: [prettierBabel, prettierEstree],
-          printWidth: 120,
-          endOfLine: 'lf',
-        })
-        text = result.formatted
-          .replace(/\n{3,}/g, '\n\n')
-          .replace(/\s+$/gm, '')
-          .replace(/\n$/, '')
-        newCursor = result.cursorOffset
-      } else if (language === 'yaml') {
-        const [prettier, prettierYaml] = await Promise.all([import('prettier'), import('prettier/plugins/yaml')])
-        const result = await prettier.formatWithCursor(content, {
-          cursorOffset,
-          parser: 'yaml',
-          plugins: [prettierYaml],
-          printWidth: 200,
-          tabWidth: 2,
-          singleQuote: true,
-          endOfLine: 'lf',
-        })
-        text = result.formatted
-        newCursor = result.cursorOffset
-      } else {
-        return
-      }
-      if (text === content) return
+      const formatted = await formatWithPrettier(content, language, view.state.selection.main.head)
+      if (!formatted || formatted.text === content) return
 
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: text },
-        selection: EditorSelection.cursor(Math.min(newCursor, text.length)),
+        changes: { from: 0, to: view.state.doc.length, insert: formatted.text },
+        selection: EditorSelection.cursor(Math.min(formatted.cursor, formatted.text.length)),
         scrollIntoView: true,
       })
       runValidation(view, filenameRef.current)

@@ -5,7 +5,8 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
-import { IconBolt, IconCodeDots, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
+import { IconBolt, IconCode, IconCodeDots, IconDeviceFloppy, IconGripVertical, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { appendPingEntries, clearPingHistory, useAppActions, usePingHistoryStore, type PingEntry } from '../../../lib/store'
@@ -13,7 +14,7 @@ import type { Config } from '../../../lib/types'
 import { cn, copyText } from '../../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { CodeMirrorRef } from '../CodeMirror'
-import { ProviderEditor } from '../editor/ProviderEditor'
+import { ProviderEditor, type ProviderEditorHandle } from '../editor/ProviderEditor'
 
 type Outbound = Record<string, any>
 
@@ -163,6 +164,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
   // Исходный текст черновика: разница с editContent — признак изменений для кнопки сохранения.
   const [editOriginal, setEditOriginal] = useState('')
   const [editError, setEditError] = useState<string | undefined>(undefined)
+  const editEditorRef = useRef<ProviderEditorHandle>(null)
 
   const getCardRef = useCallback((index: number) => {
     if (!cardRefHandlersRef.current[index]) {
@@ -383,7 +385,8 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
   const isValidLink = OUTBOUND_LINK_PREFIXES.some((prefix) => link.trim().toLowerCase().startsWith(prefix))
   const isDraftDirty = editing != null && editContent !== editOriginal
   const draftSaveDisabled = !isDraftDirty || !!editError
-  const draftSaveHint = editError ? `Исправьте ошибки JSON: ${editError}` : !isDraftDirty ? 'Нет изменений' : 'Сохранить (Ctrl+S)'
+  // Форматирование имеет смысл только при валидном JSON — невалидное форматирование ничего не исправит.
+  const draftFormatDisabled = !!editError
 
   return (
     <TooltipProvider delayDuration={500}>
@@ -476,6 +479,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
               {editing != null && (
                 <>
                   <ProviderEditor
+                    ref={editEditorRef}
                     key={editing.key}
                     content={editContent}
                     language="json"
@@ -484,25 +488,68 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
                     onSave={() => saveEdit()}
                     onValidationChange={setEditError}
                   />
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span className="absolute right-3 bottom-3 z-10">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="border-border/60 bg-background/40 hover:bg-background/70 supports-backdrop-filter:bg-background/40 gap-1.5 px-3 shadow-lg shadow-black/20 backdrop-blur-xl backdrop-saturate-150"
-                            onClick={() => saveEdit()}
-                            disabled={draftSaveDisabled}
-                          >
-                            <IconDeviceFloppy />
-                            <span className="text-xs font-medium">Сохранить</span>
-                          </Button>
-                        </span>
-                      }
-                    />
-                    <TooltipContent side="left">{draftSaveHint}</TooltipContent>
-                  </Tooltip>
+                  <span className="absolute right-3 bottom-3 z-10 flex items-center gap-1.5">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span>
+                            <Button
+                              size="icon-lg"
+                              variant="ghost"
+                              className="border-border/60 bg-background/40 hover:bg-background/70 rounded-lg backdrop-blur-md"
+                              onClick={() => void editEditorRef.current?.format()}
+                              disabled={draftFormatDisabled}
+                            >
+                              <IconCode className="size-5" />
+                            </Button>
+                          </span>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        Форматировать JSON{' '}
+                        <KbdGroup>
+                          <Kbd>Shift</Kbd>
+                          <Kbd>Alt</Kbd>
+                          <Kbd>F</Kbd>
+                        </KbdGroup>
+                      </TooltipContent>
+                    </Tooltip>
+                    {draftSaveDisabled ? (
+                      <Button
+                        size="icon-lg"
+                        variant="ghost"
+                        className="border-border/60 bg-background/40 hover:bg-background/70 rounded-lg backdrop-blur-md"
+                        onClick={() => saveEdit()}
+                        disabled
+                      >
+                        <IconDeviceFloppy className="size-5" />
+                      </Button>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span>
+                              <Button
+                                size="icon-lg"
+                                variant="ghost"
+                                className="border-border/60 bg-background/40 hover:bg-background/70 rounded-lg backdrop-blur-md"
+                                onClick={() => saveEdit()}
+                              >
+                                <IconDeviceFloppy className="size-5" />
+                              </Button>
+                            </span>
+                          }
+                        />
+                        <TooltipContent side="top" className="whitespace-nowrap">
+                          Сохранить изменения{' '}
+                          <KbdGroup>
+                            <Kbd>Ctrl</Kbd>
+                            <Kbd>S</Kbd>
+                          </KbdGroup>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </span>
                 </>
               )}
             </div>

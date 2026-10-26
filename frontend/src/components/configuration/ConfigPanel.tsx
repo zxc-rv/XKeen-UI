@@ -70,6 +70,7 @@ const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
+import { Kbd, KbdGroup } from '../ui/kbd'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
 const BackupsModalContainer = memo(function BackupsModalContainer({ onRefreshConfigs }: { onRefreshConfigs: () => Promise<unknown> }) {
@@ -1122,9 +1123,22 @@ export function ConfigPanel({
                       />
                       <TooltipContent>Сохранить и перезапустить</TooltipContent>
                     </Tooltip>
-                    <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
-                      <IconDeviceFloppy data-icon="inline-start" /> Сохранить
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button size="default" disabled={!canSave} onClick={() => saveCurrentConfig()}>
+                            <IconDeviceFloppy data-icon="inline-start" /> Сохранить
+                          </Button>
+                        }
+                      />
+                      <TooltipContent>
+                        Сохранить файл{' '}
+                        <KbdGroup>
+                          <Kbd>Ctrl</Kbd>
+                          <Kbd>S</Kbd>
+                        </KbdGroup>
+                      </TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger
                         render={
@@ -1133,7 +1147,14 @@ export function ConfigPanel({
                           </Button>
                         }
                       />
-                      <TooltipContent>Форматировать файл</TooltipContent>
+                      <TooltipContent>
+                        Форматировать файл{' '}
+                        <KbdGroup>
+                          <Kbd>Shift</Kbd>
+                          <Kbd>Alt</Kbd>
+                          <Kbd>F</Kbd>
+                        </KbdGroup>
+                      </TooltipContent>
                     </Tooltip>
                     <DropdownMenu>
                       <DropdownMenuTrigger
