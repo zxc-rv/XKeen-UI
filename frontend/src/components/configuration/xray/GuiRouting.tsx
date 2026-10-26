@@ -548,7 +548,7 @@ const RuleCard = memo(
               >
                 <SelectTrigger
                   popper
-                  className="border-border bg-input-background hover:bg-muted flex h-9 w-fit shrink-0 items-center justify-between gap-2 rounded-md border px-3 text-[13px] font-medium transition-colors focus:ring-0"
+                  className="border-border bg-input-background hover:bg-muted flex h-9 w-fit shrink-0 items-center justify-between gap-2 rounded-md border px-3 font-medium transition-colors focus:ring-0"
                 >
                   <SelectValue placeholder={fieldName} />
                 </SelectTrigger>
@@ -556,7 +556,7 @@ const RuleCard = memo(
                 <SelectContent position="popper" align="start">
                   <SelectGroup>
                     {otherFields.map((f) => (
-                      <SelectItem key={f} value={f} className="cursor-pointer text-[13px]">
+                      <SelectItem key={f} value={f} className="cursor-pointer">
                         {f}
                       </SelectItem>
                     ))}
@@ -635,16 +635,16 @@ const RuleCard = memo(
           <Select value={outboundType} onValueChange={(v) => switchOutbound(v as 'outboundTag' | 'balancerTag')}>
             <SelectTrigger
               popper
-              className="min-w-34 shrink-0 border-blue-500/40 text-[13px] font-bold text-blue-400 transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
+              className="min-w-34 shrink-0 border-blue-500/40 font-bold text-blue-400 transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent position="popper" className="border-blue-500/40">
               <SelectGroup>
-                <SelectItem value="outboundTag" className="text-[13px] font-medium">
+                <SelectItem value="outboundTag" className="font-medium">
                   outboundTag
                 </SelectItem>
-                <SelectItem value="balancerTag" className="text-[13px] font-medium">
+                <SelectItem value="balancerTag" className="font-medium">
                   balancerTag
                 </SelectItem>
               </SelectGroup>
@@ -654,7 +654,7 @@ const RuleCard = memo(
           <Select value={outboundValue} onValueChange={changeOutboundValue}>
             <SelectTrigger
               popper
-              className="min-w-0 flex-1 border-blue-500/40 text-[13px] transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
+              className="min-w-0 flex-1 border-blue-500/40 transition-colors hover:bg-blue-500/10 [&>svg]:text-blue-400/60"
             >
               <SelectValue placeholder="Выберите outbound..." />
             </SelectTrigger>
@@ -666,7 +666,7 @@ const RuleCard = memo(
                   </div>
                 ) : (
                   (isBalancer ? available.balancers : available.outbounds).map((tag) => (
-                    <SelectItem key={tag} value={tag} className="text-[13px]">
+                    <SelectItem key={tag} value={tag}>
                       {tag}
                     </SelectItem>
                   ))

@@ -70,7 +70,7 @@ const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
-import { Kbd, KbdGroup } from '../ui/kbd'
+import { Kbd } from '../ui/kbd'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
 const BackupsModalContainer = memo(function BackupsModalContainer({ onRefreshConfigs }: { onRefreshConfigs: () => Promise<unknown> }) {
@@ -249,7 +249,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
           )}
           <ContextMenuSeparator />
           <ContextMenuItem disabled={isProtected} variant="destructive" onSelect={() => openDialog({ type: 'delete', file: config.file })}>
-            <IconTrash /> Удалить
+            <IconTrash /> Удалить файл
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -832,8 +832,6 @@ export function ConfigPanel({
     }
   }, [guiLog, fileForGui, contentForGui])
 
-  // Аутбаунды живут не только в файлах с "outbound" в имени — импорт подключений ищет первый файл
-  // с массивом outbounds. Поэтому гейт по содержимому, с приоритетом Routing/Log GUI.
   const isOutboundsGui = useMemo(() => {
     if (!guiOutbounds || !fileForGui || isRoutingGui || isLogGui) return false
     try {
@@ -1176,11 +1174,7 @@ export function ConfigPanel({
                         }
                       />
                       <TooltipContent>
-                        Сохранить файл{' '}
-                        <KbdGroup>
-                          <Kbd>Ctrl</Kbd>
-                          <Kbd>S</Kbd>
-                        </KbdGroup>
+                        Сохранить файл <Kbd>Ctrl+S</Kbd>
                       </TooltipContent>
                     </Tooltip>
                     <Tooltip>
@@ -1192,12 +1186,7 @@ export function ConfigPanel({
                         }
                       />
                       <TooltipContent>
-                        Форматировать файл{' '}
-                        <KbdGroup>
-                          <Kbd>Shift</Kbd>
-                          <Kbd>Alt</Kbd>
-                          <Kbd>F</Kbd>
-                        </KbdGroup>
+                        Форматировать файл <Kbd>Shift+Alt+F</Kbd>
                       </TooltipContent>
                     </Tooltip>
                     <DropdownMenu>
@@ -1239,7 +1228,7 @@ export function ConfigPanel({
                               tabIndex={-1}
                               className="ml-auto size-5 rounded-[min(var(--radius-md),6px)]"
                             >
-                              <IconBoltFilled />
+                              <IconBoltFilled className="size-3.5" />
                             </Button>
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={onOpenGeoScan}>

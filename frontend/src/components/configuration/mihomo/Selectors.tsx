@@ -355,21 +355,21 @@ const ProxyCard = memo(function ProxyCard({
 
       <div className="flex items-center justify-between gap-1">
         <div className="flex min-w-0 flex-wrap items-center gap-0.75">
-          <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
+          <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
             {proxy.type.toLowerCase()}
           </Badge>
           {showTcpOnly && (
-            <Badge variant="destructive" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
+            <Badge variant="destructive" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
               tcp only
             </Badge>
           )}
           {proxy.smux && (
-            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
+            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
               smux
             </Badge>
           )}
           {proxy.tfo && (
-            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider">
+            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
               tfo
             </Badge>
           )}
@@ -379,7 +379,7 @@ const ProxyCard = memo(function ProxyCard({
                 render={
                   <Badge
                     variant={smartRankVariant(smartInfo!.rank)}
-                    className="h-4.5 rounded-full px-1.5 text-[10px] font-normal tracking-wider"
+                    className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider"
                   >
                     {smartLabel}
                   </Badge>

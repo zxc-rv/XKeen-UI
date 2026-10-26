@@ -8,19 +8,9 @@ function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimit
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />
 }
 
-function ContextMenuTrigger({
-  className,
-  children,
-  render,
-  ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.Trigger>) {
+function ContextMenuTrigger({ className, children, render, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Trigger>) {
   return (
-    <ContextMenuPrimitive.Trigger
-      data-slot="context-menu-trigger"
-      render={render}
-      className={cn('select-none', className)}
-      {...props}
-    >
+    <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" render={render} className={cn('select-none', className)} {...props}>
       {children}
     </ContextMenuPrimitive.Trigger>
   )
@@ -56,12 +46,18 @@ function ContextMenuContent({
   }) {
   return (
     <ContextMenuPrimitive.Portal>
-      <ContextMenuPrimitive.Positioner side={side} alignOffset={alignOffset} sideOffset={sideOffset} align={align} className="isolate z-50 outline-none">
+      <ContextMenuPrimitive.Positioner
+        side={side}
+        alignOffset={alignOffset}
+        sideOffset={sideOffset}
+        align={align}
+        className="isolate z-50 outline-none"
+      >
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-content"
           finalFocus={onCloseAutoFocus ? false : undefined}
           className={cn(
-            'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-input-background text-popover-foreground z-50 max-h-(--available-height) min-w-41 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md p-1 shadow-md ring-1 outline-none transition duration-150 ease-out data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0',
+            'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ring-foreground/10 bg-input-background text-popover-foreground z-50 max-h-(--available-height) min-w-41 origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md p-1 shadow-md ring-1 transition duration-150 ease-out outline-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0',
             className
           )}
           {...props}
@@ -95,7 +91,7 @@ function ContextMenuItem({
       onClick={onSelect}
       label={textValue}
       className={cn(
-        "group/context-menu-item data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive relative flex items-center gap-2 rounded-sm px-2 py-1.25 text-sm outline-hidden select-none focus:bg-(--menu-active-bg) not-data-[variant=destructive]:focus:font-semibold not-data-[variant=destructive]:focus:text-[#60a5fa] not-data-[variant=destructive]:focus:**:text-[#60a5fa] data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-(--menu-active-bg) data-inset:pl-8 data-[variant=destructive]:focus:bg-(--menu-destructive-active-bg) [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "group/context-menu-item data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:text-destructive relative flex items-center gap-2 rounded-sm px-2 py-1.25 text-sm outline-hidden select-none focus:bg-(--menu-active-bg) not-data-[variant=destructive]:focus:font-semibold not-data-[variant=destructive]:focus:text-[#60a5fa] not-data-[variant=destructive]:focus:**:text-[#60a5fa] data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-(--menu-active-bg) data-inset:pl-8 data-[variant=destructive]:focus:bg-(--menu-destructive-active-bg) data-[variant=destructive]:focus:font-medium [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -130,14 +126,28 @@ function ContextMenuSubTrigger({
   )
 }
 
-function ContextMenuSubContent({ className, align = 'start', alignOffset = 4, side = 'right', sideOffset = 0, ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Popup> & Pick<ContextMenuPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset'>) {
+function ContextMenuSubContent({
+  className,
+  align = 'start',
+  alignOffset = 4,
+  side = 'right',
+  sideOffset = 0,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.Popup> &
+  Pick<ContextMenuPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset'>) {
   return (
     <ContextMenuPrimitive.Portal>
-      <ContextMenuPrimitive.Positioner align={align} alignOffset={alignOffset} side={side} sideOffset={sideOffset} className="isolate z-50 outline-none">
+      <ContextMenuPrimitive.Positioner
+        align={align}
+        alignOffset={alignOffset}
+        side={side}
+        sideOffset={sideOffset}
+        className="isolate z-50 outline-none"
+      >
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-sub-content"
           className={cn(
-            'bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 origin-(--transform-origin) overflow-hidden rounded-md border p-1 shadow-lg outline-none transition duration-150 ease-out data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0',
+            'bg-popover text-popover-foreground data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-32 origin-(--transform-origin) overflow-hidden rounded-md border p-1 shadow-lg transition duration-150 ease-out outline-none data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0',
             className
           )}
           {...props}

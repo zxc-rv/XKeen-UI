@@ -10,7 +10,16 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconAlertCircle, IconChevronDown, IconChevronUp, IconSettings, IconX, IconArrowBackUp } from '@tabler/icons-react'
+import {
+  IconAlertCircle,
+  IconChevronDown,
+  IconChevronUp,
+  IconSettings,
+  IconX,
+  IconArrowBackUp,
+  IconCornerDownLeft,
+  IconTrash,
+} from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
 import { useAppContext, useModalContext } from '../../lib/store'
@@ -158,14 +167,14 @@ const ProxyRow = memo(function ProxyRow({
   const onRemoveClick = useCallback(() => void onRemove(index), [index, onRemove])
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="bg-input-background flex h-9 min-w-0 flex-1 items-center rounded-md border px-2.5">
-        <span className="w-full truncate text-[13px]">{proxy}</span>
-      </div>
-      <Button variant="destructive" className="shrink-0" onClick={onRemoveClick} aria-label={`Удалить прокси ${proxy}`}>
-        Удалить
-      </Button>
-    </div>
+    <InputGroup>
+      <InputGroupInput readOnly value={proxy} />
+      <InputGroupAddon align="inline-end">
+        <InputGroupButton variant="destructive" size="icon-xs" onClick={onRemoveClick} aria-label={`Удалить прокси ${proxy}`}>
+          <IconTrash className="size-3.5" />
+        </InputGroupButton>
+      </InputGroupAddon>
+    </InputGroup>
   )
 })
 
@@ -188,7 +197,7 @@ const ProxySettingsField = memo(function ProxySettingsField({
   }, [hasNewProxy, newProxy, onAddProxy])
 
   return (
-    <Field className="px-0 py-3">
+    <Field className="gap-2 py-3">
       <FieldContent>
         <FieldLabel htmlFor="github-proxy-input">GitHub Proxy</FieldLabel>
         <FieldDescription className="text-[13px] text-wrap!">
@@ -199,22 +208,21 @@ const ProxySettingsField = memo(function ProxySettingsField({
       {githubProxies.length === 0 ? (
         <FieldDescription className="py-1 text-[13px]">Прокси не добавлены</FieldDescription>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {githubProxies.map((proxy, index) => (
             <ProxyRow key={proxy + index} proxy={proxy} index={index} onRemove={onRemoveProxy} />
           ))}
         </div>
       )}
 
-      <Field orientation="horizontal" className="gap-2">
-        <InputGroup className="flex-1">
+      <Field orientation="horizontal">
+        <InputGroup>
           <InputGroupInput
             id="github-proxy-input"
             value={newProxy}
             onChange={(e) => setNewProxy(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void addProxy()}
             placeholder="Введите URL прокси..."
-            className={hasNewProxy ? 'pr-7' : undefined}
           />
           <InputGroupAddon align="inline-end">
             {hasNewProxy && (
@@ -227,10 +235,13 @@ const ProxySettingsField = memo(function ProxySettingsField({
               </InputGroupButton>
             )}
           </InputGroupAddon>
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton variant="default" className="rounded-sm text-xs" onClick={() => void addProxy()} disabled={!hasNewProxy}>
+              Добавить
+              <IconCornerDownLeft />
+            </InputGroupButton>
+          </InputGroupAddon>
         </InputGroup>
-        <Button variant="default" className="shrink-0" onClick={() => void addProxy()} disabled={!hasNewProxy}>
-          Добавить
-        </Button>
       </Field>
     </Field>
   )
@@ -248,14 +259,14 @@ const HiddenFileRow = memo(function HiddenFileRow({
   const onRemoveClick = useCallback(() => void onRemove(index), [index, onRemove])
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="bg-input-background flex h-9 min-w-0 flex-1 items-center rounded-md border px-2.5">
-        <span className="w-full truncate text-[13px]">{file}</span>
-      </div>
-      <Button variant="destructive" className="shrink-0" onClick={onRemoveClick} aria-label={`Показать файл ${file}`}>
-        Удалить
-      </Button>
-    </div>
+    <InputGroup>
+      <InputGroupInput readOnly value={file} />
+      <InputGroupAddon align="inline-end">
+        <InputGroupButton size="icon-xs" variant="destructive" onClick={onRemoveClick} aria-label={`Показать файл ${file}`}>
+          <IconTrash className="size-3.5" />
+        </InputGroupButton>
+      </InputGroupAddon>
+    </InputGroup>
   )
 })
 
@@ -267,16 +278,16 @@ const HiddenFilesField = memo(function HiddenFilesField({
   onRemoveFile: (index: number) => Promise<void>
 }) {
   return (
-    <Field className="px-0 py-3">
+    <Field className="gap-2 py-3">
       <FieldContent>
         <FieldLabel>Скрытые файлы</FieldLabel>
         <FieldDescription className="text-[13px] text-wrap!">Файлы, скрытые из панели вкладок редактора</FieldDescription>
       </FieldContent>
 
       {hiddenFiles.length === 0 ? (
-        <FieldDescription className="py-1 text-[13px]">Файлы не скрыты</FieldDescription>
+        <FieldDescription className="py-1 text-[13px]">Нет скрытых файлов</FieldDescription>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           {hiddenFiles.map((file, index) => (
             <HiddenFileRow key={file + index} file={file} index={index} onRemove={onRemoveFile} />
           ))}
@@ -362,7 +373,6 @@ const RepoSourceField = memo(function RepoSourceField({
               onBlur={() => void save()}
               placeholder={defaultUrl}
               aria-invalid={invalid}
-              className="placeholder:text-sm"
             />
             {draft !== defaultUrl && (
               <InputGroupAddon align="inline-end">
@@ -372,7 +382,7 @@ const RepoSourceField = memo(function RepoSourceField({
                       <InputGroupButton
                         aria-label="Вернуть значение по-умолчанию"
                         className="text-muted-foreground hover:text-foreground hover:bg-transparent!"
-                        onMouseDown={(e) => e.preventDefault()} // Блочим лишний onBlur инпута
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => void save(defaultUrl)}
                       >
                         <IconArrowBackUp className="size-4.5" />
@@ -398,6 +408,7 @@ const PING_URL_PRESETS = [
   'www.gstatic.com/generate_204',
   'www.google.com/generate_204',
   'www.youtube.com/generate_204',
+  'redirector.googlevideo.com/generate_204',
   'connectivitycheck.gstatic.com/generate_204',
 ] as const
 
@@ -538,7 +549,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
               onBlur={() => void save()}
               placeholder="www.example.com/generate_204"
               aria-label="Свой URL пинга"
-              className="pl-0! text-sm placeholder:text-sm"
+              className="pl-0!"
             />
           </InputGroup>
         )}
@@ -558,7 +569,7 @@ const PingTestSettingsField = memo(function PingTestSettingsField({
             min={1}
             step={100}
             inputMode="numeric"
-            className="[appearance:textfield] text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             value={timeout}
             onChange={(e) => setTimeout(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void save()}
@@ -808,7 +819,7 @@ export function SettingsModal() {
           <div className="scrollbar-none overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <TabsList
               variant="line"
-              className="border-border w-max shrink-0 justify-start gap-3 rounded-none border-b px-0 whitespace-nowrap"
+              className="border-border w-max shrink-0 justify-start gap-2 rounded-none border-b px-0 whitespace-nowrap"
             >
               <TabsTrigger value="general">Общие</TabsTrigger>
               <TabsTrigger value="gui">Режим GUI</TabsTrigger>
@@ -897,10 +908,10 @@ export function SettingsModal() {
                   <Separator />
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
-                      <FieldLabel htmlFor="ping-mode">Режим (Xray)</FieldLabel>
+                      <FieldLabel htmlFor="ping-mode">Режим теста</FieldLabel>
                       <FieldDescription className="text-[13px] whitespace-pre-line">
-                        Двойной: первый запрос с закрытием соединения для прогрева DNS/MUX, второй - сам тест.{'\n'} KeepAlive: первое
-                        соединение не закрывается, второй запрос идёт по нему же.
+                        Применяется только к замерам через Xray. Двойной: первый запрос с закрытием соединения для прогрева DNS/MUX, второй
+                        - сам тест.{'\n'} KeepAlive: первое соединение не закрывается, второй запрос идёт по нему же.
                       </FieldDescription>
                     </FieldContent>
                     <Select
@@ -908,7 +919,7 @@ export function SettingsModal() {
                       items={Object.fromEntries(pingModeOptions.map((o) => [o.value, o.label]))}
                       onValueChange={setPingMode}
                     >
-                      <SelectTrigger id="ping-mode" className="w-46.75">
+                      <SelectTrigger id="ping-mode" className="w-45">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1034,21 +1045,21 @@ export function SettingsModal() {
                     </FieldContent>
                     <Select
                       value={settings.autoDns}
-                      items={{ disabled: 'Выкл', enabled: 'Вкл', with_filter: 'Вкл с автонастройкой' }}
+                      items={{ disabled: 'Выкл', enabled: 'Вкл', with_filter: 'Вкл+Авто' }}
                       onValueChange={(v) => {
                         void saveSetting('clash_api', { auto_dns: v }).then((ok) => {
                           if (ok) dispatch({ type: 'SET_SETTINGS', settings: { autoDns: v as AutoDnsMode } })
                         })
                       }}
                     >
-                      <SelectTrigger id="auto-dns" className="w-51">
+                      <SelectTrigger id="auto-dns" className="w-35">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
                           <SelectItem value="disabled">Выкл</SelectItem>
                           <SelectItem value="enabled">Вкл</SelectItem>
-                          <SelectItem value="with_filter">Вкл с автонастройкой</SelectItem>
+                          <SelectItem value="with_filter">Вкл+Авто</SelectItem>
                         </SelectGroup>
                       </SelectContent>
                     </Select>

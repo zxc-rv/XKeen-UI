@@ -382,11 +382,11 @@ export function LogPanel() {
                     </InputGroup>
                   </div>
                   <Select value={currentFile} onValueChange={switchFile}>
-                    <SelectTrigger popper className="md:w-33">
+                    <SelectTrigger className="md:w-33">
                       <SelectValue />
                     </SelectTrigger>
 
-                    <SelectContent position="popper">
+                    <SelectContent>
                       <SelectGroup>
                         {LOG_FILES.map((f) => (
                           <SelectItem key={f} value={f} className="text-sm">
