@@ -5,7 +5,7 @@ use axum::response::{IntoResponse, Json};
 pub async fn get_settings(State(state): State<AppState>) -> impl IntoResponse {
     let s = state.settings.read().unwrap();
     Json(
-        serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log, "clash_api": s.clash_api, "auth": { "enabled": s.auth.enabled }, "plugins": s.plugins }),
+        serde_json::json!({ "success": true, "gui": s.gui, "updater": s.updater, "log": s.log, "clash_api": s.clash_api, "auth": { "enabled": s.auth.enabled }, "plugins": s.plugins, "ui": s.ui }),
     )
 }
 
@@ -59,6 +59,17 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
         }
     }
     settings.normalize_proxies();
+    settings.ui.hidden_files = {
+        let mut seen = std::collections::HashSet::new();
+        settings
+            .ui
+            .hidden_files
+            .iter()
+            .map(|f| f.trim())
+            .filter(|f| !f.is_empty() && seen.insert((*f).to_string()))
+            .map(|f| f.to_string())
+            .collect()
+    };
 
     *state.settings.write().unwrap() = settings;
 

@@ -42,6 +42,7 @@ export interface AppSettings {
   timezone: number
   authEnabled: boolean
   multiRouter: boolean
+  hiddenConfigFiles: string[]
 }
 
 export interface ProxySubscriptionInfo {

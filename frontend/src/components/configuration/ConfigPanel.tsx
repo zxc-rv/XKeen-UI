@@ -113,6 +113,7 @@ interface ConfigTabProps {
   showToast: (msg: string, type?: 'success' | 'error') => void
   onRefreshConfigs: () => Promise<Config[]>
   withContextMenu?: boolean
+  onHideFile?: (file: string) => void
 }
 
 type DialogState =
@@ -121,7 +122,7 @@ type DialogState =
   | { type: 'delete'; file: string }
   | null
 
-function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withContextMenu = false }: ConfigTabProps) {
+function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFile, withContextMenu = false }: ConfigTabProps) {
   const [dialogData, setDialogData] = useState<DialogState>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
 
@@ -241,6 +242,11 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, withConte
           >
             <IconPencil /> Переименовать
           </ContextMenuItem>
+          {onHideFile && (
+            <ContextMenuItem onSelect={() => onHideFile(config.file)}>
+              <IconEyeOff /> Скрыть файл
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem disabled={isProtected} variant="destructive" onSelect={() => openDialog({ type: 'delete', file: config.file })}>
             <IconTrash /> Удалить
@@ -310,6 +316,7 @@ export function ConfigPanel({
   const guiOutbounds = useSettings((s) => s.guiOutbounds)
   const multiRouter = useSettings((s) => s.multiRouter)
   const closeConnsOnApply = useSettings((s) => s.closeConnectionsOnApply)
+  const hiddenConfigFiles = useSettings((s) => s.hiddenConfigFiles)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
   const getMassTargets = () => {
     if (!multiRouter) return [LOCAL_ROUTER_ID]
@@ -329,8 +336,10 @@ export function ConfigPanel({
   const activeConfigIndex = useMemo(() => {
     if (!configs.length) return 0
     const idx = configs.findIndex((c) => c.file === activeConfigFile)
-    return idx >= 0 ? idx : 0
-  }, [configs, activeConfigFile])
+    if (idx >= 0 && !hiddenConfigFiles.includes(activeConfigFile)) return idx
+    const firstVisible = configs.findIndex((c) => !hiddenConfigFiles.includes(c.file))
+    return firstVisible >= 0 ? firstVisible : 0
+  }, [configs, activeConfigFile, hiddenConfigFiles])
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
 
   const [isEditorMounted, setIsEditorMounted] = useState(false)
@@ -510,7 +519,11 @@ export function ConfigPanel({
 
     const targetFile = currentCfg?.file ?? activeConfigFile
     const nextConfigs = await onRefreshConfigs()
-    const nextConfig = nextConfigs.find((config) => config.file === targetFile) ?? nextConfigs[0]
+    const target = nextConfigs.find((config) => config.file === targetFile)
+    const nextConfig =
+      target && !hiddenConfigFiles.includes(target.file)
+        ? target
+        : (nextConfigs.find((config) => !hiddenConfigFiles.includes(config.file)) ?? nextConfigs[0])
 
     if (nextConfig) {
       if (nextConfig.file !== activeConfigFile) {
@@ -521,7 +534,7 @@ export function ConfigPanel({
     }
 
     return nextConfigs
-  }, [activeConfigFile, loadConfigIntoEditor, onRefreshConfigs, saveViewState])
+  }, [activeConfigFile, hiddenConfigFiles, loadConfigIntoEditor, onRefreshConfigs, saveViewState])
 
   const switchTab = useCallback(
     (index: number) => {
@@ -833,8 +846,38 @@ export function ConfigPanel({
 
   const isAnyGui = isRoutingGui || isLogGui || isOutboundsGui
 
-  const coreConfigs = configs.filter((c) => !isXkeenFile(c.file))
-  const xkeenConfigs = configs.filter((c) => isXkeenFile(c.file))
+  const coreConfigs = configs.filter((c) => !isXkeenFile(c.file) && !hiddenConfigFiles.includes(c.file))
+  const xkeenConfigs = configs.filter((c) => isXkeenFile(c.file) && !hiddenConfigFiles.includes(c.file))
+
+  const hideConfigFile = useCallback(
+    async (file: string) => {
+      const visibleCount = configs.filter((c) => c.file !== file && !hiddenConfigFiles.includes(c.file)).length
+      if (visibleCount === 0) {
+        showToast('Нельзя скрыть последний файл', 'error')
+        return
+      }
+      const next = hiddenConfigFiles.includes(file) ? hiddenConfigFiles : [...hiddenConfigFiles, file]
+      try {
+        const result = await apiCall<{ success: boolean; error?: string }>('PATCH', 'settings', { ui: { hidden_files: next } })
+        if (!result.success) {
+          showToast(`Ошибка: ${result.error}`, 'error')
+          return
+        }
+        dispatch({ type: 'SET_SETTINGS', settings: { hiddenConfigFiles: next } })
+        showToast('Файл успешно скрыт. Скрытый файл можно вернуть в настройках', 'success')
+        if (activeConfigFile === file) {
+          const nextFile = configs.find((c) => !isXkeenFile(c.file) && c.file !== file && !next.includes(c.file))?.file ?? ''
+          if (nextFile) {
+            setActiveConfigFile(nextFile)
+            localStorage.setItem('lastSelectedTab', nextFile)
+          }
+        }
+      } catch (e: any) {
+        showToast(e.message, 'error')
+      }
+    },
+    [configs, hiddenConfigFiles, activeConfigFile, dispatch, showToast]
+  )
 
   const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
@@ -989,6 +1032,7 @@ export function ConfigPanel({
                             currentCore={currentCore}
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
+                            onHideFile={(file) => void hideConfigFile(file)}
                             withContextMenu
                           />
                         ))}

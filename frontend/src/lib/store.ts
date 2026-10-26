@@ -45,6 +45,7 @@ const initialSettings: AppSettings = {
   timezone: 0,
   authEnabled: false,
   multiRouter: false,
+  hiddenConfigFiles: [],
 }
 
 const initialState: AppState = {

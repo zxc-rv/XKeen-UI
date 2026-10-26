@@ -262,6 +262,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             timezone: data.log.timezone,
             authEnabled: !!data.auth?.enabled,
             multiRouter: data.plugins?.multi_router ?? false,
+            hiddenConfigFiles: data.ui?.hidden_files ?? [],
           },
         })
         if (Array.isArray(data.plugins?.routers)) {

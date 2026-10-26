@@ -236,6 +236,56 @@ const ProxySettingsField = memo(function ProxySettingsField({
   )
 })
 
+const HiddenFileRow = memo(function HiddenFileRow({
+  file,
+  index,
+  onRemove,
+}: {
+  file: string
+  index: number
+  onRemove: (index: number) => Promise<void>
+}) {
+  const onRemoveClick = useCallback(() => void onRemove(index), [index, onRemove])
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="bg-input-background flex h-9 min-w-0 flex-1 items-center rounded-md border px-2.5">
+        <span className="w-full truncate text-[13px]">{file}</span>
+      </div>
+      <Button variant="destructive" className="shrink-0" onClick={onRemoveClick} aria-label={`Показать файл ${file}`}>
+        Удалить
+      </Button>
+    </div>
+  )
+})
+
+const HiddenFilesField = memo(function HiddenFilesField({
+  hiddenFiles,
+  onRemoveFile,
+}: {
+  hiddenFiles: string[]
+  onRemoveFile: (index: number) => Promise<void>
+}) {
+  return (
+    <Field className="px-0 py-3">
+      <FieldContent>
+        <FieldLabel>Скрытые файлы</FieldLabel>
+        <FieldDescription className="text-[13px] text-wrap!">Файлы, скрытые из панели вкладок редактора</FieldDescription>
+      </FieldContent>
+
+      {hiddenFiles.length === 0 ? (
+        <FieldDescription className="py-1 text-[13px]">Файлы не скрыты</FieldDescription>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {hiddenFiles.map((file, index) => (
+            <HiddenFileRow key={file + index} file={file} index={index} onRemove={onRemoveFile} />
+          ))}
+        </div>
+      )}
+    </Field>
+  )
+})
+
 type RepoSourceKey = 'xrayRepo' | 'mihomoRepo'
 
 const GITHUB_REPO_PREFIX = 'https://github.com/'
@@ -601,7 +651,8 @@ export function SettingsModal() {
       const [section, key] = path.split('.')
       try {
         const body: Record<string, unknown> = {}
-        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins'].includes(section)) body[section] = key ? { [key]: value } : value
+        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins', 'ui'].includes(section))
+          body[section] = key ? { [key]: value } : value
         const result = await apiCall<any>('PATCH', 'settings', body)
         if (!result.success) {
           showToast('Ошибка: ' + result.error, 'error')
@@ -666,6 +717,15 @@ export function SettingsModal() {
       if (ok) dispatch({ type: 'SET_SETTINGS', settings: { githubProxies: next } })
     },
     [dispatch, saveSetting, settings.githubProxies]
+  )
+
+  const removeHiddenFile = useCallback(
+    async (index: number) => {
+      const next = settings.hiddenConfigFiles.filter((_, i) => i !== index)
+      const ok = await saveSetting('ui', { hidden_files: next })
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { hiddenConfigFiles: next } })
+    },
+    [dispatch, saveSetting, settings.hiddenConfigFiles]
   )
 
   const saveRepoSource = useCallback(
@@ -787,6 +847,9 @@ export function SettingsModal() {
                       </SelectContent>
                     </Select>
                   </Field>
+                  <Separator className="my-2" />
+                  <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Редактор</p>
+                  <HiddenFilesField hiddenFiles={settings.hiddenConfigFiles} onRemoveFile={removeHiddenFile} />
                   <Separator className="my-2" />
                   <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Авторизация</p>
                   <AuthSettingsField authEnabled={settings.authEnabled} onToggle={toggleAuth} showToast={showToast} />

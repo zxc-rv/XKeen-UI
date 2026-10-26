@@ -240,6 +240,12 @@ pub struct RemoteRouter {
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
+pub struct UiSettings {
+    pub hidden_files: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct PluginsSettings {
     pub multi_router: bool,
     pub routers: Vec<RemoteRouter>,
@@ -254,6 +260,7 @@ pub struct AppSettings {
     pub append_config_paths: AppendConfigPaths,
     pub auth: AuthSettings,
     pub plugins: PluginsSettings,
+    pub ui: UiSettings,
 }
 
 impl<'de> Deserialize<'de> for AppSettings {
@@ -277,6 +284,8 @@ impl<'de> Deserialize<'de> for AppSettings {
             auth: AuthSettings,
             #[serde(default)]
             plugins: PluginsSettings,
+            #[serde(default)]
+            ui: UiSettings,
             #[serde(rename = "timezoneOffset")]
             legacy_tz: Option<i32>,
         }
@@ -292,6 +301,7 @@ impl<'de> Deserialize<'de> for AppSettings {
             append_config_paths: raw.append_config_paths,
             auth: raw.auth,
             plugins: raw.plugins,
+            ui: raw.ui,
         })
     }
 }
