@@ -83,12 +83,23 @@ function collectTags(content: string | undefined, read: (json: any) => any[] | u
   }
 }
 
-function readAvailable(configs: Config[], activeContent: string): AvailableTags {
-  const findContent = (name: string) => configs.find((config) => config.file.toLowerCase().includes(name))?.content
+function readAvailable(configs: Config[]): AvailableTags {
+  const merged = (get: (json: any) => any[] | undefined): string[] => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const config of configs) {
+      for (const tag of collectTags(config.content, get)) {
+        if (seen.has(tag)) continue
+        seen.add(tag)
+        result.push(tag)
+      }
+    }
+    return result
+  }
   return {
-    outbounds: collectTags(findContent('outbound'), (json) => json.outbounds),
-    inbounds: collectTags(findContent('inbound'), (json) => json.inbounds),
-    balancers: collectTags(activeContent, (json) => json.routing?.balancers),
+    outbounds: merged((json) => json.outbounds),
+    inbounds: merged((json) => json.inbounds),
+    balancers: merged((json) => json.routing?.balancers),
   }
 }
 
@@ -104,7 +115,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   const autoApply = useSettings((s) => s.autoApply)
   const getActiveContent = () => configs[activeConfigIndex]?.content ?? editorRef.current?.getValue() ?? ''
   const [rules, setRules] = useState<Rule[]>(() => parseRules(getActiveContent()))
-  const [available, setAvailable] = useState<AvailableTags>(() => readAvailable(configs, getActiveContent()))
+  const [available, setAvailable] = useState<AvailableTags>(() => readAvailable(configs))
   const configsRef = useRef(configs)
   const activeConfigIndexRef = useRef(activeConfigIndex)
   const autoApplyRef = useRef(autoApply)
@@ -131,13 +142,14 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     const parsed = parseRules(content)
     rulesRef.current = parsed
     setRules(parsed)
-    setAvailable(readAvailable(configs, content))
+    setAvailable(readAvailable(configsRef.current))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConfigIndex])
 
   useEffect(() => {
     configsRef.current = configs
     activeConfigIndexRef.current = activeConfigIndex
+    setAvailable(readAvailable(configs))
   }, [configs, activeConfigIndex])
 
   useEffect(() => {
