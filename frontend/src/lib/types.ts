@@ -18,6 +18,8 @@ export type PingMode = 'single' | 'double' | 'double_keep_alive'
 
 export type AutoDnsMode = 'disabled' | 'enabled' | 'with_filter'
 
+export type EmojiFont = 'twemoji' | 'notocoloremoji'
+
 export interface AppSettings {
   theme: ThemeMode
   autoApply: boolean
@@ -43,6 +45,7 @@ export interface AppSettings {
   authEnabled: boolean
   multiRouter: boolean
   hiddenConfigFiles: string[]
+  emojiFont: EmojiFont
 }
 
 export interface ProxySubscriptionInfo {

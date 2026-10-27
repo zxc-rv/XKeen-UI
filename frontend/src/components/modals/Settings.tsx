@@ -22,8 +22,9 @@ import {
 } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
+import { applyEmojiFont } from '../../lib/theme'
 import { useAppContext, useModalContext } from '../../lib/store'
-import type { AppSettings, AutoDnsMode, PingMode, ProxySortOrder, ThemeMode } from '../../lib/types'
+import type { AppSettings, AutoDnsMode, EmojiFont, PingMode, ProxySortOrder, ThemeMode } from '../../lib/types'
 
 type BooleanSettingKey = {
   [K in keyof AppSettings]: AppSettings[K] extends boolean ? K : never
@@ -131,6 +132,11 @@ const themeOptions: { value: ThemeMode; label: string }[] = [
   { value: 'auto', label: 'Авто' },
   { value: 'light', label: 'Светлая' },
   { value: 'dark', label: 'Темная' },
+]
+
+const emojiFontOptions: { value: EmojiFont; label: string }[] = [
+  { value: 'twemoji', label: 'Twemoji' },
+  { value: 'notocoloremoji', label: 'Noto Color Emoji' },
 ]
 
 const SwitchSettingField = memo(function SwitchSettingField({
@@ -701,6 +707,14 @@ export function SettingsModal() {
     [dispatch, saveSetting]
   )
 
+  const setEmojiFont = useCallback(
+    (value: string) => {
+      applyEmojiFont(value as EmojiFont)
+      dispatch({ type: 'SET_SETTINGS', settings: { emojiFont: value as EmojiFont } })
+    },
+    [dispatch]
+  )
+
   const addProxy = useCallback(
     async (rawUrl: string) => {
       let url = rawUrl.trim().replace(/\/+$/, '')
@@ -844,12 +858,39 @@ export function SettingsModal() {
                       items={Object.fromEntries(themeOptions.map((o) => [o.value, o.label]))}
                       onValueChange={setTheme}
                     >
-                      <SelectTrigger id="theme" className="w-34">
+                      <SelectTrigger id="theme" className="w-32">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
                           {themeOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Separator className="my-2" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="emoji-font">Шрифт эмоджи</FieldLabel>
+                      <FieldDescription className="text-[13px]">
+                        Используется для отображения флагов и других эмоджи. Шрифты отличные от Twemoji должны быть установлены в системе.
+                      </FieldDescription>
+                    </FieldContent>
+                    <Select
+                      value={settings.emojiFont}
+                      items={Object.fromEntries(emojiFontOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setEmojiFont}
+                    >
+                      <SelectTrigger id="emoji-font" className="w-42">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {emojiFontOptions.map((item) => (
                             <SelectItem key={item.value} value={item.value}>
                               {item.label}
                             </SelectItem>

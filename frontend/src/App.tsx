@@ -32,13 +32,14 @@ import {
   useModalContext,
   useSettings,
 } from './lib/store'
-import { applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
+import { applyEmojiFont, applyTheme, THEME_MEDIA_QUERY } from './lib/theme'
 import {
   DEFAULT_MIHOMO_REPO,
   DEFAULT_PING_TEST_TIMEOUT,
   DEFAULT_PING_TEST_URL,
   DEFAULT_XRAY_REPO,
   type Config,
+  type EmojiFont,
   type ThemeMode,
 } from './lib/types'
 import { parseClashApiCredentials } from './lib/utils'
@@ -55,6 +56,12 @@ function useThemeMode(theme: ThemeMode) {
     media.addEventListener('change', syncTheme)
     return () => media.removeEventListener('change', syncTheme)
   }, [theme])
+}
+
+function useEmojiFont(font: EmojiFont) {
+  useEffect(() => {
+    applyEmojiFont(font)
+  }, [font])
 }
 
 interface ModalManagerProps {
@@ -571,8 +578,10 @@ type AuthState = 'loading' | 'login' | 'setup' | 'authenticated'
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>('loading')
   const theme = useSettings((s) => s.theme)
+  const emojiFont = useSettings((s) => s.emojiFont)
 
   useThemeMode(theme)
+  useEmojiFont(emojiFont)
 
   useEffect(() => {
     fetch('/api/auth/login')
