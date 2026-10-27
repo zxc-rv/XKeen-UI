@@ -446,11 +446,13 @@ function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
   if (core !== 'mihomo' && (uri.startsWith('hysteria2') || uri.startsWith('hy2'))) {
     const config = parseHysteria2Xray(uri)
     if (config.tag === 'PROXY' || existingConfig.includes(config.tag)) config.tag = generateName('hysteria')
+    config.streamSettings.sockopt = { mark: 255 }
     return { type: 'outbound', content: JSON.stringify(config, null, 2) }
   }
 
   const config = parseProxyUri(uri)
   if (config.tag === 'PROXY' || existingConfig.includes(config.tag)) config.tag = generateName(config.protocol)
+  if (core !== 'mihomo') config.streamSettings = { ...config.streamSettings, sockopt: { mark: 255 } }
 
   return core === 'mihomo'
     ? { type: 'proxy', content: convertToMihomoYaml(config) + '\n' }
