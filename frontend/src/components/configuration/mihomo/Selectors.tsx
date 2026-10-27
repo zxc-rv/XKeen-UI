@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -145,26 +144,13 @@ function isSelectionDisabled(autoPolicy: boolean, proxy?: ProxyInfo): boolean {
 function delayColor(delay: number | null): string {
   if (!delay) return 'text-red-400'
   if (delay < 300) return 'text-green-400'
-  if (delay < 600) return 'text-yellow-400'
+  if (delay < 600) return 'text-yellow-300'
   return 'text-red-400'
-}
-
-function delayColorImportant(delay: number | null): string {
-  if (!delay) return 'text-red-400!'
-  if (delay < 300) return 'text-green-400!'
-  if (delay < 600) return 'text-yellow-400!'
-  return 'text-red-400!'
 }
 
 function shouldShowDelay(proxy?: ProxyInfo, isTesting = false): boolean {
   if (!proxy || NO_DELAY_TYPES.has(proxy.type.toLowerCase())) return false
   return getLastDelay(proxy) !== null || isTesting
-}
-
-function smartRankVariant(rank: string): 'emerald' | 'amber' | 'secondary' {
-  if (rank === 'MostUsed') return 'emerald'
-  if (rank === 'OccasionalUsed') return 'amber'
-  return 'secondary'
 }
 
 function hasNConsecutiveTimeouts(proxy: ProxyInfo | undefined, n: number): boolean {
@@ -317,7 +303,7 @@ const ProxyCard = memo(function ProxyCard({
         if (canTest && !isTestingSingle) onTestSingle(proxyName)
       }}
     >
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="text- flex min-w-0 items-center gap-1.5">
         {proxy.icon && (
           <img
             src={proxy.icon}
@@ -354,39 +340,45 @@ const ProxyCard = memo(function ProxyCard({
       </div>
 
       <div className="flex items-center justify-between gap-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-0.75">
-          <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
-            {proxy.type.toLowerCase()}
-          </Badge>
+        <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] tracking-wider">
+          <span>{proxy.type.toLowerCase()}</span>
           {showTcpOnly && (
-            <Badge variant="destructive" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
-              tcp only
-            </Badge>
+            <>
+              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+              <span className="text-red-400">tcp only</span>
+            </>
           )}
           {proxy.smux && (
-            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
-              smux
-            </Badge>
+            <>
+              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+              <span>smux</span>
+            </>
           )}
           {proxy.tfo && (
-            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
-              tfo
-            </Badge>
+            <>
+              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+              <span>tfo</span>
+            </>
           )}
           {smartLabel && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Badge
-                    variant={smartRankVariant(smartInfo!.rank)}
-                    className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider"
-                  >
-                    {smartLabel}
-                  </Badge>
-                }
-              />
-              <TooltipContent>Smart-вес: {smartInfo!.weight.toFixed(1)}%</TooltipContent>
-            </Tooltip>
+            <>
+              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className={cn(
+                        smartInfo!.rank === 'MostUsed' && 'text-green-400',
+                        smartInfo!.rank === 'OccasionalUsed' && 'text-yellow-300'
+                      )}
+                    >
+                      {smartLabel}
+                    </span>
+                  }
+                />
+                <TooltipContent>Smart-вес: {smartInfo!.weight.toFixed(1)}%</TooltipContent>
+              </Tooltip>
+            </>
           )}
         </div>
 
@@ -550,9 +542,8 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
                 data-slot="proxy-delay-test"
                 className={cn(
                   'ml-auto flex h-5 min-w-8 shrink-0 cursor-pointer items-center justify-center bg-transparent px-1.5 text-xs font-medium tabular-nums outline-hidden',
-                  showDelay ? delayColorImportant(delay) : 'text-foreground!'
+                  showDelay ? delayColor(delay) : 'text-foreground!'
                 )}
-                style={showDelay ? undefined : { color: '#fff' }}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -808,8 +799,7 @@ const SelectorRow = memo(function SelectorRow({
                     variant="outline"
                     size={selectedDigits === 0 ? 'icon-sm' : 'sm'}
                     className={cn(
-                      selectedDigits > 0 && 'min-w-8 justify-center px-0 text-xs font-medium tabular-nums',
-                      selectedDigits > 0 && delayColor(selectedDelay)
+                      selectedDigits > 0 && ['min-w-8 justify-center px-0 text-xs font-medium tabular-nums', delayColor(selectedDelay)]
                     )}
                     style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 1rem)` } : undefined}
                     onClick={() => onTestAll(selectorName)}

@@ -125,7 +125,7 @@ function extractMeta(ob: Outbound): OutboundMeta {
 function delayColor(delay: number | null): string {
   if (!delay) return 'text-red-400'
   if (delay < 300) return 'text-green-400'
-  if (delay < 600) return 'text-yellow-400'
+  if (delay < 600) return 'text-yellow-300'
   return 'text-red-400'
 }
 
