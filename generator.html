@@ -3,15 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Outbound Generator</title>
     <link rel="icon" type="image/png" href="favicon.png" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tokyo-night-dark.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/tokyo-night-dark.css"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=block" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&display=block"
+      rel="stylesheet"
+    />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/json.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/yaml.min.js"></script>
@@ -503,7 +512,9 @@
         </div>
       </div>
 
-      <button class="btn" id="generateBtn" onclick="generate()" disabled>Сгенерировать</button>
+      <button class="btn" id="generateBtn" onclick="generate()" disabled>
+        Сгенерировать
+      </button>
 
       <div class="output" id="output">
         <button class="copy-btn" onclick="copy()" title="Скопировать">
@@ -520,7 +531,12 @@
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
         </button>
-        <button class="copy-btn download-btn" onclick="download()" title="Скачать" style="top: 58px">
+        <button
+          class="copy-btn download-btn"
+          onclick="download()"
+          title="Скачать"
+          style="top: 58px"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
@@ -541,194 +557,226 @@
       </div>
     </div>
 
-    <script src="outboundParser.js"></script>
+    <script src="generator.js"></script>
     <script>
-      let currentCore = "xray"
-      let hasGenerated = false
-      const uriInput = document.getElementById("uri")
-      const clearBtn = document.getElementById("clearInput")
-      const generateBtn = document.getElementById("generateBtn")
-      const SUPPORTED_PROTOCOLS = ["http://", "https://", "ss://", "trojan://", "vmess://", "vless://", "hysteria2://", "hy2://"]
+      let currentCore = "xray";
+      let hasGenerated = false;
+      const uriInput = document.getElementById("uri");
+      const clearBtn = document.getElementById("clearInput");
+      const generateBtn = document.getElementById("generateBtn");
+      const SUPPORTED_PROTOCOLS = [
+        "http://",
+        "https://",
+        "ss://",
+        "trojan://",
+        "vmess://",
+        "vless://",
+        "hysteria2://",
+        "hy2://",
+      ];
 
       function checkURIInput() {
-        const uri = uriInput.value.trim().toLowerCase()
-        const isValid = SUPPORTED_PROTOCOLS.some((protocol) => uri.startsWith(protocol))
-        generateBtn.disabled = !isValid
+        const uri = uriInput.value.trim().toLowerCase();
+        const isValid = SUPPORTED_PROTOCOLS.some((protocol) =>
+          uri.startsWith(protocol),
+        );
+        generateBtn.disabled = !isValid;
       }
 
       uriInput.addEventListener("input", () => {
-        clearBtn.classList.toggle("show", uriInput.value.length > 0)
-        checkURIInput()
-      })
+        clearBtn.classList.toggle("show", uriInput.value.length > 0);
+        checkURIInput();
+      });
 
       uriInput.addEventListener("keypress", (e) => {
         if (e.key === "Enter" && generateBtn.disabled === false) {
-          generate()
+          generate();
         }
-      })
+      });
 
       document.getElementById("fullConfig").addEventListener("change", () => {
-        if (hasGenerated) toggleFullConfig()
-      })
+        if (hasGenerated) toggleFullConfig();
+      });
 
       window.addEventListener("pageshow", () => {
         if (uriInput.value.trim()) {
-          clearBtn.classList.add("show")
+          clearBtn.classList.add("show");
         }
-        checkURIInput()
-      })
+        checkURIInput();
+      });
 
       if (currentCore === "xray") {
-        document.getElementById("fullConfigGroup").style.display = "block"
+        document.getElementById("fullConfigGroup").style.display = "block";
       }
 
       function clearInput() {
-        uriInput.value = ""
-        clearBtn.classList.remove("show")
-        checkURIInput()
-        uriInput.focus()
+        uriInput.value = "";
+        clearBtn.classList.remove("show");
+        checkURIInput();
+        uriInput.focus();
       }
       function updateDisclaimer() {
-        const disclaimer = document.getElementById("disclaimer")
-        disclaimer.classList.toggle("show", currentCore === "xray")
+        const disclaimer = document.getElementById("disclaimer");
+        disclaimer.classList.toggle("show", currentCore === "xray");
       }
 
       document.querySelectorAll(".tab").forEach((tab) => {
         tab.addEventListener("click", () => {
-          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"))
-          tab.classList.add("active")
-          currentCore = tab.dataset.core
-          updateDisclaimer()
-          document.getElementById("fullConfigGroup").style.display = currentCore === "xray" ? "block" : "none"
-        })
-      })
+          document
+            .querySelectorAll(".tab")
+            .forEach((t) => t.classList.remove("active"));
+          tab.classList.add("active");
+          currentCore = tab.dataset.core;
+          updateDisclaimer();
+          document.getElementById("fullConfigGroup").style.display =
+            currentCore === "xray" ? "block" : "none";
+        });
+      });
 
       function generate() {
-        const uri = uriInput.value.trim()
-        if (!uri) return
+        const uri = uriInput.value.trim();
+        if (!uri) return;
 
-        const output = document.getElementById("output")
-        const resultEl = document.getElementById("result")
-        const isFull = document.getElementById("fullConfig").checked
+        const output = document.getElementById("output");
+        const resultEl = document.getElementById("result");
+        const isFull = document.getElementById("fullConfig").checked;
 
         try {
           const lines = uri
             .split(/[\r\n]+/)
             .map((l) => l.trim())
-            .filter(Boolean)
+            .filter(Boolean);
           const results = lines.map((line) => {
-            if (!line.toLowerCase().startsWith("http")) line = line.split("#")[0] + "#vless-reality"
-            const res = generateConfigForCore(line, currentCore, "")
-            return currentCore === "xray" ? JSON.parse(res.content) : res.content
-          })
+            if (!line.toLowerCase().startsWith("http"))
+              line = line.split("#")[0] + "#vless-reality";
+            const res = generateConfigForCore(line, currentCore, "");
+            return currentCore === "xray"
+              ? JSON.parse(res.content)
+              : res.content;
+          });
 
-          let content, lang
+          let content, lang;
 
           if (currentCore === "xray") {
-            lang = "json"
+            lang = "json";
             if (isFull) {
               const config = {
-                outbounds: [...results, { tag: "direct", protocol: "freedom" }, { tag: "block", protocol: "blackhole" }],
-              }
-              content = JSON.stringify(config, null, 2)
+                outbounds: [
+                  ...results,
+                  { tag: "direct", protocol: "freedom" },
+                  { tag: "block", protocol: "blackhole" },
+                ],
+              };
+              content = JSON.stringify(config, null, 2);
             } else {
-              content = results.map((r) => JSON.stringify(r, null, 2)).join(",\n")
+              content = results
+                .map((r) => JSON.stringify(r, null, 2))
+                .join(",\n");
             }
           } else {
-            lang = "yaml"
+            lang = "yaml";
             const { proxies, providers } = results.reduce(
               (acc, item, i) => {
-                const isProvider = lines[i].toLowerCase().startsWith("http")
-                isProvider ? acc.providers.push(item) : acc.proxies.push(item)
-                return acc
+                const isProvider = lines[i].toLowerCase().startsWith("http");
+                isProvider ? acc.providers.push(item) : acc.proxies.push(item);
+                return acc;
               },
               { proxies: [], providers: [] },
-            )
+            );
 
-            const parts = []
-            if (proxies.length) parts.push(`proxies:\n${proxies.join("\n")}`)
-            if (providers.length) parts.push(`proxy-providers:\n${providers.join("\n")}`)
-            content = parts.join("\n\n")
+            const parts = [];
+            if (proxies.length) parts.push(`proxies:\n${proxies.join("\n")}`);
+            if (providers.length)
+              parts.push(`proxy-providers:\n${providers.join("\n")}`);
+            content = parts.join("\n\n");
           }
 
-          resultEl.innerHTML = `<code class="language-${lang}">${hljs.highlight(content, { language: lang }).value}</code>`
-          output.className = "output success show"
+          resultEl.innerHTML = `<code class="language-${lang}">${hljs.highlight(content, { language: lang }).value}</code>`;
+          output.className = "output success show";
 
-          document.querySelector(".download-btn").classList.toggle("show", currentCore === "xray" && isFull)
-          hasGenerated = true
+          document
+            .querySelector(".download-btn")
+            .classList.toggle("show", currentCore === "xray" && isFull);
+          hasGenerated = true;
         } catch (e) {
-          resultEl.textContent = `Ошибка: ${e.message}`
-          output.className = "output error show"
+          resultEl.textContent = `Ошибка: ${e.message}`;
+          output.className = "output error show";
         }
       }
 
       function copy() {
-        const text = document.getElementById("result").textContent
+        const text = document.getElementById("result").textContent;
         navigator.clipboard.writeText(text).then(() => {
-          const btn = document.querySelector(".copy-btn")
+          const btn = document.querySelector(".copy-btn");
           btn.innerHTML =
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-          btn.classList.add("success")
-          setTimeout(() => btn.classList.remove("success"), 2000)
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          btn.classList.add("success");
+          setTimeout(() => btn.classList.remove("success"), 2000);
           setTimeout(
             () =>
               (btn.innerHTML =
                 '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'),
             2000,
-          )
-        })
+          );
+        });
       }
 
       function toggleFullConfig() {
-        const resultEl = document.getElementById("result")
-        const isFull = document.getElementById("fullConfig").checked
-        let currentContent = resultEl.textContent
+        const resultEl = document.getElementById("result");
+        const isFull = document.getElementById("fullConfig").checked;
+        let currentContent = resultEl.textContent;
 
         try {
           if (isFull) {
-            const outbounds = JSON.parse(`[${currentContent}]`)
+            const outbounds = JSON.parse(`[${currentContent}]`);
             const config = {
-              outbounds: [...outbounds, { tag: "direct", protocol: "freedom" }, { tag: "block", protocol: "blackhole" }],
-            }
-            currentContent = JSON.stringify(config, null, 2)
+              outbounds: [
+                ...outbounds,
+                { tag: "direct", protocol: "freedom" },
+                { tag: "block", protocol: "blackhole" },
+              ],
+            };
+            currentContent = JSON.stringify(config, null, 2);
           } else {
-            const config = JSON.parse(currentContent)
+            const config = JSON.parse(currentContent);
             currentContent = config.outbounds
               .filter((o) => o.tag !== "direct" && o.tag !== "block")
               .map((o) => JSON.stringify(o, null, 2))
-              .join(",\n")
+              .join(",\n");
           }
 
-          resultEl.innerHTML = `<code class="language-json">${hljs.highlight(currentContent, { language: "json" }).value}</code>`
-          document.querySelector(".download-btn").classList.toggle("show", isFull)
+          resultEl.innerHTML = `<code class="language-json">${hljs.highlight(currentContent, { language: "json" }).value}</code>`;
+          document
+            .querySelector(".download-btn")
+            .classList.toggle("show", isFull);
         } catch (e) {
-          console.error("Ошибка переключения конфига:", e)
+          console.error("Ошибка переключения конфига:", e);
         }
       }
 
       function download() {
-        const text = document.getElementById("result").textContent
-        const blob = new Blob([text], { type: "application/json" })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = "04_outbounds.json"
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        const text = document.getElementById("result").textContent;
+        const blob = new Blob([text], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "04_outbounds.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-        const btn = document.querySelector(".download-btn")
+        const btn = document.querySelector(".download-btn");
         btn.innerHTML =
-          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-        btn.classList.add("success")
-        setTimeout(() => btn.classList.remove("success"), 2000)
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+        btn.classList.add("success");
+        setTimeout(() => btn.classList.remove("success"), 2000);
         setTimeout(
           () =>
             (btn.innerHTML =
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'),
           2000,
-        )
+        );
       }
     </script>
   </body>

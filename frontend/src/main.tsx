@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client'
 
 import App from './App.tsx'
 import './globals.css'
-import './lib/outboundParser.js'
+import './lib/generator.js'
 import { initVisibilityReload } from './lib/visibilityReload'
 
 initVisibilityReload()
