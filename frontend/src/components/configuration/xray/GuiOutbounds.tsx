@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -25,6 +24,7 @@ import type { Config } from '../../../lib/types'
 import { cn, copyText } from '../../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { CodeMirrorRef } from '../CodeMirror'
+import { IndexBadge } from './IndexBadge'
 import { ProviderEditor, type ProviderEditorHandle } from '../editor/ProviderEditor'
 
 type Outbound = Record<string, any>
@@ -626,9 +626,7 @@ const OutboundCard = memo(function OutboundCard({
         >
           <IconGripVertical size={16} />
         </div>
-        <Badge variant="outline" className="mr-1 size-7 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
-          #{index + 1}
-        </Badge>
+        <IndexBadge index={index} />
         <span className={cn('truncate text-sm', !tag && 'text-muted-foreground italic')}>{tag || 'без тега'}</span>
         {(meta.address || meta.port) && (
           <Tooltip>

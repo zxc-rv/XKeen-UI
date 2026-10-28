@@ -340,7 +340,7 @@ const ProxyCard = memo(function ProxyCard({
       </div>
 
       <div className="flex items-center justify-between gap-1">
-        <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] tracking-wider">
+        <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-xs tracking-wide">
           <span>{proxy.type.toLowerCase()}</span>
           {showTcpOnly && (
             <>

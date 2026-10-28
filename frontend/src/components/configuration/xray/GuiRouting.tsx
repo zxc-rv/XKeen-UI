@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -10,6 +9,7 @@ import type { Config } from '../../../lib/types'
 import { cn } from '../../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { CodeMirrorRef } from '../CodeMirror'
+import { IndexBadge } from './IndexBadge'
 
 const RULE_FIELDS = {
   domain: {
@@ -448,9 +448,7 @@ const RuleCard = memo(
           >
             <IconGripVertical size={16} />
           </div>
-          <Badge variant="outline" className="mr-1 size-7 rounded-full border-blue-500/20 bg-blue-500/10 text-blue-400">
-            #{index + 1}
-          </Badge>
+          <IndexBadge index={index} />
           {editingName ? (
             <div className="flex min-w-0 flex-1 items-center gap-1">
               <input
