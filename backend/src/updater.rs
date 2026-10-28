@@ -1,4 +1,3 @@
-use crate::logger::log;
 use crate::types::*;
 use axum::extract::State;
 use axum::http::{HeaderMap, header};
@@ -11,10 +10,11 @@ use std::io::{Cursor, Read, Seek, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
+use tokio::sync::watch;
 
 const GITHUB_API: &str = "https://api.github.com/repos";
 const GITHUB_RELEASE: &str = "https://github.com";
@@ -165,18 +165,20 @@ pub async fn fetch_latest_version(
             Err(_) => continue,
         };
 
-        if is_alpha && core == "mihomo"
-            && let Some(r) = rels.iter().find(|r| r.tag_name == "Prerelease-Alpha") {
-                for asset in &r.assets {
-                    if let Some(hash) = asset
-                        .name
-                        .find("alpha-")
-                        .and_then(|index| asset.name[index..].split('.').next())
-                    {
-                        return Some((hash.to_string(), "Prerelease-Alpha".into()));
-                    }
+        if is_alpha
+            && core == "mihomo"
+            && let Some(r) = rels.iter().find(|r| r.tag_name == "Prerelease-Alpha")
+        {
+            for asset in &r.assets {
+                if let Some(hash) = asset
+                    .name
+                    .find("alpha-")
+                    .and_then(|index| asset.name[index..].split('.').next())
+                {
+                    return Some((hash.to_string(), "Prerelease-Alpha".into()));
                 }
             }
+        }
 
         if let Some(r) = rels.into_iter().find(|r| !r.prerelease) {
             let tag = r.tag_name.clone();
@@ -192,201 +194,103 @@ fn response(success: bool, error: Option<String>) -> (HeaderMap, Json<Value>) {
     (h, Json(json!({ "success": success, "error": error })))
 }
 
-async fn download(
-    client: &reqwest::Client, url: &str, proxies: &[String], tmp_path: &Path,
-) -> Result<DownloadResult, String> {
-    async fn load(r: reqwest::Response, path: &Path, source: &str) -> Option<DownloadResult> {
-        let size = r.content_length().unwrap_or(0) as usize;
-        let (mut stream, is_disk) = (r.bytes_stream(), size > 50 * 1024 * 1024);
-        let mut file = if is_disk {
-            Some(fs::File::create(path).await.ok()?)
-        } else {
-            None
-        };
-        let mut buf = if is_disk {
-            Vec::new()
-        } else {
-            Vec::with_capacity(if size > 0 { size } else { 5 * 1024 * 1024 })
-        };
-
-        loop {
-            match tokio::time::timeout(std::time::Duration::from_secs(5), stream.next()).await {
-                Ok(Some(Ok(chunk))) => {
-                    if let Some(f) = &mut file {
-                        if f.write_all(&chunk).await.is_err() {
-                            log("WARN", format!("Ошибка записи на диск ({})", source));
-                            _ = fs::remove_file(path);
-                            return None;
-                        }
-                    } else {
-                        buf.extend_from_slice(&chunk);
-                    }
-                }
-                Ok(None) => {
-                    if !is_disk && buf.is_empty() {
-                        log("WARN", format!("Загрузка вернула 0 байт ({})", source));
-                        return None;
-                    }
-                    log(
-                        "INFO",
-                        format!(
-                            "Файл загружен {} ({:.1} МБ)",
-                            if is_disk { "на диск" } else { "в ОЗУ" },
-                            (if is_disk { size } else { buf.len() }) as f64 / 1048576.0
-                        ),
-                    );
-                    return Some(if is_disk {
-                        DownloadResult::Disk(path.to_path_buf())
-                    } else {
-                        DownloadResult::Ram(buf)
-                    });
-                }
-                Ok(Some(Err(e))) => {
-                    log("WARN", format!("Соединение оборвалось ({}): {}", source, e));
-                    break;
-                }
-                Err(_) => {
-                    log("WARN", format!("Таймаут загрузки ({})", source));
-                    break;
-                }
-            }
-        }
-        if is_disk {
-            _ = fs::remove_file(path).await;
-        }
-        None
+/// Ждёт следующую команду управления (кнопки окна обновления).
+async fn ctl_next(ctl: &mut watch::Receiver<UpdateCtl>) -> UpdateCtl {
+    if ctl.changed().await.is_err() {
+        return UpdateCtl::Cancel;
     }
-
-    let list = std::iter::once(url.to_string()).chain(proxies.iter().map(|p| format!("{}/{}", p, url)));
-    for (i, u) in list.enumerate() {
-        let (source, is_proxy) = if i == 0 {
-            ("напрямую", false)
-        } else {
-            ("прокси", true)
-        };
-        if is_proxy {
-            log(
-                "INFO",
-                format!("Попытка загрузки через прокси #{}: {}", i, proxies[i - 1]),
-            );
-        }
-
-        match client.get(&u).send().await {
-            Ok(r) if r.status().is_success() => {
-                if r.headers()
-                    .get("content-type")
-                    .is_some_and(|v| v.to_str().unwrap_or("").contains("text/html"))
-                {
-                    log(
-                        "WARN",
-                        if is_proxy {
-                            format!("Прокси #{} вернул HTML", i)
-                        } else {
-                            "Прямой URL вернул HTML".into()
-                        },
-                    );
-                    continue;
-                }
-                if let Some(res) = load(
-                    r,
-                    tmp_path,
-                    &format!("{}{}", source, if is_proxy { format!(" #{}", i) } else { "".into() }),
-                )
-                .await
-                {
-                    return Ok(res);
-                }
-            }
-            Ok(r) => log("WARN", format!("Ошибка загрузки: {}", r.status())),
-            Err(e) => log("WARN", format!("Ошибка загрузки: {}", e)),
-        }
-    }
-    log("ERROR", "Не удалось выполнить обновление".into());
-    Err("Не удалось выполнить обновление".into())
-}
-async fn save(dl: DownloadResult, out_path: PathBuf) -> std::io::Result<()> {
-    tokio::task::spawn_blocking(move || {
-        let mut out = File::create(&out_path)?;
-        match dl {
-            DownloadResult::Ram(d) => out.write_all(&d)?,
-            DownloadResult::Disk(p) => {
-                std::io::copy(&mut File::open(&p)?, &mut out)?;
-                _ = std::fs::remove_file(p);
-            }
-        }
-        out.sync_data()
-    })
-    .await
-    .map_err(|e| std::io::Error::other(e.to_string()))?
+    *ctl.borrow_and_update()
 }
 
-async fn install_jq() -> Result<(), String> {
-    log("INFO", "Установка jq через opkg...".into());
-    let update = Command::new("opkg")
-        .arg("update")
-        .status()
-        .await
-        .map_err(|e| format!("opkg update: {}", e))?;
-    if !update.success() {
-        return Err("Ошибка обновления opkg кеша".into());
-    }
-    let install = Command::new("opkg")
-        .args(["install", "jq"])
-        .status()
-        .await
-        .map_err(|e| format!("opkg install jq: {}", e))?;
-    if !install.success() {
-        return Err("Ошибка установки jq".into());
-    }
-    log("INFO", "Пакет jq установлен".into());
-    Ok(())
+#[derive(Debug)]
+enum UpdateError {
+    Cancelled,
+    Failed(String),
 }
 
-async fn install_yq(client: &reqwest::Client, proxies: &[String], tmp_dir: &Path) -> Result<(), String> {
-    let arch = std::env::consts::ARCH;
-    let url = match arch {
-        "aarch64" => format!(
-            "{}/mikefarah/yq/releases/latest/download/yq_linux_arm64",
-            GITHUB_RELEASE
-        ),
-        "mips" if cfg!(target_endian = "little") => format!(
-            "{}/mikefarah/yq/releases/download/v4.52.2/yq_linux_mipsle",
-            GITHUB_RELEASE
-        ),
-        "mips" => format!(
-            "{}/mikefarah/yq/releases/download/v4.52.2/yq_linux_mips",
-            GITHUB_RELEASE
-        ),
-        _ => return Err("Архитектура не поддерживается для yq".into()),
-    };
-
-    log("INFO", format!("Загрузка yq: {}", url));
-    let dl_res = download(client, &url, proxies, &tmp_dir.join("yq.tmp")).await?;
-    let target = "/opt/sbin/yq";
-    if let Err(e) = save(dl_res, tmp_dir.join("yq.bin")).await {
-        return Err(format!("Ошибка записи yq: {}", e));
+impl From<String> for UpdateError {
+    fn from(e: String) -> Self {
+        Self::Failed(e)
     }
+}
 
-    log("INFO", "Установка yq...".into());
-    let src = tmp_dir.join("yq.bin");
-    if fs::rename(&src, target).await.is_err() {
-        fs::copy(&src, target)
-            .await
-            .map_err(|e| format!("Ошибка установки yq: {}", e))?;
-        _ = fs::remove_file(&src).await;
+impl std::fmt::Display for UpdateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cancelled => write!(f, "Отменено пользователем"),
+            Self::Failed(e) => write!(f, "{}", e),
+        }
     }
-    _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
-    log("INFO", "Пакет yq установлен".into());
-    Ok(())
 }
 
 pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateReq>) -> impl IntoResponse {
+    let repo = {
+        let s = state.settings.read().unwrap();
+        get_repo(&s.updater, &req.core)
+    };
+    let Some(_) = repo else {
+        return response(false, Some("Неизвестное ядро".into()));
+    };
+    if req.version.trim().is_empty() {
+        return response(false, Some("Не указана версия".into()));
+    }
+    if !state.update_session.try_begin() {
+        return response(false, Some("Обновление уже выполняется".into()));
+    }
+
+    tokio::spawn(run_update(state.clone(), req));
+    response(true, None)
+}
+
+pub async fn post_update_control(
+    State(state): State<AppState>, Json(req): Json<UpdateControlReq>,
+) -> impl IntoResponse {
+    match req.action.as_str() {
+        "cancel" => state.update_session.cancel(),
+        "proxy" => state.update_session.switch_to_proxy(),
+        _ => return response(false, Some("Неизвестное действие".into())),
+    }
+    response(true, None)
+}
+
+async fn run_update(state: AppState, req: UpdateReq) {
+    // Страховка: при панике или досрочном выходе сессия всё равно завершается.
+    struct DoneGuard {
+        session: UpdateSession,
+        armed: bool,
+    }
+    impl Drop for DoneGuard {
+        fn drop(&mut self) {
+            if self.armed {
+                self.session.done(false, Some("Процесс обновления прерван".into()));
+                self.session.finish();
+            }
+        }
+    }
+
+    let session = state.update_session.clone();
+    let mut guard = DoneGuard {
+        session: session.clone(),
+        armed: true,
+    };
+    let result = run_update_inner(&state, &req).await;
+    guard.armed = false;
+    if let Err(e) = &result {
+        session.log("error", format!("⨯ {}", e));
+        session.done(false, Some(e.to_string()));
+    }
+    session.finish();
+}
+
+async fn run_update_inner(state: &AppState, req: &UpdateReq) -> Result<(), UpdateError> {
+    let session = &state.update_session;
+    let client = &state.update_client;
     let (repo, proxies) = {
         let s = state.settings.read().unwrap();
         (get_repo(&s.updater, &req.core), s.updater.github_proxy.clone())
     };
     let Some(repo) = repo else {
-        return response(false, Some("Неизвестное ядро".into()));
+        return Err(UpdateError::Failed("Неизвестное ядро".into()));
     };
     let ver = if req.version.starts_with(|c: char| c.is_ascii_digit()) {
         format!("v{}", req.version)
@@ -398,8 +302,9 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
         r.make_ascii_uppercase();
     }
 
-    log(
-        "INFO",
+    session.stage("prepare");
+    session.log(
+        "info",
         format!(
             "Запущено обновление {} до {}",
             if req.core == "self" { "XKeen UI" } else { &core_cap },
@@ -416,22 +321,24 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             "aarch64" => "arm64-v8a",
             "mips" if cfg!(target_endian = "little") => "mips32le",
             "mips" => "mips32",
-            _ => return response(false, Some("Архитектура не поддерживается".into())),
+            _ => return Err(UpdateError::Failed("Архитектура не поддерживается".into())),
         };
 
-        log("INFO", "Загрузка исполняемого файла...".into());
+        session.stage("download");
+        session.log("info", "Загрузка исполняемого файла...");
         let bin_url = format!("{GITHUB_RELEASE}/{repo}/releases/download/{ver}/xkeen-ui-{arch_suffix}");
-        let bin_d = match download(&state.http_client, &bin_url, &proxies, &tmp_dir.join("bin.tmp")).await {
-            Ok(d) => d,
-            Err(e) => return response(false, Some(e)),
-        };
+        let bin_d = download(client, &bin_url, &proxies, &tmp_dir.join("bin.tmp"), session).await?;
 
-        log("INFO", "Установка обновления...".into());
+        if session.cancelled() {
+            return Err(UpdateError::Cancelled);
+        }
+        session.stage("install");
+        session.log("info", "Установка обновления...");
 
         let source = tmp_dir.join(format!("xkeen-ui_{}", ver));
-        if let Err(e) = save(bin_d, source.clone()).await {
-            return response(false, Some(format!("Ошибка сохранения: {}", e)));
-        }
+        save(bin_d, source.clone())
+            .await
+            .map_err(|e| UpdateError::Failed(format!("Ошибка сохранения: {}", e)))?;
 
         let integrity_check = tokio::task::spawn_blocking({
             let source = source.clone();
@@ -451,45 +358,54 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
             }
         })
         .await
-        .map_err(|e| format!("Ошибка проверки: {}", e))
-        .and_then(|r| r);
+        .map_err(|e| UpdateError::Failed(format!("Ошибка проверки: {}", e)))
+        .and_then(|r| r.map_err(UpdateError::Failed));
 
         if let Err(e) = integrity_check {
             _ = std::fs::remove_file(&source);
-            return response(false, Some(e));
+            return Err(e);
+        }
+
+        if session.cancelled() {
+            return Err(UpdateError::Cancelled);
         }
 
         let target = "/opt/sbin/xkeen-ui";
-        if let Err(e) = fs::rename(&source, target).await {
-            return response(false, Some(format!("Ошибка установки: {}", e)));
-        }
+        fs::rename(&source, target)
+            .await
+            .map_err(|e| UpdateError::Failed(format!("Ошибка установки: {}", e)))?;
 
         _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
         _ = tokio::task::spawn_blocking(rustix::fs::sync).await;
 
-        log("INFO", format!("Обновление XKeen UI до {} завершено", ver));
-
+        session.log("info", format!("✓ Обновление XKeen UI до {} завершено", ver));
+        session.stage("restart");
         if Path::new(S99XKEEN_UI).exists() {
-            log("INFO", "Перезапуск...".into());
+            session.log("info", "Перезапуск интерфейса...");
+            // Done отправляем до перезапуска, чтобы окно успело получить событие.
+            session.done(true, None);
             _ = Command::new(S99XKEEN_UI)
                 .arg("restart")
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn();
         } else {
-            log(
-                "WARN",
-                "Init скрипт панели не найден, требуется ручной перезапуск".into(),
-            );
+            session.done(true, None);
+            session.log("warn", "Init скрипт панели не найден, требуется ручной перезапуск");
         }
-        return response(true, None);
+        return Ok(());
     }
+
+    session.stage("download");
     let assets = if req.assets.is_empty() {
-        log("INFO", format!("Получение списка ассетов релиза {}...", ver));
-        fetch_release_assets(&state.http_client, &proxies, &repo, &ver).await
+        session.log("info", format!("Получение списка ассетов релиза {}...", ver));
+        fetch_release_assets(client, &proxies, &repo, &ver).await
     } else {
         req.assets.clone()
     };
+    if session.cancelled() {
+        return Err(UpdateError::Cancelled);
+    }
 
     let asset = if !assets.is_empty() {
         match pick_asset(&assets, arch, &ver) {
@@ -500,7 +416,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
                 } else {
                     "Архитектура не поддерживается"
                 };
-                return response(false, Some(msg.into()));
+                return Err(UpdateError::Failed(msg.into()));
             }
         }
     } else {
@@ -510,48 +426,50 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
                 "aarch64" => "Xray-linux-arm64-v8a.zip".to_string(),
                 "mips" if cfg!(target_endian = "little") => "Xray-linux-mips32le.zip".to_string(),
                 "mips" => "Xray-linux-mips32.zip".to_string(),
-                _ => return response(false, Some("Архитектура не поддерживается".into())),
+                _ => return Err(UpdateError::Failed("Архитектура не поддерживается".into())),
             },
             "mihomo" if ver == "Prerelease-Alpha" => {
-                return response(false, Some("Ассет не найден — обновите страницу и повторите".into()));
+                return Err(UpdateError::Failed(
+                    "Ассет не найден — обновите страницу и повторите".into(),
+                ));
             }
             "mihomo" => {
                 let m = match arch {
                     "aarch64" => "arm64",
                     "mips" if cfg!(target_endian = "little") => "mipsle-softfloat",
                     "mips" => "mips-softfloat",
-                    _ => return response(false, Some("Архитектура не поддерживается".into())),
+                    _ => return Err(UpdateError::Failed("Архитектура не поддерживается".into())),
                 };
                 format!("mihomo-linux-{}-{}.gz", m, ver)
             }
-            _ => return response(false, Some("Неизвестное ядро".into())),
+            _ => return Err(UpdateError::Failed("Неизвестное ядро".into())),
         }
     };
     let url = format!("{}/{}/releases/download/{}/{}", GITHUB_RELEASE, repo, ver, asset);
 
     match req.core.as_str() {
         "xray" if !Path::new("/opt/bin/jq").exists() => {
-            log("WARN", "Пакет jq не найден".into());
-            if let Err(e) = install_jq().await {
-                return response(false, Some(e));
-            }
+            session.log("warn", "Пакет jq не найден");
+            install_jq(session).await?;
         }
         "mihomo" if !Path::new("/opt/sbin/yq").exists() => {
-            log("WARN", "Пакет yq не найден".into());
-            if let Err(e) = install_yq(&state.http_client, &proxies, tmp_dir).await {
-                return response(false, Some(e));
-            }
+            session.log("warn", "Пакет yq не найден");
+            install_yq(client, &proxies, tmp_dir, session).await?;
         }
         _ => {}
     }
+    if session.cancelled() {
+        return Err(UpdateError::Cancelled);
+    }
 
-    log("INFO", format!("Загрузка: {}", url));
-    let dl_res = match download(&state.http_client, &url, &proxies, &tmp_dir.join("download.tmp")).await {
-        Ok(r) => r,
-        Err(e) => return response(false, Some(e)),
-    };
+    session.log("info", format!("Загрузка: {}", url));
+    let dl_res = download(client, &url, &proxies, &tmp_dir.join("download.tmp"), session).await?;
 
-    log("INFO", "Установка обновления...".into());
+    if session.cancelled() {
+        return Err(UpdateError::Cancelled);
+    }
+    session.stage("install");
+    session.log("info", "Установка обновления...");
     let (core_name, is_zip) = (req.core.clone(), asset.ends_with(".zip"));
 
     fn unpack<R: Read + Seek>(rdr: R, out_path: &Path, core: &str, is_zip: bool) -> std::io::Result<()> {
@@ -576,9 +494,10 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
                 let mut files: Vec<String> = Vec::new();
                 for i in 0..archive.len() {
                     if let Ok(f) = archive.by_index(i)
-                        && let Ok(name) = f.name() {
-                            files.push(name.to_string());
-                        }
+                        && let Ok(name) = f.name()
+                    {
+                        files.push(name.to_string());
+                    }
                 }
                 if files.len() == 1 {
                     entry = files.into_iter().next();
@@ -609,7 +528,11 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     .await;
 
     if let Ok(Err(e)) | Err(e) = unpack.map_err(|e| std::io::Error::other(e.to_string())) {
-        return response(false, Some(format!("Ошибка распаковки: {}", e)));
+        return Err(UpdateError::Failed(format!("Ошибка распаковки: {}", e)));
+    }
+
+    if session.cancelled() {
+        return Err(UpdateError::Cancelled);
     }
 
     let target = format!("/opt/sbin/{}", req.core);
@@ -621,7 +544,7 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
                 .format("%Y%m%d-%H%M%S")
         );
         _ = fs::create_dir_all("/opt/sbin/core-backup").await;
-        log("INFO", format!("Создание бэкапа: {}", bk));
+        session.log("info", format!("Создание бэкапа: {}", bk));
         _ = fs::copy(&target, &bk).await;
     }
 
@@ -632,36 +555,46 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     if fs::rename(&source, &target).await.is_ok() {
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run {
-            log("INFO", format!("Перезапуск {}...", core_cap));
+            if session.cancelled() {
+                return Err(UpdateError::Cancelled);
+            }
+            session.stage("restart");
+            session.log("info", format!("Перезапуск {}...", core_cap));
             let log_len = fs::metadata(error_log_path()).await.map(|m| m.len()).unwrap_or(0) as usize;
             if let Err(e) = crate::controller::soft_restart(&req.core).await {
-                log("ERROR", e.to_string());
-                return response(false, Some(e.to_string()));
+                return Err(UpdateError::Failed(e.to_string()));
             }
             if req.core == "mihomo"
-                && let Err(e) = crate::controller::wait_mihomo_ready(log_len).await {
-                    log("ERROR", e.to_string());
-                    return response(false, Some(e.to_string()));
-                }
+                && let Err(e) = crate::controller::wait_mihomo_ready(log_len).await
+            {
+                return Err(UpdateError::Failed(e.to_string()));
+            }
         }
     } else {
-        log("WARN", "Атомарная замена не удалась, фолбек на копирование...".into());
+        session.log("warn", "Атомарная замена не удалась, фолбек на копирование...");
         if run {
-            log("INFO", "Остановка XKeen...".into());
-            _ = crate::controller::run_init_command(&state, &["stop"]).await;
+            if session.cancelled() {
+                return Err(UpdateError::Cancelled);
+            }
+            session.stage("restart");
+            session.log("info", "Остановка XKeen...");
+            _ = crate::controller::run_init_command(state, &["stop"]).await;
         }
         if let Err(e) = fs::copy(&source, &target).await {
-            return response(false, Some(format!("Ошибка установки: {}", e)));
+            return Err(UpdateError::Failed(format!("Ошибка установки: {}", e)));
         }
         _ = fs::remove_file(&source).await;
         _ = fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await;
         if run {
-            log("INFO", "Запуск XKeen...".into());
-            _ = crate::controller::run_init_command(&state, &["start", "on"]).await;
+            if session.cancelled() {
+                return Err(UpdateError::Cancelled);
+            }
+            session.log("info", "Запуск XKeen...");
+            _ = crate::controller::run_init_command(state, &["start", "on"]).await;
         }
     }
 
-    log("INFO", format!("Обновление {} до {} завершено", core_cap, ver));
+    session.log("info", format!("✓ Обновление {} до {} завершено", core_cap, ver));
     {
         let mut c = state.update_checker.core_outdated.write().unwrap();
         *c = false;
@@ -672,7 +605,283 @@ pub async fn post_update(State(state): State<AppState>, Json(req): Json<UpdateRe
     }
     *state.update_checker.last_core_toast.write().unwrap() = None;
 
-    response(true, None)
+    session.done(true, None);
+    Ok(())
+}
+
+/// Вытаскивает корневую причину ошибки reqwest как есть: reqwest прячет её
+/// (io/rustls/hyper) на дне цепочки источников, а сам наверху рапортует
+/// безликим «error sending request for url».
+fn describe_send_error(e: &reqwest::Error) -> String {
+    let mut cur: &(dyn std::error::Error + 'static) = e;
+    let mut reason = cur.to_string();
+    while let Some(src) = cur.source() {
+        cur = src;
+        reason = cur.to_string();
+    }
+    reason
+}
+
+async fn download(
+    client: &reqwest::Client, url: &str, proxies: &[String], tmp_path: &Path, session: &UpdateSession,
+) -> Result<DownloadResult, UpdateError> {
+    /// Читает поток ответа, рапортуя прогресс и реагируя на команды управления.
+    async fn load(
+        r: reqwest::Response, path: &Path, session: &UpdateSession, source: &str,
+    ) -> Result<Option<DownloadResult>, UpdateError> {
+        let total = r.content_length().unwrap_or(0);
+        let (mut stream, is_disk) = (r.bytes_stream(), total > 50 * 1024 * 1024);
+        let mut file = if is_disk {
+            Some(
+                fs::File::create(path)
+                    .await
+                    .map_err(|e| UpdateError::Failed(format!("Ошибка записи на диск: {}", e)))?,
+            )
+        } else {
+            None
+        };
+        let mut buf = if is_disk {
+            Vec::new()
+        } else {
+            Vec::with_capacity(if total > 0 { total as usize } else { 5 * 1024 * 1024 })
+        };
+        let mut ctl = session.ctl_rx.clone();
+        let (mut written, mut last_bytes) = (0u64, 0u64);
+        let mut last_emit = Instant::now();
+
+        loop {
+            tokio::select! {
+                biased;
+                ctl = ctl_next(&mut ctl) => match ctl {
+                    UpdateCtl::Cancel => {
+                        if is_disk {
+                            _ = fs::remove_file(path).await;
+                        }
+                        return Err(UpdateError::Cancelled);
+                    }
+                    UpdateCtl::Proxy => {
+                        if is_disk {
+                            _ = fs::remove_file(path).await;
+                        }
+                        session.log("info", "Текущая попытка отменена — переключаюсь на загрузку через прокси");
+                        return Ok(None);
+                    }
+                    UpdateCtl::Run => continue,
+                },
+                chunk = stream.next() => match chunk {
+                    Some(Ok(chunk)) => {
+                        if let Some(f) = &mut file {
+                            if f.write_all(&chunk).await.is_err() {
+                                _ = fs::remove_file(path).await;
+                                return Err(UpdateError::Failed(format!("Ошибка записи на диск ({})", source)));
+                            }
+                        } else {
+                            buf.extend_from_slice(&chunk);
+                        }
+                        written += chunk.len() as u64;
+                        if last_emit.elapsed().as_millis() >= 200 {
+                            let speed = (written - last_bytes) as f64 / last_emit.elapsed().as_secs_f64();
+                            session.progress(written, total, speed);
+                            last_bytes = written;
+                            last_emit = Instant::now();
+                        }
+                    }
+                    Some(Err(e)) => {
+                        session.log("warn", format!("Ошибка загрузки: {}", describe_send_error(&e)));
+                        if is_disk {
+                            _ = fs::remove_file(path).await;
+                        }
+                        return Ok(None);
+                    }
+                    None => {
+                        if !is_disk && buf.is_empty() {
+                            session.log("warn", "Загрузка вернула 0 байт");
+                            return Ok(None);
+                        }
+                        let size = if is_disk { written } else { buf.len() as u64 };
+                        session.progress(size, size, 0.0);
+                        session.log(
+                            "info",
+                            format!(
+                                "Файл загружен {} ({:.1} МБ)",
+                                if is_disk { "на диск" } else { "в ОЗУ" },
+                                size as f64 / 1048576.0
+                            ),
+                        );
+                        return Ok(Some(if is_disk {
+                            DownloadResult::Disk(path.to_path_buf())
+                        } else {
+                            DownloadResult::Ram(buf)
+                        }));
+                    }
+                },
+            }
+        }
+    }
+
+    let mut ctl = session.ctl_rx.clone();
+    let list: Vec<String> = std::iter::once(url.to_string())
+        .chain(
+            proxies
+                .iter()
+                .map(|p| format!("{}/{}", p.trim().trim_end_matches('/'), url)),
+        )
+        .collect();
+
+    // Если прокси уже запрошен кнопкой — начинаем сразу с прокси-попытки.
+    let mut i = if *ctl.borrow_and_update() == UpdateCtl::Proxy {
+        _ = session.control.send(UpdateCtl::Run);
+        1
+    } else {
+        0
+    };
+
+    while i < list.len() {
+        if session.cancelled() {
+            return Err(UpdateError::Cancelled);
+        }
+        let is_proxy = i > 0;
+        let source = if is_proxy {
+            format!("прокси #{}", i)
+        } else {
+            "напрямую".into()
+        };
+        if is_proxy {
+            session.log("info", format!("Попытка загрузки через {}: {}", source, proxies[i - 1]));
+        }
+
+        // Запрос заголовков тоже прерывается кнопками отмены/прокси.
+        let res = loop {
+            tokio::select! {
+                biased;
+                ctl = ctl_next(&mut ctl) => match ctl {
+                    UpdateCtl::Cancel => return Err(UpdateError::Cancelled),
+                    UpdateCtl::Proxy => break None,
+                    UpdateCtl::Run => continue,
+                },
+                r = client.get(&list[i]).send() => break Some(r),
+            }
+        };
+
+        match res {
+            Some(Ok(r)) if r.status().is_success() => {
+                if r.headers()
+                    .get("content-type")
+                    .is_some_and(|v| v.to_str().unwrap_or("").contains("text/html"))
+                {
+                    session.log(
+                        "warn",
+                        if is_proxy {
+                            format!("Прокси #{} вернул HTML", i)
+                        } else {
+                            "Прямой URL вернул HTML".into()
+                        },
+                    );
+                    i += 1;
+                    continue;
+                }
+                match load(r, tmp_path, session, &source).await {
+                    Ok(Some(res)) => return Ok(res),
+                    Ok(None) => {
+                        // Попытка прервана (обрыв соединения или кнопка «Прокси») — сбрасываем флаг,
+                        // чтобы команда не перескочила на следующую попытку.
+                        if *ctl.borrow() == UpdateCtl::Proxy {
+                            _ = session.control.send(UpdateCtl::Run);
+                        }
+                    }
+                    Err(UpdateError::Cancelled) => return Err(UpdateError::Cancelled),
+                    Err(e) => return Err(e),
+                }
+            }
+            Some(Ok(r)) => session.log("warn", format!("Ошибка загрузки: {}", r.status())),
+            Some(Err(e)) => session.log("warn", format!("Ошибка загрузки: {}", describe_send_error(&e))),
+            None => {
+                // Пользователь нажал «Прокси» — сбрасываем флаг и переходим к следующей попытке.
+                _ = session.control.send(UpdateCtl::Run);
+            }
+        }
+        i += 1;
+    }
+    Err(UpdateError::Failed("Не удалось выполнить обновление".into()))
+}
+async fn save(dl: DownloadResult, out_path: PathBuf) -> std::io::Result<()> {
+    tokio::task::spawn_blocking(move || {
+        let mut out = File::create(&out_path)?;
+        match dl {
+            DownloadResult::Ram(d) => out.write_all(&d)?,
+            DownloadResult::Disk(p) => {
+                std::io::copy(&mut File::open(&p)?, &mut out)?;
+                _ = std::fs::remove_file(p);
+            }
+        }
+        out.sync_data()
+    })
+    .await
+    .map_err(|e| std::io::Error::other(e.to_string()))?
+}
+
+async fn install_jq(session: &UpdateSession) -> Result<(), String> {
+    session.log("info", "Установка jq через opkg...");
+    let update = Command::new("opkg")
+        .arg("update")
+        .status()
+        .await
+        .map_err(|e| format!("opkg update: {}", e))?;
+    if !update.success() {
+        return Err("Ошибка обновления opkg кеша".into());
+    }
+    let install = Command::new("opkg")
+        .args(["install", "jq"])
+        .status()
+        .await
+        .map_err(|e| format!("opkg install jq: {}", e))?;
+    if !install.success() {
+        return Err("Ошибка установки jq".into());
+    }
+    session.log("info", "Пакет jq установлен");
+    Ok(())
+}
+
+async fn install_yq(
+    client: &reqwest::Client, proxies: &[String], tmp_dir: &Path, session: &UpdateSession,
+) -> Result<(), String> {
+    let arch = std::env::consts::ARCH;
+    let url = match arch {
+        "aarch64" => format!(
+            "{}/mikefarah/yq/releases/latest/download/yq_linux_arm64",
+            GITHUB_RELEASE
+        ),
+        "mips" if cfg!(target_endian = "little") => format!(
+            "{}/mikefarah/yq/releases/download/v4.52.2/yq_linux_mipsle",
+            GITHUB_RELEASE
+        ),
+        "mips" => format!(
+            "{}/mikefarah/yq/releases/download/v4.52.2/yq_linux_mips",
+            GITHUB_RELEASE
+        ),
+        _ => return Err("Архитектура не поддерживается для yq".into()),
+    };
+
+    session.log("info", format!("Загрузка yq: {}", url));
+    let dl_res = download(client, &url, proxies, &tmp_dir.join("yq.tmp"), session)
+        .await
+        .map_err(|e| e.to_string())?;
+    let target = "/opt/sbin/yq";
+    if let Err(e) = save(dl_res, tmp_dir.join("yq.bin")).await {
+        return Err(format!("Ошибка записи yq: {}", e));
+    }
+
+    session.log("info", "Установка yq...");
+    let src = tmp_dir.join("yq.bin");
+    if fs::rename(&src, target).await.is_err() {
+        fs::copy(&src, target)
+            .await
+            .map_err(|e| format!("Ошибка установки yq: {}", e))?;
+        _ = fs::remove_file(&src).await;
+    }
+    _ = fs::set_permissions(target, std::fs::Permissions::from_mode(0o755)).await;
+    session.log("info", "Пакет yq установлен");
+    Ok(())
 }
 
 #[cfg(test)]

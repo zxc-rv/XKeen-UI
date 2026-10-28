@@ -1,11 +1,12 @@
 use crate::logger::{process_log_line, ts};
 use crate::types::*;
-use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{Query, State};
 use axum::response::IntoResponse;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use notify::{RecursiveMode, Watcher};
+use serde::Deserialize;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::Path;
@@ -13,8 +14,27 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 static WS_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+#[derive(Deserialize)]
+pub struct LogParams {
+    file: Option<String>,
+}
+
+fn log_path(file: Option<&str>) -> String {
+    if file == Some("access.log") {
+        access_log_path()
+    } else {
+        error_log_path()
+    }
+}
+
+pub async fn log_ws_handler(
+    ws: WebSocketUpgrade, State(state): State<AppState>, Query(params): Query<LogParams>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_log_socket(socket, state, params.file))
+}
+
+pub async fn update_ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_update_socket(socket, state))
 }
 
 fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> (String, Vec<String>, u64) {
@@ -86,50 +106,69 @@ fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> 
     (if full { "initial".into() } else { "append".into() }, lines, bytes_read)
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState) {
-    let debug = state.debug;
+async fn attach_log_client(state: &AppState) {
+    let mut guard = state.log_watcher.lock().await;
     let count = WS_COUNTER.fetch_add(1, Ordering::SeqCst);
-    if debug {
+    if state.debug {
         println!("{} [INFO] WS-{} Connected (Total: {})", ts(), count, count + 1);
     }
-
-    {
-        let mut guard = state.log_watcher.lock().await;
-        let need_spawn = guard.as_ref().is_none_or(|h| h.is_finished());
-        if need_spawn {
-            if debug {
-                println!("{} [INFO] 🚀 Starting log watcher...", ts());
-            }
-            let tx = state.log_tx.clone();
-            let handle = tokio::spawn(async move {
-                let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel::<String>(32);
-                let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
-                    if let Ok(e) = res
-                        && e.kind.is_modify() {
-                            for path in e.paths {
-                                let _ = mpsc_tx.try_send(path.to_string_lossy().to_string());
-                            }
-                        }
-                })
-                .unwrap();
-
-                let error_log = error_log_path();
-                let access_log = access_log_path();
-                let _ = watcher.watch(Path::new(&error_log), RecursiveMode::NonRecursive);
-                let _ = watcher.watch(Path::new(&access_log), RecursiveMode::NonRecursive);
-
-                while let Some(path) = mpsc_rx.recv().await {
-                    let _ = tx.send(path);
+    if guard.as_ref().is_none_or(|h| h.is_finished()) {
+        if state.debug {
+            println!("{} [INFO] 🚀 Starting log watcher...", ts());
+        }
+        let tx = state.log_tx.clone();
+        let handle = tokio::spawn(async move {
+            let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel::<String>(32);
+            let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
+                if let Ok(e) = res
+                    && e.kind.is_modify()
+                {
+                    for path in e.paths {
+                        let _ = mpsc_tx.try_send(path.to_string_lossy().to_string());
+                    }
                 }
-            });
+            })
+            .unwrap();
 
-            *guard = Some(handle.abort_handle());
+            let error_log = error_log_path();
+            let access_log = access_log_path();
+            let _ = watcher.watch(Path::new(&error_log), RecursiveMode::NonRecursive);
+            let _ = watcher.watch(Path::new(&access_log), RecursiveMode::NonRecursive);
+
+            while let Some(path) = mpsc_rx.recv().await {
+                let _ = tx.send(path);
+            }
+        });
+        *guard = Some(handle.abort_handle());
+    }
+}
+
+async fn detach_log_client(state: &AppState) {
+    let mut guard = state.log_watcher.lock().await;
+    let remaining = WS_COUNTER.fetch_sub(1, Ordering::SeqCst) - 1;
+    if state.debug {
+        println!("{} [INFO] WS Disconnected. Remaining: {}", ts(), remaining);
+    }
+    if remaining == 0 {
+        if state.debug {
+            println!("{} [INFO] 💤 Stopping log watcher...", ts());
+        }
+        if let Some(abort_handle) = guard.take() {
+            abort_handle.abort();
         }
     }
+}
 
+async fn handle_log_socket(socket: WebSocket, state: AppState, file: Option<String>) {
+    attach_log_client(&state).await;
+    run_log_socket(socket, state.clone(), file).await;
+    detach_log_client(&state).await;
+}
+
+async fn run_log_socket(socket: WebSocket, state: AppState, file: Option<String>) {
     let (mut tx, mut rx) = socket.split();
     let mut log_rx = state.log_tx.subscribe();
-    let mut path = error_log_path();
+    let mut path = log_path(file.as_deref());
     let mut query = String::new();
     let tz = state.settings.read().unwrap().log.timezone;
 
@@ -150,14 +189,14 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     loop {
         tokio::select! {
-            Some(msg) = rx.next() => {
+            msg = rx.next() => {
                 match msg {
-                    Ok(Message::Text(txt)) => {
+                    Some(Ok(Message::Text(txt))) => {
                         let v: serde_json::Value = serde_json::from_str(&txt).unwrap_or_default();
                         let tz = state.settings.read().unwrap().log.timezone;
                         match v["type"].as_str() {
                             Some("switchFile") => {
-                                path = if v["file"] == "access.log" { access_log_path() } else { error_log_path() };
+                                path = log_path(v["file"].as_str());
 
                                 let p = path.clone();
                                 let q = query.clone();
@@ -186,7 +225,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             _ => {}
                         }
                     },
-                    Ok(Message::Close(_)) | Err(_) => break,
+                    Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
                     _ => {}
                 }
             }
@@ -213,18 +252,43 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             }
         }
     }
+}
 
-    let count_after = WS_COUNTER.fetch_sub(1, Ordering::SeqCst);
-    if debug {
-        println!("{} [INFO] WS Disconnected. Remaining: {}", ts(), count_after - 1);
+async fn handle_update_socket(socket: WebSocket, state: AppState) {
+    let (mut tx, mut rx) = socket.split();
+    let mut update_rx = state.update_session.events.subscribe();
+    let history = state.update_session.history.read().unwrap().clone();
+    let mut last_seq = history.last().map_or(0, |event| event.seq);
+    let initial = serde_json::json!({ "type": "update", "history": history });
+    if tx.send(Message::Text(initial.to_string().into())).await.is_err() {
+        return;
     }
 
-    if count_after == 1 {
-        if debug {
-            println!("{} [INFO] 💤 Stopping log watcher...", ts());
-        }
-        if let Some(abort_handle) = state.log_watcher.lock().await.take() {
-            abort_handle.abort();
+    loop {
+        tokio::select! {
+            msg = rx.next() => match msg {
+                Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                _ => {}
+            },
+            result = update_rx.recv() => {
+                let payload = match result {
+                    Ok(event) if event.seq <= last_seq => continue,
+                    Ok(event) => {
+                        last_seq = event.seq;
+                        serde_json::json!({ "type": "update", "event": event })
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        let history = state.update_session.history.read().unwrap().clone();
+                        let Some(newest_seq) = history.last().map(|event| event.seq) else { continue };
+                        last_seq = last_seq.max(newest_seq);
+                        serde_json::json!({ "type": "update", "history": history })
+                    }
+                    Err(_) => break,
+                };
+                if tx.send(Message::Text(payload.to_string().into())).await.is_err() {
+                    break;
+                }
+            }
         }
     }
 }
