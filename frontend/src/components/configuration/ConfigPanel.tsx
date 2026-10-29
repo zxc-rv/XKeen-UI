@@ -90,6 +90,18 @@ type ApiResult = { success: boolean; error?: string }
 const HOT_RELOAD_UNAVAILABLE = 'Hot reload unavailable'
 
 const isXkeenFile = (file: string) => file.startsWith('/opt/etc/xkeen')
+
+const findNeighborFile = (configs: Config[], removedFile: string, isAvailable: (file: string) => boolean) => {
+  const group = configs.filter((config) => isXkeenFile(config.file) === isXkeenFile(removedFile))
+  const removedIndex = group.findIndex((config) => config.file === removedFile)
+  if (removedIndex < 0) return undefined
+  const previous = group
+    .slice(0, removedIndex)
+    .reverse()
+    .find((config) => isAvailable(config.file))
+  const following = group.slice(removedIndex + 1).find((config) => isAvailable(config.file))
+  return (previous ?? following)?.file
+}
 type ProvidersModalKind = 'rules' | 'proxies'
 
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
@@ -518,12 +530,20 @@ export function ConfigPanel({
     if (currentCfg) saveViewState(currentCfg.file, currentCfg.isDirty)
 
     const targetFile = currentCfg?.file ?? activeConfigFile
+    const previousConfigs = configsRef.current
     const nextConfigs = await onRefreshConfigs()
     const target = nextConfigs.find((config) => config.file === targetFile)
+    const neighborFile = findNeighborFile(
+      previousConfigs,
+      targetFile,
+      (file) => !hiddenConfigFiles.includes(file) && nextConfigs.some((config) => config.file === file)
+    )
     const nextConfig =
       target && !hiddenConfigFiles.includes(target.file)
         ? target
-        : (nextConfigs.find((config) => !hiddenConfigFiles.includes(config.file)) ?? nextConfigs[0])
+        : (nextConfigs.find((config) => config.file === neighborFile) ??
+          nextConfigs.find((config) => !hiddenConfigFiles.includes(config.file)) ??
+          nextConfigs[0])
 
     if (nextConfig) {
       if (nextConfig.file !== activeConfigFile) {
@@ -864,7 +884,7 @@ export function ConfigPanel({
         dispatch({ type: 'SET_SETTINGS', settings: { hiddenConfigFiles: next } })
         showToast('Файл успешно скрыт. Скрытый файл можно вернуть в настройках', 'success')
         if (activeConfigFile === file) {
-          const nextFile = configs.find((c) => !isXkeenFile(c.file) && c.file !== file && !next.includes(c.file))?.file ?? ''
+          const nextFile = findNeighborFile(configs, file, (candidate) => !next.includes(candidate))
           if (nextFile) {
             setActiveConfigFile(nextFile)
             localStorage.setItem('lastSelectedTab', nextFile)
