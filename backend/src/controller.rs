@@ -142,6 +142,7 @@ pub async fn soft_restart(core: &str) -> Result<(), String> {
             cmd.env("CLASH_HOME_DIR", MIHOMO_CONF_DIR);
         }
         _ => {
+            cmd.arg("run");
             cmd.envs([
                 ("XRAY_LOCATION_CONFDIR", XRAY_CONF_DIR),
                 ("XRAY_LOCATION_ASSET", XRAY_ASSET_DIR),
