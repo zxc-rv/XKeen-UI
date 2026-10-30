@@ -617,7 +617,12 @@ const RuleCard = memo(
             <IconGripVertical size={16} />
           </div>
           <IndexBadge index={index} />
-          <EditableTitle value={rule.ruleTag ?? ''} placeholder="Название правила" onSave={saveName} />
+          <EditableTitle
+            value={rule.ruleTag ?? ''}
+            placeholder="Название правила"
+            tooltip="Редактировать название (ruleTag)"
+            onSave={saveName}
+          />
           {availableToAdd.length > 0 && (
             <Select
               value=""
@@ -969,16 +974,25 @@ function listHandlers(list: string[], update: (next: string[]) => void) {
 }
 
 function InfoIcon({ text, ariaLabel, className }: { text: string; ariaLabel?: string; className?: string }) {
+  const [open, setOpen] = useState(false)
   return (
     <TooltipProvider delayDuration={300}>
-      <Tooltip>
+      <Tooltip open={open} onOpenChange={setOpen}>
         <TooltipTrigger
           render={<span className={cn('text-muted-foreground inline-flex cursor-help', className)} />}
           aria-label={ariaLabel ?? `Подробнее: ${text}`}
+          onClick={() => setOpen((prev) => !prev)}
         >
           <IconInfoCircle className="size-3.5" />
         </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8} className="max-w-xs whitespace-pre-line">
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          className="max-w-xs whitespace-pre-line"
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.innerWidth < 768) setOpen(false)
+          }}
+        >
           {text}
         </TooltipContent>
       </Tooltip>
@@ -998,7 +1012,17 @@ function FieldRow({ label, tooltip, children }: { label: string; tooltip?: strin
   )
 }
 
-function EditableTitle({ value, placeholder, onSave }: { value: string; placeholder: string; onSave: (value: string) => void }) {
+function EditableTitle({
+  value,
+  placeholder,
+  tooltip = 'Редактировать название',
+  onSave,
+}: {
+  value: string
+  placeholder: string
+  tooltip?: string
+  onSave: (value: string) => void
+}) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
 
@@ -1049,7 +1073,7 @@ function EditableTitle({ value, placeholder, onSave }: { value: string; placehol
               </button>
             }
           />
-          <TooltipContent>Редактировать название</TooltipContent>
+          <TooltipContent>{tooltip}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
@@ -1106,7 +1130,12 @@ const BalancerCard = forwardRef<HTMLDivElement, BalancerCardProps>(function Bala
           <IconGripVertical size={16} />
         </div>
         <IndexBadge index={index} />
-        <EditableTitle value={balancer.tag ?? ''} placeholder="Тег балансера" onSave={(tag) => tag && patch({ tag })} />
+        <EditableTitle
+          value={balancer.tag ?? ''}
+          placeholder="Тег балансера"
+          tooltip="Редактировать название (tag)"
+          onSave={(tag) => tag && patch({ tag })}
+        />
         <Button
           onClick={onDelete}
           variant="outline"

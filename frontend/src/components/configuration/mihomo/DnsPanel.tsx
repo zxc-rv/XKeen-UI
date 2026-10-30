@@ -39,15 +39,27 @@ function formatPortListener(listener: string): string {
 
 function DnsSettingLabel({ children, tooltip }: { children: string; tooltip: string }) {
   const formattedTooltip = tooltip.replaceAll('\\n', '\n')
+  const [open, setOpen] = useState(false)
 
   return (
     <div className="flex items-center gap-1">
       <Label className="text-xs">{children}</Label>
-      <Tooltip>
-        <TooltipTrigger render={<span className="text-muted-foreground inline-flex cursor-help" />} aria-label={`Подробнее: ${children}`}>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger
+          render={<span className="text-muted-foreground inline-flex cursor-help" />}
+          aria-label={`Подробнее: ${children}`}
+          onClick={() => setOpen((prev) => !prev)}
+        >
           <IconInfoCircle size={14} />
         </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8} className="max-w-xs whitespace-pre-line">
+        <TooltipContent
+          side="right"
+          sideOffset={8}
+          className="max-w-xs whitespace-pre-line"
+          onClick={() => {
+            if (typeof window !== 'undefined' && window.innerWidth < 768) setOpen(false)
+          }}
+        >
           {formattedTooltip}
         </TooltipContent>
       </Tooltip>
