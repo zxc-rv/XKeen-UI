@@ -1,3 +1,4 @@
+use crate::logger::log;
 use crate::types::{AppState, VERSION};
 use crate::updater::{self, get_repo};
 use axum::extract::State;
@@ -8,6 +9,7 @@ use tokio::process::Command;
 use tokio::time::timeout;
 
 const GITHUB_RELEASE: &str = "https://github.com";
+const FAILURE_COOLDOWN: Duration = Duration::from_secs(300);
 
 pub async fn get_local_core_version(core: &str) -> Option<String> {
     let arg = if core == "mihomo" { "-v" } else { "version" };
@@ -29,6 +31,11 @@ pub async fn get_local_core_version(core: &str) -> Option<String> {
     } else {
         format!("v{}", ver)
     })
+}
+
+pub async fn check_updates_handler(State(state): State<AppState>) -> impl IntoResponse {
+    refresh_updates(&state).await;
+    version_handler(State(state)).await
 }
 
 pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -110,61 +117,79 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
     Json(res)
 }
 
-pub fn start_update_checker(state: AppState) {
-    tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(300));
-        loop {
-            interval.tick().await;
-
-            let (check_ui, check_core, proxies, upd) = {
-                let s = state.settings.read().unwrap();
-                let need = |hours: u32, last: &std::sync::RwLock<Option<Instant>>| {
-                    hours > 0
-                        && last
-                            .read()
-                            .unwrap()
-                            .is_none_or(|t| t.elapsed().as_secs() > u64::from(hours) * 3600)
-                };
-                (
-                    need(s.updater.auto_check_ui, &state.update_checker.last_ui_check),
-                    need(s.updater.auto_check_core, &state.update_checker.last_core_check),
-                    s.updater.github_proxy.clone(),
-                    s.updater.clone(),
-                )
+async fn refresh_updates(state: &AppState) {
+    let (check_ui, check_core, updater_settings) = {
+        let settings = state.settings.read().unwrap();
+        let due =
+            |hours: u32, last: &std::sync::RwLock<Option<Instant>>, failed: &std::sync::RwLock<Option<Instant>>| {
+                hours > 0
+                    && last
+                        .read()
+                        .unwrap()
+                        .is_none_or(|t| t.elapsed().as_secs() > u64::from(hours) * 3600)
+                    && failed.read().unwrap().is_none_or(|t| t.elapsed() > FAILURE_COOLDOWN)
             };
+        (
+            due(
+                settings.updater.auto_check_ui,
+                &state.update_checker.last_ui_check,
+                &state.update_checker.last_ui_failure,
+            ),
+            due(
+                settings.updater.auto_check_core,
+                &state.update_checker.last_core_check,
+                &state.update_checker.last_core_failure,
+            ),
+            settings.updater.clone(),
+        )
+    };
+    let proxies = &updater_settings.github_proxy;
 
-            if check_ui {
-                let cur = VERSION.trim_start_matches('v');
-                if let Some(repo) = get_repo(&upd, "self")
-                    && let Some((latest, tag)) =
-                        updater::fetch_latest_version(&state.http_client, &repo, "self", &proxies, Some(cur)).await
-                {
-                    *state.update_checker.ui_outdated.write().unwrap() = compare_versions(&latest, cur);
+    let refresh_ui = async {
+        if !check_ui {
+            return;
+        }
+        let current = VERSION.trim_start_matches('v');
+        if let Some(repo) = get_repo(&updater_settings, "self") {
+            match updater::fetch_latest_version(&state.http_client, &repo, "self", proxies, Some(current)).await {
+                Ok((latest, tag)) => {
+                    *state.update_checker.ui_outdated.write().unwrap() = compare_versions(&latest, current);
                     *state.update_checker.ui_latest_tag.write().unwrap() = Some(tag);
                     *state.update_checker.last_ui_check.write().unwrap() = Some(Instant::now());
                 }
-            }
-
-            if check_core {
-                let core = state.core.read().unwrap().name.clone();
-                if let Some(repo) = get_repo(&upd, &core) {
-                    let cur_opt = get_local_core_version(&core).await;
-                    let cur_str = cur_opt.as_deref().map(|v| v.trim_start_matches('v'));
-                    if let Some((latest, tag)) =
-                        updater::fetch_latest_version(&state.http_client, &repo, &core, &proxies, cur_str).await
-                    {
-                        if let Some(cur) = cur_str
-                            && !cur.is_empty()
-                        {
-                            *state.update_checker.core_outdated.write().unwrap() = compare_versions(&latest, cur);
-                        }
-                        *state.update_checker.core_latest_tag.write().unwrap() = Some(tag);
-                        *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
-                    }
+                Err(reason) => {
+                    *state.update_checker.last_ui_failure.write().unwrap() = Some(Instant::now());
+                    log("WARN", format!("Не удалось проверить обновления XKeen UI: {}", reason));
                 }
             }
         }
-    });
+    };
+
+    let refresh_core = async {
+        if !check_core {
+            return;
+        }
+        let core = state.core.read().unwrap().name.clone();
+        if let Some(repo) = get_repo(&updater_settings, &core) {
+            let local_version = get_local_core_version(&core).await;
+            let current = local_version.as_deref().map(|v| v.trim_start_matches('v'));
+            match updater::fetch_latest_version(&state.http_client, &repo, &core, proxies, current).await {
+                Ok((latest, tag)) => {
+                    if let Some(current) = current.filter(|v| !v.is_empty()) {
+                        *state.update_checker.core_outdated.write().unwrap() = compare_versions(&latest, current);
+                    }
+                    *state.update_checker.core_latest_tag.write().unwrap() = Some(tag);
+                    *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
+                }
+                Err(reason) => {
+                    *state.update_checker.last_core_failure.write().unwrap() = Some(Instant::now());
+                    log("WARN", format!("Не удалось проверить обновления {}: {}", core, reason));
+                }
+            }
+        }
+    };
+
+    tokio::join!(refresh_ui, refresh_core);
 }
 
 fn compare_versions(latest: &str, current: &str) -> bool {
@@ -173,4 +198,3 @@ fn compare_versions(latest: &str, current: &str) -> bool {
         _ => latest != current,
     }
 }
-

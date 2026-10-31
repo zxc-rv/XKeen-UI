@@ -6,8 +6,8 @@ mod controller;
 mod dns;
 mod frontend_embedder;
 mod geo;
-mod logger;
 mod healthchecker;
+mod logger;
 mod provider_inspector;
 mod route_test;
 mod settings;
@@ -122,14 +122,15 @@ fn setup_process_logging() {
     install_crash_signal_handlers();
 
     if !stdio_is_interactive()
-        && let Err(e) = redirect_stderr_to_process_log() {
-            eprintln!(
-                "{} {}: {}",
-                " Не удалось перенаправить stderr в".red().bold(),
-                XKEEN_UI_LOG,
-                e
-            );
-        }
+        && let Err(e) = redirect_stderr_to_process_log()
+    {
+        eprintln!(
+            "{} {}: {}",
+            " Не удалось перенаправить stderr в".red().bold(),
+            XKEEN_UI_LOG,
+            e
+        );
+    }
 }
 
 fn stdio_is_interactive() -> bool {
@@ -445,7 +446,6 @@ async fn main() {
         debug: cli.debug,
         rci_token,
     };
-    version::start_update_checker(state.clone());
 
     if let Some(ref _token) = state.rci_token {
         log("INFO", "RCI токен успешно загружен".into());
@@ -493,6 +493,7 @@ async fn main() {
             get(settings::get_settings).patch(settings::patch_settings),
         )
         .route("/api/version", get(version::version_handler))
+        .route("/api/version/check", get(version::check_updates_handler))
         .route("/api/system", get(system::get_system_stats))
         .route(
             "/api/rule-providers",

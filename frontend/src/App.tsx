@@ -176,10 +176,10 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     [dispatch, showToast]
   )
 
-  const checkVersion = useCallback(
-    async (showUpdateToast = false) => {
+  const fetchVersion = useCallback(
+    async (path: string, showUpdateToast: boolean) => {
       try {
-        const data = await apiCall<any>('GET', 'version')
+        const data = await apiCall<any>('GET', path)
         if (!data.success) return
 
         const ui = data['xkeen-ui']
@@ -240,6 +240,14 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
     [dispatch, showToast]
   )
 
+  const checkVersion = useCallback(
+    async (showUpdateToast = false) => {
+      await fetchVersion('version', showUpdateToast)
+      if (showUpdateToast) await fetchVersion('version/check', true)
+    },
+    [fetchVersion]
+  )
+
   useEffect(() => {
     const loadSettings = async () => {
       const data = await apiCall<any>('GET', 'settings')
@@ -251,8 +259,8 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             guiRouting: data.gui.routing,
             guiOutbounds: data.gui.outbounds ?? false,
             guiLog: data.gui.log,
-            autoCheckUI: data.updater.auto_check_ui ?? 4,
-            autoCheckCore: data.updater.auto_check_core ?? 4,
+            autoCheckUI: data.updater.auto_check_ui ?? 2,
+            autoCheckCore: data.updater.auto_check_core ?? 2,
             backupCore: data.updater.backup_core,
             githubProxies: data.updater.github_proxy || [],
             xrayRepo: data.updater.xray_repo ?? DEFAULT_XRAY_REPO,

@@ -130,39 +130,51 @@ async fn fetch_release_assets(client: &reqwest::Client, proxies: &[String], repo
 
 pub async fn fetch_latest_version(
     client: &reqwest::Client, repo: &str, core: &str, proxies: &[String], current_ver: Option<&str>,
-) -> Option<(String, String)> {
+) -> Result<(String, String), String> {
     let url = format!("{}/{}/releases?per_page=10", GITHUB_API, repo);
-    let list = std::iter::once(url.clone()).chain(
+    let list = std::iter::once(("https://api.github.com".to_string(), url.clone())).chain(
         proxies
             .iter()
             .map(|p| p.trim())
             .filter(|p| !p.is_empty())
-            .map(|p| format!("{}/{}", p.trim_end_matches('/'), url)),
+            .map(|p| (p.to_string(), format!("{}/{}", p.trim_end_matches('/'), url))),
     );
 
     let is_alpha = current_ver.is_some_and(|v| v.contains("alpha"));
+    let mut errors = Vec::new();
 
-    for u in list {
-        let res = match client
-            .get(&u)
-            .header("Accept", "application/vnd.github+json")
-            .timeout(Duration::from_secs(15))
-            .send()
-            .await
-        {
-            Ok(r) if r.status().is_success() => r,
-            _ => continue,
-        };
-        if res
-            .headers()
-            .get("content-type")
-            .is_some_and(|v| v.to_str().unwrap_or("").contains("text/html"))
-        {
-            continue;
+    for (source, u) in list {
+        let attempt: Result<Vec<GhRelease>, String> = async {
+            let res = client
+                .get(&u)
+                .header("Accept", "application/vnd.github+json")
+                .timeout(Duration::from_secs(15))
+                .send()
+                .await
+                .map_err(|e| describe_send_error(&e))?;
+            if !res.status().is_success() {
+                return Err(res.status().to_string());
+            }
+            if res
+                .headers()
+                .get("content-type")
+                .is_some_and(|v| v.to_str().unwrap_or("").contains("text/html"))
+            {
+                return Err("получен HTML вместо JSON".into());
+            }
+            res.json::<Vec<GhRelease>>().await.map_err(|e| describe_send_error(&e))
         }
-        let rels = match res.json::<Vec<GhRelease>>().await {
+        .await;
+        let rels = match attempt {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(reason) => {
+                errors.push(format!(
+                    "{}: {}",
+                    source.split_once("://").map_or(source.as_str(), |(_, host)| host),
+                    reason
+                ));
+                continue;
+            }
         };
 
         if is_alpha
@@ -175,17 +187,21 @@ pub async fn fetch_latest_version(
                     .find("alpha-")
                     .and_then(|index| asset.name[index..].split('.').next())
                 {
-                    return Some((hash.to_string(), "Prerelease-Alpha".into()));
+                    return Ok((hash.to_string(), "Prerelease-Alpha".into()));
                 }
             }
         }
 
         if let Some(r) = rels.into_iter().find(|r| !r.prerelease) {
             let tag = r.tag_name.clone();
-            return Some((tag.trim_start_matches('v').to_string(), tag));
+            return Ok((tag.trim_start_matches('v').to_string(), tag));
         }
     }
-    None
+    Err(if errors.is_empty() {
+        "релиз не найден".into()
+    } else {
+        errors.join("; ")
+    })
 }
 
 fn response(success: bool, error: Option<String>) -> (HeaderMap, Json<Value>) {
@@ -991,3 +1007,4 @@ mod tests {
         );
     }
 }
+

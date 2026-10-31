@@ -121,6 +121,8 @@ pub struct UpdateChecker {
     pub core_outdated: Arc<RwLock<bool>>,
     pub last_ui_check: Arc<RwLock<Option<Instant>>>,
     pub last_core_check: Arc<RwLock<Option<Instant>>>,
+    pub last_ui_failure: Arc<RwLock<Option<Instant>>>,
+    pub last_core_failure: Arc<RwLock<Option<Instant>>>,
     pub last_ui_toast: Arc<RwLock<Option<Instant>>>,
     pub last_core_toast: Arc<RwLock<Option<Instant>>>,
     pub ui_latest_tag: Arc<RwLock<Option<String>>>,
@@ -283,7 +285,7 @@ pub struct GuiSettings {
     pub auto_apply: bool,
 }
 
-pub const DEFAULT_CHECK_INTERVAL_HOURS: u32 = 4;
+pub const DEFAULT_CHECK_INTERVAL_HOURS: u32 = 2;
 pub const MAX_CHECK_INTERVAL_HOURS: u32 = 24;
 
 fn deserialize_check_interval<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
@@ -294,13 +296,7 @@ fn deserialize_check_interval<'de, D: serde::Deserializer<'de>>(deserializer: D)
         Hours(u32),
     }
     Ok(match LegacyOrHours::deserialize(deserializer)? {
-        LegacyOrHours::Legacy(enabled) => {
-            if enabled {
-                DEFAULT_CHECK_INTERVAL_HOURS
-            } else {
-                0
-            }
-        }
+        LegacyOrHours::Legacy(enabled) => u32::from(enabled) * DEFAULT_CHECK_INTERVAL_HOURS,
         LegacyOrHours::Hours(hours) => hours,
     })
 }
@@ -523,4 +519,3 @@ pub struct UpdateReq {
 pub struct UpdateControlReq {
     pub action: String,
 }
-
