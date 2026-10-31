@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ClearIcon } from '@/components/ui/clear-icon'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -10,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn, copyText } from '@/lib/utils'
-import { IconCheck, IconCopy, IconFlag, IconInfoCircle, IconLink, IconPlus, IconRefresh, IconReplace, IconSearch, IconX } from '@tabler/icons-react'
+import { IconCheck, IconCopy, IconFlag, IconInfoCircle, IconLink, IconPlus, IconRefresh, IconReplace, IconSearch } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
 import {
   listMihomoProviders,
@@ -1173,7 +1174,7 @@ export function ImportModal({ onGenerate, onAddToConfig, onReplace }: Props) {
                       }}
                       className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
                     >
-                      <IconX size={13} />
+                      <ClearIcon size={13} />
                     </Button>
                   )}
                 </InputGroupAddon>

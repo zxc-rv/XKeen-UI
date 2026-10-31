@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { ClearIcon } from '@/components/ui/clear-icon'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
@@ -15,7 +16,6 @@ import {
   IconGripVertical,
   IconPlugX,
   IconTrash,
-  IconX,
 } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
@@ -449,7 +449,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
                   onClick={() => setLink('')}
                   className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
                 >
-                  <IconX size={13} />
+                  <ClearIcon className="size-3.25" />
                 </Button>
               </InputGroupAddon>
             )}

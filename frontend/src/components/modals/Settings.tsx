@@ -1,5 +1,6 @@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { ClearIcon } from '@/components/ui/clear-icon'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
@@ -15,7 +16,6 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconSettings,
-  IconX,
   IconArrowBackUp,
   IconCornerDownLeft,
   IconTrash,
@@ -237,7 +237,7 @@ const ProxySettingsField = memo(function ProxySettingsField({
                 className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
                 onClick={() => setNewProxy('')}
               >
-                <IconX />
+                <ClearIcon size={14} />
               </InputGroupButton>
             )}
           </InputGroupAddon>

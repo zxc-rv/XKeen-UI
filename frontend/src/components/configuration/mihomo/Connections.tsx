@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { ClearIcon } from '@/components/ui/clear-icon'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -944,7 +945,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
         <InputGroupAddon align="inline-end" className="gap-0">
           {filter && (
             <InputGroupButton className="text-muted-foreground hover:text-destructive" onClick={onClearFilter}>
-              <IconX size={13} />
+              <ClearIcon size={13} />
             </InputGroupButton>
           )}
           <Tooltip>

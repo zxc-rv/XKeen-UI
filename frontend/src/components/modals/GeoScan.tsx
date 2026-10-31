@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ClearIcon } from '@/components/ui/clear-icon'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -7,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { IconSearch, IconServer, IconWorld, IconX } from '@tabler/icons-react'
+import { IconSearch, IconServer, IconWorld } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { useAppContext, useModalContext } from '../../lib/store'
 import { cn, copyText } from '../../lib/utils'
@@ -260,7 +261,7 @@ export function GeoScanModal() {
                 onClick={() => setInput('')}
                 className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
               >
-                <IconX className="size-3.5" />
+                <ClearIcon className="size-3.5" />
               </InputGroupButton>
             )}
           </InputGroupAddon>

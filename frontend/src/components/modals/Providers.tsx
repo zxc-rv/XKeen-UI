@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ClearIcon } from '@/components/ui/clear-icon'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -18,7 +19,6 @@ import {
   IconPencil,
   IconRefresh,
   IconStack2,
-  IconX,
 } from '@tabler/icons-react'
 import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml'
@@ -437,7 +437,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
               <InputGroupAddon align="inline-end" className="gap-0">
                 {filter && (
                   <InputGroupButton className="text-muted-foreground hover:text-destructive" onClick={() => setFilter('')}>
-                    <IconX size={13} />
+                    <ClearIcon size={13} />
                   </InputGroupButton>
                 )}
                 <Tooltip>

@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { ClearIcon } from '@/components/ui/clear-icon'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -19,7 +20,6 @@ import {
   IconPencil,
   IconPlus,
   IconTrash,
-  IconX,
 } from '@tabler/icons-react'
 import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
@@ -954,7 +954,7 @@ const RuleCard = memo(
                       }}
                       className="text-muted-foreground/40 hover:text-destructive ml-auto shrink-0 p-1 transition-colors"
                     >
-                      <IconX size={14} />
+                      <ClearIcon size={14} />
                     </button>
                   </div>
                 ) : (
@@ -1086,7 +1086,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
 
   return (
     <div
-      className="border-border bg-input-background relative flex min-h-9 cursor-text flex-wrap items-center gap-1 rounded-md border px-1 py-1 pr-7"
+      className="border-border bg-input-background relative flex min-h-9 cursor-text flex-wrap items-center gap-1 rounded-md border px-1 py-1 pr-7 transition-colors focus-within:border-[#60a5fa]"
       onClick={() => {
         if (editingIndex === null) inputRef.current?.focus()
       }}
@@ -1136,7 +1136,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
               onClick={(e) => e.stopPropagation()}
               className="ml-1 text-sm leading-none opacity-50 transition-opacity hover:opacity-100"
             >
-              <IconX size={12} />
+              <ClearIcon size={12} />
             </button>
           </span>
         )
@@ -1171,7 +1171,7 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
         onClick={(e) => e.stopPropagation()}
         className="text-muted-foreground/40 hover:text-destructive absolute top-1.5 right-1 p-1 transition-colors"
       >
-        <IconX size={14} />
+        <ClearIcon size={14} />
       </button>
     </div>
   )
@@ -1462,7 +1462,7 @@ const BalancerCard = forwardRef<HTMLDivElement, BalancerCardProps>(function Bala
                   className="text-muted-foreground/40 hover:text-destructive absolute top-1.5 right-1 cursor-pointer p-1 transition-colors"
                   aria-label={`Удалить ${key}`}
                 >
-                  <IconX size={14} />
+                  <ClearIcon size={14} />
                 </button>
               </InputGroup>
             </FieldRow>
@@ -1545,7 +1545,7 @@ const BalancerCard = forwardRef<HTMLDivElement, BalancerCardProps>(function Bala
                       onClick={() => patchSettings({ costs: costs.filter((_, costIndex) => costIndex !== position) })}
                       className="text-muted-foreground/40 hover:text-destructive shrink-0 p-1 transition-colors"
                     >
-                      <IconX size={14} />
+                      <ClearIcon size={14} />
                     </button>
                   </div>
                 </div>

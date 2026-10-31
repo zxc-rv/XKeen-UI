@@ -4,7 +4,15 @@ import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
+import {
+  IconChevronDown,
+  IconFile,
+  IconFilter,
+  IconMaximize,
+  IconMinimize,
+  IconPlus,
+  IconTrash,
+} from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { LOCAL_ROUTER_ID, isRouterSelectable, routerId } from '../../lib/multi-routers/model'
@@ -16,6 +24,7 @@ import { useWebSocket } from '../../lib/websocket'
 import { AddRouterDialog } from './multi-routers/AddRouterDialog'
 import { RoutersListPanel } from './multi-routers/RoutersListPanel'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '../ui/input-group'
+import { ClearIcon } from '../ui/clear-icon'
 
 const LOG_FILES = ['error.log', 'access.log']
 const MAX_LINES = 1000
@@ -375,7 +384,7 @@ export function LogPanel() {
                             }}
                             className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
                           >
-                            <IconX className="size-3.25" />
+                            <ClearIcon className="size-3.25" />
                           </InputGroupButton>
                         )}
                       </InputGroupAddon>
