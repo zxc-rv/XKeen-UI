@@ -23,10 +23,11 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
 
     if let serde_json::Value::Object(ref mut map) = file_json
         && let Some(legacy) = map.remove("timezoneOffset")
-            && !patch_sets_tz
-                && let Some(log) = map.entry("log").or_insert(serde_json::json!({})).as_object_mut() {
-                    log.insert("timezone".into(), legacy);
-                }
+        && !patch_sets_tz
+        && let Some(log) = map.entry("log").or_insert(serde_json::json!({})).as_object_mut()
+    {
+        log.insert("timezone".into(), legacy);
+    }
 
     let mut settings: AppSettings = match serde_json::from_value(file_json.clone()) {
         Ok(s) => s,
@@ -58,6 +59,15 @@ pub async fn patch_settings(State(state): State<AppState>, Json(patch): Json<ser
             );
         }
     }
+    if settings.updater.auto_check_ui > MAX_CHECK_INTERVAL_HOURS
+        || settings.updater.auto_check_core > MAX_CHECK_INTERVAL_HOURS
+    {
+        return Json(
+            serde_json::json!({"success": false, "error": format!("Интервал автопроверки: 0–{} ч", MAX_CHECK_INTERVAL_HOURS)}),
+        );
+    }
+    file_json["updater"]["auto_check_ui"] = settings.updater.auto_check_ui.into();
+    file_json["updater"]["auto_check_core"] = settings.updater.auto_check_core.into();
     settings.normalize_proxies();
     settings.ui.hidden_files = {
         let mut seen = std::collections::HashSet::new();
@@ -98,3 +108,4 @@ fn json_merge(a: &mut serde_json::Value, b: serde_json::Value) {
         (a, b) => *a = b,
     }
 }
+

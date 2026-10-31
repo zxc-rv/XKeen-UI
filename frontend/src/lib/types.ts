@@ -26,8 +26,8 @@ export interface AppSettings {
   guiRouting: boolean
   guiOutbounds: boolean
   guiLog: boolean
-  autoCheckUI: boolean
-  autoCheckCore: boolean
+  autoCheckUI: number
+  autoCheckCore: number
   backupCore: boolean
   githubProxies: string[]
   xrayRepo: string

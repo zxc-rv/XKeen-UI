@@ -73,25 +73,32 @@ const guiSettings: ToggleSetting[] = [
 
 const updateSettings: ToggleSetting[] = [
   {
+    id: 'backup',
+    key: 'backupCore',
+    path: 'updater.backup_core',
+    title: 'Бэкап ядра',
+    description: 'Сохранять резервную копию ядра при обновлении',
+  },
+]
+
+type IntervalSetting = Omit<ToggleSetting, 'key'> & { key: 'autoCheckUI' | 'autoCheckCore' }
+
+type IntervalSettingHandler = (item: IntervalSetting, value: number) => void
+
+const checkIntervalSettings: IntervalSetting[] = [
+  {
     id: 'auto-ui',
     key: 'autoCheckUI',
     path: 'updater.auto_check_ui',
     title: 'Автопроверка (панель)',
-    description: 'Фоновая проверка обновлений панели с интервалом в 4 часа',
+    description: 'Интервал проверки обновлений панели в часах (1–24, 0 — выкл)',
   },
   {
     id: 'auto-core',
     key: 'autoCheckCore',
     path: 'updater.auto_check_core',
     title: 'Автопроверка (ядро)',
-    description: 'Фоновая проверка обновлений ядра с интервалом в 4 часа',
-  },
-  {
-    id: 'backup',
-    key: 'backupCore',
-    path: 'updater.backup_core',
-    title: 'Бэкап ядра',
-    description: 'Сохранять резервную копию ядра при обновлении',
+    description: 'Интервал проверки обновлений ядра в часах (1–24, 0 — выкл)',
   },
 ]
 
@@ -138,6 +145,44 @@ const emojiFontOptions: { value: EmojiFont; label: string }[] = [
   { value: 'twemoji', label: 'Twemoji' },
   { value: 'notocoloremoji', label: 'Noto Color Emoji' },
 ]
+
+const IntervalSettingField = memo(function IntervalSettingField({
+  item,
+  value,
+  onChangeInterval,
+}: {
+  item: IntervalSetting
+  value: number
+  onChangeInterval: IntervalSettingHandler
+}) {
+  return (
+    <Field orientation="horizontal" className="px-0 py-3">
+      <FieldContent>
+        <FieldLabel htmlFor={item.id}>{item.title}</FieldLabel>
+        <FieldDescription className="text-[13px]">{item.description}</FieldDescription>
+      </FieldContent>
+      <InputGroup className="w-15">
+        <InputGroupInput id={item.id} readOnly value={value} />
+        <InputGroupAddon align="inline-end" className="flex flex-col gap-0">
+          <InputGroupButton
+            aria-label="Увеличить"
+            className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+            onClick={() => onChangeInterval(item, value + 1)}
+          >
+            <IconChevronUp />
+          </InputGroupButton>
+          <InputGroupButton
+            aria-label="Уменьшить"
+            className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+            onClick={() => onChangeInterval(item, value - 1)}
+          >
+            <IconChevronDown />
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    </Field>
+  )
+})
 
 const SwitchSettingField = memo(function SwitchSettingField({
   item,
@@ -692,6 +737,16 @@ export function SettingsModal() {
     [dispatch, saveSetting]
   )
 
+  const setCheckInterval = useCallback(
+    async (item: IntervalSetting, value: number) => {
+      const hours = Math.max(0, Math.min(24, value))
+      if (hours === settings[item.key]) return
+      const ok = await saveSetting(item.path, hours)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { [item.key]: hours } })
+    },
+    [dispatch, saveSetting, settings]
+  )
+
   const setTheme = useCallback(
     (value: string) => {
       dispatch({ type: 'SET_SETTINGS', settings: { theme: value as ThemeMode } })
@@ -1110,6 +1165,12 @@ export function SettingsModal() {
 
               <TabsContent value="updates">
                 <FieldGroup className="gap-0!">
+                  {checkIntervalSettings.map((item) => (
+                    <Fragment key={item.id}>
+                      <IntervalSettingField item={item} value={settings[item.key]} onChangeInterval={setCheckInterval} />
+                      <Separator className="my-0" />
+                    </Fragment>
+                  ))}
                   {updateSettings.map((item) => (
                     <Fragment key={item.id}>
                       <SwitchSettingField item={item} checked={settings[item.key]} onToggleSetting={toggleSetting} />

@@ -87,17 +87,19 @@ pub async fn version_handler(State(state): State<AppState>) -> impl IntoResponse
 
     if current_core == "mihomo" {
         if let Some(v) = mihomo_version
-            && let Some(repo) = get_repo(&updater_settings, "mihomo") {
-                res.insert("mihomo".into(), make_core_obj(v, &repo, core_tag.as_deref()));
-            }
+            && let Some(repo) = get_repo(&updater_settings, "mihomo")
+        {
+            res.insert("mihomo".into(), make_core_obj(v, &repo, core_tag.as_deref()));
+        }
         if let Some(v) = xray_version {
             res.insert("xray".into(), json!({ "version": v }));
         }
     } else {
         if let Some(v) = xray_version
-            && let Some(repo) = get_repo(&updater_settings, "xray") {
-                res.insert("xray".into(), make_core_obj(v, &repo, core_tag.as_deref()));
-            }
+            && let Some(repo) = get_repo(&updater_settings, "xray")
+        {
+            res.insert("xray".into(), make_core_obj(v, &repo, core_tag.as_deref()));
+        }
         if let Some(v) = mihomo_version {
             res.insert("mihomo".into(), json!({ "version": v }));
         }
@@ -116,12 +118,16 @@ pub fn start_update_checker(state: AppState) {
 
             let (check_ui, check_core, proxies, upd) = {
                 let s = state.settings.read().unwrap();
-                let need = |on, last: &std::sync::RwLock<Option<Instant>>, sec| {
-                    on && last.read().unwrap().is_none_or(|t| t.elapsed().as_secs() > sec)
+                let need = |hours: u32, last: &std::sync::RwLock<Option<Instant>>| {
+                    hours > 0
+                        && last
+                            .read()
+                            .unwrap()
+                            .is_none_or(|t| t.elapsed().as_secs() > u64::from(hours) * 3600)
                 };
                 (
-                    need(s.updater.auto_check_ui, &state.update_checker.last_ui_check, 14400),
-                    need(s.updater.auto_check_core, &state.update_checker.last_core_check, 14400),
+                    need(s.updater.auto_check_ui, &state.update_checker.last_ui_check),
+                    need(s.updater.auto_check_core, &state.update_checker.last_core_check),
                     s.updater.github_proxy.clone(),
                     s.updater.clone(),
                 )
@@ -148,9 +154,10 @@ pub fn start_update_checker(state: AppState) {
                         updater::fetch_latest_version(&state.http_client, &repo, &core, &proxies, cur_str).await
                     {
                         if let Some(cur) = cur_str
-                            && !cur.is_empty() {
-                                *state.update_checker.core_outdated.write().unwrap() = compare_versions(&latest, cur);
-                            }
+                            && !cur.is_empty()
+                        {
+                            *state.update_checker.core_outdated.write().unwrap() = compare_versions(&latest, cur);
+                        }
                         *state.update_checker.core_latest_tag.write().unwrap() = Some(tag);
                         *state.update_checker.last_core_check.write().unwrap() = Some(Instant::now());
                     }
@@ -166,3 +173,4 @@ fn compare_versions(latest: &str, current: &str) -> bool {
         _ => latest != current,
     }
 }
+

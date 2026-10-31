@@ -283,11 +283,35 @@ pub struct GuiSettings {
     pub auto_apply: bool,
 }
 
+pub const DEFAULT_CHECK_INTERVAL_HOURS: u32 = 4;
+pub const MAX_CHECK_INTERVAL_HOURS: u32 = 24;
+
+fn deserialize_check_interval<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u32, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum LegacyOrHours {
+        Legacy(bool),
+        Hours(u32),
+    }
+    Ok(match LegacyOrHours::deserialize(deserializer)? {
+        LegacyOrHours::Legacy(enabled) => {
+            if enabled {
+                DEFAULT_CHECK_INTERVAL_HOURS
+            } else {
+                0
+            }
+        }
+        LegacyOrHours::Hours(hours) => hours,
+    })
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UpdaterSettings {
-    pub auto_check_ui: bool,
-    pub auto_check_core: bool,
+    #[serde(deserialize_with = "deserialize_check_interval")]
+    pub auto_check_ui: u32,
+    #[serde(deserialize_with = "deserialize_check_interval")]
+    pub auto_check_core: u32,
     pub backup_core: bool,
     pub github_proxy: Vec<String>,
     pub xray_repo: String,
@@ -301,8 +325,8 @@ impl Default for UpdaterSettings {
             xray_repo: "https://github.com/XTLS/Xray-core".into(),
             mihomo_repo: "https://github.com/MetaCubeX/mihomo".into(),
             backup_core: true,
-            auto_check_ui: true,
-            auto_check_core: true,
+            auto_check_ui: DEFAULT_CHECK_INTERVAL_HOURS,
+            auto_check_core: DEFAULT_CHECK_INTERVAL_HOURS,
         }
     }
 }
@@ -499,3 +523,4 @@ pub struct UpdateReq {
 pub struct UpdateControlReq {
     pub action: String,
 }
+
