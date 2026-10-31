@@ -24,7 +24,7 @@ import {
   IconSettings,
   IconAlertCircle,
 } from '@tabler/icons-react'
-import { CoreLogo } from '../CoreLogo'
+import { CoreLogo } from '../ui/core-logo'
 import { useEffect, useRef, useState } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
 import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
