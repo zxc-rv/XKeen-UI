@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::io::BufReader;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Instant;
 use tokio::sync::{Mutex, broadcast, watch};
@@ -161,7 +161,7 @@ pub struct UpdateSession {
     pub control: Arc<watch::Sender<UpdateCtl>>,
     pub ctl_rx: watch::Receiver<UpdateCtl>,
     pub running: Arc<AtomicBool>,
-    seq: Arc<AtomicU64>,
+    seq: Arc<std::sync::Mutex<u64>>,
 }
 
 impl Default for UpdateSession {
@@ -180,16 +180,18 @@ impl UpdateSession {
             control: Arc::new(control),
             ctl_rx,
             running: Arc::new(AtomicBool::new(false)),
-            seq: Arc::new(AtomicU64::new(0)),
+            seq: Arc::new(std::sync::Mutex::new(0)),
         }
     }
 
     pub fn emit(&self, data: UpdateEventData) {
         let mut h = self.history.write().unwrap();
-        let event = UpdateEvent {
-            seq: self.seq.fetch_add(1, Ordering::Relaxed) + 1,
-            data,
+        let seq = {
+            let mut counter = self.seq.lock().unwrap();
+            *counter += 1;
+            *counter
         };
+        let event = UpdateEvent { seq, data };
         if matches!(event.data, UpdateEventData::Progress { .. })
             && matches!(
                 h.last(),
