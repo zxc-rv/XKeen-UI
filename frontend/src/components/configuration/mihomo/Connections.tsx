@@ -396,7 +396,7 @@ function ProxyIcon({ name, className }: { name: string; className?: string }) {
       alt=""
       className={className ?? 'size-4.5 shrink-0 object-contain'}
       onError={(e) => {
-        ; (e.target as HTMLImageElement).style.display = 'none'
+        ;(e.target as HTMLImageElement).style.display = 'none'
       }}
     />
   )
@@ -487,51 +487,55 @@ const ConnectionRow = memo(function ConnectionRow({
     <TableRow className="hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => onSelect(conn)}>
       <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
         <Tooltip>
-          <TooltipTrigger render={
-            <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
-              {first && (
-                <button
-                  type="button"
-                  className="flex shrink-0 cursor-copy items-center gap-1 text-left hover:text-blue-400"
-                  onClick={(e) => applyChainFilter(first, e)}
-                >
-                  <ProxyIcon name={first} className="mr-0.5 size-4.5 shrink-0 object-contain" />
-                  <span className="block whitespace-nowrap">{first}</span>
-                </button>
-              )}
-              {reversedChains.length > 1 && (
-                <>
-                  <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
+          <TooltipTrigger
+            render={
+              <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
+                {first && (
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 cursor-copy items-center gap-1 overflow-hidden text-left hover:text-blue-400"
-                    onClick={(e) => applyChainFilter(last, e)}
+                    className="flex shrink-0 cursor-copy items-center gap-1 text-left hover:text-blue-400"
+                    onClick={(e) => applyChainFilter(first, e)}
                   >
-                    <ProxyIcon name={last!} className="mr-0.5 size-4.5 shrink-0 object-contain" />
-                    <span className="block truncate">{last}</span>
+                    <ProxyIcon name={first} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                    <span className="block whitespace-nowrap">{first}</span>
                   </button>
-                </>
-              )}
-            </div>
-          } />
+                )}
+                {reversedChains.length > 1 && (
+                  <>
+                    <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 cursor-copy items-center gap-1 overflow-hidden text-left hover:text-blue-400"
+                      onClick={(e) => applyChainFilter(last, e)}
+                    >
+                      <ProxyIcon name={last!} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                      <span className="block truncate">{last}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            }
+          />
           <ChainTooltip chains={reversedChains} />
         </Tooltip>
       </TableCell>
       <TableCell className="max-w-72 text-[13px] md:max-w-48">
         <Tooltip>
-          <TooltipTrigger render={
-            <button
-              type="button"
-              className="flex w-fit max-w-full cursor-copy items-center overflow-hidden text-left hover:text-blue-400"
-              onClick={(e) => {
-                e.stopPropagation()
-                onApplyFilter(host)
-              }}
-            >
-              <span className="truncate">{host}</span>
-              {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
-            </button>
-          } />
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className="flex w-fit max-w-full cursor-copy items-center overflow-hidden text-left hover:text-blue-400"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onApplyFilter(host)
+                }}
+              >
+                <span className="truncate">{host}</span>
+                {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
+              </button>
+            }
+          />
           <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
             {hostLabel}
           </TooltipContent>
@@ -555,18 +559,20 @@ const ConnectionRow = memo(function ConnectionRow({
       </TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
-          <TooltipTrigger render={
-            <button
-              type="button"
-              className="block w-fit max-w-full cursor-copy truncate text-left hover:text-blue-400"
-              onClick={(e) => {
-                e.stopPropagation()
-                onApplyFilter(sourceFilter)
-              }}
-            >
-              {source}
-            </button>
-          } />
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className="block w-fit max-w-full cursor-copy truncate text-left hover:text-blue-400"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onApplyFilter(sourceFilter)
+                }}
+              >
+                {source}
+              </button>
+            }
+          />
           <TooltipContent side="top" className="text-[13px]" copyTextValue={sourceCopy}>
             {sourceCopy}
           </TooltipContent>
@@ -582,30 +588,34 @@ const ConnectionRow = memo(function ConnectionRow({
         <span className="flex items-center justify-end">
           {canSmartBlock && (
             <Tooltip>
-              <TooltipTrigger render={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground size-5 hover:bg-transparent! hover:text-amber-400"
-                  onClick={(e) => onBlock(conn.id, e)}
-                >
-                  <IconBan className="size-3.5" />
-                </Button>
-              } />
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground size-5 hover:bg-transparent! hover:text-amber-400"
+                    onClick={(e) => onBlock(conn.id, e)}
+                  >
+                    <IconBan className="size-3.5" />
+                  </Button>
+                }
+              />
               <TooltipContent>Smart: заблокировать узел для этого хоста</TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
-            <TooltipTrigger render={
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
-                onClick={(e) => onClose(conn.id, e)}
-              >
-                <IconX className="size-3.5" />
-              </Button>
-            } />
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
+                  onClick={(e) => onClose(conn.id, e)}
+                >
+                  <IconX className="size-3.5" />
+                </Button>
+              }
+            />
             <TooltipContent>Закрыть соединение</TooltipContent>
           </Tooltip>
         </span>
@@ -639,36 +649,40 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
     <TableRow className="hover:bg-muted/50 h-9.75 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
       <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
         <Tooltip>
-          <TooltipTrigger render={
-            <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
-              {first && (
-                <span className="flex shrink-0 items-center gap-1">
-                  <ProxyIcon name={first} className="mr-0.5 size-4.5 shrink-0 object-contain" />
-                  <span className="block whitespace-nowrap">{first}</span>
-                </span>
-              )}
-              {reversedChains.length > 1 && (
-                <>
-                  <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
-                  <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-                    <ProxyIcon name={last!} className="mr-0.5 size-4.5 shrink-0 object-contain" />
-                    <span className="block truncate">{last}</span>
+          <TooltipTrigger
+            render={
+              <div className="flex w-fit max-w-full items-center gap-1 overflow-hidden text-left">
+                {first && (
+                  <span className="flex shrink-0 items-center gap-1">
+                    <ProxyIcon name={first} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                    <span className="block whitespace-nowrap">{first}</span>
                   </span>
-                </>
-              )}
-            </div>
-          } />
+                )}
+                {reversedChains.length > 1 && (
+                  <>
+                    <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
+                    <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+                      <ProxyIcon name={last!} className="mr-0.5 size-4.5 shrink-0 object-contain" />
+                      <span className="block truncate">{last}</span>
+                    </span>
+                  </>
+                )}
+              </div>
+            }
+          />
           <ChainTooltip chains={reversedChains} />
         </Tooltip>
       </TableCell>
       <TableCell className="max-w-72 text-[13px] md:max-w-48">
         <Tooltip>
-          <TooltipTrigger render={
-            <span className="flex w-fit max-w-full items-center overflow-hidden">
-              <span className="truncate">{host}</span>
-              {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
-            </span>
-          } />
+          <TooltipTrigger
+            render={
+              <span className="flex w-fit max-w-full items-center overflow-hidden">
+                <span className="truncate">{host}</span>
+                {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
+              </span>
+            }
+          />
           <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
             {hostLabel}
           </TooltipContent>
@@ -944,14 +958,18 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
         </InputGroupAddon>
         <InputGroupAddon align="inline-end" className="gap-0">
           {filter && (
-            <InputGroupButton className="text-muted-foreground hover:text-destructive" onClick={onClearFilter}>
-              <ClearIcon size={13} />
+            <InputGroupButton size="icon-xs" className="text-muted-foreground hover:text-destructive hover:bg-transparent!" onClick={onClearFilter}>
+              <ClearIcon className="size-3.25" />
             </InputGroupButton>
           )}
           <Tooltip>
-            <TooltipTrigger render={<InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
-              <IconLetterCase size={16} />
-            </InputGroupButton>} />
+            <TooltipTrigger
+              render={
+                <InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
+                  <IconLetterCase size={16} />
+                </InputGroupButton>
+              }
+            />
             <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
           </Tooltip>
         </InputGroupAddon>
