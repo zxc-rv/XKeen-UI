@@ -1,11 +1,27 @@
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
-import { IconArrowsShuffle, IconCheck, IconGripVertical, IconInfoCircle, IconPencil, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
-import { forwardRef, memo, useCallback, useEffect, useRef, useState } from 'react'
+import { Kbd } from '@/components/ui/kbd'
+import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
+import { ProviderEditor, type ProviderEditorHandle } from '../editor/ProviderEditor'
+import {
+  IconArrowsShuffle,
+  IconCheck,
+  IconCode,
+  IconCodeDots,
+  IconDeviceFloppy,
+  IconGripVertical,
+  IconInfoCircle,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+  IconX,
+} from '@tabler/icons-react'
+import { forwardRef, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiCall } from '../../../lib/api'
 import { useAppActions, useCoreRuntimeState, useSettings } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
@@ -43,12 +59,11 @@ type Balancer = Record<string, any>
 const DOMAIN_STRATEGIES = ['AsIs', 'IPIfNonMatch', 'IPOnDemand']
 const BALANCER_STRATEGIES = ['random', 'roundRobin', 'leastPing', 'leastLoad']
 const BALANCER_INFO: Record<string, string> = {
-  tag: 'Тег балансировщика нагрузки, используется для сопоставления с balancerTag в правилах маршрутизации.',
   selector:
-    'Строки используются для сопоставления с префиксом тегов исходящих каналов. Например, для тегов a, ab, c, ba селектор a соответствует a и ab. Отобранные outbounds распределяют между собой нагрузку.',
+    'Префиксы строк, используемые для сопоставления с outboundTag. Например, для outboundTag "a", "ab", "c", "ba" селектор "a" соответствует outboundTag "a" и "ab". Отобранные подключения будут включены в балансер.',
   strategy:
-    'random — случайно выбирает исходящий прокси.\nroundRobin — выбирает подключение по очереди.\nleastPing — выбирает прокси с наименьшей задержкой; требует observatory/burstObservatory, узлы без данных наблюдения исключаются.\nleastLoad — выбирает самый стабильный прокси; требует observatory/burstObservatory, узлы без данных наблюдения исключаются.',
-  expected: 'Количество оптимальных узлов, выбираемых балансировщиком. Трафик будет случайным образом распределён между этими узлами.',
+    'random — подключение выбирается случайно.\nroundRobin — подключение выбирается по очереди.\nleastPing — выбирается подключение с наименьшей задержкой; требуется observatory/burstObservatory, узлы без данных наблюдения исключаются.\nleastLoad — выбирается самое стабильное подключение; требуется observatory/burstObservatory, узлы без данных наблюдения исключаются.',
+  expected: 'Количество подключений, отбираемых балансировщиком. Трафик будет распределён между ними случайным образом.',
   maxRTT: 'Максимально допустимое время RTT (задержки) при измерении скорости.',
   tolerance: 'Максимально допустимая доля неудачных измерений скорости. Например, 0.01 означает, что допустим 1% неудачных измерений.',
   baselines: 'Максимально допустимое стандартное отклонение времени RTT при измерении скорости.',
@@ -88,8 +103,8 @@ function pruneEmptyLists(balancers: Balancer[]): Balancer[] {
     const strategy = balancer.strategy ?? {}
     if (!strategy.settings || typeof strategy.settings !== 'object') return balancer
     const settings = { ...strategy.settings }
-    for (const key of ['costs', 'baselines']) {
-      if (Array.isArray(settings[key]) && settings[key].length === 0) delete settings[key]
+    for (const [key, value] of Object.entries(settings)) {
+      if (value === undefined || (Array.isArray(value) && value.length === 0)) delete settings[key]
     }
     const nextStrategy = { ...strategy, settings }
     if (Object.keys(settings).length === 0) delete nextStrategy.settings
@@ -187,6 +202,25 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingPatchRef = useRef<Record<string, unknown>>({})
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const [editing, setEditing] = useState<{ kind: 'rules' | 'balancers'; index: number; key: number } | null>(null)
+  const [editContent, setEditContent] = useState('')
+  const [editOriginal, setEditOriginal] = useState('')
+  const [editError, setEditError] = useState<string | undefined>(undefined)
+  const editEditorRef = useRef<ProviderEditorHandle>(null)
+
+  const isDraftDirty = editing != null && editContent !== editOriginal
+  const draftSaveDisabled = !isDraftDirty || !!editError
+  const draftFormatDisabled = !!editError
+  const editTitle = useMemo(() => {
+    if (!editing) return ''
+    const item = (editing.kind === 'rules' ? rulesRef.current : balancersRef.current)[editing.index]
+    if (item) {
+      const tag = editing.kind === 'rules' ? item.ruleTag : item.tag
+      if (typeof tag === 'string' && tag) return tag
+    }
+    return `#${(editing?.index ?? 0) + 1}`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing])
 
   const getCardRef = useCallback((index: number) => {
     if (!cardRefHandlersRef.current[index]) {
@@ -290,9 +324,10 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   )
 
   const updateBalancers = (next: Balancer[]) => {
-    balancersRef.current = next
-    setBalancers(next)
-    applyRouting({ balancers: next.length ? pruneEmptyLists(next) : undefined })
+    const pruned = next.length ? pruneEmptyLists(next) : next
+    balancersRef.current = pruned
+    setBalancers(pruned)
+    applyRouting({ balancers: pruned.length ? pruned : undefined })
   }
 
   const changeDomainStrategy = (value: string) => {
@@ -315,6 +350,43 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const openEdit = useCallback((kind: 'rules' | 'balancers', index: number) => {
+    const item = (kind === 'rules' ? rulesRef.current : balancersRef.current)[index]
+    if (!item) return
+    const original = JSON.stringify(item, null, 2)
+    setEditContent(original)
+    setEditOriginal(original)
+    setEditError(undefined)
+    setEditing({ kind, index, key: Date.now() })
+  }, [])
+
+  const editRuleJson = useCallback((index: number) => openEdit('rules', index), [openEdit])
+  const editBalancerJson = useCallback((index: number) => openEdit('balancers', index), [openEdit])
+
+  const saveEdit = useCallback(() => {
+    if (editing == null || editContent === editOriginal || editError) return
+    let parsed: Rule
+    try {
+      parsed = JSON.parse(editContent)
+    } catch {
+      setEditError('Синтаксическая ошибка JSON')
+      return
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      setEditError(editing.kind === 'rules' ? 'Правило должно быть JSON-объектом' : 'Балансер должен быть JSON-объектом')
+      return
+    }
+    if (editing.kind === 'rules') {
+      applyRules(rulesRef.current.map((item, position) => (position === editing.index ? parsed : item)))
+      showToast('Правило обновлено')
+    } else {
+      updateBalancers(balancersRef.current.map((item, position) => (position === editing.index ? parsed : item)))
+      showToast('Балансер обновлён')
+    }
+    setEditing(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, editContent, editOriginal, editError, applyRules, showToast])
 
   const startDrag = useCallback(
     (e: React.MouseEvent | React.TouchEvent, fromIndex: number, kind: 'rules' | 'balancers' = 'rules') => {
@@ -343,7 +415,14 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
         }
       }
       const onUp = () => {
-        syncToEditor({ [kind]: itemsRef.current })
+        if (kind === 'balancers') {
+          const pruned = pruneEmptyLists(itemsRef.current)
+          itemsRef.current = pruned
+          setItems(pruned)
+          syncToEditor({ [kind]: pruned })
+        } else {
+          syncToEditor({ [kind]: itemsRef.current })
+        }
         setDraggingIndex(null)
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
@@ -423,6 +502,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
               available={available}
               onUpdate={handleUpdateRule}
               onDelete={handleDeleteRule}
+              onEditJson={editRuleJson}
               onDragStart={handleDragStart}
               showToast={showToast}
             />
@@ -476,6 +556,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
                 onDragStart={(event) => startDrag(event, index, 'balancers')}
                 onChange={(updated) => updateBalancers(balancers.map((item, position) => (position === index ? updated : item)))}
                 onDelete={() => updateBalancers(balancers.filter((_, position) => position !== index))}
+                onEditJson={editBalancerJson}
               />
             ))}
             <button onClick={() => addBalancer()} className={ADD_BUTTON_CLASS}>
@@ -484,6 +565,94 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
           </>
         )}
       </TabsContent>
+
+      {/* Модалка редактирования JSON правила/ балансера */}
+      <Dialog
+        open={editing != null}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null)
+        }}
+      >
+        <DialogContent className="w-full max-w-[95vw]! md:w-[min(80vw,700px)]">
+          <div className="flex h-[54dvh] flex-col gap-4 overflow-hidden md:h-[50dvh]">
+            <DialogHeader className="shrink-0">
+              <DialogTitle className="flex items-center gap-2">
+                <IconCodeDots size={24} className="text-chart-2" />
+                {editTitle}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="border-border bg-input-background relative min-h-0 flex-1 overflow-hidden rounded-xl border">
+              {editing != null && (
+                <>
+                  <ProviderEditor
+                    ref={editEditorRef}
+                    key={editing.key}
+                    content={editContent}
+                    language="json"
+                    lineWrap={false}
+                    onChange={setEditContent}
+                    onSave={() => saveEdit()}
+                    onValidationChange={setEditError}
+                  />
+                  <span className="absolute right-3 bottom-3 z-10 flex items-center gap-1.5">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span>
+                            <Button
+                              size="icon-lg"
+                              variant="ghost"
+                              className="border-border/60 bg-background/40 hover:bg-background/70 rounded-lg backdrop-blur-md"
+                              onClick={() => void editEditorRef.current?.format()}
+                              disabled={draftFormatDisabled}
+                            >
+                              <IconCode className="size-5" />
+                            </Button>
+                          </span>
+                        }
+                      />
+                      <TooltipContent side="top">
+                        Форматировать JSON <Kbd>Shift+Alt+F</Kbd>
+                      </TooltipContent>
+                    </Tooltip>
+                    {draftSaveDisabled ? (
+                      <Button
+                        size="icon-lg"
+                        variant="ghost"
+                        className="border-border/60 bg-background/40 hover:bg-background/70 rounded-lg backdrop-blur-md"
+                        onClick={() => saveEdit()}
+                        disabled
+                      >
+                        <IconDeviceFloppy className="size-5" />
+                      </Button>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span>
+                              <Button
+                                size="icon-lg"
+                                variant="ghost"
+                                className="border-border/60 bg-background/40 hover:bg-background/70 rounded-lg backdrop-blur-md"
+                                onClick={() => saveEdit()}
+                              >
+                                <IconDeviceFloppy className="size-5" />
+                              </Button>
+                            </span>
+                          }
+                        />
+                        <TooltipContent side="top" className="whitespace-nowrap">
+                          Сохранить изменения <Kbd>Ctrl+S</Kbd>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Tabs>
   )
 }
@@ -495,13 +664,14 @@ interface RuleCardProps {
   available: AvailableTags
   onUpdate: (index: number, r: Rule, triggerSoftRestart?: boolean) => void
   onDelete: (index: number) => void
+  onEditJson: (index: number) => void
   onDragStart: (e: React.MouseEvent | React.TouchEvent, index: number) => void
   showToast: (msg: string, type?: 'success' | 'error') => void
 }
 
 const RuleCard = memo(
   forwardRef<HTMLDivElement, RuleCardProps>(function RuleCard(
-    { rule, index, isDragging, available, onUpdate, onDelete, onDragStart, showToast },
+    { rule, index, isDragging, available, onUpdate, onDelete, onEditJson, onDragStart, showToast },
     ref
   ) {
     const isBalancer = 'balancerTag' in rule
@@ -509,6 +679,7 @@ const RuleCard = memo(
     const outboundValue = rule[outboundType] ?? ''
     const conditionFields = Object.keys(rule).filter((k) => k in RULE_FIELDS)
     const availableToAdd = (Object.keys(RULE_FIELDS) as FieldName[]).filter((f) => !(f in rule))
+    const [confirmOpen, setConfirmOpen] = useState(false)
 
     function saveName(name: string) {
       const updated = { ...rule }
@@ -651,14 +822,58 @@ const RuleCard = memo(
               </SelectContent>
             </Select>
           )}
-          <Button
-            onClick={() => onDelete(index)}
-            variant="outline"
-            size="icon-sm"
-            className="hover:text-destructive hover:bg-destructive/20 shrink-0 rounded-md p-1 transition-colors"
-          >
-            <IconTrash size={16} className="cursor-pointer" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button variant="outline" size="icon-sm" onClick={() => onEditJson(index)} aria-label="Редактировать JSON">
+                  <IconCodeDots className="size-4.5" />
+                </Button>
+              }
+            />
+            <TooltipContent>Редактировать JSON</TooltipContent>
+          </Tooltip>
+          <Popover open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <PopoverTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        aria-label="Удалить правило"
+                        disabled={isDragging}
+                        className="rounded-md p-1 transition-colors hover:text-red-400"
+                      />
+                    }
+                  >
+                    <IconTrash size={16} />
+                  </PopoverTrigger>
+                }
+              />
+              <TooltipContent>Удалить правило</TooltipContent>
+            </Tooltip>
+            <PopoverContent align="end" sideOffset={6} className="max-w-72">
+              <PopoverHeader>
+                <PopoverTitle>Удалить правило «{rule.ruleTag || `#${index + 1}`}» из конфига?</PopoverTitle>
+              </PopoverHeader>
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => setConfirmOpen(false)}>
+                  Нет
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => {
+                    setConfirmOpen(false)
+                    onDelete(index)
+                  }}
+                >
+                  Да
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Condition fields */}
@@ -811,6 +1026,7 @@ const RuleCard = memo(
     prev.index === next.index &&
     prev.isDragging === next.isDragging &&
     prev.available === next.available &&
+    prev.onEditJson === next.onEditJson &&
     prev.showToast === next.showToast
 )
 RuleCard.displayName = 'RuleCard'
@@ -858,13 +1074,15 @@ function BadgeInput({ badges, placeholder, fieldType, onAdd, onRemove, onRemoveF
   }
 
   const color =
-    fieldType === 'domain'
-      ? 'text-red-400 bg-red-400/15 border-none rounded-sm'
-      : fieldType === 'ip'
-        ? 'text-blue-400 bg-blue-400/15 border-none rounded-sm'
-        : fieldType === 'sourceIP'
-          ? 'text-purple-400 bg-purple-400/15 border-none rounded-sm'
-          : 'text-yellow-400 bg-yellow-400/15 border-none rounded-sm'
+    fieldType === 'selector'
+      ? 'text-teal-400 bg-teal-400/15 border-none rounded-sm'
+      : fieldType === 'domain'
+        ? 'text-red-400 bg-red-400/15 border-none rounded-sm'
+        : fieldType === 'ip'
+          ? 'text-blue-400 bg-blue-400/15 border-none rounded-sm'
+          : fieldType === 'sourceIP'
+            ? 'text-purple-400 bg-purple-400/15 border-none rounded-sm'
+            : 'text-yellow-400 bg-yellow-400/15 border-none rounded-sm'
 
   return (
     <div
@@ -1087,16 +1305,18 @@ interface BalancerCardProps {
   available: AvailableTags
   onChange: (balancer: Balancer) => void
   onDelete: () => void
+  onEditJson: (index: number) => void
   onDragStart: (event: React.MouseEvent | React.TouchEvent) => void
 }
 
 const BalancerCard = forwardRef<HTMLDivElement, BalancerCardProps>(function BalancerCard(
-  { balancer, index, isDragging, available, onChange, onDelete, onDragStart },
+  { balancer, index, isDragging, available, onChange, onDelete, onEditJson, onDragStart },
   ref
 ) {
   const strategyType: string = balancer.strategy?.type ?? 'random'
   const settings: Record<string, any> = balancer.strategy?.settings ?? {}
   const costs: Record<string, any>[] = settings.costs ?? []
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   function patch(changes: Balancer) {
     onChange({ ...balancer, ...changes })
@@ -1136,14 +1356,58 @@ const BalancerCard = forwardRef<HTMLDivElement, BalancerCardProps>(function Bala
           tooltip="Редактировать название (tag)"
           onSave={(tag) => tag && patch({ tag })}
         />
-        <Button
-          onClick={onDelete}
-          variant="outline"
-          size="icon-sm"
-          className="hover:text-destructive hover:bg-destructive/20 shrink-0 rounded-md p-1 transition-colors"
-        >
-          <IconTrash size={16} className="cursor-pointer" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button variant="outline" size="icon-sm" onClick={() => onEditJson(index)} aria-label="Редактировать JSON">
+                <IconCodeDots className="size-4.5" />
+              </Button>
+            }
+          />
+          <TooltipContent>Редактировать JSON</TooltipContent>
+        </Tooltip>
+        <Popover open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      aria-label="Удалить балансер"
+                      disabled={isDragging}
+                      className="rounded-md p-1 transition-colors hover:text-red-400"
+                    />
+                  }
+                >
+                  <IconTrash size={16} />
+                </PopoverTrigger>
+              }
+            />
+            <TooltipContent>Удалить балансер</TooltipContent>
+          </Tooltip>
+          <PopoverContent align="end" sideOffset={6} className="max-w-72">
+            <PopoverHeader>
+              <PopoverTitle>Удалить балансер «{balancer.tag || `#${index + 1}`}» из конфига?</PopoverTitle>
+            </PopoverHeader>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={() => setConfirmOpen(false)}>
+                Нет
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  setConfirmOpen(false)
+                  onDelete()
+                }}
+              >
+                Да
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <FieldRow label="selector" tooltip={BALANCER_INFO.selector}>
