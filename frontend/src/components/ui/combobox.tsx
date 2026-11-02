@@ -102,7 +102,13 @@ function ComboboxInput({
   return (
     <div ref={setAnchorElement} className={cn('min-w-0', fullWidth ? 'w-full' : 'inline-block w-auto')}>
       <InputGroup
-        className={cn(fullWidth ? 'w-full' : 'w-auto', open && 'hover:bg-input-background!', className)}
+        className={cn(
+          fullWidth ? 'w-full' : 'w-auto',
+          open
+            ? 'hover:bg-input-background!'
+            : 'hover:bg-input-background-hover! dark:hover:bg-input-background-hover!',
+          className
+        )}
         style={
           open
             ? {
