@@ -9,6 +9,7 @@ mod geo;
 mod healthchecker;
 mod logger;
 mod provider_inspector;
+mod resolver;
 mod route_test;
 mod settings;
 mod system;
@@ -430,11 +431,13 @@ async fn main() {
             .user_agent("XKeen-UI")
             .connect_timeout(std::time::Duration::from_secs(5))
             .timeout(std::time::Duration::from_secs(120))
+            .dns_resolver(Arc::new(resolver::Ipv4Resolver))
             .build()
             .unwrap(),
         update_client: reqwest::Client::builder()
             .user_agent("XKeen-UI")
             .connect_timeout(std::time::Duration::from_secs(10))
+            .dns_resolver(Arc::new(resolver::Ipv4Resolver))
             .build()
             .unwrap(),
         update_checker: UpdateChecker::default(),
