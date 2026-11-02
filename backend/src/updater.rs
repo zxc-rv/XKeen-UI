@@ -478,7 +478,6 @@ async fn run_update_inner(state: &AppState, req: &UpdateReq) -> Result<(), Updat
         return Err(UpdateError::Cancelled);
     }
 
-    session.log("info", format!("Загрузка: {}", url));
     let dl_res = download(client, &url, &proxies, &tmp_dir.join("download.tmp"), session).await?;
 
     if session.cancelled() {
@@ -781,6 +780,9 @@ async fn download(
 
         match res {
             Some(Ok(r)) if r.status().is_success() => {
+                if let Some(address) = r.remote_addr() {
+                    session.log("info", format!("Соединение установлено [{}]", address.ip()));
+                }
                 if r.headers()
                     .get("content-type")
                     .is_some_and(|v| v.to_str().unwrap_or("").contains("text/html"))
@@ -796,6 +798,7 @@ async fn download(
                     i += 1;
                     continue;
                 }
+                session.log("info", format!("Загрузка: {}", url));
                 match load(r, tmp_path, session, &source).await {
                     Ok(Some(res)) => return Ok(res),
                     Ok(None) => {
@@ -810,7 +813,7 @@ async fn download(
                 }
             }
             Some(Ok(r)) => session.log("warn", format!("Ошибка загрузки: {}", r.status())),
-            Some(Err(e)) => session.log("warn", format!("Ошибка загрузки: {}", describe_send_error(&e))),
+            Some(Err(e)) => session.log("warn", format!("Ошибка: {}", describe_send_error(&e))),
             None => {
                 // Пользователь нажал «Прокси» — сбрасываем флаг и переходим к следующей попытке.
                 _ = session.control.send(UpdateCtl::Run);
@@ -878,7 +881,6 @@ async fn install_yq(
         _ => return Err("Архитектура не поддерживается для yq".into()),
     };
 
-    session.log("info", format!("Загрузка yq: {}", url));
     let dl_res = download(client, &url, proxies, &tmp_dir.join("yq.tmp"), session)
         .await
         .map_err(|e| e.to_string())?;
@@ -1007,4 +1009,3 @@ mod tests {
         );
     }
 }
-

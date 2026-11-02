@@ -423,25 +423,29 @@ async fn main() {
         .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
         .and_then(|json| json.get("xkeen")?.get("rci_token")?.as_str().map(String::from));
 
+    let update_session = UpdateSession::new();
+
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(init_file.as_deref()))),
         settings: Arc::new(RwLock::new(load_settings())),
         init_file: Arc::new(RwLock::new(init_file)),
         http_client: reqwest::Client::builder()
             .user_agent("XKeen-UI")
-            .connect_timeout(std::time::Duration::from_secs(5))
+            .connect_timeout(std::time::Duration::from_secs(10))
             .timeout(std::time::Duration::from_secs(120))
-            .dns_resolver(Arc::new(resolver::Ipv4Resolver))
+            .dns_resolver(Arc::new(resolver::HostResolver { session: None }))
             .build()
             .unwrap(),
         update_client: reqwest::Client::builder()
             .user_agent("XKeen-UI")
             .connect_timeout(std::time::Duration::from_secs(10))
-            .dns_resolver(Arc::new(resolver::Ipv4Resolver))
+            .dns_resolver(Arc::new(resolver::HostResolver {
+                session: Some(update_session.clone()),
+            }))
             .build()
             .unwrap(),
         update_checker: UpdateChecker::default(),
-        update_session: UpdateSession::new(),
+        update_session,
         geo_cache,
         log_tx: log_tx_arc,
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),

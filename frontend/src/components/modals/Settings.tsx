@@ -268,12 +268,14 @@ const ProxySettingsField = memo(function ProxySettingsField({
 
       <Field orientation="horizontal">
         <InputGroup>
+          <InputGroupAddon align="inline-start">https://</InputGroupAddon>
           <InputGroupInput
             id="github-proxy-input"
             value={newProxy}
-            onChange={(e) => setNewProxy(e.target.value)}
+            onChange={(e) => setNewProxy(e.target.value.replace(/^https?:\/\//i, ''))}
             onKeyDown={(e) => e.key === 'Enter' && void addProxy()}
-            placeholder="Введите URL прокси..."
+            placeholder="example.com"
+            className="pl-0!"
           />
           <InputGroupAddon align="inline-end">
             {hasNewProxy && (

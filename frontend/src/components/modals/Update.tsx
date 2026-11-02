@@ -277,7 +277,7 @@ function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent showCloseButton={!running} className="w-full max-w-[95vw]! p-0! md:w-150">
+      <DialogContent showCloseButton={!running} className="w-full max-w-[95vw]! p-0! md:w-160">
         <div className="flex flex-col gap-4 p-6">
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 pr-8">
@@ -290,7 +290,7 @@ function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore
             <CodeBlockContent
               ref={logRef}
               wrap
-              className="h-72 [&>code:has([data-slot=empty])]:h-full [&>code:has([data-slot=empty])]:content-center"
+              className="h-90 [&>code:has([data-slot=empty])]:h-full [&>code:has([data-slot=empty])]:content-center"
             >
               {entries.length === 0 ? (
                 <Empty className="p-2 font-sans">
