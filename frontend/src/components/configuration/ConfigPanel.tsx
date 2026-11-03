@@ -1333,6 +1333,7 @@ function hasCriticalChanges(oldContent: string, newContent: string, language: st
         'listeners',
         'redir-port',
         'tproxy-port',
+        'routing-mark',
         'external-controller',
         'external-controller-tls',
         'external-controller-unix',
