@@ -54,10 +54,12 @@ import { LOCAL_ROUTER_ID } from '../../lib/multi-routers/model'
 import { useRoutersStore } from '../../lib/multi-routers/store'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
+import { findAddedMihomoRuleLines } from '../../lib/mihomo-rules'
 import { cn } from '../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { MassConfirmDialog } from '../log/multi-routers/MassConfirmDialog'
 import { BackupsModal } from '../modals/Backups'
+import { AddMihomoRuleDialog } from '../modals/AddMihomoRule'
 import { ProvidersModal } from '../modals/Providers'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
@@ -369,6 +371,7 @@ export function ConfigPanel({
   })
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
+  const [isAddRuleOpen, setIsAddRuleOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
   const currentPanel = isRunning ? activePanel : 'config'
   const [massConfirm, setMassConfirm] = useState<{
@@ -653,6 +656,21 @@ export function ConfigPanel({
 
     await executeSave(targets, cfg, content, targetIndex)
   }
+
+  const handleAddMihomoRule = useCallback(
+    (content: string) => {
+      if (!editorRef.current || !activeConfig) {
+        showToast('Не удалось изменить активный конфиг', 'error')
+        return
+      }
+      const lines = findAddedMihomoRuleLines(editorRef.current.getValue(), content)
+      editorRef.current.replaceAll(content)
+      editorRef.current.validate(activeConfig.file)
+      if (lines) setTimeout(() => editorRef.current?.highlightLines(lines.from, lines.to), 200)
+      showToast('Правило добавлено. Нажмите «Применить»')
+    },
+    [activeConfig, editorRef, showToast]
+  )
 
   function restartActionFor(cfg: Config, content: string) {
     const lang = getFileLanguage(cfg.file)
@@ -1231,6 +1249,11 @@ export function ConfigPanel({
                           <DropdownMenuItem onClick={onOpenTemplate}>
                             <IconFileText /> Шаблоны конфигураций
                           </DropdownMenuItem>
+                          {isCoreMihomo && (
+                            <DropdownMenuItem onClick={() => setIsAddRuleOpen(true)}>
+                              <IconListDetails /> Добавить правило
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             className="whitespace-nowrap"
                             onClick={(e) => {
@@ -1300,6 +1323,15 @@ export function ConfigPanel({
             onOpenChange={handleProvidersModalOpenChange}
           />
         )}
+        {isCoreMihomo && (
+          <AddMihomoRuleDialog
+            open={isAddRuleOpen}
+            content={editorRef.current?.getValue() ?? activeConfig?.content ?? ''}
+            onOpenChange={setIsAddRuleOpen}
+            onInsert={handleAddMihomoRule}
+            showToast={showToast}
+          />
+        )}
         <BackupsModalContainer onRefreshConfigs={refreshConfigsAndEditor} />
         {massConfirm && (
           <MassConfirmDialog
@@ -1360,3 +1392,4 @@ function hasCriticalChanges(oldContent: string, newContent: string, language: st
   }
   return false
 }
+
