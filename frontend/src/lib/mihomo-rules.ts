@@ -20,13 +20,7 @@ export const MIHOMO_RULE_TYPES = [
   'SRC-PORT',
   'IN-PORT',
   'IN-TYPE',
-  'IN-USER',
   'IN-NAME',
-  'PROCESS-PATH',
-  'PROCESS-PATH-REGEX',
-  'PROCESS-NAME',
-  'PROCESS-NAME-REGEX',
-  'UID',
   'NETWORK',
   'DSCP',
 ] as const
