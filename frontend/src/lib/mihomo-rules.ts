@@ -1,11 +1,11 @@
 import { Alias, isAlias, isMap, isScalar, isSeq, parseDocument, visit, type Document, type YAMLMap, type YAMLSeq } from 'yaml'
 
 export const MIHOMO_RULE_TYPES = [
-  'DOMAIN',
   'DOMAIN-SUFFIX',
   'DOMAIN-KEYWORD',
   'DOMAIN-REGEX',
   'DOMAIN-WILDCARD',
+  'DOMAIN',
   'GEOSITE',
   'IP-CIDR',
   'IP-CIDR6',
@@ -31,7 +31,7 @@ export const MIHOMO_RULE_TYPES = [
   'DSCP',
 ] as const
 
-export type MihomoRuleType = (typeof MIHOMO_RULE_TYPES)[number]
+export type MihomoRuleType = (typeof MIHOMO_RULE_TYPES)[number] | 'AND' | 'OR' | 'NOT'
 export type MihomoRuleOperation = 'rules' | 'inline' | 'rule-set' | 'payload' | 'provider-import'
 
 export interface MihomoRuleProviderOption {
@@ -58,6 +58,8 @@ export interface AddMihomoRuleRequest {
   value?: string
   providerName?: string
   target?: string
+  groupName?: string
+  insertionIndex?: number
 }
 
 function getString(node: unknown): string | undefined {
@@ -65,8 +67,9 @@ function getString(node: unknown): string | undefined {
   return String(node.value)
 }
 
-function getCount(node: unknown): number {
-  return isSeq(node) ? node.items.length : 0
+function getCount(node: unknown, doc?: Document): number {
+  const resolved = doc && isAlias(node) ? node.resolve(doc) : node
+  return isSeq(resolved) ? resolved.items.length : 0
 }
 
 function inheritedValue(doc: Document, map: YAMLMap, key: string, seen = new Set<YAMLMap>()): unknown {
@@ -126,16 +129,18 @@ export function inspectMihomoRuleConfig(content: string): MihomoRuleConfigOption
     : []
 
   const providersNode = root.get('rule-providers', true)
-  const providers = isMap(providersNode)
-    ? providersNode.items.flatMap(({ key, value }) => {
+  const resolvedProviders = isAlias(providersNode) ? providersNode.resolve(doc) : providersNode
+  const providers = isMap(resolvedProviders)
+    ? resolvedProviders.items.flatMap(({ key, value }) => {
         const name = getString(key)
-        if (!name || !isMap(value)) return []
+        const provider = isAlias(value) ? value.resolve(doc) : value
+        if (!name || !isMap(provider)) return []
         return [
           {
             name,
-            type: getString(inheritedValue(doc, value, 'type')) ?? '',
-            behavior: getString(inheritedValue(doc, value, 'behavior')) ?? 'classical',
-            payloadCount: getCount(value.get('payload', true)),
+            type: getString(inheritedValue(doc, provider, 'type')) ?? '',
+            behavior: getString(inheritedValue(doc, provider, 'behavior')) ?? 'classical',
+            payloadCount: getCount(inheritedValue(doc, provider, 'payload'), doc),
           },
         ]
       })
@@ -149,8 +154,9 @@ export function inspectMihomoRuleConfig(content: string): MihomoRuleConfigOption
     providers,
     hasRules: isSeq(rulesNode),
     rulesCount: getCount(rulesNode),
-    hasRootPayload: isSeq(payloadNode),
-    rootPayloadCount: getCount(payloadNode),
+    hasRootPayload:
+      root.has('payload') && (isSeq(payloadNode) || isAlias(payloadNode) || (isScalar(payloadNode) && payloadNode.value == null)),
+    rootPayloadCount: getCount(payloadNode, doc),
   }
 }
 
@@ -175,17 +181,508 @@ function prependUnique(doc: Document, seq: YAMLSeq, value: string): boolean {
   return true
 }
 
-function insertRoutingRule(doc: Document, seq: YAMLSeq, value: string): void {
+export function getMihomoRuleInsertionIndex(rules: string[], _target = ''): number {
+  const rejectIndexes = rules.flatMap((raw, index) =>
+    /^REJECT(?:-DROP)?$/i.test(describeMihomoRoutingRule(raw).target) ? [index] : []
+  )
+  return rejectIndexes.length ? rejectIndexes[rejectIndexes.length - 1] : 0
+}
+
+function insertRoutingRule(doc: Document, seq: YAMLSeq, value: string, groupName?: string): void {
   if (seq.items.some((item) => getString(item) === value)) return
-  const index = seq.items.findIndex((item) => {
-    const fields = getString(item)
-      ?.split(',')
-      .map((field) => field.trim())
-    return fields?.[0]?.toUpperCase() === 'RULE-SET'
-      && /^quic(?:@[^,]+)?$/i.test(fields[1] ?? '')
-      && /^REJECT(?:-DROP)?$/i.test(fields[2] ?? '')
+  const node = doc.createNode(value)
+  if (groupName) node.comment = ` xkeen-ui-group: ${groupName.replace(/[\r\n]/g, ' ').trim()}`
+  seq.items.splice(getMihomoRuleInsertionIndex(seq.items.map((item) => getString(item) ?? ''), describeMihomoRoutingRule(value).target), 0, node)
+}
+
+export interface MihomoRoutingRule {
+  raw: string
+  type: string
+  matcher: string
+  target: string
+}
+
+export interface MihomoPayloadGroup {
+  name: string
+  rules: string[]
+  behavior?: string
+}
+
+export interface MihomoRuleCondition {
+  field: string
+  value: string
+}
+
+export interface MihomoConditionNode {
+  type: string
+  value?: string
+  children?: MihomoConditionNode[]
+  options?: string[]
+}
+
+export function parseMihomoCondition(raw: string): MihomoConditionNode {
+  const fields = splitRuleFields(raw)
+  const type = fields[0].toUpperCase()
+  if (['AND', 'OR', 'NOT'].includes(type)) {
+    const body = fields[1] ?? ''
+    if (!body.startsWith('(') || !body.endsWith(')')) throw new Error('Некорректные скобки условия')
+    const children = splitRuleFields(body.slice(1, -1)).map((part) => {
+      if (!part.startsWith('(') || !part.endsWith(')')) throw new Error('Некорректные скобки условия')
+      return parseMihomoCondition(part.slice(1, -1))
+    })
+    const node = { type, children, options: fields.slice(2) }
+    serializeMihomoCondition(node)
+    return node
+  }
+  const node = { type, value: fields[1] ?? '', options: fields.slice(2) }
+  serializeMihomoCondition(node)
+  return node
+}
+
+export function serializeMihomoCondition(node: MihomoConditionNode): string {
+  const type = node.type.toUpperCase()
+  const flags = node.options ?? []
+  if (flags.some((flag) => !['no-resolve', 'src'].includes(flag))) throw new Error('Неизвестные параметры условия')
+  if (['AND', 'OR', 'NOT'].includes(type)) {
+    const children = node.children ?? []
+    if (!children.length || (type === 'NOT' && children.length !== 1)) throw new Error('NOT требует одно условие; AND/OR — хотя бы одно')
+    return [type, `(${children.map((child) => `(${serializeMihomoCondition(child)})`).join(',')})`, ...flags].join(',')
+  }
+  if (![...MIHOMO_RULE_TYPES, 'RULE-SET'].includes(type as MihomoRuleType)) throw new Error('Неподдерживаемый тип условия')
+  const value = node.value?.trim() ?? ''
+  if (!value || /[\r\n,]/.test(value)) throw new Error('Введите значение условия в одну строку без запятых')
+  return [type, value, ...flags].join(',')
+}
+
+export function summarizeMihomoCondition(raw: string): string {
+  const format = (node: MihomoConditionNode): string => {
+    if (node.type === 'NOT') return `NOT (${format(node.children![0])})`
+    if (node.type === 'AND' || node.type === 'OR') {
+      return node
+        .children!.map((child) => {
+          const text = format(child)
+          return child.type === 'AND' || child.type === 'OR' ? `(${text})` : text
+        })
+        .join(node.type === 'AND' ? ' И ' : ' / ')
+    }
+    return `${node.type}: ${node.value}${node.options?.length ? ` [${node.options.join(', ')}]` : ''}`
+  }
+  const node = parseMihomoCondition(raw)
+  return node.type === 'NOT' ? format(node.children![0]) : format(node)
+}
+
+export function insertMihomoRoutingRuleAt(content: string, index: number, raw: string): string {
+  const doc = parseDocument(content)
+  if (doc.errors.length) throw new Error(doc.errors[0].message)
+  const rules = asSequence(doc, ensureRootMap(doc), 'rules')
+  if (!Number.isInteger(index) || index < 0 || index > rules.items.length) throw new Error('Некорректная позиция правила')
+  rules.items.splice(index, 0, doc.createNode(raw))
+  return doc.toString({ lineWidth: 0 })
+}
+
+export function completeMihomoRoutingDraft(raw: string): string {
+  const rule = describeMihomoRoutingRule(raw)
+  if (!rule.matcher || !rule.target) throw new Error('Заполните значение и маршрут')
+  ensureTarget(rule.target)
+  if (['AND', 'OR', 'NOT'].includes(rule.type)) {
+    return [serializeMihomoCondition(parseMihomoCondition(`${rule.type},${rule.matcher}`)), rule.target, ...getMihomoRuleOptions(raw)].join(
+      ','
+    )
+  }
+  return editMihomoRuleMatcher(raw, rule.type, rule.matcher)
+}
+
+function splitRuleFields(rule: string): string[] {
+  const fields: string[] = []
+  let start = 0
+  let depth = 0
+  let quote = ''
+  let escaped = false
+  for (let index = 0; index < rule.length; index++) {
+    const char = rule[index]
+    if (quote) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === quote) quote = ''
+      continue
+    }
+    if (char === '"' || char === "'") {
+      quote = char
+    } else if (char === '(' || char === '[' || char === '{') {
+      depth++
+    } else if (char === ')' || char === ']' || char === '}') {
+      depth = Math.max(0, depth - 1)
+    } else if (char === ',' && depth === 0) {
+      fields.push(rule.slice(start, index).trim())
+      start = index + 1
+    }
+  }
+  fields.push(rule.slice(start).trim())
+  return fields
+}
+
+function getRuleTargetIndex(fields: string[]): number {
+  const type = (fields[0] ?? '').toUpperCase()
+  if (type === 'MATCH') return 1
+  if (type === 'RULE-SET') return 2
+  let index = fields.length - 1
+  // A destination is required before flags. Do not confuse a proxy named
+  // "src" or "no-resolve" with an option when it occupies that position.
+  while (index > 2 && ['no-resolve', 'src'].includes(fields[index].toLowerCase())) {
+    index--
+  }
+  return index
+}
+
+export function getMihomoRuleOptions(rule: string, payload = false): string[] {
+  const fields = splitRuleFields(rule)
+  if (payload) return fields.slice(2).every((field) => ['no-resolve', 'src'].includes(field.toLowerCase())) ? fields.slice(2) : []
+  return fields.slice(getRuleTargetIndex(fields) + 1)
+}
+
+export function setMihomoRuleOptions(rule: string, options: string[]): string {
+  if (options.some((option) => !['no-resolve', 'src'].includes(option))) throw new Error('Неизвестный параметр правила')
+  const fields = splitRuleFields(rule)
+  const targetIndex = getRuleTargetIndex(fields)
+  if (targetIndex < 2 || !fields[targetIndex]) throw new Error('Не удалось определить маршрут правила')
+  return [...fields.slice(0, targetIndex + 1), ...new Set(options)].join(',')
+}
+
+/** Edits a single condition without changing its destination or trailing options. */
+export function editMihomoRuleMatcher(rule: string, type: string, matcher: string, payload = false, behavior = 'classical'): string {
+  const value = matcher.trim()
+  if (!value || /[\r\n]/.test(value)) throw new Error('Введите непустое значение в одну строку')
+  if (!/^[A-Z][A-Z0-9-]*$/.test(type)) throw new Error('Некорректный тип правила')
+  if (!['AND', 'OR', 'NOT', 'SUB-RULE'].includes(type) && value.includes(',')) throw new Error('Значение не должно содержать запятых')
+  if (payload && behavior === 'domain') {
+    if (type === 'DOMAIN-SUFFIX') {
+      if (/^\+?\./.test(value)) return value
+      return `${rule.startsWith('.') ? '.' : '+.'}${value}`
+    }
+    return value.replace(/^\+?\./, '')
+  }
+  if (payload && behavior === 'ipcidr') return value
+  if (payload) return [type, value, ...getMihomoRuleOptions(rule, true)].join(',')
+  const original = describeMihomoRoutingRule(rule)
+  if (!original.target) throw new Error('Не удалось определить маршрут правила')
+  return [type, value, original.target, ...getMihomoRuleOptions(rule)].join(',')
+}
+
+export function describeMihomoRoutingRule(rule: string): MihomoRoutingRule {
+  const fields = splitRuleFields(rule)
+  const type = fields[0] || 'RULE'
+  const normalizedType = type.toUpperCase()
+  const isComposite = ['AND', 'OR', 'NOT'].includes(normalizedType)
+  const targetIndex = getRuleTargetIndex(fields)
+  const matcher =
+    isComposite || normalizedType === 'RULE-SET'
+      ? fields.slice(1, targetIndex).join(', ')
+      : fields.slice(1, Math.max(1, targetIndex)).join(', ')
+  const target = fields[targetIndex] ?? ''
+  return { raw: rule, type, matcher, target }
+}
+
+export function groupMihomoRoutingRules(
+  rules: string[],
+  comments: string[] = []
+): { key: string; label: string; target: string; indices: number[]; subrule: boolean }[] {
+  const groups = new Map<string, { key: string; label: string; target: string; indices: number[]; subrule: boolean }>()
+  rules.forEach((raw, index) => {
+    const rule = describeMihomoRoutingRule(raw)
+    const type = rule.type.toUpperCase()
+    const subrule = type === 'SUB-RULE'
+    const name = comments[index]
+      ?.split('\n')
+      .find((line) => line.trim().startsWith('xkeen-ui-group:'))
+      ?.trim()
+      .slice('xkeen-ui-group:'.length)
+      .trim()
+    const key =
+      type === 'MATCH' ? `MATCH:${index}` : subrule ? `SUB-RULE:${rule.target}` : `group:${name || rule.target}:route:${rule.target}`
+    const group = groups.get(key)
+    if (group) group.indices.push(index)
+    else
+      groups.set(key, {
+        key,
+        label: type === 'MATCH' ? 'Остальной трафик · MATCH' : name || rule.target || rule.type,
+        target: rule.target,
+        indices: [index],
+        subrule,
+      })
   })
-  seq.items.splice(index >= 0 ? index + 1 : 0, 0, doc.createNode(value))
+  return [...groups.values()]
+}
+
+/** Move only the selected block; all other rules retain their relative priority. */
+export function moveMihomoRuleGroup(count: number, indices: number[], beforeIndex: number): number[] {
+  const selected = new Set(indices)
+  if (
+    !indices.length ||
+    selected.size !== indices.length ||
+    indices.some((index) => !Number.isInteger(index) || index < 0 || index >= count) ||
+    !Number.isInteger(beforeIndex) ||
+    beforeIndex < 0 ||
+    beforeIndex > count ||
+    selected.has(beforeIndex)
+  )
+    throw new Error('Некорректная позиция перемещения блока')
+  const order = Array.from({ length: count }, (_, index) => index).filter((index) => !selected.has(index))
+  const position = beforeIndex === count ? order.length : order.indexOf(beforeIndex)
+  order.splice(position, 0, ...[...indices].sort((a, b) => a - b))
+  return order
+}
+
+function stripOuterParentheses(value: string): string {
+  let result = value.trim()
+  while (result.startsWith('(') && result.endsWith(')')) {
+    let depth = 0
+    let quote = ''
+    let escaped = false
+    let closesAtEnd = false
+    for (let index = 0; index < result.length; index++) {
+      const char = result[index]
+      if (quote) {
+        if (escaped) escaped = false
+        else if (char === '\\') escaped = true
+        else if (char === quote) quote = ''
+        continue
+      }
+      if (char === '"' || char === "'") quote = char
+      else if (char === '(') depth++
+      else if (char === ')' && --depth === 0) {
+        closesAtEnd = index === result.length - 1
+        break
+      }
+    }
+    if (!closesAtEnd) break
+    result = result.slice(1, -1).trim()
+  }
+  return result
+}
+
+function collectMihomoRuleConditions(expression: string, depth = 0): MihomoRuleCondition[] {
+  if (depth > 8) return []
+  const normalized = stripOuterParentheses(expression)
+  const fields = splitRuleFields(normalized)
+  if (fields.length === 2 && /^[a-z0-9_-]+$/i.test(fields[0]) && fields[1]) {
+    return [{ field: fields[0], value: fields[1] }]
+  }
+  return fields.flatMap((field) => collectMihomoRuleConditions(field, depth + 1))
+}
+
+export function getMihomoRuleConditions(rule: string, payload = false): MihomoRuleCondition[] {
+  const fields = splitRuleFields(rule)
+  if (!['AND', 'OR', 'NOT'].includes((fields[0] ?? '').toUpperCase())) return []
+  return collectMihomoRuleConditions(fields.slice(1, payload ? undefined : getRuleTargetIndex(fields)).join(','))
+}
+
+function parseMihomoRulesDocument(content: string): { doc: Document; rules: YAMLSeq } {
+  const doc = parseDocument(content)
+  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
+  const root = ensureRootMap(doc)
+  const node = root.get('rules', true)
+  const rules = isAlias(node) ? node.resolve(doc) : node
+  if (!isSeq(rules)) throw new Error('Раздел «rules» должен быть списком YAML')
+  return { doc, rules }
+}
+
+export function getMihomoRoutingRules(content: string): string[] {
+  const doc = parseDocument(content)
+  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
+  const root = ensureRootMap(doc)
+  const node = root.get('rules', true)
+  if (node === undefined) return []
+  const rules = isAlias(node) ? node.resolve(doc) : node
+  if (isScalar(rules) && rules.value == null) return []
+  if (!isSeq(rules)) throw new Error('Раздел «rules» должен быть списком YAML')
+  return rules.items.map((item) => {
+    if (!isScalar(item) || item.value == null) throw new Error('Правила в разделе «rules» должны быть строками')
+    return String(item.value)
+  })
+}
+
+export function getMihomoRoutingRuleComments(content: string): string[] {
+  const doc = parseDocument(content)
+  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
+  const root = ensureRootMap(doc)
+  const node = root.get('rules', true)
+  const rules = isAlias(node) ? node.resolve(doc) : node
+  if (rules === undefined || (isScalar(rules) && rules.value == null)) return []
+  if (!isSeq(rules)) throw new Error('Раздел «rules» должен быть списком YAML')
+  return rules.items.map((item) => (isScalar(item) ? [item.commentBefore, item.comment].filter(Boolean).join('\n').trim() : ''))
+}
+
+export function getMihomoPayloadGroups(content: string): MihomoPayloadGroup[] {
+  const doc = parseDocument(content)
+  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
+  const root = ensureRootMap(doc)
+  const groups: MihomoPayloadGroup[] = []
+  const getPayloadRules = (node: unknown, source: string, includeEmpty = false): MihomoPayloadGroup | undefined => {
+    const resolved = isAlias(node) ? node.resolve(doc) : node
+    if (resolved === undefined || (isScalar(resolved) && resolved.value == null))
+      return includeEmpty ? { name: source, rules: [] } : undefined
+    if (!isSeq(resolved)) throw new Error(`Payload в «${source}» должен быть списком YAML`)
+    const rules = resolved.items.map((item) => {
+      if (!isScalar(item) || item.value == null) throw new Error(`Элементы payload в «${source}» должны быть строками`)
+      return String(item.value)
+    })
+    return { name: source, rules }
+  }
+
+  const rootPayload = getPayloadRules(root.get('payload', true), 'payload', root.has('payload'))
+  if (rootPayload) groups.push(rootPayload)
+
+  const providersNode = root.get('rule-providers', true)
+  const providers = isAlias(providersNode) ? providersNode.resolve(doc) : providersNode
+  if (isMap(providers)) {
+    for (const { key, value } of providers.items) {
+      const name = getString(key)
+      const provider = isAlias(value) ? value.resolve(doc) : value
+      if (!name || !isMap(provider)) continue
+      const payload = inheritedValue(doc, provider, 'payload')
+      const inline = getString(inheritedValue(doc, provider, 'type')) === 'inline'
+      if (payload === undefined && !inline) continue
+      const group = getPayloadRules(payload, name, inline)
+      if (group) groups.push({ ...group, behavior: getString(inheritedValue(doc, provider, 'behavior')) ?? 'classical' })
+    }
+  }
+  return groups
+}
+
+export function describeMihomoPayloadRule(rule: string, behavior = 'classical'): MihomoRoutingRule {
+  if (behavior === 'domain')
+    return { raw: rule, type: rule.startsWith('.') || rule.startsWith('+.') ? 'DOMAIN-SUFFIX' : 'DOMAIN', matcher: rule, target: '' }
+  if (behavior === 'ipcidr') return { raw: rule, type: rule.includes(':') ? 'IP-CIDR6' : 'IP-CIDR', matcher: rule, target: '' }
+  const fields = splitRuleFields(rule)
+  const options = getMihomoRuleOptions(rule, true)
+  return { raw: rule, type: fields[0] || 'PAYLOAD', matcher: fields.slice(1, fields.length - options.length).join(', '), target: '' }
+}
+
+export function reorderMihomoRoutingRules(content: string, order: number[]): string {
+  const { doc, rules } = parseMihomoRulesDocument(content)
+  if (order.length !== rules.items.length) throw new Error('Не удалось переставить правила: изменился их список')
+  if (order.some((index) => !Number.isInteger(index) || index < 0 || index >= rules.items.length) || new Set(order).size !== order.length) {
+    throw new Error('Не удалось переставить правила: некорректный порядок')
+  }
+  if (order.every((index, position) => index === position)) return content
+  const originalItems = [...rules.items]
+  rules.items.splice(0, rules.items.length, ...order.map((index) => originalItems[index]))
+  return doc.toString({ lineWidth: 0 })
+}
+
+export function updateMihomoRoutingRule(content: string, index: number, value: string): string {
+  const { doc, rules } = parseMihomoRulesDocument(content)
+  const current = rules.items[index]
+  if (!current || !isScalar(current)) throw new Error('Не найдено правило для изменения')
+  current.value = value
+  return doc.toString({ lineWidth: 0 })
+}
+
+export function updateMihomoRoutingRuleTargets(content: string, indices: number[], target: string, groupName?: string): string {
+  const normalizedTarget = ensureTarget(target)
+  const { doc, rules } = parseMihomoRulesDocument(content)
+  const uniqueIndices = [...new Set(indices)]
+  if (!uniqueIndices.length || uniqueIndices.some((index) => !Number.isInteger(index) || index < 0 || index >= rules.items.length)) {
+    throw new Error('Не найдены правила для изменения маршрута')
+  }
+  for (const index of uniqueIndices) {
+    const item = rules.items[index]
+    if (!isScalar(item) || item.value == null) throw new Error('Правило должно быть строкой YAML')
+    const fields = splitRuleFields(String(item.value))
+    if (fields[0]?.toUpperCase() === 'SUB-RULE') throw new Error('SUB-RULE ссылается на подправило, а не на маршрут прокси')
+    const targetIndex = getRuleTargetIndex(fields)
+    if (targetIndex <= 0 || targetIndex >= fields.length) throw new Error('Не удалось определить маршрут правила')
+    fields[targetIndex] = normalizedTarget
+    item.value = fields.join(',')
+    if (groupName && fields[0]?.toUpperCase() !== 'MATCH') {
+      const otherComments = item.comment ? item.comment.split('\n').filter((line) => !line.trim().startsWith('xkeen-ui-group:')) : []
+      item.comment = [...otherComments, ` xkeen-ui-group: ${groupName.replace(/[\r\n]/g, ' ').trim()}`].join('\n')
+    }
+  }
+  return doc.toString({ lineWidth: 0 })
+}
+
+export function getMihomoRoutingTargets(content: string): string[] {
+  const options = inspectMihomoRuleConfig(content)
+  return [...new Set(['DIRECT', 'REJECT', ...options.groups])].filter((target) => target !== 'REJECT-DROP')
+}
+
+export function deleteMihomoRoutingRule(content: string, index: number): string {
+  const { doc, rules } = parseMihomoRulesDocument(content)
+  if (index < 0 || index >= rules.items.length) throw new Error('Не найдено правило для удаления')
+  rules.items.splice(index, 1)
+  return doc.toString({ lineWidth: 0 })
+}
+
+function clonePayloadOwner<T extends YAMLMap | YAMLSeq>(doc: Document, node: T): T {
+  const copy = node.clone(doc.schema) as T
+  // The original alias target stays in the document. Copies must not shadow
+  // its anchors; existing alias references continue to refer to that source.
+  visit(copy, {
+    Node(_, child) {
+      if (isMap(child) || isSeq(child) || isScalar(child)) child.anchor = undefined
+    },
+  })
+  return copy
+}
+
+function parseMihomoPayloadSequence(doc: Document, name: string, createEmpty = false): YAMLSeq {
+  const root = ensureRootMap(doc)
+  let owner = root
+  if (name !== 'payload') {
+    const providerNode = root.get('rule-providers', true)
+    const providersValue = isAlias(providerNode) ? providerNode.resolve(doc) : providerNode
+    if (!isMap(providersValue)) throw new Error('В конфигурации нет раздела rule-providers')
+    let providers: YAMLMap = providersValue
+    if (isAlias(providerNode)) {
+      providers = clonePayloadOwner(doc, providers)
+      providers.anchor = undefined
+      root.set('rule-providers', providers)
+    }
+    const rawProvider = providers.get(name, true)
+    const providerValue = isAlias(rawProvider) ? rawProvider.resolve(doc) : rawProvider
+    if (!isMap(providerValue)) throw new Error(`Не найден rule-provider «${name}»`)
+    let provider: YAMLMap = providerValue
+    if (isAlias(rawProvider)) {
+      provider = clonePayloadOwner(doc, provider)
+      provider.anchor = undefined
+      providers.set(name, provider)
+    }
+    owner = provider
+  }
+  const ownPayload: unknown = owner.get('payload', true)
+  const payload = inheritedValue(doc, owner, 'payload')
+  const resolved = isAlias(payload) ? payload.resolve(doc) : payload
+  if (createEmpty && (resolved === undefined || (isScalar(resolved) && resolved.value == null))) return asSequence(doc, owner, 'payload')
+  if (!isSeq(resolved)) throw new Error(`Payload в «${name}» должен быть списком YAML`)
+  if (ownPayload !== resolved || isAlias(payload)) {
+    const copy = clonePayloadOwner(doc, resolved)
+    copy.anchor = undefined
+    owner.set('payload', copy)
+    return copy
+  }
+  return resolved
+}
+
+export function updateMihomoPayloadRule(content: string, name: string, index: number, value: string): string {
+  const doc = parseDocument(content)
+  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
+  const rules = parseMihomoPayloadSequence(doc, name)
+  const current = rules.items[index]
+  if (!current || !isScalar(current)) throw new Error('Не найдено правило payload для изменения')
+  const normalized = value.trim()
+  if (!normalized || /[\r\n]/.test(normalized)) throw new Error('Правило payload должно занимать одну непустую строку')
+  current.value = normalized
+  return doc.toString({ lineWidth: 0 })
+}
+
+export function deleteMihomoPayloadRule(content: string, name: string, index: number): string {
+  const doc = parseDocument(content)
+  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
+  const rules = parseMihomoPayloadSequence(doc, name)
+  if (index < 0 || index >= rules.items.length) throw new Error('Не найдено правило payload для удаления')
+  rules.items.splice(index, 1)
+  return doc.toString({ lineWidth: 0 })
 }
 
 function normalizeValue(value: string): string {
@@ -204,6 +701,8 @@ export function normalizeMihomoRuleValues(value: string, ruleType: MihomoRuleTyp
   return [
     ...new Set(
       lines.map((line) => {
+        if (['AND', 'OR', 'NOT'].includes(ruleType))
+          return serializeMihomoCondition(parseMihomoCondition(`${ruleType},${line}`)).slice(ruleType.length + 1)
         let input = normalizeValue(line)
         if (ruleType === 'DOMAIN' || ruleType === 'DOMAIN-SUFFIX') {
           try {
@@ -297,9 +796,7 @@ function ensureRootMap(doc: Document): YAMLMap {
 }
 
 function insertProviderBeforeInline(doc: Document, providers: YAMLMap, name: string, node: unknown): void {
-  const inlineIndex = providers.items.findIndex(({ value }) =>
-    isMap(value) && getString(inheritedValue(doc, value, 'type')) === 'inline'
-  )
+  const inlineIndex = providers.items.findIndex(({ value }) => isMap(value) && getString(inheritedValue(doc, value, 'type')) === 'inline')
   if (inlineIndex < 0) {
     providers.set(name, node)
     return
@@ -307,10 +804,10 @@ function insertProviderBeforeInline(doc: Document, providers: YAMLMap, name: str
   providers.items.splice(inlineIndex, 0, doc.createPair(name, node))
 }
 
-function ensureRuleReference(doc: Document, providerName: string, target: string): void {
+function ensureRuleReference(doc: Document, providerName: string, target: string, groupName?: string): void {
   const root = ensureRootMap(doc)
   const rules = asSequence(doc, root, 'rules')
-  insertRoutingRule(doc, rules, `RULE-SET,${providerName},${target}`)
+  insertRoutingRule(doc, rules, `RULE-SET,${providerName},${target}`, groupName)
 }
 
 export function addMihomoRule(content: string, request: AddMihomoRuleRequest): string {
@@ -363,11 +860,18 @@ export function addMihomoRule(content: string, request: AddMihomoRuleRequest): s
   if (request.operation === 'rule-set') {
     const providerName = request.providerName?.trim()
     if (!providerName) throw new Error('Выберите rule-provider')
-    const providers = root.get('rule-providers', true)
-    const provider = isMap(providers) ? providers.get(providerName, true) : undefined
+    const rawProviders = root.get('rule-providers', true)
+    const providers = isAlias(rawProviders) ? rawProviders.resolve(doc) : rawProviders
+    const rawProvider = isMap(providers) ? providers.get(providerName, true) : undefined
+    const provider = isAlias(rawProvider) ? rawProvider.resolve(doc) : rawProvider
     if (!isMap(provider)) throw new Error(`Не найден rule-provider «${providerName}»`)
     const target = ensureTarget(request.target ?? '')
-    ensureRuleReference(doc, providerName, target)
+    if (request.insertionIndex === undefined) ensureRuleReference(doc, providerName, target, request.groupName)
+    else {
+      const rules = asSequence(doc, root, 'rules')
+      if (request.insertionIndex < 0 || request.insertionIndex > rules.items.length) throw new Error('Некорректная позиция правила')
+      rules.items.splice(request.insertionIndex, 0, doc.createNode(`RULE-SET,${providerName},${target}`))
+    }
     return doc.toString({ lineWidth: 0 })
   }
 
@@ -378,26 +882,35 @@ export function addMihomoRule(content: string, request: AddMihomoRuleRequest): s
   if (request.operation === 'rules') {
     const target = ensureTarget(request.target ?? '')
     const rules = asSequence(doc, root, 'rules')
-    for (const input of [...inputs].reverse()) insertRoutingRule(doc, rules, `${ruleType},${input},${target}`)
+    const index = request.insertionIndex ?? getMihomoRuleInsertionIndex(rules.items.map((item) => getString(item) ?? ''), target)
+    if (!Number.isInteger(index) || index < 0 || index > rules.items.length) throw new Error('Некорректная позиция правила')
+    const nodes = inputs.map((input) => {
+      const node = doc.createNode(`${ruleType},${input},${target}`)
+      if (request.groupName) node.comment = ` xkeen-ui-group: ${request.groupName.replace(/[\r\n]/g, ' ').trim()}`
+      return node
+    })
+    rules.items.splice(index, 0, ...nodes)
     return doc.toString({ lineWidth: 0 })
   }
 
   if (request.operation === 'payload') {
-    const payload = asSequence(doc, root, 'payload')
+    const payload = parseMihomoPayloadSequence(doc, 'payload', true)
     for (const input of [...inputs].reverse()) prependUnique(doc, payload, buildProviderPayloadRule('classical', ruleType, input))
     return doc.toString({ lineWidth: 0 })
   }
 
   const providerName = request.providerName?.trim()
   if (!providerName) throw new Error('Выберите inline rule-provider')
-  const providerMap = root.get('rule-providers', true)
+  const rawProviderMap = root.get('rule-providers', true)
+  const providerMap = isAlias(rawProviderMap) ? rawProviderMap.resolve(doc) : rawProviderMap
   if (!isMap(providerMap)) throw new Error('В конфигурации нет раздела rule-providers')
-  const providerNode = providerMap.get(providerName, true)
+  const rawProviderNode = providerMap.get(providerName, true)
+  const providerNode = isAlias(rawProviderNode) ? rawProviderNode.resolve(doc) : rawProviderNode
   if (!isMap(providerNode)) throw new Error(`Не найден rule-provider «${providerName}»`)
   const providerType = getString(inheritedValue(doc, providerNode, 'type'))
   if (providerType !== 'inline') throw new Error(`Provider «${providerName}» не является inline`)
   const behavior = getString(inheritedValue(doc, providerNode, 'behavior')) ?? 'classical'
-  const payload = asSequence(doc, providerNode, 'payload')
+  const payload = parseMihomoPayloadSequence(doc, providerName, true)
   for (const input of [...inputs].reverse()) prependUnique(doc, payload, buildProviderPayloadRule(behavior, ruleType, input))
 
   return doc.toString({ lineWidth: 0 })
@@ -410,7 +923,7 @@ export function findAddedMihomoRuleLines(before: string, after: string): { from:
   const newItemOffsets = (oldNode: unknown, newNode: unknown): [number, number][] => {
     if (!isSeq(newNode)) return []
     const existing = new Set(isSeq(oldNode) ? oldNode.items.map(getString) : [])
-    return newNode.items.flatMap(item => {
+    return newNode.items.flatMap((item) => {
       if (existing.has(getString(item)) || !isScalar(item) || !item.range) return []
       return [[item.range[0], item.range[1]]]
     })
@@ -446,4 +959,3 @@ export function findAddedMihomoRuleLines(before: string, after: string): { from:
   }
   return undefined
 }
-

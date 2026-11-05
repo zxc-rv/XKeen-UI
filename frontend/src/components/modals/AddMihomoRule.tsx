@@ -1,372 +1,289 @@
+import { ProviderLabel } from '../configuration/mihomo/ProviderLabel'
+import { mihomoRuleColor } from '@/lib/mihomo-rule-color'
+import { cn } from '@/lib/utils'
+import { NetworkSelect } from '../configuration/mihomo/NetworkSelect'
+import { useEffect, useMemo, useState } from 'react'
+import { IconListDetails } from '@tabler/icons-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { IconListDetails } from '@tabler/icons-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Textarea } from '@/components/ui/textarea'
 import {
   addMihomoRule,
   inspectMihomoRuleConfig,
-  MIHOMO_RULE_TYPES,
   normalizeMihomoRuleValues,
-  type MihomoRuleOperation,
+  serializeMihomoCondition,
+  type MihomoConditionNode,
   type MihomoRuleType,
-} from '../../lib/mihomo-rules'
+} from '@/lib/mihomo-rules'
+import { SelectorLabel } from '../configuration/mihomo/SelectorLabel'
+import { ConditionEditor, CONDITION_TYPES, emptyCondition } from '../configuration/mihomo/ConditionEditor'
 
 interface Props {
   open: boolean
   content: string
+  initialOperation?: 'rules' | 'inline' | 'payload'
+  initialProviderName?: string
+  initialTarget?: string
+  initialGroupName?: string
   onOpenChange: (open: boolean) => void
   onInsert: (content: string) => void
   showToast: (message: string, type?: 'success' | 'error') => void
 }
 
-const OPERATION_LABELS: Record<MihomoRuleOperation, string> = {
-  rules: 'Добавить правило в rules',
-  'rule-set': 'Добавить RULE-SET (rule-provider)',
-  'provider-import': 'Добавить provider по ссылке',
-  inline: 'В payload inline-провайдера',
-  payload: 'В payload текущего файла',
-}
-
-function formatRuleCount(count: number): string {
-  const last = count % 10
-  const lastTwo = count % 100
-  const noun = last === 1 && lastTwo !== 11 ? 'правило' : last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? 'правила' : 'правил'
-  return `${count} ${noun}`
-}
-
-function SelectorLabel({ name, icon }: { name: string; icon?: string }) {
-  return <span className="inline-flex min-w-0 items-center gap-2">
-    {icon && <img src={icon} alt="" className="size-4 shrink-0 rounded-sm object-contain" onError={event => { event.currentTarget.style.display = 'none' }} />}
-    <span className="truncate">{name}</span>
-  </span>
-}
-
-const TYPE_LABELS: Partial<Record<MihomoRuleType, string>> = {
-  DOMAIN: 'Домен (DOMAIN)',
-  'DOMAIN-SUFFIX': 'Домен и поддомены (DOMAIN-SUFFIX)',
-  'DOMAIN-KEYWORD': 'Ключевое слово (DOMAIN-KEYWORD)',
-  'DOMAIN-REGEX': 'Регулярное выражение (DOMAIN-REGEX)',
-  'DOMAIN-WILDCARD': 'Шаблон домена (DOMAIN-WILDCARD)',
-  GEOSITE: 'Категория геосайтов (GEOSITE)',
-  'IP-CIDR': 'IPv4-сеть (IP-CIDR)',
-  'IP-CIDR6': 'IPv6-сеть (IP-CIDR6)',
-  'IP-SUFFIX': 'Суффикс IP (IP-SUFFIX)',
-  GEOIP: 'Страна по IP (GEOIP)',
-  'SRC-IP-CIDR': 'Исходная IP-сеть (SRC-IP-CIDR)',
-  'DST-PORT': 'Порт назначения (DST-PORT)',
-  'SRC-PORT': 'Порт источника (SRC-PORT)',
-  'PROCESS-NAME': 'Имя процесса (PROCESS-NAME)',
-  NETWORK: 'Тип сети (NETWORK)',
-}
-
-function getTypeOptions(operation: MihomoRuleOperation, behavior?: string): MihomoRuleType[] {
-  if (operation === 'inline' && behavior === 'domain') return ['DOMAIN', 'DOMAIN-SUFFIX']
-  if (operation === 'inline' && behavior === 'ipcidr') return ['IP-CIDR', 'IP-CIDR6']
-  if (operation === 'inline' && behavior !== 'classical') return []
-  return [...MIHOMO_RULE_TYPES]
-}
-
-function formatPreview(
-  operation: MihomoRuleOperation,
-  ruleType: MihomoRuleType,
-  value: string,
-  providerName: string,
-  target: string,
-  behavior?: string
-) {
-  if (operation === 'provider-import') return value.trim() || 'https://github.com/…/fastly@ipcidr.mrs'
-  let inputs: string[]
-  try {
-    inputs = normalizeMihomoRuleValues(value || 'google.com', ruleType)
-  } catch {
-    inputs = value.split(/\r?\n/).filter(Boolean)
-  }
-  const route = target || 'Main'
-  if (operation === 'rule-set') return `RULE-SET,${providerName || 'provider'},${route}`
-  return inputs
-    .map((input) => {
-      if (operation === 'inline') {
-        const payload =
-          behavior === 'domain' && ruleType === 'DOMAIN-SUFFIX'
-            ? `.${input.replace(/^\.+/, '')}`
-            : behavior === 'domain'
-              ? input.replace(/^\.+/, '')
-              : behavior === 'ipcidr'
-                ? input
-                : `${ruleType},${input}`
-        return `payload: ${payload}`
-      }
-      if (operation === 'payload') return `payload: ${ruleType},${input}`
-      return `${ruleType},${input},${route}`
-    })
-    .join('\n')
-}
-
-export function AddMihomoRuleDialog({ open, content, onOpenChange, onInsert, showToast }: Props) {
+export function AddMihomoRuleDialog({
+  open,
+  content,
+  initialOperation,
+  initialProviderName,
+  initialTarget,
+  onOpenChange,
+  onInsert,
+  showToast,
+}: Props) {
   const options = useMemo(() => inspectMihomoRuleConfig(content), [content])
-  const [operation, setOperation] = useState<MihomoRuleOperation>('rules')
-  const [ruleType, setRuleType] = useState<MihomoRuleType>('DOMAIN-SUFFIX')
+  const [operation, setOperation] = useState<'rules' | 'inline' | 'payload'>('rules')
+  const [type, setType] = useState('DOMAIN-SUFFIX')
   const [value, setValue] = useState('')
   const [providerName, setProviderName] = useState('')
   const [target, setTarget] = useState('')
-  const valueRef = useRef<HTMLTextAreaElement>(null)
-
-  useLayoutEffect(() => {
-    const element = valueRef.current
-    if (!element) return
-    element.style.height = 'auto'
-    element.style.height = `${Math.min(element.scrollHeight, 240)}px`
-  }, [value, operation, open])
-
-  const inlineProviders = options.providers.filter((provider) => provider.type === 'inline')
-  const selectedProvider = options.providers.find((provider) => provider.name === providerName)
-  const typeOptions = getTypeOptions(operation, selectedProvider?.behavior)
-  const targetOptions = ['DIRECT', 'REJECT', ...options.groups.filter(name => name !== 'DIRECT' && name !== 'REJECT')]
-  const providerOptions = operation === 'inline' ? inlineProviders : options.providers
-  const needsTarget = operation === 'rules' || operation === 'rule-set'
-  const preview = formatPreview(operation, ruleType, value, providerName, target, selectedProvider?.behavior)
-
-  function resetForm() {
-    setOperation('rules')
-    setRuleType('DOMAIN-SUFFIX')
-    setValue('')
-    setProviderName('')
-    setTarget('')
-  }
-
-  function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) resetForm()
-    onOpenChange(nextOpen)
-  }
-
+  const [condition, setCondition] = useState<MihomoConditionNode>(emptyCondition('AND'))
   useEffect(() => {
-    if (typeOptions.length > 0 && !typeOptions.includes(ruleType)) setRuleType(typeOptions[0])
-  }, [ruleType, typeOptions])
-
+    if (!open) return
+    setOperation(initialOperation ?? 'rules')
+    setProviderName(initialProviderName ?? '')
+    setType('DOMAIN-SUFFIX')
+    setValue('')
+    setTarget(initialTarget === 'REJECT-DROP' ? '' : (initialTarget ?? ''))
+    setCondition(emptyCondition('AND'))
+  }, [open, initialOperation, initialProviderName, initialTarget])
+  const inlineProviders = options.providers.filter((p) => p.type === 'inline')
+  const selectedProvider = options.providers.find((p) => p.name === providerName)
+  const behavior = operation === 'inline' ? selectedProvider?.behavior : 'classical'
+  const types =
+    operation === 'inline' && behavior === 'domain'
+      ? ['DOMAIN-SUFFIX', 'DOMAIN']
+      : operation === 'inline' && behavior === 'ipcidr'
+        ? ['IP-CIDR', 'IP-CIDR6']
+        : CONDITION_TYPES.filter((t) => operation === 'rules' || t !== 'RULE-SET')
+  const targets = [...new Set(['DIRECT', 'REJECT', ...options.groups])].filter((t) => t !== 'REJECT-DROP')
+  const logical = ['AND', 'OR', 'NOT'].includes(type)
+  let error = options.error ?? ''
+  let preview = ''
+  let input = value
+  try {
+    if (logical) input = serializeMihomoCondition(condition).slice(type.length + 1)
+    const values = type === 'RULE-SET' ? [providerName] : normalizeMihomoRuleValues(input, type as MihomoRuleType)
+    if (type === 'RULE-SET' && !options.providers.some((p) => p.name === providerName)) throw new Error('Выберите rule-provider')
+    if (operation === 'rules' && !target) throw new Error('Выберите маршрут')
+    if (operation === 'inline' && (!selectedProvider || selectedProvider.type !== 'inline')) throw new Error('Выберите inline-провайдер')
+    preview = values
+      .map((item) => {
+        if (operation === 'inline' && behavior === 'domain') return type === 'DOMAIN-SUFFIX' ? `.${item.replace(/^\.+/, '')}` : item
+        if (operation === 'inline' && behavior === 'ipcidr') return item
+        return `${type},${item}${operation === 'rules' ? `,${target}` : ''}`
+      })
+      .join('\n')
+  } catch (cause) {
+    error = cause instanceof Error ? cause.message : 'Заполните правило'
+  }
+  const destinations = [
+    ['rules', 'В rules'],
+    ...(inlineProviders.length ? [['inline', 'В payload inline-провайдера']] : []),
+    ...(options.hasRootPayload ? [['payload', 'В payload текущего файла']] : []),
+  ]
+  function changeType(next: string) {
+    setType(next)
+    if (['AND', 'OR', 'NOT'].includes(next)) setCondition(emptyCondition(next))
+  }
   function submit() {
+    if (error) return
     try {
       onInsert(
         addMihomoRule(content, {
-          operation,
-          ruleType,
-          value,
+          operation: operation === 'rules' && type === 'RULE-SET' ? 'rule-set' : operation,
+          ruleType: type as MihomoRuleType,
+          value: input,
           providerName,
           target,
         })
       )
-      handleOpenChange(false)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось добавить правило'
-      showToast(message, 'error')
+      onOpenChange(false)
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : 'Не удалось добавить правило', 'error')
     }
   }
-
-  const validSelection =
-    !options.error &&
-    (operation === 'provider-import'
-      ? value.trim().length > 0
-      : operation === 'rules'
-        ? targetOptions.length > 0 && value.trim().length > 0
-        : operation === 'inline'
-          ? inlineProviders.length > 0 && !!selectedProvider && typeOptions.includes(ruleType) && value.trim().length > 0
-          : operation === 'rule-set'
-            ? options.providers.length > 0 && !!selectedProvider && targetOptions.length > 0
-            : options.hasRootPayload && value.trim().length > 0)
-
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="w-full max-w-[95vw]! p-0! sm:max-w-130!">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={`w-full max-w-[95vw]! p-0! ${logical ? 'sm:max-w-3xl!' : 'sm:max-w-130!'}`}>
         <div className="flex max-h-[90dvh] flex-col gap-4 overflow-hidden p-5 sm:p-6">
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 pr-8">
               <IconListDetails size={22} className="text-chart-2" />
-              Добавить правило
+              Конструктор правил
             </DialogTitle>
-            <DialogDescription>Правило будет вставлено в конфигурацию. Затем нажмите «Применить».</DialogDescription>
+            <DialogDescription>Изменения добавляются в редактор. Для применения конфигурации нажмите «Применить».</DialogDescription>
           </DialogHeader>
-
           <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
-            {options.error ? (
-              <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-3 text-sm">
-                Не удалось разобрать YAML: {options.error}
+            <div className="grid gap-2">
+              <Label htmlFor="mihomo-rule-operation">Куда добавить</Label>
+              <Select
+                value={operation}
+                items={Object.fromEntries(destinations)}
+                onValueChange={(next) => {
+                  setOperation(next as typeof operation)
+                  changeType('DOMAIN-SUFFIX')
+                  if (next === 'inline') {
+                    const p = inlineProviders[0]
+                    setProviderName(p?.name ?? '')
+                    if (p?.behavior === 'ipcidr') changeType('IP-CIDR')
+                  }
+                }}
+              >
+                <SelectTrigger id="mihomo-rule-operation" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {destinations.map(([key, label]) => (
+                      <SelectItem key={key} value={key}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            {operation === 'inline' && (
+              <div className="grid gap-2">
+                <Label htmlFor="mihomo-rule-provider">Rule-provider</Label>
+                <Select
+                  value={providerName}
+                  onValueChange={(name) => {
+                    setProviderName(name)
+                    changeType(options.providers.find((p) => p.name === name)?.behavior === 'ipcidr' ? 'IP-CIDR' : 'DOMAIN-SUFFIX')
+                  }}
+                >
+                  <SelectTrigger id="mihomo-rule-provider" className="w-full">
+                    <SelectValue placeholder="Выберите провайдер">
+                      {providerName ? <ProviderLabel name={providerName} /> : 'Выберите провайдер'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {inlineProviders.map((p) => (
+                        <SelectItem key={p.name} value={p.name}>
+                          <ProviderLabel name={p.name} />
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </div>
+            )}
+            {logical ? (
+              <ConditionEditor
+                node={condition}
+                providers={options.providers.map((p) => p.name)}
+                onChange={(node) => {
+                  setCondition(node)
+                  setType(node.type)
+                  setValue(node.value ?? '')
+                }}
+              />
             ) : (
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor="mihomo-rule-operation">Куда добавить</Label>
-                  <Select
-                    value={operation}
-                    items={Object.fromEntries(
-                      Object.entries(OPERATION_LABELS).filter(([key]) => {
-                        if (key === 'inline') return inlineProviders.length > 0
-                        if (key === 'rule-set') return options.providers.length > 0
-                        if (key === 'payload') return options.hasRootPayload
-                        return true
-                      })
-                    )}
-                    onValueChange={(next) => {
-                      setOperation(next as MihomoRuleOperation)
-                      setRuleType('DOMAIN-SUFFIX')
-                      if (next === 'inline' && inlineProviders[0]) setProviderName(inlineProviders[0].name)
-                      else if (next === 'rule-set' && options.providers[0]) setProviderName(options.providers[0].name)
-                    }}
-                  >
-                    <SelectTrigger id="mihomo-rule-operation" className="w-full">
+                  <Label htmlFor="mihomo-rule-type">Тип правила</Label>
+                  <Select value={type} onValueChange={changeType}>
+                    <SelectTrigger id="mihomo-rule-type" className={cn('w-full', mihomoRuleColor(type, '', false))}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        {Object.entries(OPERATION_LABELS)
-                          .filter(([key]) => {
-                            if (key === 'inline') return inlineProviders.length > 0
-                            if (key === 'rule-set') return options.providers.length > 0
-                            if (key === 'payload') return options.hasRootPayload
-                            return true
-                          })
-                          .map(([key, label]) => (
-                            <SelectItem key={key} value={key}>
-                              {label}
-                            </SelectItem>
-                          ))}
+                        {types.map((t) => (
+                          <SelectItem key={t} value={t} className={mihomoRuleColor(t, '', false)}>
+                            {t}
+                          </SelectItem>
+                        ))}
                       </SelectGroup>
                     </SelectContent>
                   </Select>
                 </div>
-
-                {operation === 'inline' || operation === 'rule-set' ? (
+                {type === 'RULE-SET' ? (
                   <div className="grid gap-2">
                     <Label htmlFor="mihomo-rule-provider">Rule-provider</Label>
-                    <Select
-                      value={providerName}
-                      items={Object.fromEntries(providerOptions.map((provider) => [provider.name, provider.name]))}
-                      onValueChange={(next) => {
-                        setProviderName(next)
-                        setRuleType('DOMAIN-SUFFIX')
-                      }}
-                    >
+                    <Select value={providerName} onValueChange={setProviderName}>
                       <SelectTrigger id="mihomo-rule-provider" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {providerOptions.map((provider) => (
-                            <SelectItem key={provider.name} value={provider.name}>
-                              {provider.name}
-                              {provider.behavior ? ` · ${provider.behavior}` : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    {operation === 'inline' && selectedProvider && (
-                      <p className="text-muted-foreground text-xs">{formatRuleCount(selectedProvider.payloadCount)}</p>
-                    )}
-                  </div>
-                ) : null}
-
-                {operation === 'provider-import' && (
-                  <div className="grid gap-2">
-                    <Label htmlFor="provider-import">Ссылки или готовые записи rule-providers</Label>
-                    <Textarea
-                      id="provider-import"
-                      value={value}
-                      onChange={(event) => setValue(event.target.value)}
-                      placeholder="https://…/fastly@ipcidr.mrs"
-                      className="min-h-32 font-mono text-xs"
-                    />
-                  </div>
-                )}
-                {operation !== 'rule-set' && operation !== 'provider-import' && (
-                  <>
-                    <div className="grid gap-2">
-                      <Label htmlFor="mihomo-rule-type">Тип правила</Label>
-                      <Select
-                        value={ruleType}
-                        items={Object.fromEntries(typeOptions.map((type) => [type, TYPE_LABELS[type] ?? type]))}
-                        onValueChange={(next) => setRuleType(next as MihomoRuleType)}
-                      >
-                        <SelectTrigger id="mihomo-rule-type" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {typeOptions.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {TYPE_LABELS[type] ?? type}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="mihomo-rule-value">Значение</Label>
-                      <Textarea
-                        ref={valueRef}
-                        rows={1}
-                        className="min-h-9! resize-none overflow-y-auto max-md:placeholder:text-sm"
-                        id="mihomo-rule-value"
-                        value={value}
-                        onChange={(event) => setValue(event.target.value)}
-                        placeholder={ruleType.startsWith('IP-') ? '192.168.1.0/24' : 'google.com'}
-                        autoComplete="off"
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                            event.preventDefault()
-                            if (validSelection) submit()
-                          }
-                        }}
-                      />
-                      <p className="text-muted-foreground text-xs">Один домен на строку</p>
-                    </div>
-                  </>
-                )}
-
-                {needsTarget && (
-                  <div className="grid gap-2">
-                    <Label htmlFor="mihomo-rule-target">Селектор / маршрут</Label>
-                    <Select value={target} items={Object.fromEntries(targetOptions.map((item) => [item, item]))} onValueChange={setTarget}>
-                      <SelectTrigger id="mihomo-rule-target" className="w-full">
-                        <SelectValue placeholder="Выберите селектор">
-                          {target ? <SelectorLabel name={target} icon={options.groupIcons[target]} /> : 'Выберите селектор'}
+                        <SelectValue placeholder="Выберите провайдер">
+                          {providerName ? <ProviderLabel name={providerName} /> : 'Выберите провайдер'}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          {targetOptions.map((item) => (
-                            <SelectItem key={item} value={item}>
-                              <SelectorLabel name={item} icon={options.groupIcons[item]} />
+                          {options.providers.map((p) => (
+                            <SelectItem key={p.name} value={p.name}>
+                              <ProviderLabel name={p.name} />
                             </SelectItem>
                           ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-                    {options.groups.length === 0 && <p className="text-destructive text-xs">В конфигурации не найдены proxy-groups</p>}
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    <Label htmlFor="mihomo-rule-value">Значение</Label>
+                    {type === 'NETWORK' ? (
+                      <NetworkSelect id="mihomo-rule-value" value={value} onValueChange={setValue} />
+                    ) : (
+                      <>
+                        <Textarea
+                          id="mihomo-rule-value"
+                          rows={1}
+                          className="max-h-60 min-h-9! resize-y"
+                          value={value}
+                          onChange={(event) => setValue(event.target.value)}
+                          placeholder={type.startsWith('IP-') ? '192.168.1.0/24' : 'google.com'}
+                        />
+                        <p className="text-muted-foreground text-xs">Одно значение на строку</p>{' '}
+                      </>
+                    )}
                   </div>
                 )}
-
-                {operation === 'payload' && (
-                  <p className="text-muted-foreground rounded-md border px-3 py-2 text-xs">
-                    В payload добавляется условие без маршрута. Маршрут задаётся ссылкой RULE-SET в основном разделе rules.
-                  </p>
-                )}
-
-                <div className="bg-muted/40 overflow-hidden rounded-lg border p-3">
-                  <p className="text-muted-foreground mb-1 text-xs">Предпросмотр</p>
-                  <pre className="text-foreground overflow-x-auto text-xs break-all whitespace-pre-wrap">{preview}</pre>
-                </div>
               </>
             )}
+            {operation === 'rules' && (
+              <div className="grid gap-2">
+                <Label htmlFor="mihomo-rule-target">Селектор / маршрут</Label>
+                <Select value={target} items={Object.fromEntries(targets.map((t) => [t, t]))} onValueChange={setTarget}>
+                  <SelectTrigger id="mihomo-rule-target" className="w-full">
+                    <SelectValue placeholder="Выберите селектор">
+                      {target ? <SelectorLabel name={target} icon={options.groupIcons[target]} /> : 'Выберите селектор'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {targets.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          <SelectorLabel name={t} icon={options.groupIcons[t]} />
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="bg-muted/40 rounded-lg border p-3">
+              <p className="text-muted-foreground mb-1 text-xs">Предпросмотр</p>
+              <pre className="overflow-x-auto text-xs break-all whitespace-pre-wrap">{preview || error}</pre>
+            </div>
           </div>
-
           <DialogFooter className="shrink-0">
-            <Button variant="outline" onClick={() => handleOpenChange(false)}>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
               Отмена
             </Button>
-            <Button onClick={submit} disabled={!validSelection}>
+            <Button disabled={!!error} onClick={submit}>
               Добавить правило
             </Button>
           </DialogFooter>
@@ -375,4 +292,3 @@ export function AddMihomoRuleDialog({ open, content, onOpenChange, onInsert, sho
     </Dialog>
   )
 }
-
