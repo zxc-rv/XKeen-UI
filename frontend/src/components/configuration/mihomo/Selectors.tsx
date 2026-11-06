@@ -1178,10 +1178,10 @@ const SelectorRow = memo(function SelectorRow({
     <div
       className={cn(
         'border-border bg-input-background rounded-xl border',
-        useMultiColumnCollapse && collapsed ? 'px-4 py-2.5' : 'p-4'
+        useMultiColumnCollapse && collapsed ? 'px-4 pt-4 pb-3' : 'p-4'
       )}
     >
-      <div className={cn('flex flex-col gap-2', useMultiColumnCollapse && collapsed ? 'mb-0' : 'mb-2.5')}>
+      <div className="mb-2.5 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             {selector.icon && (
@@ -1273,14 +1273,35 @@ const SelectorRow = memo(function SelectorRow({
       </div>
 
       {useMultiColumnCollapse ? (
-        <div
-          className={cn(
-            'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out',
-            collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">{proxyCardGrid}</div>
-        </div>
+        <>
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out',
+              collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">{proxyCardGrid}</div>
+          </div>
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+              collapsed ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            )}
+          >
+            <div className={cn('min-h-0', collapsed ? 'overflow-visible' : 'overflow-hidden')}>
+              <SelectorCombobox
+                key={selectorName}
+                selectorName={selectorName}
+                options={filteredSortedProxies}
+                autoPolicy={autoPolicy}
+                lockSelection={lockSelection}
+                onSelect={onSelect}
+                onTestSingle={onTestSingle}
+                visible={collapsed}
+              />
+            </div>
+          </div>
+        </>
       ) : (
         <div className="flex flex-col gap-0">
           <div
