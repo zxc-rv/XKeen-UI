@@ -70,6 +70,8 @@ const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
+import { ConnectionsDisplaySettings } from './mihomo/ConnectionsDisplaySettings'
+import { SelectorDisplaySettings } from './mihomo/SelectorDisplaySettings'
 import { Kbd } from '../ui/kbd'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
@@ -946,6 +948,7 @@ export function ConfigPanel({
 
             {isMihomo && currentPanel === 'connections' && (
               <div className="ml-auto flex items-center gap-2">
+                {isMobile && <ConnectionsDisplaySettings />}
                 <span className="text-muted-foreground text-xs">Режим маршрутизации</span>
                 <Select
                   value={mode}
@@ -1002,6 +1005,7 @@ export function ConfigPanel({
                   />
                   <TooltipContent>{showHiddenSelectors ? 'Скрыть скрытые' : 'Показывать скрытые'}</TooltipContent>
                 </Tooltip>
+                <SelectorDisplaySettings />
                 <Tooltip>
                   <TooltipTrigger
                     render={
