@@ -165,7 +165,12 @@ function readAvailable(configs: Config[]): AvailableTags {
   }
   return {
     outbounds: merged((json) => json.outbounds),
-    inbounds: merged((json) => json.inbounds),
+    inbounds: merged((json) => [
+      ...(json.inbounds ?? []),
+      ...(json.outbounds ?? [])
+        .filter((outbound: any) => outbound.protocol === 'loopback')
+        .map((outbound: any) => ({ tag: outbound.settings?.inboundTag })),
+    ]),
     balancers: merged((json) => json.routing?.balancers),
   }
 }
