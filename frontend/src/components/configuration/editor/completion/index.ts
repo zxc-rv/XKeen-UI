@@ -46,8 +46,11 @@ function keyCompletion(language: EditorLanguage, ctx: ResolvedContext, key: stri
     label: key,
     type: isEnumTrigger(node) ? 'key-enum' : 'key',
     detail: detailOf(node),
-    apply(view, completion) {
-      const insertion = language === 'json' ? jsonKeyInsertion(view.state, ctx, key) : yamlKeyInsertion(view.state, ctx, key, node)
+    apply(view, completion, from, to) {
+      const currentContext = { ...ctx, from, to }
+      const insertion = language === 'json'
+        ? jsonKeyInsertion(view.state, currentContext, key)
+        : yamlKeyInsertion(view.state, currentContext, key, node)
       view.dispatch({ ...toTransactionSpec(insertion), annotations: pickedCompletion.of(completion) })
     },
   }
@@ -61,8 +64,11 @@ function valueCompletion(language: EditorLanguage, ctx: ResolvedContext, value: 
     sortText: String(order).padStart(3, '0'),
     // The enum list itself is the popup, so only an explicitly authored hint is worth showing here.
     detail: node.detail,
-    apply(view, completion) {
-      const insertion = language === 'json' ? jsonValueInsertion(view.state, ctx, value, node) : yamlValueInsertion(ctx, value)
+    apply(view, completion, from, to) {
+      const currentContext = { ...ctx, from, to }
+      const insertion = language === 'json'
+        ? jsonValueInsertion(view.state, currentContext, value, node)
+        : yamlValueInsertion(currentContext, value)
       view.dispatch({ ...toTransactionSpec(insertion), annotations: pickedCompletion.of(completion) })
     },
   }

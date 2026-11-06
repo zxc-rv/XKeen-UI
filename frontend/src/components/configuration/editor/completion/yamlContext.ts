@@ -20,6 +20,7 @@ const INLINE_DASH_PAIR_RE = new RegExp(`^\\s*-\\s+(${KEY_TOKEN}):\\s*(.*)$`, 'u'
 const DASH_ONLY_RE = /^\s*-\s/
 const DOCUMENT_MARKER_RE = /^---\s*$/
 const BARE_VALID_FOR = /^[\p{L}\p{N}_.-]*$/u
+const BARE_TOKEN_FORWARD_RE = /^[\p{L}\p{N}_.-]*/u
 const BLOCKED_NODE_NAMES = ['Comment', 'QuotedLiteral', 'FlowMapping', 'FlowSequence', 'BlockLiteral']
 
 /** Hard cap on how many lines the upward/forward block scans will walk, however deep the file. */
@@ -50,6 +51,12 @@ function stripYamlScalar(value: string): string {
     return trimmed.slice(1, -1)
   }
   return trimmed
+}
+
+/** Extends a completion replacement through the rest of the bare token to the cursor's right. */
+function tokenEnd(lineText: string, cursorColumn: number): number {
+  const rest = lineText.slice(cursorColumn)
+  return cursorColumn + (BARE_TOKEN_FORWARD_RE.exec(rest)?.[0].length ?? 0)
 }
 
 function isInBlockedNode(state: EditorState, pos: number): boolean {
@@ -184,7 +191,7 @@ export function resolveYamlContext(state: EditorState, pos: number): ResolvedCon
       kind: 'value',
       path: [...path, key],
       from: pos - token.length,
-      to: pos,
+      to: line.from + tokenEnd(line.text, pos - line.from),
       quoted: false,
       validFor: BARE_VALID_FOR,
       existingKeys: new Set(),
@@ -203,7 +210,7 @@ export function resolveYamlContext(state: EditorState, pos: number): ResolvedCon
       kind: 'key',
       path,
       from: pos - token.length,
-      to: pos,
+      to: line.from + tokenEnd(line.text, pos - line.from),
       quoted: false,
       validFor: BARE_VALID_FOR,
       existingKeys: collectBlockKeys(doc, container),
@@ -220,7 +227,7 @@ export function resolveYamlContext(state: EditorState, pos: number): ResolvedCon
       kind: 'value',
       path,
       from: pos - token.length,
-      to: pos,
+      to: line.from + tokenEnd(line.text, pos - line.from),
       quoted: false,
       validFor: BARE_VALID_FOR,
       existingKeys: new Set(),
