@@ -22,7 +22,10 @@ import {
 } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
+import { saveStatusBarAccentColor, saveStatusBarStyle, type StatusBarAccentColor } from '../../lib/status-bar-style'
 import { applyEmojiFont } from '../../lib/theme'
+import { saveProxyLabelStyle, type ProxyLabelStyle } from '../../lib/proxy-label-style'
+import { saveMihomoPalette, type MihomoPalette } from '../../lib/mihomo-palette'
 import { useAppContext, useModalContext } from '../../lib/store'
 import type { AppSettings, AutoDnsMode, EmojiFont, PingMode, ProxySortOrder, ThemeMode } from '../../lib/types'
 
@@ -144,6 +147,28 @@ const themeOptions: { value: ThemeMode; label: string }[] = [
 const emojiFontOptions: { value: EmojiFont; label: string }[] = [
   { value: 'twemoji', label: 'Twemoji' },
   { value: 'notocoloremoji', label: 'Noto Color Emoji' },
+]
+
+const statusBarStyleOptions = [
+  { value: 'standard', label: 'Стандартный' },
+  { value: 'accent', label: 'Акцентный' },
+]
+
+const statusBarAccentColorOptions: { value: StatusBarAccentColor; label: string }[] = [
+  { value: 'blue', label: 'Синий' },
+  { value: 'green', label: 'Зеленый' },
+  { value: 'purple', label: 'Фиолетовый' },
+]
+
+const mihomoPaletteOptions: { value: MihomoPalette; label: string }[] = [
+  { value: 'blue', label: 'Синий' },
+  { value: 'green', label: 'Зеленый' },
+  { value: 'purple', label: 'Фиолетовый' },
+]
+
+const proxyLabelStyleOptions: { value: ProxyLabelStyle; label: string }[] = [
+  { value: 'plain', label: 'Без обводки' },
+  { value: 'outlined', label: 'С обводкой' },
 ]
 
 const IntervalSettingField = memo(function IntervalSettingField({
@@ -772,6 +797,42 @@ export function SettingsModal() {
     [dispatch]
   )
 
+  const setStatusBarStyle = useCallback(
+    (value: string) => {
+      if (value !== 'standard' && value !== 'accent') return
+      saveStatusBarStyle(value)
+      dispatch({ type: 'SET_SETTINGS', settings: { statusBarStyle: value } })
+    },
+    [dispatch]
+  )
+
+  const setStatusBarAccentColor = useCallback(
+    (value: string) => {
+      if (value !== 'green' && value !== 'blue' && value !== 'purple') return
+      saveStatusBarAccentColor(value)
+      dispatch({ type: 'SET_SETTINGS', settings: { statusBarAccentColor: value } })
+    },
+    [dispatch]
+  )
+
+  const setProxyLabelStyle = useCallback(
+    (value: string) => {
+      if (value !== 'plain' && value !== 'outlined') return
+      saveProxyLabelStyle(value)
+      dispatch({ type: 'SET_SETTINGS', settings: { proxyLabelStyle: value } })
+    },
+    [dispatch]
+  )
+
+  const setMihomoPalette = useCallback(
+    (value: string) => {
+      if (value !== 'green' && value !== 'blue' && value !== 'purple') return
+      saveMihomoPalette(value)
+      dispatch({ type: 'SET_SETTINGS', settings: { mihomoPalette: value } })
+    },
+    [dispatch]
+  )
+
   const addProxy = useCallback(
     async (rawUrl: string) => {
       let url = rawUrl.trim().replace(/\/+$/, '')
@@ -932,6 +993,57 @@ export function SettingsModal() {
                   <Separator className="my-2" />
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
+                      <FieldLabel htmlFor="status-bar-style">Вид статус-бара</FieldLabel>
+                      <FieldDescription className="text-[13px]">Оформление блока состояния сервиса</FieldDescription>
+                    </FieldContent>
+                    <Select
+                      value={settings.statusBarStyle}
+                      items={Object.fromEntries(statusBarStyleOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setStatusBarStyle}
+                    >
+                      <SelectTrigger id="status-bar-style" className="w-42">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {statusBarStyleOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {settings.statusBarStyle === 'accent' && (
+                    <Field orientation="horizontal" className="px-0 py-3">
+                      <FieldContent>
+                        <FieldLabel htmlFor="status-bar-accent-color">Цвет обводки статус-бара</FieldLabel>
+                        <FieldDescription className="text-[13px]">Цвет контура акцентного статус-бара</FieldDescription>
+                      </FieldContent>
+                      <Select
+                        value={settings.statusBarAccentColor}
+                        items={Object.fromEntries(statusBarAccentColorOptions.map((o) => [o.value, o.label]))}
+                        onValueChange={setStatusBarAccentColor}
+                      >
+                        <SelectTrigger id="status-bar-accent-color" className="w-42">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {statusBarAccentColorOptions.map((item) => (
+                              <SelectItem key={item.value} value={item.value} aria-label={item.label}>
+                                <span>{item.label}</span>
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
+                  <Separator className="my-2" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
                       <FieldLabel htmlFor="emoji-font">Шрифт эмоджи</FieldLabel>
                       <FieldDescription className="text-[13px]">
                         Используется для отображения флагов и других эмоджи. Шрифты отличные от Twemoji должны быть установлены в системе.
@@ -1055,6 +1167,56 @@ export function SettingsModal() {
               <TabsContent value="clash-api">
                 <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Селекторы</p>
                 <FieldGroup className="gap-0!">
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="proxy-label-style">Метки протоколов</FieldLabel>
+                      <FieldDescription className="text-[13px]">Оформление меток в селекторах Mihomo</FieldDescription>
+                    </FieldContent>
+                    <Select
+                      value={settings.proxyLabelStyle}
+                      items={Object.fromEntries(proxyLabelStyleOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setProxyLabelStyle}
+                    >
+                      <SelectTrigger id="proxy-label-style" className="w-42">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {proxyLabelStyleOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Separator className="my-0" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="mihomo-palette">Палитра селекторов</FieldLabel>
+                      <FieldDescription className="text-[13px]">Цвет обводки выбранного узла</FieldDescription>
+                    </FieldContent>
+                    <Select
+                      value={settings.mihomoPalette}
+                      items={Object.fromEntries(mihomoPaletteOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setMihomoPalette}
+                    >
+                      <SelectTrigger id="mihomo-palette" className="w-42">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {mihomoPaletteOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value} aria-label={item.label}>
+                              <span>{item.label}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Separator className="my-0" />
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
                       <FieldLabel htmlFor="hide-unavailable">Скрывать недоступные подключения</FieldLabel>

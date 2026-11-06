@@ -218,10 +218,29 @@ export function StatusBar({
   return (
     <>
       <TooltipProvider delayDuration={500}>
-        <div className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-2 rounded-xl border px-3 py-3 sm:px-4 md:flex-row md:items-center">
+        <div
+          data-slot="status-bar"
+          data-style={settings.statusBarStyle}
+          className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-2 rounded-xl border px-3 py-3 sm:px-4 md:flex-row md:items-center"
+        >
           {/* Статус */}
           <div className="order-2 flex w-full items-center justify-center md:order-1 md:w-auto md:justify-start">
-            <div className="bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-1.5">
+            <div
+              data-slot="service-status"
+              data-style={settings.statusBarStyle}
+              className={cn(
+                'bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-1.5',
+                settings.statusBarStyle === 'accent' &&
+                  cn(
+                    'status-accent via-card bg-linear-to-br from-blue-500/15 to-cyan-500/10 shadow-[inset_0_1px_0_0_rgba(96,165,250,0.15)]',
+                    settings.statusBarAccentColor === 'green'
+                      ? 'border-emerald-500/45'
+                      : settings.statusBarAccentColor === 'purple'
+                        ? 'border-violet-500/45'
+                        : 'border-blue-500/45'
+                  )
+              )}
+            >
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.75 pb-0.5">
                   <div className="relative size-2.5 shrink-0">

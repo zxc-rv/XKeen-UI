@@ -2,7 +2,10 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { apiCall, clashFetch } from './api'
+import { getStoredStatusBarAccentColor, getStoredStatusBarStyle } from './status-bar-style'
 import { getStoredEmojiFont, getStoredTheme } from './theme'
+import { getStoredProxyLabelStyle } from './proxy-label-style'
+import { getStoredMihomoPalette } from './mihomo-palette'
 import {
   DEFAULT_MIHOMO_REPO,
   DEFAULT_PING_TEST_TIMEOUT,
@@ -22,6 +25,10 @@ import { clashWsUrl } from './websocket'
 // ─── Zustand store ─────────────────────────────────────────────────────────────
 
 const initialSettings: AppSettings = {
+  statusBarStyle: getStoredStatusBarStyle(),
+  statusBarAccentColor: getStoredStatusBarAccentColor(),
+  mihomoPalette: getStoredMihomoPalette(),
+  proxyLabelStyle: getStoredProxyLabelStyle(),
   theme: getStoredTheme(),
   autoApply: false,
   guiRouting: false,

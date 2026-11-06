@@ -34,12 +34,13 @@ function DialogClose({ children, render, ...props }: React.ComponentProps<typeof
 }
 
 function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Backdrop>) {
+  const customRender = !!props.render
   return (
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
         'data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 fixed inset-0 isolate z-40',
-        'bg-[#020817]/80 duration-200',
+        !customRender && 'bg-[#020817]/80 duration-200',
         className
       )}
       {...props}
@@ -49,19 +50,23 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
 
 function DialogContent({
   className,
+  overlayClassName,
+  overlayRender,
   children,
   showCloseButton = true,
   onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Popup> & {
   showCloseButton?: boolean
+  overlayClassName?: string
+  overlayRender?: React.ReactElement
   onEscapeKeyDown?: (event: KeyboardEvent) => void
 }) {
   void onEscapeKeyDown
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} render={overlayRender} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(

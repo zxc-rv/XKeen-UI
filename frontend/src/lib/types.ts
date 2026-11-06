@@ -21,6 +21,10 @@ export type AutoDnsMode = 'disabled' | 'enabled' | 'with_filter'
 export type EmojiFont = 'twemoji' | 'notocoloremoji'
 
 export interface AppSettings {
+  statusBarStyle: import('./status-bar-style').StatusBarStyle
+  statusBarAccentColor: import('./status-bar-style').StatusBarAccentColor
+  mihomoPalette: import('./mihomo-palette').MihomoPalette
+  proxyLabelStyle: import('./proxy-label-style').ProxyLabelStyle
   theme: ThemeMode
   autoApply: boolean
   guiRouting: boolean

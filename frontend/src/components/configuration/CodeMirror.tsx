@@ -2,8 +2,8 @@ import { historyField, indentWithTab } from '@codemirror/commands'
 import { foldedRanges, foldEffect, syntaxHighlighting, unfoldEffect } from '@codemirror/language'
 import { setDiagnostics } from '@codemirror/lint'
 import { selectSelectionMatches } from '@codemirror/search'
-import { Compartment, EditorSelection, EditorState, Prec, type Extension } from '@codemirror/state'
-import { EditorView, keymap, lineNumbers } from '@codemirror/view'
+import { Compartment, EditorSelection, EditorState, Prec, StateEffect, StateField, type Extension } from '@codemirror/state'
+import { Decoration, EditorView, keymap, lineNumbers, type DecorationSet } from '@codemirror/view'
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -17,6 +17,31 @@ import { baseSetup } from './editor/setup'
 import { useEditorSearch } from './editor/useEditorSearch'
 import type { EditorLanguage } from './editor/types'
 import { clamp, validateByLanguage } from './editor/validation'
+
+const highlightInsertedLines = StateEffect.define<{ from: number; to: number; fading?: boolean } | null>()
+const insertedLineDecoration = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(value, transaction) {
+    value = value.map(transaction.changes)
+    for (const effect of transaction.effects) {
+      if (effect.is(highlightInsertedLines)) {
+        if (effect.value === null) {
+          value = Decoration.none
+        } else {
+          const from = clamp(effect.value.from, 1, transaction.state.doc.lines)
+          const to = clamp(effect.value.to, from, transaction.state.doc.lines)
+          const className = effect.value.fading ? 'cm-inserted-rule cm-inserted-rule-fading' : 'cm-inserted-rule'
+          const decorations = Array.from({ length: to - from + 1 }, (_, index) =>
+            Decoration.line({ class: className }).range(transaction.state.doc.line(from + index).from)
+          )
+          value = Decoration.set(decorations)
+        }
+      }
+    }
+    return value
+  },
+  provide: field => EditorView.decorations.from(field),
+})
 
 interface SavedViewState {
   anchor: number
@@ -44,6 +69,7 @@ export interface CodeMirrorRef {
   getLineCount: () => number
   offsetToLineColumn: (offset: number) => { lineNumber: number; column: number }
   revealLine: (line: number) => void
+  highlightLines: (from: number, to: number) => void
 }
 
 interface Props {
@@ -82,6 +108,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   const filenameRef = useRef('')
   const languageRef = useRef<EditorLanguage>('json')
   const suppressRef = useRef(false)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastValidationRef = useRef<{ isValid: boolean; error?: string } | null>(null)
   const extensionsRef = useRef<Extension[]>([])
   const { searchPanel, bridge: searchBridge } = useEditorSearch(viewRef)
@@ -106,6 +133,18 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   const createExtensions = useCallback(
     (darkTheme: boolean): Extension[] => [
       ...baseSetup,
+      insertedLineDecoration,
+      EditorView.theme({
+        '.cm-line.cm-inserted-rule': {
+          backgroundColor: 'rgba(59,130,246,0.20)',
+          boxShadow: 'inset 3px 0 0 rgba(96,165,250,0.85)',
+          transition: 'background-color 300ms ease-out, box-shadow 300ms ease-out',
+        },
+        '.cm-line.cm-inserted-rule.cm-inserted-rule-fading': {
+          backgroundColor: 'transparent',
+          boxShadow: 'inset 3px 0 0 transparent',
+        },
+      }),
       configAutocompletion(() => ({ file: filenameRef.current, language: languageRef.current })),
       createSearchExtension(searchBridge),
       Prec.highest(
@@ -363,6 +402,38 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
           column: safeOffset - line.from + 1,
         }
       },
+      highlightLines: (from: number, to: number) => {
+        const view = viewRef.current
+        if (!view) return
+        if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+        const startLine = clamp(from, 1, view.state.doc.lines)
+        const endLine = clamp(to, startLine, view.state.doc.lines)
+        const offset = view.state.doc.line(startLine).from
+        const effects: StateEffect<unknown>[] = []
+        foldedRanges(view.state).between(0, view.state.doc.length, (from, to) => {
+          if (from <= offset && offset <= to) effects.push(unfoldEffect.of({ from, to }))
+        })
+        effects.push(highlightInsertedLines.of({ from: startLine, to: endLine }), EditorView.scrollIntoView(offset, { y: 'center' }))
+        view.dispatch({ effects, selection: EditorSelection.cursor(offset) })
+        view.focus()
+        requestAnimationFrame(() => {
+          if (viewRef.current !== view) return
+          const node = view.domAtPos(Math.min(offset, view.state.doc.length)).node
+          const element = node instanceof Element ? node : node.parentElement
+          element?.closest('.cm-line')?.scrollIntoView({ block: 'center', inline: 'nearest' })
+        })
+        highlightTimerRef.current = setTimeout(() => {
+          if (viewRef.current === view) {
+            view.dispatch({ effects: highlightInsertedLines.of({ from: startLine, to: endLine, fading: true }) })
+            highlightTimerRef.current = setTimeout(() => {
+              if (viewRef.current === view) view.dispatch({ effects: highlightInsertedLines.of(null) })
+              highlightTimerRef.current = null
+            }, 300)
+          } else {
+            highlightTimerRef.current = null
+          }
+        }, 1200)
+      },
       revealLine: (line: number) => {
         const view = viewRef.current
         if (!view) return
@@ -398,6 +469,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
     })
 
     return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
       view.destroy()
       viewRef.current = null
     }
