@@ -1338,15 +1338,21 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
   closed,
   onSelect,
   onClose,
+  onBlock,
+  onApplyFilter,
 }: {
   conn: Connection
   closed: boolean
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
+  onBlock: (id: string, e: React.MouseEvent) => void
+  onApplyFilter: (value: string) => void
 }) {
   const reversedChains = [...conn.chains].reverse()
+  const displayedChains = reversedChains.length > 2 ? [reversedChains[0], reversedChains[reversedChains.length - 1]] : reversedChains
   const host = getConnectionHostLabel(conn) || '—'
-  const speed = { upload: conn.uploadSpeed ?? 0, download: conn.downloadSpeed ?? 0 }
+  const smartBlockState = useConnectionsStore((s) => s.map.get(conn.id)?.metadata.smartBlock)
+  const canSmartBlock = !closed && smartBlockState === 'normal'
   return (
     <article
       tabIndex={0}
@@ -1362,7 +1368,37 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
     >
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="min-w-0 truncate text-sm font-medium">{host}</span>
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums"><TimeAgoCell isoString={conn.start} /></span>
+        <div className="flex shrink-0 items-center gap-1">
+          {canSmartBlock && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground size-7 hover:bg-transparent! hover:text-amber-400"
+                    aria-label="Smart: заблокировать узел для этого хоста"
+                    onClick={(e) => onBlock(conn.id, e)}
+                  >
+                    <IconBan size={15} />
+                  </Button>
+                }
+              />
+              <TooltipContent>Smart: заблокировать узел для этого хоста</TooltipContent>
+            </Tooltip>
+          )}
+          {!closed && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground size-7 hover:bg-destructive/10 hover:text-destructive"
+              aria-label="Закрыть соединение"
+              onClick={(e) => onClose(conn.id, e)}
+            >
+              <IconX size={15} />
+            </Button>
+          )}
+        </div>
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="text-muted-foreground min-w-0 truncate text-xs">{conn.metadata.type || '—'} | {getConnectionProtocol(conn)}</span>
@@ -1372,28 +1408,36 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
         </span>
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-xs">
-          {reversedChains.map((chain, i) => (
-            <span key={`${chain}-${i}`} className="flex min-w-0 items-center gap-1">
-              {i > 0 && <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />}
-              <ProxyIcon name={chain} className="size-4 shrink-0 object-contain" />
-              <span className="min-w-0 truncate">{chain}</span>
-            </span>
-          ))}
-          {!reversedChains.length && <span className="text-muted-foreground">DIRECT</span>}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-xs">
+                {displayedChains.map((chain, i) => (
+                  <span key={`${chain}-${i}`} className="flex min-w-0 items-center gap-1">
+                    {i > 0 && <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />}
+                    <button
+                      type="button"
+                      className="flex min-w-0 cursor-copy items-center gap-1 text-left hover:text-blue-400"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onApplyFilter(chain)
+                      }}
+                    >
+                      <ProxyIcon name={chain} className="size-4 shrink-0 object-contain" />
+                      <span className="min-w-0 truncate">{chain}</span>
+                    </button>
+                  </span>
+                ))}
+                {!reversedChains.length && <span className="text-muted-foreground">DIRECT</span>}
+              </div>
+            }
+          />
+          <ChainTooltip chains={reversedChains} />
+        </Tooltip>
+        <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+          <TimeAgoCell isoString={conn.start} />
         </span>
-        {!closed && <span className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-[11px] tabular-nums"><span className="text-emerald-400">↓ {formatBytes(speed.download)}/s</span><span className="text-sky-400">↑ {formatBytes(speed.upload)}/s</span></span>}
-        {!closed && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground size-7 shrink-0 hover:bg-destructive/10 hover:text-destructive"
-            aria-label="Закрыть соединение"
-            onClick={(e) => onClose(conn.id, e)}
-          >
-            <IconX size={15} />
-          </Button>
-        )}
       </div>
     </article>
   )
@@ -1409,6 +1453,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   onSortChange,
   onSelect,
   onClose,
+  onBlock,
   sourceIPFilter,
   onSourceIPFilterChange,
   searchHiddenColumns,
@@ -1427,6 +1472,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   onSortChange: (column: SortColumn, direction: SortDirection) => void
   onSelect: (conn: Connection) => void
   onClose: (id: string, e: React.MouseEvent) => void
+  onBlock: (id: string, e: React.MouseEvent) => void
   onCloseVisible: (ids: string[]) => void
   sourceIPFilter: string | null
   onSourceIPFilterChange: (ip: string | null) => void
@@ -1548,7 +1594,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
       <div className="bg-background min-h-0 flex-1 overflow-y-auto p-2.5">
         {connections.length ? (
           <div className="flex flex-col gap-2">
-            {connections.slice(0, visibleLimit).map(({ conn, closed }) => <MobileConnectionCard key={`${closed ? 'closed' : 'active'}-${conn.id}`} conn={conn} closed={closed} onSelect={onSelect} onClose={onClose} />)}
+            {connections.slice(0, visibleLimit).map(({ conn, closed }) => <MobileConnectionCard key={`${closed ? 'closed' : 'active'}-${conn.id}`} conn={conn} closed={closed} onSelect={onSelect} onClose={onClose} onBlock={onBlock} onApplyFilter={onFilterChange} />)}
             {visibleLimit < connections.length && (
               <Button variant="outline" size="sm" className="w-full" onClick={() => setVisibleLimit((limit) => limit + 50)}>
                 Показать ещё {Math.min(50, connections.length - visibleLimit)} из {connections.length - visibleLimit}
@@ -1784,6 +1830,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           onSortChange={handleMobileSortChange}
           onSelect={handleSelectConnection}
           onClose={handleCloseConnection}
+          onBlock={handleBlockConnection}
           sourceIPFilter={mobileSourceIPFilter}
           onSourceIPFilterChange={setMobileSourceIPFilter}
           searchHiddenColumns={mobileSearchHiddenColumns}

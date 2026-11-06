@@ -500,6 +500,7 @@ export async function fetchClashProxies(port: string, secret?: string | null, si
 
     if (proxiesData.proxies) {
       const proxies = { ...proxiesData.proxies }
+      const previousProxies = useProxiesStore.getState().proxies
 
       for (const provider of Object.values(providersData.providers ?? {})) {
         for (const proxy of provider.proxies ?? []) {
@@ -512,6 +513,10 @@ export async function fetchClashProxies(port: string, secret?: string | null, si
 
       for (const key in proxies) {
         const p = proxies[key] as any
+        const previousHistory = previousProxies[key]?.history
+        if ((!Array.isArray(p.history) || p.history.length === 0) && Array.isArray(previousHistory) && previousHistory.length > 0) {
+          p.history = previousHistory
+        }
         if (p.icon) {
           if (iconCache.has(p.icon)) p.icon = iconCache.get(p.icon)
           else if (typeof p.icon === 'string' && !p.icon.startsWith('blob:')) urlsToFetch.add(p.icon)

@@ -53,7 +53,7 @@ export function SelectorDisplaySettings() {
         <SelectGroup>
           <SelectItem value="standard">Стандартный</SelectItem>
           {!isMobile && <SelectItem value="columns">Две колонки</SelectItem>}
-          {!isMobile && <SelectItem value="tiles">Компактный список</SelectItem>}
+          {!isMobile && <SelectItem value="tiles">Три колонки</SelectItem>}
           {isMobile && <SelectItem value="popup">Zashboard</SelectItem>}
         </SelectGroup>
       </SelectContent>
