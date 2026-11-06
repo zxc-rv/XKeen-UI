@@ -224,6 +224,15 @@ export function StatusBar({
           : 'border-red-500/45'
       : 'border-blue-500/45'
 
+  const statusAccentGradient =
+    settings.statusBarAccentColor === 'status'
+      ? isRunning
+        ? 'from-emerald-500/15 via-card to-teal-500/10 shadow-[inset_0_1px_0_0_rgba(52,211,153,0.15)]'
+        : isPending
+          ? 'from-amber-500/15 via-card to-orange-500/10 shadow-[inset_0_1px_0_0_rgba(251,191,36,0.15)]'
+          : 'from-red-500/15 via-card to-rose-500/10 shadow-[inset_0_1px_0_0_rgba(248,113,113,0.15)]'
+      : 'from-blue-500/15 via-card to-cyan-500/10 shadow-[inset_0_1px_0_0_rgba(96,165,250,0.15)]'
+
   return (
     <>
       <TooltipProvider delayDuration={500}>
@@ -241,7 +250,8 @@ export function StatusBar({
                 'bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-1.5',
                 settings.statusBarStyle === 'accent' &&
                   cn(
-                    'status-accent via-card bg-linear-to-br from-blue-500/15 to-cyan-500/10 shadow-[inset_0_1px_0_0_rgba(96,165,250,0.15)]',
+                    'status-accent via-card bg-linear-to-br',
+                    statusAccentGradient,
                     statusAccentBorder
                   )
               )}
