@@ -70,6 +70,7 @@ const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
+import { SelectorDisplaySettings } from './mihomo/SelectorDisplaySettings'
 import { Kbd } from '../ui/kbd'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
@@ -1002,6 +1003,7 @@ export function ConfigPanel({
                   />
                   <TooltipContent>{showHiddenSelectors ? 'Скрыть скрытые' : 'Показывать скрытые'}</TooltipContent>
                 </Tooltip>
+                <SelectorDisplaySettings />
                 <Tooltip>
                   <TooltipTrigger
                     render={

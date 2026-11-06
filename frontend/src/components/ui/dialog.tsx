@@ -52,16 +52,24 @@ function DialogContent({
   children,
   showCloseButton = true,
   onEscapeKeyDown,
+  overlayClassName,
+  overlayRender,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Popup> & {
   showCloseButton?: boolean
   onEscapeKeyDown?: (event: KeyboardEvent) => void
+  overlayClassName?: string
+  overlayRender?: React.ReactElement
 }) {
   void onEscapeKeyDown
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      {overlayRender ? (
+        <DialogPrimitive.Backdrop render={overlayRender} />
+      ) : (
+        <DialogOverlay className={overlayClassName} />
+      )}
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(

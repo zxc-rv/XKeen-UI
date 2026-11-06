@@ -22,7 +22,9 @@ import {
 } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { apiCall } from '../../lib/api'
+import { saveStatusBarAccentColor, saveStatusBarStyle, type StatusBarAccentColor } from '../../lib/status-bar-style'
 import { applyEmojiFont } from '../../lib/theme'
+import { saveProxyLabelStyle, type ProxyLabelStyle } from '../../lib/proxy-label-style'
 import { useAppContext, useModalContext } from '../../lib/store'
 import type { AppSettings, AutoDnsMode, EmojiFont, PingMode, ProxySortOrder, ThemeMode } from '../../lib/types'
 
@@ -117,6 +119,13 @@ const clashApiSettings: ToggleSetting[] = [
     title: 'Автозакрытие при применении',
     description: 'Закрывать все соединения после успешного применения конфига Mihomo',
   },
+  {
+    id: 'mobile-layout',
+    key: 'mobileLayout',
+    path: 'clash_api.mobile_layout',
+    title: 'Мобильный лейаут',
+    description: 'Карточный лейаут соединений на мобильных устройствах',
+  },
 ]
 
 const pingModeOptions: { value: PingMode; label: string }[] = [
@@ -144,6 +153,21 @@ const themeOptions: { value: ThemeMode; label: string }[] = [
 const emojiFontOptions: { value: EmojiFont; label: string }[] = [
   { value: 'twemoji', label: 'Twemoji' },
   { value: 'notocoloremoji', label: 'Noto Color Emoji' },
+]
+
+const statusBarStyleOptions = [
+  { value: 'standard', label: 'Стандартный' },
+  { value: 'accent', label: 'Акцентный' },
+]
+
+const statusBarAccentColorOptions: { value: StatusBarAccentColor; label: string }[] = [
+  { value: 'blue', label: 'Синий' },
+  { value: 'status', label: 'Статус сервиса' },
+]
+
+const proxyLabelStyleOptions: { value: ProxyLabelStyle; label: string }[] = [
+  { value: 'plain', label: 'Текст' },
+  { value: 'outlined', label: 'Капсула' },
 ]
 
 const IntervalSettingField = memo(function IntervalSettingField({
@@ -772,6 +796,33 @@ export function SettingsModal() {
     [dispatch]
   )
 
+  const setStatusBarStyle = useCallback(
+    (value: string) => {
+      if (value !== 'standard' && value !== 'accent') return
+      saveStatusBarStyle(value)
+      dispatch({ type: 'SET_SETTINGS', settings: { statusBarStyle: value } })
+    },
+    [dispatch]
+  )
+
+  const setStatusBarAccentColor = useCallback(
+    (value: string) => {
+      if (value !== 'blue' && value !== 'status') return
+      saveStatusBarAccentColor(value)
+      dispatch({ type: 'SET_SETTINGS', settings: { statusBarAccentColor: value } })
+    },
+    [dispatch]
+  )
+
+  const setProxyLabelStyle = useCallback(
+    (value: string) => {
+      if (value !== 'plain' && value !== 'outlined') return
+      saveProxyLabelStyle(value)
+      dispatch({ type: 'SET_SETTINGS', settings: { proxyLabelStyle: value } })
+    },
+    [dispatch]
+  )
+
   const addProxy = useCallback(
     async (rawUrl: string) => {
       let url = rawUrl.trim().replace(/\/+$/, '')
@@ -907,7 +958,7 @@ export function SettingsModal() {
                   <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Оформление</p>
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
-                      <FieldLabel htmlFor="theme">Тема приложения</FieldLabel>
+                      <FieldLabel htmlFor="theme">Тема страницы</FieldLabel>
                       <FieldDescription className="text-[13px]">Ручной режим или синхронизация с системой</FieldDescription>
                     </FieldContent>
                     <Select
@@ -929,6 +980,57 @@ export function SettingsModal() {
                       </SelectContent>
                     </Select>
                   </Field>
+                  <Separator className="my-2" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="status-bar-style">Стиль статус-бара</FieldLabel>
+                      <FieldDescription className="text-[13px]">Оформление рамки состояния сервиса</FieldDescription>
+                    </FieldContent>
+                    <Select
+                      value={settings.statusBarStyle}
+                      items={Object.fromEntries(statusBarStyleOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setStatusBarStyle}
+                    >
+                      <SelectTrigger id="status-bar-style" className="w-42">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {statusBarStyleOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {settings.statusBarStyle === 'accent' && (
+                    <Field orientation="horizontal" className="px-0 py-3">
+                      <FieldContent>
+                        <FieldLabel htmlFor="status-bar-accent-color">Цвет рамки статус-бара</FieldLabel>
+                        <FieldDescription className="text-[13px]">Цвет рамки акцентного статус-бара</FieldDescription>
+                      </FieldContent>
+                      <Select
+                        value={settings.statusBarAccentColor}
+                        items={Object.fromEntries(statusBarAccentColorOptions.map((o) => [o.value, o.label]))}
+                        onValueChange={setStatusBarAccentColor}
+                      >
+                        <SelectTrigger id="status-bar-accent-color" className="w-42">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {statusBarAccentColorOptions.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
                   <Separator className="my-2" />
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
@@ -1055,6 +1157,31 @@ export function SettingsModal() {
               <TabsContent value="clash-api">
                 <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Селекторы</p>
                 <FieldGroup className="gap-0!">
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="proxy-label-style">Теги подключений</FieldLabel>
+                      <FieldDescription className="text-[13px]">Стиль тегов подключений</FieldDescription>
+                    </FieldContent>
+                    <Select
+                      value={settings.proxyLabelStyle}
+                      items={Object.fromEntries(proxyLabelStyleOptions.map((o) => [o.value, o.label]))}
+                      onValueChange={setProxyLabelStyle}
+                    >
+                      <SelectTrigger id="proxy-label-style" className="w-42">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {proxyLabelStyleOptions.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Separator className="my-0" />
                   <Field orientation="horizontal" className="px-0 py-3">
                     <FieldContent>
                       <FieldLabel htmlFor="hide-unavailable">Скрывать недоступные подключения</FieldLabel>

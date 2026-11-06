@@ -51,6 +51,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@lezer/common": "1.5.5",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
@@ -67,5 +68,8 @@
     "typescript-eslint": "^8.72.0",
     "vite": "^8.3.5",
     "vite-plugin-compression2": "^2.5.3"
+  },
+  "overrides": {
+    "@lezer/common": "1.5.5"
   }
 }

@@ -1,11 +1,15 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Input } from '@/components/ui/input'
 import { InputGroupAddon } from '@/components/ui/input-group'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { LazyMotion, domAnimation, m } from 'framer-motion'
 import {
   IconBolt,
   IconChevronDown,
@@ -14,15 +18,21 @@ import {
   IconLoader2,
   IconLock,
   IconPlugX,
+  IconSearch,
   IconScaleOff,
+  IconX,
 } from '@tabler/icons-react'
-import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DISPLAY_EVENT, readSelectorDisplay } from './SelectorDisplaySettings'
 
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
 import { fetchClashProxies, getConnections, showToast, useProxiesStore, useSettings } from '../../../lib/store'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL } from '../../../lib/types'
+
+const ACTIVE_CARD_CLASSES = 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
+const HOVER_CARD_CLASSES = 'hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
 
 interface ProxyHistory {
   time: string
@@ -115,6 +125,10 @@ function isSmartPlaceholder(name?: string | null): boolean {
   return name === SMART_NOW_PLACEHOLDER
 }
 
+function getProxyHistory(proxy?: ProxyInfo): ProxyHistory[] {
+  return Array.isArray(proxy?.history) ? proxy.history : []
+}
+
 function GraveIcon({ className, size = 16 }: { className?: string; size?: number }) {
   return (
     <svg viewBox="0 0 512 512" fill="currentColor" aria-hidden="true" className={className} style={{ width: size, height: size }}>
@@ -126,11 +140,11 @@ function GraveIcon({ className, size = 16 }: { className?: string; size?: number
 
 function getLastDelay(proxy: ProxyInfo): number | null {
   if (NO_DELAY_TYPES.has(proxy.type.toLowerCase())) return null
-  return proxy.history.length > 0 ? proxy.history.at(-1)!.delay : null
+  return getProxyHistory(proxy).at(-1)?.delay ?? null
 }
 
 function hasDelayHistory(proxy?: ProxyInfo): boolean {
-  return !!proxy && !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) && proxy.history.length > 0
+  return !!proxy && !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) && getProxyHistory(proxy).length > 0
 }
 
 function isTimedOutProxy(proxy?: ProxyInfo): boolean {
@@ -155,8 +169,9 @@ function shouldShowDelay(proxy?: ProxyInfo, isTesting = false): boolean {
 
 function hasNConsecutiveTimeouts(proxy: ProxyInfo | undefined, n: number): boolean {
   if (!proxy || n < 1) return false
-  if (proxy.history.length < n) return false
-  return proxy.history.slice(-n).every((entry) => entry.delay === 0)
+  const history = getProxyHistory(proxy)
+  if (history.length < n) return false
+  return history.slice(-n).every((entry) => entry.delay === 0)
 }
 
 function sortProxyNames(proxyNames: string[], order: string, proxies: Record<string, ProxyInfo | undefined>): string[] {
@@ -263,6 +278,7 @@ const ProxyCard = memo(function ProxyCard({
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
 }) {
+  const labelStyle = useSettings((s) => s.proxyLabelStyle)
   const proxy = useProxiesStore((s) => s.proxies[proxyName] as ProxyInfo | undefined)
   const isActive = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.now === proxyName)
   const isFixed = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.fixed === proxyName)
@@ -279,23 +295,23 @@ const ProxyCard = memo(function ProxyCard({
 
   const delay = getLastDelay(proxy)
   const hasHistory = hasDelayHistory(proxy)
+  const history = getProxyHistory(proxy)
   const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
   const selectionDisabled = lockSelection || isSelectionDisabled(autoPolicy, proxy)
   const smartLabel = smartInfo ? (SMART_RANK_LABELS[smartInfo.rank] ?? smartInfo.rank) : null
   const showTcpOnly = proxy.udp === false
-
   return (
     <div
       className={cn(
-        'flex flex-col gap-2.5 rounded-md border px-3 py-2.5 text-sm transition-all',
+        'text-foreground flex flex-col gap-2.5 rounded-md border px-3 py-2.5 text-sm transition-all',
         selectionDisabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer',
         isFixed
           ? 'border-purple-400 bg-linear-to-b from-purple-500/25 to-purple-500/15'
           : isActive
-            ? 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
+            ? ACTIVE_CARD_CLASSES
             : selectionDisabled
               ? 'border-ring/35 bg-[linear-gradient(135deg,rgba(148,163,184,0.08)_0%,transparent_55%)]'
-              : 'border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)] hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
+              : cn('border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)]', HOVER_CARD_CLASSES)
       )}
       onClick={() => !selectionDisabled && onSelect(selectorName, proxyName)}
       onContextMenu={(e) => {
@@ -303,7 +319,7 @@ const ProxyCard = memo(function ProxyCard({
         if (canTest && !isTestingSingle) onTestSingle(proxyName)
       }}
     >
-      <div className="text- flex min-w-0 items-center gap-1.5">
+      <div className="text-foreground flex min-w-0 items-center gap-1.5">
         {proxy.icon && (
           <img
             src={proxy.icon}
@@ -340,47 +356,85 @@ const ProxyCard = memo(function ProxyCard({
       </div>
 
       <div className="flex items-center justify-between gap-1">
-        <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-xs tracking-wide">
-          <span>{proxy.type.toLowerCase()}</span>
-          {showTcpOnly && (
-            <>
-              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
-              <span className="text-red-400">tcp only</span>
-            </>
-          )}
-          {proxy.smux && (
-            <>
-              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
-              <span>smux</span>
-            </>
-          )}
-          {proxy.tfo && (
-            <>
-              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
-              <span>tfo</span>
-            </>
-          )}
-          {smartLabel && (
-            <>
-              <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+        {labelStyle === 'outlined' ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-0.75">
+            <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
+              {proxy.type.toLowerCase()}
+            </Badge>
+            {showTcpOnly && (
+              <Badge variant="destructive" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
+                tcp only
+              </Badge>
+            )}
+            {proxy.smux && (
+              <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
+                smux
+              </Badge>
+            )}
+            {proxy.tfo && (
+              <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider">
+                tfo
+              </Badge>
+            )}
+            {smartLabel && (
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <span
-                      className={cn(
-                        smartInfo!.rank === 'MostUsed' && 'text-green-400',
-                        smartInfo!.rank === 'OccasionalUsed' && 'text-yellow-300'
-                      )}
+                    <Badge
+                      variant={smartInfo!.rank === 'MostUsed' ? 'emerald' : smartInfo!.rank === 'OccasionalUsed' ? 'amber' : 'secondary'}
+                      className="h-4.5 rounded-full px-1.5 text-[11px] font-normal tracking-wider"
                     >
                       {smartLabel}
-                    </span>
+                    </Badge>
                   }
                 />
                 <TooltipContent>Smart-вес: {smartInfo!.weight.toFixed(1)}%</TooltipContent>
               </Tooltip>
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-xs tracking-wide">
+            <span>{proxy.type.toLowerCase()}</span>
+            {showTcpOnly && (
+              <>
+                <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+                <span className="text-red-400">tcp only</span>
+              </>
+            )}
+            {proxy.smux && (
+              <>
+                <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+                <span>smux</span>
+              </>
+            )}
+            {proxy.tfo && (
+              <>
+                <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+                <span>tfo</span>
+              </>
+            )}
+            {smartLabel && (
+              <>
+                <span className="bg-muted-foreground/40 size-0.5 rounded-full" />
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span
+                        className={cn(
+                          smartInfo!.rank === 'MostUsed' && 'text-green-400',
+                          smartInfo!.rank === 'OccasionalUsed' && 'text-yellow-300'
+                        )}
+                      >
+                        {smartLabel}
+                      </span>
+                    }
+                  />
+                  <TooltipContent>Smart-вес: {smartInfo!.weight.toFixed(1)}%</TooltipContent>
+                </Tooltip>
+              </>
+            )}
+          </div>
+        )}
 
         {canTest && (
           <Tooltip>
@@ -407,10 +461,10 @@ const ProxyCard = memo(function ProxyCard({
                 </span>
               }
             />
-            {proxy.history.length > 0 ? (
+            {history.length > 0 ? (
               <TooltipContent side="top" className="p-2">
                 <div className="flex min-w-35 flex-col gap-1">
-                  {proxy.history.map((entry, i) => (
+                  {history.map((entry, i) => (
                     <div key={i} className="flex items-center justify-between gap-3 text-[13px]">
                       <span className="tabular-nums">
                         {new Date(entry.time).toLocaleString('sv-SE', { hour12: false }).replace('T', ' ')}
@@ -467,7 +521,7 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
 
   return (
     <div className="text-muted-foreground flex flex-wrap items-center gap-1 text-[13px]">
-      <span className="truncate">{label}</span>
+      <span className="truncate text-xs tracking-wide uppercase">{label}</span>
       {chain.map((item, i) => (
         <div key={item.name} className="flex min-w-0 items-center gap-1">
           <IconCircleArrowRightFilled size={13} className="text-muted-foreground shrink-0" />
@@ -664,20 +718,26 @@ const SelectorCombobox = memo(function SelectorCombobox({
 /* ====================== СТРОКА СЕЛЕКТОРА ====================== */
 const SelectorRow = memo(function SelectorRow({
   selectorName,
+  display,
   onTestAll,
   onSelect,
   onTestSingle,
   onClearFixed,
   onFlushSmart,
+  activePickerSelector,
+  onPickerChange,
   collapsed,
   onToggleCollapse,
 }: {
   selectorName: string
+  display: 'standard' | 'columns' | 'tiles' | 'popup'
   onTestAll: (name: string) => void
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
   onClearFixed: (selectorName: string) => Promise<void>
   onFlushSmart: (selectorName: string) => Promise<void>
+  activePickerSelector: string | null
+  onPickerChange: (selectorName: string | null) => void
   collapsed: boolean
   onToggleCollapse: (name: string) => void
 }) {
@@ -689,7 +749,74 @@ const SelectorRow = memo(function SelectorRow({
   })
   const smartNodesForGroup = useSelectorsStore((s) => s.smartNodes[selectorName])
   const [isFlushingSmart, setIsFlushingSmart] = useState(false)
+  const [isClearingFixed, setIsClearingFixed] = useState(false)
   const [flushConfirmOpen, setFlushConfirmOpen] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => window.matchMedia('(max-width: 767px)').matches)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [pickerAnimationReady, setPickerAnimationReady] = useState(false)
+  const [pickerClosing, setPickerClosing] = useState(false)
+  const [pickerMotionBoxes, setPickerMotionBoxes] = useState<{
+    from: { left: number; top: number; width: number; height: number }
+    to: { left: number; top: number; width: number; height: number }
+  } | null>(null)
+  const pickerAnchorRef = useRef<HTMLDivElement>(null)
+  const pickerCardRef = useRef<HTMLDivElement>(null)
+  const pickerHeaderRef = useRef<HTMLDivElement>(null)
+  const pickerGridRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const isTestingSelected = useSelectorsStore((s) => (!!selector?.now ? !!s.testingSingle[selector.now] : false))
+  const isPickerOpen = activePickerSelector === selectorName
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const updateViewport = () => setIsMobileViewport(media.matches)
+    media.addEventListener('change', updateViewport)
+    return () => media.removeEventListener('change', updateViewport)
+  }, [])
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
+
+  useEffect(() => {
+    if (!isMobileViewport || !isPickerOpen) {
+      setPickerAnimationReady(false)
+      return
+    }
+    setPickerAnimationReady(false)
+    const frame = window.requestAnimationFrame(() => {
+      const width = window.innerWidth - 24
+      const card = pickerCardRef.current
+      const originalWidth = card?.style.width
+      if (card) {
+        card.style.width = `${width}px`
+        card.getBoundingClientRect()
+      }
+
+      const heightLimit = Math.max(240, Math.min(window.innerHeight - 24, window.innerHeight * 0.82))
+      const headerHeight = pickerHeaderRef.current?.getBoundingClientRect().height ?? 72
+      const grid = pickerGridRef.current
+      const pickerNodes = grid?.querySelectorAll<HTMLElement>(':scope > [data-picker-node]')
+      const firstNode = pickerNodes?.item(0)?.getBoundingClientRect()
+      const lastNode = pickerNodes && pickerNodes.length > 0 ? pickerNodes.item(pickerNodes.length - 1).getBoundingClientRect() : null
+      const gridContentHeight =
+        grid && firstNode && lastNode ? lastNode.bottom - grid.getBoundingClientRect().top : (grid?.scrollHeight ?? 0)
+      const contentHeight = Math.ceil(headerHeight + gridContentHeight + 36)
+      const height = Math.min(contentHeight, heightLimit)
+      if (card) card.style.width = originalWidth ?? ''
+      setPickerMotionBoxes((current) =>
+        current
+          ? {
+              ...current,
+              to: { left: 12, top: Math.max(12, (window.innerHeight - height) / 2), width, height },
+            }
+          : current
+      )
+      setPickerAnimationReady(true)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [isMobileViewport, isPickerOpen])
 
   if (!selector) return null
 
@@ -697,9 +824,7 @@ const SelectorRow = memo(function SelectorRow({
   const autoPolicy = AUTO_POLICY_TYPES.has(selector.type)
   const lockSelection = selector.type === 'LoadBalance'
   const isSmart = isSmartType(selector.type)
-  const selectedDelay = selectedProxy ? getLastDelay(selectedProxy) : null
-  const showSelectedDelay = !!selectedProxy && selectedDelay !== null && selectedDelay > 0
-  const selectedDigits = showSelectedDelay && selectedDelay ? String(selectedDelay).length : 0
+  const isTestingSmart = useSelectorsStore((s) => !!s.testingAll[selectorName])
 
   const hideUnavailable = useSettings((s) => s.hideUnavailableProxies)
   const hideCounter = useSettings((s) => s.hideUnavailableProxiesCounter)
@@ -723,6 +848,30 @@ const SelectorRow = memo(function SelectorRow({
     return result
   }, [allProxies, hideUnavailable, hideCounter, sortOrder, allProxiesMap, isSmart, smartNodesForGroup])
 
+  const smartNodeDelays = isSmart
+    ? filteredSortedProxies
+        .map((name) => {
+          const proxy = allProxiesMap[name]
+          const delay = proxy ? getLastDelay(proxy) : null
+          return delay !== null && delay > 0 ? delay : null
+        })
+        .filter((delay): delay is number => delay !== null)
+    : []
+  const selectedDelay = selectedProxy
+    ? getLastDelay(selectedProxy)
+    : isSmart
+      ? (getLastDelay(selector) ?? (smartNodeDelays.length ? Math.min(...smartNodeDelays) : null))
+      : null
+  const showSelectedDelay = selectedDelay !== null && selectedDelay > 0
+  const selectedDigits = showSelectedDelay && selectedDelay ? String(selectedDelay).length : 0
+
+  const pickerProxies = useMemo(() => {
+    const query = searchQuery.trim()
+    if (!query) return filteredSortedProxies
+    const normalized = query.toLocaleLowerCase()
+    return filteredSortedProxies.filter((name) => name.toLocaleLowerCase().includes(normalized))
+  }, [filteredSortedProxies, searchQuery])
+
   async function handleFlushSmartConfirm() {
     setFlushConfirmOpen(false)
     if (isFlushingSmart) return
@@ -735,8 +884,397 @@ const SelectorRow = memo(function SelectorRow({
     }
   }
 
+  async function handleClearFixed(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isClearingFixed) return
+    blurActiveElement()
+    setIsClearingFixed(true)
+    try {
+      await onClearFixed(selectorName)
+    } finally {
+      setIsClearingFixed(false)
+    }
+  }
+
+  const useMultiColumnCollapse = display === 'columns' || display === 'tiles'
+  const proxyCardGrid = (
+    <div className={cn('grid gap-2', display === 'columns' ? 'grid-cols-3' : 'grid-cols-2')}>
+      {filteredSortedProxies.map((proxyName) => (
+        <ProxyCard
+          key={proxyName}
+          proxyName={proxyName}
+          selectorName={selectorName}
+          autoPolicy={autoPolicy}
+          lockSelection={lockSelection}
+          onSelect={onSelect}
+          onTestSingle={onTestSingle}
+        />
+      ))}
+    </div>
+  )
+
+  if (display === 'popup') {
+    const selectedName = selectedProxy ? selector.now : isSmart ? 'Автовыбор' : 'Не выбрано'
+    const isOpen = activePickerSelector === selectorName
+    const onPickerOpenChange = (open: boolean) => {
+      if (open) {
+        setPickerClosing(false)
+        const rect = pickerAnchorRef.current?.getBoundingClientRect()
+        if (rect) {
+          const from = { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+          setPickerMotionBoxes({ from, to: from })
+        }
+        onPickerChange(selectorName)
+      } else if (activePickerSelector === selectorName) {
+        if (isMobileViewport) setPickerClosing(true)
+        else onPickerChange(null)
+      }
+    }
+    const trigger = (
+      <button
+        type="button"
+        aria-label={`Открыть селектор ${selectorName}`}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        className={cn(
+          'border-border bg-input-background hover:bg-input-background-hover! flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors hover:border-[#60a5fa]/60 sm:px-3 sm:pt-2.5 sm:pb-3',
+          isOpen && 'border-[#60a5fa]!'
+        )}
+      >
+        <span className="flex min-w-0 items-center justify-between gap-2">
+          <span className="truncate text-[15px] font-medium">{selectorName}</span>
+          {selector.icon && (
+            <img
+              src={selector.icon}
+              alt=""
+              className="size-8 shrink-0 rounded-sm object-contain"
+              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+            />
+          )}
+        </span>
+        <span className="text-muted-foreground truncate text-[10px] tracking-wide uppercase">
+          {selector.type} ({filteredSortedProxies.length}
+          {allProxies.length !== filteredSortedProxies.length ? `/${allProxies.length}` : ''})
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5 pr-9 text-[13px]">
+          <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />
+          {selectedProxy?.icon && (
+            <img
+              src={selectedProxy.icon}
+              alt=""
+              className="size-4 shrink-0 rounded-sm object-contain"
+              onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+            />
+          )}
+          <span className="min-w-0 flex-1 truncate">{selectedName}</span>
+        </span>
+      </button>
+    )
+    const pickerHeading = (
+      <div className="text-foreground flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
+        <span className="truncate">{selectorName}</span>
+        <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />
+        {selectedProxy?.icon && (
+          <img
+            src={selectedProxy.icon}
+            alt=""
+            className="size-4 shrink-0 rounded-sm object-contain"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+        )}
+        {autoPolicy && !!selector.fixed && selector.fixed === selector.now && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="flex size-4 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:text-purple-300 disabled:opacity-50"
+                  onClick={handleClearFixed}
+                  disabled={isClearingFixed}
+                  aria-label="Снять фиксацию выбора"
+                >
+                  {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconLock size={17} />}
+                </button>
+              }
+            />
+            <TooltipContent>Снять фиксацию</TooltipContent>
+          </Tooltip>
+        )}
+        <span className="truncate">{selectedName}</span>
+      </div>
+    )
+    const proxyCards = pickerProxies.map((proxyName) => (
+      <div key={proxyName} data-picker-node>
+        <ProxyCard
+          proxyName={proxyName}
+          selectorName={selectorName}
+          autoPolicy={autoPolicy}
+          lockSelection={lockSelection}
+          onSelect={(groupName, selectedProxyName) => {
+            onSelect(groupName, selectedProxyName)
+            if (!isMobileViewport) onPickerChange(null)
+          }}
+          onTestSingle={onTestSingle}
+        />
+      </div>
+    ))
+
+    if (isMobileViewport) {
+      return (
+        <LazyMotion features={domAnimation}>
+          <Dialog open={isOpen} onOpenChange={onPickerOpenChange}>
+            <div className="relative isolate" ref={pickerAnchorRef}>
+              <DialogTrigger render={trigger} />
+              <div className="absolute right-2.5 bottom-2.5 z-10 flex items-center">
+                {(selectedProxy && !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase())) || isSmart ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={selectedProxy ? `Проверить сервер ${selector.now}` : `Проверить серверы ${selectorName}`}
+                          className={cn(
+                            'flex min-w-7 items-center justify-end bg-transparent text-xs font-medium tabular-nums',
+                            delayColor(selectedDelay)
+                          )}
+                          disabled={
+                            selectedProxy && !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase()) ? isTestingSelected : isTestingSmart
+                          }
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            if (
+                              selectedProxy &&
+                              !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase()) &&
+                              !isTestingSelected &&
+                              selector.now
+                            ) {
+                              void onTestSingle(selector.now)
+                            } else if (isSmart && !isTestingSmart) {
+                              onTestAll(selectorName)
+                            }
+                          }}
+                        >
+                          {(selectedProxy && !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase()) ? isTestingSelected : isTestingSmart) ? (
+                            <IconLoader2 size={13} className="animate-spin" />
+                          ) : hasDelayHistory(selectedProxy) ? (
+                            selectedDelay || <GraveIcon size={14} />
+                          ) : isSmart && showSelectedDelay ? (
+                            selectedDelay
+                          ) : (
+                            <IconBolt size={13} className="text-foreground" />
+                          )}
+                        </button>
+                      }
+                    />
+                    <TooltipContent>{selectedProxy ? 'Проверить выбранный сервер' : 'Проверить серверы селектора'}</TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
+            </div>
+            <DialogContent
+              showCloseButton={false}
+              overlayClassName="!animate-none !duration-0"
+              overlayRender={
+                <m.div
+                  aria-hidden="true"
+                  className="fixed inset-0 isolate z-40 bg-[#020817]/80"
+                  onClick={() => onPickerOpenChange(false)}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: pickerClosing ? 0 : 1 }}
+                  transition={{ duration: 0.25, ease: [0, 0, 0.2, 1] }}
+                />
+              }
+              className="!fixed !inset-0 !h-[100dvh] !w-screen !max-w-none !translate-x-0 !translate-y-0 !animate-none !gap-0 !overflow-hidden !bg-transparent !p-0 !ring-0 !transition-none !duration-0"
+              style={{
+                position: 'fixed',
+                inset: 0,
+                width: '100vw',
+                height: '100dvh',
+                maxWidth: 'none',
+                transform: 'none',
+                display: 'block',
+                pointerEvents: 'none',
+              }}
+            >
+              <m.div
+                ref={pickerCardRef}
+                initial={pickerMotionBoxes?.from ?? { left: 12, top: 12, width: window.innerWidth - 24, height: 120 }}
+                animate={
+                  pickerClosing
+                    ? (pickerMotionBoxes?.from ?? { left: 12, top: 12, width: window.innerWidth - 24, height: 120 })
+                    : pickerAnimationReady
+                      ? (pickerMotionBoxes?.to ?? { left: 12, top: 12, width: window.innerWidth - 24, height: 120 })
+                      : (pickerMotionBoxes?.from ?? { left: 12, top: 12, width: window.innerWidth - 24, height: 120 })
+                }
+                transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+                onAnimationComplete={() => {
+                  if (!pickerClosing) return
+                  if (activePickerSelector === selectorName) onPickerChange(null)
+                }}
+                style={{ position: 'absolute', overflow: 'hidden', pointerEvents: pickerClosing ? 'none' : 'auto' }}
+                onClick={(event) => {
+                  const target = event.target as HTMLElement
+                  if (!searchOpen || target.closest('button, input, [data-picker-node]')) return
+                  setSearchOpen(false)
+                  setSearchQuery('')
+                }}
+                className="bg-input-background border-border text-foreground flex max-h-[calc(100dvh-1.5rem)] min-w-0 flex-col gap-2.5 overflow-hidden rounded-xl border p-3 font-sans shadow-xl"
+              >
+                <DialogHeader ref={pickerHeaderRef} className="gap-2">
+                  <DialogTitle className="sr-only">Выбор сервера для {selectorName}</DialogTitle>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      {pickerHeading}
+                      <div className="text-muted-foreground mt-2 flex min-w-0 items-center gap-1.5 text-xs">
+                        <span className="shrink-0 text-xs tracking-wide uppercase">
+                          {selector.type} ({filteredSortedProxies.length})
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="size-6 shrink-0"
+                          aria-label={searchOpen ? 'Закрыть поиск серверов' : 'Поиск серверов'}
+                          aria-expanded={searchOpen}
+                          onClick={() => {
+                            if (searchOpen) setSearchQuery('')
+                            setSearchOpen((open) => !open)
+                          }}
+                        >
+                          {searchOpen ? <IconX size={14} /> : <IconSearch size={14} />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="-mt-1 flex shrink-0 flex-col items-center gap-1">
+                      {selector.icon && (
+                        <img
+                          src={selector.icon}
+                          alt=""
+                          className="size-8 rounded-sm object-contain"
+                          onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+                        />
+                      )}
+                      <div className="flex items-center gap-1">
+                        {isSmart && (
+                          <Popover open={flushConfirmOpen} onOpenChange={setFlushConfirmOpen}>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <PopoverTrigger
+                                    render={
+                                      <Button
+                                        variant="outline"
+                                        size="icon-xs"
+                                        className="!size-7"
+                                        aria-label="Сбросить smart-веса"
+                                        disabled={isFlushingSmart}
+                                      >
+                                        {isFlushingSmart ? <IconLoader2 size={13} className="animate-spin" /> : <IconScaleOff size={13} />}
+                                      </Button>
+                                    }
+                                  />
+                                }
+                              />
+                              {!flushConfirmOpen && <TooltipContent>Сбросить smart-веса</TooltipContent>}
+                            </Tooltip>
+                            <PopoverContent align="end">
+                              <PopoverHeader>
+                                <PopoverTitle>Вы уверены, что хотите сбросить smart-веса?</PopoverTitle>
+                              </PopoverHeader>
+                              <div className="flex justify-end gap-2">
+                                <Button size="sm" variant="outline" onClick={() => setFlushConfirmOpen(false)}>
+                                  Нет
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => void handleFlushSmartConfirm()}>
+                                  Да
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="outline"
+                                size={selectedDigits === 0 ? 'icon-xs' : 'sm'}
+                                aria-label="Проверить все серверы селектора"
+                                className={cn(
+                                  '!h-7',
+                                  selectedDigits > 0 && [
+                                    '!min-w-7 justify-center !px-1 text-xs font-medium tabular-nums',
+                                    delayColor(selectedDelay),
+                                  ]
+                                )}
+                                style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 0.75rem)` } : undefined}
+                                disabled={isTesting}
+                                onClick={() => onTestAll(selectorName)}
+                              >
+                                {isTesting ? (
+                                  <IconLoader2 size={13} className="animate-spin" />
+                                ) : showSelectedDelay ? (
+                                  selectedDelay
+                                ) : (
+                                  <IconBolt size={13} />
+                                )}
+                              </Button>
+                            }
+                          />
+                          <TooltipContent>Проверить все серверы</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+                  </div>
+                  {searchOpen && (
+                    <div className="relative">
+                      <Input
+                        ref={searchInputRef}
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder="Поиск серверов"
+                        aria-label="Поиск серверов"
+                        className="text-foreground placeholder:text-muted-foreground h-8 pr-8 font-sans"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+                          aria-label="Очистить поиск"
+                          onClick={() => setSearchQuery('')}
+                        >
+                          <IconX size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </DialogHeader>
+                <m.div
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: pickerAnimationReady && !pickerClosing ? 1 : 0 }}
+                  transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+                >
+                  <div ref={pickerGridRef} className="text-foreground grid grid-cols-2 content-start gap-2 font-sans">
+                    {proxyCards.length > 0 ? (
+                      proxyCards
+                    ) : (
+                      <div className="text-muted-foreground col-span-full py-6 text-center text-sm">Ничего не найдено</div>
+                    )}
+                  </div>
+                </m.div>
+              </m.div>
+            </DialogContent>
+          </Dialog>
+        </LazyMotion>
+      )
+    }
+  }
+
   return (
-    <div className="border-border bg-input-background rounded-xl border p-4">
+    <div
+      className={cn('border-border bg-input-background rounded-xl border', useMultiColumnCollapse && collapsed ? 'px-4 pt-4 pb-3' : 'p-4')}
+    >
       <div className="mb-2.5 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -822,67 +1360,118 @@ const SelectorRow = memo(function SelectorRow({
 
         <SelectorStatusRow
           selectorName={selectorName}
-          label={`${selector.type} (${filteredSortedProxies.length}${allProxies.length !== filteredSortedProxies.length ? `/${allProxies.length}` : ''})`}
+          label={`${selector.type.toUpperCase()} (${filteredSortedProxies.length}${allProxies.length !== filteredSortedProxies.length ? `/${allProxies.length}` : ''})`}
           fixedProxyName={autoPolicy ? selector.fixed : undefined}
           onClearFixed={autoPolicy && selector.fixed ? () => onClearFixed(selectorName) : undefined}
         />
       </div>
 
-      <div className="flex flex-col gap-0">
-        <div
-          className={cn(
-            'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out',
-            collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-              {filteredSortedProxies.map((proxyName) => (
-                <ProxyCard
-                  key={proxyName}
-                  proxyName={proxyName}
-                  selectorName={selectorName}
-                  autoPolicy={autoPolicy}
-                  lockSelection={lockSelection}
-                  onSelect={onSelect}
-                  onTestSingle={onTestSingle}
-                />
-              ))}
+      {useMultiColumnCollapse ? (
+        <>
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out',
+              collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">{proxyCardGrid}</div>
+          </div>
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+              collapsed ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            )}
+          >
+            <div className={cn('min-h-0', collapsed ? 'overflow-visible' : 'overflow-hidden')}>
+              <SelectorCombobox
+                key={selectorName}
+                selectorName={selectorName}
+                options={filteredSortedProxies}
+                autoPolicy={autoPolicy}
+                lockSelection={lockSelection}
+                onSelect={onSelect}
+                onTestSingle={onTestSingle}
+                visible={collapsed}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col gap-0">
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out',
+              collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div
+                className={cn(
+                  'grid gap-2',
+                  display === 'standard' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : 'grid-cols-2'
+                )}
+              >
+                {filteredSortedProxies.map((proxyName) => (
+                  <ProxyCard
+                    key={proxyName}
+                    proxyName={proxyName}
+                    selectorName={selectorName}
+                    autoPolicy={autoPolicy}
+                    lockSelection={lockSelection}
+                    onSelect={onSelect}
+                    onTestSingle={onTestSingle}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
+              collapsed ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            )}
+          >
+            <div className={cn('min-h-0', collapsed ? 'overflow-visible' : 'overflow-hidden')}>
+              <SelectorCombobox
+                key={selectorName}
+                selectorName={selectorName}
+                options={filteredSortedProxies}
+                autoPolicy={autoPolicy}
+                lockSelection={lockSelection}
+                onSelect={onSelect}
+                onTestSingle={onTestSingle}
+                visible={collapsed}
+              />
             </div>
           </div>
         </div>
-
-        <div
-          className={cn(
-            'grid transition-[grid-template-rows,opacity] duration-200 ease-out',
-            collapsed ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-          )}
-        >
-          <div className={cn('min-h-0', collapsed ? 'overflow-visible' : 'overflow-hidden')}>
-            <SelectorCombobox
-              key={selectorName}
-              selectorName={selectorName}
-              options={filteredSortedProxies}
-              autoPolicy={autoPolicy}
-              lockSelection={lockSelection}
-              onSelect={onSelect}
-              onTestSingle={onTestSingle}
-              visible={collapsed}
-            />
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   )
 })
 
 /* ====================== ОСНОВНОЙ КОМПОНЕНТ ====================== */
 export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUnix, showHiddenSelectors, onCollapsedStateChange }: Props) {
+  const [display, setDisplay] = useState(readSelectorDisplay)
+  useEffect(() => {
+    const update = () => setDisplay(readSelectorDisplay())
+    window.addEventListener(DISPLAY_EVENT, update)
+    window.addEventListener('storage', update)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener(DISPLAY_EVENT, update)
+      window.removeEventListener('storage', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
   const loading = useProxiesStore((s) => s.loading)
   const error = useProxiesStore((s) => s.error)
   const pingTestUrl = useSettings((s) => s.pingTestUrl)
   const pingTestTimeout = useSettings((s) => s.pingTestTimeout)
   const [collapsedSelectors, setCollapsedSelectors] = useState<Record<string, boolean>>(() => readCollapsedSelectors())
+  const [activePickerSelector, setActivePickerSelector] = useState<string | null>(null)
 
   const pingTestQuery = useMemo(() => {
     const url = pingTestUrl.trim() || DEFAULT_PING_TEST_URL
@@ -982,7 +1571,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       for (const [name, delay] of results) {
         const proxy = state.proxies[name] as ProxyInfo | undefined
         if (!proxy) continue
-        const newHistory = [...proxy.history, { time, delay }].slice(-10)
+        const newHistory = [...getProxyHistory(proxy), { time, delay }].slice(-10)
         next[name] = { ...proxy, history: newHistory, alive: delay > 0 }
         changed = true
       }
@@ -1003,6 +1592,30 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       const orderMap = new Map(globalOrder.map((name, i) => [name, i]))
       return [...allSelectors].sort((a, b) => (orderMap.get(a.name) ?? Infinity) - (orderMap.get(b.name) ?? Infinity)).map((p) => p.name)
     })
+  )
+
+  const selectorColumnCount = display === 'columns' ? 2 : display === 'tiles' ? 3 : 1
+  const selectorColumns = useMemo(() => {
+    const columns = Array.from({ length: selectorColumnCount }, () => [] as string[])
+    selectorNames.forEach((name, index) => columns[index % selectorColumnCount].push(name))
+    return columns
+  }, [selectorColumnCount, selectorNames])
+
+  const renderSelector = (name: string) => (
+    <SelectorRow
+      key={name}
+      selectorName={name}
+      display={display}
+      onTestAll={testAll}
+      onSelect={selectProxy}
+      onTestSingle={testSingle}
+      onClearFixed={clearFixedSelection}
+      onFlushSmart={flushSmartWeights}
+      activePickerSelector={activePickerSelector}
+      onPickerChange={setActivePickerSelector}
+      collapsed={!!collapsedSelectors[name]}
+      onToggleCollapse={toggleCollapse}
+    />
   )
 
   const persistedCollapsedSelectors = useMemo(
@@ -1161,20 +1774,25 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
-        {selectorNames.map((name) => (
-          <SelectorRow
-            key={name}
-            selectorName={name}
-            onTestAll={testAll}
-            onSelect={selectProxy}
-            onTestSingle={testSingle}
-            onClearFixed={clearFixedSelection}
-            onFlushSmart={flushSmartWeights}
-            collapsed={!!collapsedSelectors[name]}
-            onToggleCollapse={toggleCollapse}
-          />
-        ))}
+      <div className="absolute inset-4 scrollbar-thin overflow-y-auto">
+        {display === 'columns' || display === 'tiles' ? (
+          <div className="flex items-start gap-4">
+            {selectorColumns.map((column, index) => (
+              <div key={index} className="flex min-w-0 flex-1 basis-0 flex-col gap-4">
+                {column.map(renderSelector)}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div
+            className={cn(
+              'min-w-0',
+              display === 'popup' ? 'grid grid-cols-2 content-start items-start gap-2 sm:gap-4 xl:grid-cols-3' : 'flex flex-col gap-4'
+            )}
+          >
+            {selectorColumns[0].map(renderSelector)}
+          </div>
+        )}
       </div>
     </TooltipProvider>
   )

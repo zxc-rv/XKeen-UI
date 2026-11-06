@@ -1,9 +1,11 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ClearIcon } from '@/components/ui/clear-icon'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   IconActivity,
@@ -18,7 +20,7 @@ import {
   IconPlugX,
   IconX,
 } from '@tabler/icons-react'
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { apiCall, clashFetch } from '../../../lib/api'
@@ -41,6 +43,14 @@ interface ConnectionMetadata {
   remoteDestination: string
   sniffHost: string
   smartBlock?: string
+  destinationGeoIP?: string
+  destinationIPASN?: string
+  sourceGeoIP?: string
+  sourceIPASN?: string
+  specialProxy?: string
+  specialRules?: string
+  inboundUser?: string
+  dscp?: number
 }
 
 interface Connection {
@@ -53,9 +63,40 @@ interface Connection {
   providerChains: string[]
   rule: string
   rulePayload: string
+  downloadSpeed?: number
+  uploadSpeed?: number
 }
 
-type SortColumn = 'host' | 'protocol' | 'chains' | 'source' | 'start' | 'upload' | 'download' | null
+function highlightConnectionJson(json: string): ReactNode[] {
+  const tokenPattern = /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null/g
+  return json.split('\n').map((line, lineIndex) => {
+    const parts: ReactNode[] = []
+    let lastIndex = 0
+    for (const match of line.matchAll(tokenPattern)) {
+      const token = match[0]
+      const index = match.index ?? 0
+      if (index > lastIndex) parts.push(line.slice(lastIndex, index))
+      const isKey = token.startsWith('"') && /^\s*:/.test(line.slice(index + token.length))
+      const tokenClass = isKey
+        ? 'text-foreground'
+        : token.startsWith('"')
+          ? 'text-[#13ce66]'
+          : token === 'null'
+            ? 'text-[#d55fde]'
+            : 'text-[#1d8ce0]'
+      parts.push(
+        <span key={`${lineIndex}-${index}`} className={tokenClass}>
+          {token}
+        </span>
+      )
+      lastIndex = index + token.length
+    }
+    if (lastIndex < line.length) parts.push(line.slice(lastIndex))
+    return <Fragment key={lineIndex}>{parts.length ? parts : line}</Fragment>
+  })
+}
+
+type SortColumn = 'host' | 'protocol' | 'chains' | 'source' | 'start' | 'upload' | 'download' | 'uploadSpeed' | 'downloadSpeed' | null
 type SortDirection = 'asc' | 'desc'
 
 interface Props {
@@ -107,8 +148,16 @@ function trimMap<K, V>(map: Map<K, V>, cap: number) {
 const MAX_CLOSED_CONNECTIONS = 1000
 
 subscribeConnections((connections) => {
-  const newMap = toMap(connections)
   const { map: prevMap, closedMap: prevClosed } = useConnectionsStore.getState()
+  const normalizedConnections = connections.map((conn) => {
+    const previous = prevMap.get(conn.id)
+    return {
+      ...conn,
+      downloadSpeed: previous ? Math.max(0, conn.download - previous.download) : 0,
+      uploadSpeed: previous ? Math.max(0, conn.upload - previous.upload) : 0,
+    }
+  })
+  const newMap = toMap(normalizedConnections)
   let nextClosed = prevClosed
   for (const [id, conn] of prevMap) {
     if (!newMap.has(id) && !prevClosed.has(id)) {
@@ -296,31 +345,87 @@ function formatAsn(data: any): string | null {
 function getConnectionSortValue(conn: Connection, column: SortColumn, showSourceName = false): string {
   switch (column) {
     case 'host':
-      return getConnectionHost(conn)
+      return getConnectionHost(conn) || ''
     case 'protocol':
-      return conn.metadata.network
+      return conn.metadata.network || ''
     case 'chains':
-      return conn.chains[0] ?? ''
+      return conn.chains?.[0] ?? ''
     case 'source':
       return getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
     case 'start':
-      return conn.start
+      return conn.start || ''
     case 'upload':
       return String(conn.upload).padStart(20, '0')
     case 'download':
       return String(conn.download).padStart(20, '0')
+    case 'uploadSpeed':
+      return String(conn.uploadSpeed ?? 0).padStart(20, '0')
+    case 'downloadSpeed':
+      return String(conn.downloadSpeed ?? 0).padStart(20, '0')
     default:
       return ''
   }
 }
 
 function getConnectionHost(conn: Connection): string {
-  return conn.metadata.host || conn.metadata.sniffHost || conn.metadata.destinationIP
+  return conn.metadata.host || conn.metadata.sniffHost || conn.metadata.destinationIP || ''
 }
 
 function getConnectionHostLabel(conn: Connection): string {
   const host = getConnectionHost(conn)
   return conn.metadata.destinationPort ? `${host}:${conn.metadata.destinationPort}` : host
+}
+
+function matchesMobileConnectionFilter(conn: Connection, query: string, searchHiddenColumns: boolean, showSourceName: boolean): boolean {
+  const source = getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
+  const visibleValues = [
+    getConnectionHostLabel(conn),
+    getConnectionProtocol(conn),
+    conn.metadata.type,
+    ...conn.chains,
+    formatBytes(conn.download),
+    formatBytes(conn.upload),
+    formatBytes(conn.downloadSpeed ?? 0),
+    formatBytes(conn.uploadSpeed ?? 0),
+    timeAgo(conn.start),
+  ]
+  const hiddenValues = [
+    conn.rule,
+    conn.rulePayload,
+    source,
+    conn.metadata.sourceIP,
+    conn.metadata.sourcePort,
+    conn.metadata.host,
+    conn.metadata.destinationIP,
+    conn.metadata.destinationGeoIP ?? '',
+    conn.metadata.destinationIPASN ?? '',
+    conn.metadata.destinationPort,
+    conn.metadata.inboundName,
+    conn.metadata.inboundUser ?? '',
+    conn.metadata.inboundIP,
+    conn.metadata.inboundPort,
+    conn.metadata.remoteDestination,
+    conn.metadata.sniffHost,
+    conn.metadata.sourceGeoIP ?? '',
+    conn.metadata.sourceIPASN ?? '',
+    conn.metadata.dnsMode,
+    conn.metadata.specialProxy ?? '',
+    conn.metadata.specialRules ?? '',
+    conn.metadata.process,
+    conn.metadata.processPath,
+    String(conn.metadata.uid || ''),
+  ]
+  const values = [...visibleValues, ...(searchHiddenColumns ? hiddenValues : [])].filter(Boolean)
+  const tokens = query.trim().split(/\s+/).filter(Boolean)
+  const regexes = tokens.map((token) => {
+    try {
+      return new RegExp(token, 'i')
+    } catch {
+      const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      return new RegExp(escaped, 'i')
+    }
+  })
+  return regexes.every((regex) => values.some((value) => regex.test(value)))
 }
 
 function getConnectionProtocol(conn: Connection): string {
@@ -612,7 +717,7 @@ const ConnectionRow = memo(function ConnectionRow({
                   className="text-muted-foreground size-5 hover:bg-transparent! hover:text-red-400"
                   onClick={(e) => onClose(conn.id, e)}
                 >
-                  <IconX className="size-3.5" />
+                  <IconX className="size-4.25" />
                 </Button>
               }
             />
@@ -711,7 +816,15 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
   )
 })
 
-const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn, showSourceName }: { conn: Connection; showSourceName: boolean }) {
+const ConnectionDialogMeta = memo(function ConnectionDialogMeta({
+  conn,
+  showSourceName,
+  showExtended = false,
+}: {
+  conn: Connection
+  showSourceName: boolean
+  showExtended?: boolean
+}) {
   const reversedChains = [...conn.chains].reverse()
   const asnIp = conn.metadata.destinationIP?.trim() ?? ''
   const sourceName = useSourceName(conn.metadata.sourceIP, showSourceName)
@@ -777,6 +890,20 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn, showSour
 
       <ConnectionDialogTraffic conn={conn} />
 
+      {showExtended &&
+        (conn.metadata.destinationGeoIP || conn.metadata.destinationIPASN || conn.metadata.sourceGeoIP || conn.metadata.sourceIPASN) && (
+          <>
+            <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">GeoIP</p>
+            <div className="border-border mb-4 rounded-lg border px-3">
+              <MetaRow label="IP назначения" value={conn.metadata.destinationIP} />
+              <MetaRow label="GeoIP назначения" value={conn.metadata.destinationGeoIP} />
+              <MetaRow label="ASN назначения" value={conn.metadata.destinationIPASN} />
+              <MetaRow label="GeoIP источника" value={conn.metadata.sourceGeoIP} />
+              <MetaRow label="ASN источника" value={conn.metadata.sourceIPASN} />
+            </div>
+          </>
+        )}
+
       <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase">Метаданные</p>
       <div className="border-border rounded-lg border px-3">
         <MetaRow label="Протокол" value={conn.metadata.network?.toUpperCase()} />
@@ -789,9 +916,13 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({ conn, showSour
         <MetaRow label="Sniff Host" value={conn.metadata.sniffHost} />
         <MetaRow label="DNS режим" value={conn.metadata.dnsMode} />
         <MetaRow label="Inbound" value={conn.metadata.inboundName} />
+        {showExtended && <MetaRow label="Inbound user" value={conn.metadata.inboundUser} />}
         <MetaRow label="Inbound адрес" value={`${conn.metadata.inboundIP}:${conn.metadata.inboundPort}`} />
         <MetaRow label="Процесс" value={conn.metadata.process || conn.metadata.processPath} />
         <MetaRow label="UID" value={conn.metadata.uid || undefined} />
+        {showExtended && <MetaRow label="DSCP" value={conn.metadata.dscp} />}
+        {showExtended && <MetaRow label="Special proxy" value={conn.metadata.specialProxy} />}
+        {showExtended && <MetaRow label="Special rules" value={conn.metadata.specialRules} />}
         <MetaRow label="Начало" value={new Date(conn.start).toLocaleString()} />
         {asnIp && (
           <MetaRow
@@ -836,31 +967,70 @@ const ConnectionDialog = memo(function ConnectionDialog({
   onClose,
   onCloseConnection,
   showSourceName,
+  tileMode,
 }: {
   open: boolean
   connId: string | null
   onClose: () => void
   onCloseConnection: (id: string) => Promise<void>
   showSourceName: boolean
+  tileMode: boolean
 }) {
   const liveConn = useConnectionsStore((s) => (connId ? (s.map.get(connId) ?? null) : null))
   const frozenConn = useConnectionsStore((s) => (connId ? (s.closedMap.get(connId) ?? null) : null))
   const displayConn = liveConn ?? frozenConn
   const isClosed = !!connId && !liveConn
   const renderedConn = displayConn
+  const [detailsTab, setDetailsTab] = useState<'overview' | 'raw'>('overview')
+  const rawJsonLines = useMemo(() => (renderedConn ? highlightConnectionJson(JSON.stringify(renderedConn, null, 2)) : null), [renderedConn])
+
+  useEffect(() => setDetailsTab('overview'), [connId])
 
   return (
     <Dialog open={open && !!connId} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden">
+      <DialogContent
+        className={`flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden ${tileMode ? 'max-h-[88dvh]! max-w-[calc(100vw-1.5rem)]!' : ''}`}
+      >
         <DialogHeader className="shrink-0">{renderedConn && <ConnectionDialogTitle conn={renderedConn} />}</DialogHeader>
 
-        <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
-          {renderedConn && (
-            <>
-              <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} />
-            </>
-          )}
-        </div>
+        {tileMode ? (
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <Select
+              value={detailsTab}
+              items={{ overview: 'Обзор', raw: 'Raw' }}
+              onValueChange={(value) => setDetailsTab(value as 'overview' | 'raw')}
+            >
+              <SelectTrigger aria-label="Раздел сведений о соединении" className="h-9 w-[132px] shrink-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start" sideOffset={4}>
+                <SelectGroup>
+                  <SelectItem value="overview">Обзор</SelectItem>
+                  <SelectItem value="raw">Raw</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            {detailsTab === 'overview' ? (
+              <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
+                {renderedConn && <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} showExtended />}
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
+                {renderedConn && (
+                  <pre className="text-muted-foreground rounded-lg border p-3 font-mono text-xs break-all whitespace-pre-wrap">
+                    {rawJsonLines?.map((line, index) => (
+                      <div key={index}>{line}</div>
+                    ))}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
+            {renderedConn && <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} />}
+          </div>
+        )}
 
         {renderedConn && (
           <div>
@@ -910,14 +1080,14 @@ const ConnectionsTabs = memo(function ConnectionsTabs({
   )
 })
 
-const CloseAllBtn = memo(function CloseAllBtn({ onCloseAll }: { onCloseAll: () => void }) {
+const CloseAllBtn = memo(function CloseAllBtn({ onCloseAll, disabled }: { onCloseAll: () => void; disabled?: boolean }) {
   const totalCount = useConnectionsStore((s) => s.map.size)
   return (
     <Button
       variant="destructive"
       className="text-[13px] max-md:size-9 max-md:px-0 max-md:pr-0! max-md:pl-0!"
       onClick={onCloseAll}
-      disabled={totalCount === 0}
+      disabled={disabled ?? totalCount === 0}
     >
       <IconPlugX className="md:hidden" />
       <IconPlugX data-icon="inline-start" className="hidden md:block" />
@@ -928,6 +1098,54 @@ const CloseAllBtn = memo(function CloseAllBtn({ onCloseAll }: { onCloseAll: () =
 
 // ─── Header ────────────────────────────────────────────────────────────────────
 
+function getSourceLabel(ip: string, showSourceName: boolean): string {
+  return showSourceName ? getCachedSourceName(ip) || ip : ip
+}
+
+function uniqueSourceLabels(sourceIPs: string[], showSourceName: boolean): string[] {
+  const labels = new Set<string>()
+  for (const ip of sourceIPs) labels.add(getSourceLabel(ip, showSourceName))
+  return Array.from(labels)
+}
+
+function toggleSourceFilter(selected: string[], label: string): string[] {
+  return selected.includes(label) ? selected.filter((value) => value !== label) : [...selected, label]
+}
+
+const SourceDeviceBadges = memo(function SourceDeviceBadges({
+  labels,
+  selectedLabels,
+  onToggleLabel,
+  onClear,
+}: {
+  labels: string[]
+  selectedLabels: string[]
+  onToggleLabel: (label: string) => void
+  onClear: () => void
+}) {
+  const ghostLabels = selectedLabels.filter((label) => !labels.includes(label))
+  const allLabels = ghostLabels.length ? [...labels, ...ghostLabels] : labels
+  if (!allLabels.length) return null
+  const badgeStyles = 'h-7 rounded-md px-3 text-xs cursor-pointer select-none'
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <Badge variant={selectedLabels.length ? 'outline' : 'default'} className={badgeStyles + ' hover:bg-primary/90'} onClick={onClear}>
+        Все устройства
+      </Badge>
+      {allLabels.map((label) => (
+        <Badge
+          key={label}
+          variant={selectedLabels.includes(label) ? 'default' : 'outline'}
+          className={badgeStyles + ' hover:bg-muted max-w-45'}
+          onClick={() => onToggleLabel(label)}
+        >
+          <span className="min-w-0 truncate">{label}</span>
+        </Badge>
+      ))}
+    </div>
+  )
+})
+
 const ConnectionsHeader = memo(function ConnectionsHeader({
   filter,
   activeTab,
@@ -937,6 +1155,10 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onCloseAll,
   caseSensitive,
   onToggleCaseSensitive,
+  sourceLabels,
+  selectedSourceLabels,
+  onToggleSourceLabel,
+  onClearSourceFilter,
 }: {
   filter: string
   activeTab: 'active' | 'closed'
@@ -946,36 +1168,52 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onCloseAll: () => void
   caseSensitive: boolean
   onToggleCaseSensitive: () => void
+  sourceLabels: string[]
+  selectedSourceLabels: string[]
+  onToggleSourceLabel: (label: string) => void
+  onClearSourceFilter: () => void
 }) {
   return (
-    <div className="border-border flex shrink-0 items-center gap-2 border-b p-3">
-      <ConnectionsTabs activeTab={activeTab} onTabChange={onTabChange} />
+    <div className="border-border flex shrink-0 flex-col gap-2.5 border-b p-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <ConnectionsTabs activeTab={activeTab} onTabChange={onTabChange} />
 
-      <InputGroup>
-        <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
-        <InputGroupAddon>
-          <IconFilter />
-        </InputGroupAddon>
-        <InputGroupAddon align="inline-end" className="gap-0">
-          {filter && (
-            <InputGroupButton size="icon-xs" className="text-muted-foreground hover:text-destructive hover:bg-transparent!" onClick={onClearFilter}>
-              <ClearIcon className="size-3.25" />
-            </InputGroupButton>
-          )}
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
-                  <IconLetterCase size={16} />
-                </InputGroupButton>
-              }
-            />
-            <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
-          </Tooltip>
-        </InputGroupAddon>
-      </InputGroup>
+        <InputGroup>
+          <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
+          <InputGroupAddon>
+            <IconFilter />
+          </InputGroupAddon>
+          <InputGroupAddon align="inline-end" className="gap-0">
+            {filter && (
+              <InputGroupButton
+                size="icon-xs"
+                className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                onClick={onClearFilter}
+              >
+                <ClearIcon className="size-3.25" />
+              </InputGroupButton>
+            )}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
+                    <IconLetterCase size={16} />
+                  </InputGroupButton>
+                }
+              />
+              <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
+            </Tooltip>
+          </InputGroupAddon>
+        </InputGroup>
 
-      {activeTab === 'active' && <CloseAllBtn onCloseAll={onCloseAll} />}
+        {activeTab === 'active' && <CloseAllBtn onCloseAll={onCloseAll} />}
+      </div>
+      <SourceDeviceBadges
+        labels={sourceLabels}
+        selectedLabels={selectedSourceLabels}
+        onToggleLabel={onToggleSourceLabel}
+        onClear={onClearSourceFilter}
+      />
     </div>
   )
 })
@@ -1031,6 +1269,7 @@ const ConnectionsTableHead = memo(function ConnectionsTableHead({
 
 const ConnectionsBody = memo(function ConnectionsBody({
   filter,
+  sourceFilter,
   sortColumn,
   sortDirection,
   onSelect,
@@ -1041,6 +1280,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   caseSensitive,
 }: {
   filter: string
+  sourceFilter: string[]
   sortColumn: SortColumn
   sortDirection: SortDirection
   onSelect: (conn: Connection) => void
@@ -1058,6 +1298,10 @@ const ConnectionsBody = memo(function ConnectionsBody({
       const connections = Array.from(s.map.values())
       const query = filter.trim()
       let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
+      if (sourceFilter.length) {
+        const selectedLabels = new Set(sourceFilter)
+        result = result.filter((conn) => selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName)))
+      }
 
       if (query) {
         const match = (v: string) => (caseSensitive ? v.includes(query) : v.toLowerCase().includes(query.toLowerCase()))
@@ -1096,7 +1340,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
       {filteredIds.length === 0 ? (
         <TableRow>
           <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-            {!connected ? 'Подключение...' : filter ? 'Нет совпадений' : 'Нет активных соединений'}
+            {!connected ? 'Подключение...' : filter || sourceFilter.length ? 'Нет совпадений' : 'Нет активных соединений'}
           </TableCell>
         </TableRow>
       ) : (
@@ -1118,6 +1362,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
 
 const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   filter,
+  sourceFilter,
   sortColumn,
   sortDirection,
   onSelect,
@@ -1125,6 +1370,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   caseSensitive,
 }: {
   filter: string
+  sourceFilter: string[]
   sortColumn: SortColumn
   sortDirection: SortDirection
   onSelect: (conn: Connection) => void
@@ -1137,6 +1383,10 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
       const connections = Array.from(s.closedMap.values())
       const query = filter.trim()
       let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
+      if (sourceFilter.length) {
+        const selectedLabels = new Set(sourceFilter)
+        result = result.filter((conn) => selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName)))
+      }
       if (query) {
         const match = (v: string) => (caseSensitive ? v.includes(query) : v.toLowerCase().includes(query.toLowerCase()))
         result = result.filter((conn) => {
@@ -1172,7 +1422,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
       {filteredConns.length === 0 ? (
         <TableRow>
           <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-            {filter ? 'Нет совпадений' : 'Нет закрытых соединений'}
+            {filter || sourceFilter.length ? 'Нет совпадений' : 'Нет закрытых соединений'}
           </TableCell>
         </TableRow>
       ) : (
@@ -1182,15 +1432,377 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   )
 })
 
+const MobileConnectionCard = memo(function MobileConnectionCard({
+  conn,
+  closed,
+  onSelect,
+  onClose,
+  onBlock,
+  onApplyFilter,
+}: {
+  conn: Connection
+  closed: boolean
+  onSelect: (conn: Connection) => void
+  onClose: (id: string, e: React.MouseEvent) => void
+  onBlock: (id: string, e: React.MouseEvent) => void
+  onApplyFilter: (value: string) => void
+}) {
+  const reversedChains = [...conn.chains].reverse()
+  const displayedChains = reversedChains.length > 2 ? [reversedChains[0], reversedChains[reversedChains.length - 1]] : reversedChains
+  const host = getConnectionHostLabel(conn) || '—'
+  const smartBlockState = useConnectionsStore((s) => s.map.get(conn.id)?.metadata.smartBlock)
+  const canSmartBlock = !closed && smartBlockState === 'normal'
+  return (
+    <article
+      tabIndex={0}
+      aria-label={`Соединение ${host}`}
+      className={`border-border bg-input-background hover:bg-muted/40 focus-visible:ring-ring flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none ${closed ? 'opacity-60' : ''}`}
+      onClick={() => onSelect(conn)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(conn)
+        }
+      }}
+    >
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-sm font-medium">{host}</span>
+        <div className="flex shrink-0 items-center">
+          {canSmartBlock && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground size-6 hover:bg-transparent! hover:text-amber-400"
+                    aria-label="Smart: заблокировать узел для этого хоста"
+                    onClick={(e) => onBlock(conn.id, e)}
+                  >
+                    <IconBan className="size-3.5" />
+                  </Button>
+                }
+              />
+              <TooltipContent>Smart: заблокировать узел для этого хоста</TooltipContent>
+            </Tooltip>
+          )}
+          {!closed && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive size-7"
+              aria-label="Закрыть соединение"
+              onClick={(e) => onClose(conn.id, e)}
+            >
+              <IconX className="size-4.25" />
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="text-muted-foreground min-w-0 truncate text-xs">
+          {conn.metadata.type || '—'} | {getConnectionProtocol(conn)}
+        </span>
+        <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-xs tabular-nums">
+          <span className="text-emerald-400">↓ {formatBytes(conn.download)}</span>
+          <span className="text-sky-400">↑ {formatBytes(conn.upload)}</span>
+        </span>
+      </div>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-xs">
+                {displayedChains.map((chain, i) => (
+                  <span key={`${chain}-${i}`} className="flex min-w-0 items-center gap-1">
+                    {i > 0 && <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />}
+                    <button
+                      type="button"
+                      className="flex min-w-0 cursor-copy items-center gap-1 text-left hover:text-blue-400"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        onApplyFilter(chain)
+                      }}
+                    >
+                      <ProxyIcon name={chain} className="size-4 shrink-0 object-contain" />
+                      <span className="min-w-0 truncate">{chain}</span>
+                    </button>
+                  </span>
+                ))}
+                {!reversedChains.length && <span className="text-muted-foreground">DIRECT</span>}
+              </div>
+            }
+          />
+          <ChainTooltip chains={reversedChains} />
+        </Tooltip>
+        <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+          <TimeAgoCell isoString={conn.start} />
+        </span>
+      </div>
+    </article>
+  )
+})
+
+const MobileConnectionsView = memo(function MobileConnectionsView({
+  filter,
+  activeTab,
+  sortColumn,
+  sortDirection,
+  onFilterChange,
+  onTabChange,
+  onSortChange,
+  onSelect,
+  onClose,
+  onBlock,
+  sourceFilter,
+  onSourceFilterChange,
+  searchHiddenColumns,
+  onToggleSearchHiddenColumns,
+  onCloseVisible,
+  showSourceName,
+}: {
+  filter: string
+  activeTab: 'active' | 'closed' | 'all'
+  sortColumn: SortColumn
+  sortDirection: SortDirection
+  onFilterChange: (value: string) => void
+  onTabChange: (tab: 'active' | 'closed' | 'all') => void
+  onSortChange: (column: SortColumn, direction: SortDirection) => void
+  onSelect: (conn: Connection) => void
+  onClose: (id: string, e: React.MouseEvent) => void
+  onBlock: (id: string, e: React.MouseEvent) => void
+  onCloseVisible: (ids: string[]) => void
+  sourceFilter: string[]
+  onSourceFilterChange: (ips: string[]) => void
+  searchHiddenColumns: boolean
+  onToggleSearchHiddenColumns: () => void
+  showSourceName: boolean
+}) {
+  const connected = useWsConnected()
+  const sourceNameVersion = useSourceNameStore((s) => (showSourceName ? s.version : 0))
+  const [visibleLimit, setVisibleLimit] = useState(50)
+  const liveMaps = useConnectionsStore(useShallow((s) => ({ active: s.map, closed: s.closedMap })))
+  const liveSets = useMemo(
+    () => ({ active: Array.from(liveMaps.active.values()), closed: Array.from(liveMaps.closed.values()) }),
+    [liveMaps.active, liveMaps.closed]
+  )
+  useEffect(() => setVisibleLimit(50), [filter, activeTab, sortColumn, sortDirection, sourceFilter, searchHiddenColumns])
+  const sourceSets = liveSets
+  const sourceIPs = useMemo(
+    () =>
+      Array.from(new Set([...sourceSets.active, ...sourceSets.closed].map((conn) => conn.metadata.sourceIP).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true })
+      ),
+    [sourceSets]
+  )
+  const sourceLabels = useMemo(() => uniqueSourceLabels(sourceIPs, showSourceName), [sourceIPs, showSourceName, sourceNameVersion])
+  const toggleSourceLabel = (label: string) => onSourceFilterChange(toggleSourceFilter(sourceFilter, label))
+  const connections = useMemo(() => {
+    let result: { conn: Connection; closed: boolean }[] = []
+    if (activeTab !== 'closed') result.push(...sourceSets.active.map((conn) => ({ conn, closed: false })))
+    if (activeTab !== 'active')
+      result.push(
+        ...sourceSets.closed
+          .filter((conn) => !sourceSets.active.some((active) => active.id === conn.id))
+          .map((conn) => ({ conn, closed: true }))
+      )
+    result = result.filter(({ conn }) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
+    if (sourceFilter.length) {
+      const selectedLabels = new Set(sourceFilter)
+      result = result.filter(({ conn }) => selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName)))
+    }
+    const query = filter.trim()
+    if (query) {
+      result = result.filter(({ conn }) => matchesMobileConnectionFilter(conn, query, searchHiddenColumns, showSourceName))
+    }
+    if (sortColumn) {
+      result = [...result].sort((a, b) => {
+        const aValue = getConnectionSortValue(a.conn, sortColumn, showSourceName)
+        const bValue = getConnectionSortValue(b.conn, sortColumn, showSourceName)
+        const compared = aValue.localeCompare(bValue, undefined, { numeric: true }) || a.conn.id.localeCompare(b.conn.id)
+        return sortDirection === 'asc' ? compared : -compared
+      })
+    }
+    return result
+  }, [sourceSets, activeTab, sourceFilter, filter, searchHiddenColumns, showSourceName, sortColumn, sortDirection, sourceNameVersion])
+  const activeCount = sourceSets.active.length
+  const closedCount = sourceSets.closed.filter((conn) => !sourceSets.active.some((active) => active.id === conn.id)).length
+  const triggerStyles = 'data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!'
+  const sortOptions = [
+    ['start', 'desc', 'Время ↓'],
+    ['start', 'asc', 'Время ↑'],
+    ['host', 'desc', 'Хост ↓'],
+    ['host', 'asc', 'Хост ↑'],
+    ['protocol', 'desc', 'Тип ↓'],
+    ['protocol', 'asc', 'Тип ↑'],
+    ['chains', 'desc', 'Цепочка ↓'],
+    ['chains', 'asc', 'Цепочка ↑'],
+    ['source', 'desc', 'Источник ↓'],
+    ['source', 'asc', 'Источник ↑'],
+    ['upload', 'desc', 'Отправлено ↓'],
+    ['upload', 'asc', 'Отправлено ↑'],
+    ['download', 'desc', 'Получено ↓'],
+    ['download', 'asc', 'Получено ↑'],
+    ['uploadSpeed', 'desc', 'Скорость отдачи ↓'],
+    ['uploadSpeed', 'asc', 'Скорость отдачи ↑'],
+    ['downloadSpeed', 'desc', 'Скорость загрузки ↓'],
+    ['downloadSpeed', 'asc', 'Скорость загрузки ↑'],
+  ] as const satisfies readonly [Exclude<SortColumn, null>, SortDirection, string][]
+  const sortItems = Object.fromEntries(sortOptions.map(([column, direction, label]) => [`${column}:${direction}`, label]))
+
+  return (
+    <div className="border-border bg-input-background absolute inset-4 flex min-h-0 flex-col overflow-hidden rounded-xl border md:hidden">
+      <div className="border-border bg-input-background flex shrink-0 flex-col gap-2 border-b p-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <Tabs value={activeTab === 'all' ? 'active' : activeTab} onValueChange={(v) => onTabChange(v as 'active' | 'closed')}>
+            <TabsList className="h-9 shrink-0">
+              <TabsTrigger aria-label={`Активные соединения: ${activeCount}`} value="active" className={triggerStyles}>
+                <IconActivity size={16} />
+                <span className="text-xs tabular-nums">{activeCount}</span>
+              </TabsTrigger>
+              <TabsTrigger aria-label={`Закрытые соединения: ${closedCount}`} value="closed" className={triggerStyles}>
+                <IconPlugX size={16} />
+                <span className="text-xs tabular-nums">{closedCount}</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <InputGroup className="min-w-0 flex-1">
+            <InputGroupAddon>
+              <IconFilter className="text-muted-foreground" />
+            </InputGroupAddon>
+            <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
+            <InputGroupAddon align="inline-end" className="gap-0">
+              {filter && (
+                <InputGroupButton
+                  size="icon-xs"
+                  className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                  aria-label="Очистить фильтр"
+                  onClick={() => onFilterChange('')}
+                >
+                  <ClearIcon className="size-3.25" />
+                </InputGroupButton>
+              )}
+              <InputGroupButton
+                aria-pressed={searchHiddenColumns}
+                className={searchHiddenColumns ? 'bg-accent' : ''}
+                aria-label="Искать по скрытым полям"
+                title={searchHiddenColumns ? 'Поиск по всем полям' : 'Искать по скрытым полям'}
+                onClick={onToggleSearchHiddenColumns}
+              >
+                <IconLetterCase size={16} />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          <Select
+            value={`${sortColumn ?? 'host'}:${sortDirection}`}
+            items={sortItems}
+            onValueChange={(value) => {
+              const [column, direction] = value.split(':')
+              onSortChange(column as SortColumn, direction as SortDirection)
+            }}
+          >
+            <SelectTrigger className="h-9 min-w-0 flex-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="start" sideOffset={4}>
+              <SelectGroup>
+                {sortOptions.map(([column, direction, label]) => (
+                  <SelectItem key={`${column}:${direction}`} value={`${column}:${direction}`}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          {activeTab !== 'closed' && (
+            <Button
+              variant="destructive"
+              className="h-9 shrink-0 px-2.5 text-xs"
+              disabled={!connections.some((item) => !item.closed)}
+              onClick={() => onCloseVisible(connections.filter((item) => !item.closed).map((item) => item.conn.id))}
+            >
+              <IconPlugX size={16} />
+              Закрыть все
+            </Button>
+          )}
+        </div>
+        <SourceDeviceBadges
+          labels={sourceLabels}
+          selectedLabels={sourceFilter}
+          onToggleLabel={toggleSourceLabel}
+          onClear={() => onSourceFilterChange([])}
+        />
+      </div>
+      <div className="bg-input-background min-h-0 flex-1 overflow-y-auto p-2.5">
+        {connections.length ? (
+          <div className="flex flex-col gap-2">
+            {connections.slice(0, visibleLimit).map(({ conn, closed }) => (
+              <MobileConnectionCard
+                key={`${closed ? 'closed' : 'active'}-${conn.id}`}
+                conn={conn}
+                closed={closed}
+                onSelect={onSelect}
+                onClose={onClose}
+                onBlock={onBlock}
+                onApplyFilter={onFilterChange}
+              />
+            ))}
+            {visibleLimit < connections.length && (
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setVisibleLimit((limit) => limit + 50)}>
+                Показать ещё {Math.min(50, connections.length - visibleLimit)} из {connections.length - visibleLimit}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="text-muted-foreground py-10 text-center text-sm">
+            {!connected ? 'Подключение…' : filter || sourceFilter.length ? 'Нет совпадений' : 'Нет соединений'}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+})
+
+const SOURCE_FILTER_KEY = 'conn_source_filter'
+
+function readSourceFilter(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(SOURCE_FILTER_KEY) ?? '')
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writeSourceFilter(labels: string[]) {
+  try {
+    localStorage.setItem(SOURCE_FILTER_KEY, JSON.stringify(labels))
+  } catch {
+    /* */
+  }
+}
+
 // ─── Main panel ────────────────────────────────────────────────────────────────
 
 export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }: Props) {
   const [filter, setFilter] = useState('')
   const [sortColumn, setSortColumn] = useState<SortColumn>('start')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [mobileFilter, setMobileFilter] = useState('')
+  const [mobileSortColumn, setMobileSortColumn] = useState<SortColumn>('start')
+  const [mobileSortDirection, setMobileSortDirection] = useState<SortDirection>('desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active')
+  const [sourceFilter, setSourceFilter] = useState<string[]>(readSourceFilter)
+  const [mobileTab, setMobileTab] = useState<'active' | 'closed' | 'all'>('active')
+  const [mobileSourceFilter, setMobileSourceFilter] = useState<string[]>(readSourceFilter)
+  const [mobileSearchHiddenColumns, setMobileSearchHiddenColumns] = useState(false)
+  const mobileLayout = useSettings((s) => s.mobileLayout)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   const dialogCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [caseSensitive, setCaseSensitive] = useState(() => localStorage.getItem('conn_filter_cs') === 'true')
   const toggleCaseSensitive = useCallback(() => {
@@ -1203,6 +1815,23 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const showSourceName = useSettings((s) => s.showSourceName)
   const sourceNameRefreshTick = useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const unresolvedSourceIPs = useConnectionsStore(useShallow((s) => collectRefreshableSourceIPs(s, showSourceName)))
+  const sourceIPs = useConnectionsStore(
+    useShallow((s) => {
+      const ips = new Set<string>()
+      for (const conn of s.map.values()) if (conn.metadata.sourceIP) ips.add(conn.metadata.sourceIP)
+      for (const conn of s.closedMap.values()) if (conn.metadata.sourceIP) ips.add(conn.metadata.sourceIP)
+      return Array.from(ips).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    })
+  )
+  const sourceLabels = useMemo(() => uniqueSourceLabels(sourceIPs, showSourceName), [sourceIPs, showSourceName, sourceNameRefreshTick])
+  const toggleSourceLabel = useCallback((label: string) => setSourceFilter((prev) => toggleSourceFilter(prev, label)), [])
+  const clearSourceFilter = useCallback(() => setSourceFilter([]), [])
+  useEffect(() => {
+    writeSourceFilter(sourceFilter)
+  }, [sourceFilter])
+  useEffect(() => {
+    writeSourceFilter(mobileSourceFilter)
+  }, [mobileSourceFilter])
 
   const clearDialogCloseTimer = useCallback(() => {
     if (!dialogCloseTimerRef.current) return
@@ -1249,6 +1878,25 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
     await clashFetch(clashApiPort, 'connections', { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
     setSelectedId(null)
   }, [clashApiPort, clashApiSecret, clashApiUnix])
+
+  const closeVisibleConnections = useCallback(
+    async (ids: string[]) => {
+      const active = useConnectionsStore.getState().map
+      const targets = Array.from(new Set(ids)).filter((id) => active.has(id))
+      if (!targets.length) return
+      if (targets.length === active.size) {
+        await closeAll()
+      } else {
+        await Promise.all(
+          targets.map((id) =>
+            clashFetch(clashApiPort, `connections/${id}`, { method: 'DELETE', secret: clashApiSecret, unix: clashApiUnix ?? null })
+          )
+        )
+        if (selectedId && targets.includes(selectedId)) closeDialog()
+      }
+    },
+    [clashApiPort, clashApiSecret, clashApiUnix, closeAll, selectedId, closeDialog]
+  )
 
   const clearFilter = useCallback(() => setFilter(''), [])
   const handleApplyFilter = useCallback((value: string) => setFilter(value), [])
@@ -1298,9 +1946,27 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
     [closeDialog, handleCloseConnection]
   )
 
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const updateViewport = () => {
+      setIsMobile(media.matches)
+    }
+    media.addEventListener('change', updateViewport)
+    return () => media.removeEventListener('change', updateViewport)
+  }, [])
+
+  const showMobileLayout = isMobile && mobileLayout
+  const handleMobileSortChange = useCallback((column: SortColumn, direction: SortDirection) => {
+    setMobileSortColumn(column)
+    setMobileSortDirection(direction)
+  }, [])
+  const toggleMobileSearchHiddenColumns = useCallback(() => setMobileSearchHiddenColumns((enabled) => !enabled), [])
+
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={0}>
-      <div className="border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border">
+      <div
+        className={`border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border ${showMobileLayout ? 'hidden md:flex' : ''}`}
+      >
         <ConnectionsHeader
           filter={filter}
           activeTab={activeTab}
@@ -1310,6 +1976,10 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           onCloseAll={closeAll}
           caseSensitive={caseSensitive}
           onToggleCaseSensitive={toggleCaseSensitive}
+          sourceLabels={sourceLabels}
+          selectedSourceLabels={sourceFilter}
+          onToggleSourceLabel={toggleSourceLabel}
+          onClearSourceFilter={clearSourceFilter}
         />
         <div className="flex-1 scrollbar-thin overflow-auto">
           <Table className="min-w-240 md:min-w-190">
@@ -1317,6 +1987,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
             {activeTab === 'active' ? (
               <ConnectionsBody
                 filter={filter}
+                sourceFilter={sourceFilter}
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSelect={handleSelectConnection}
@@ -1329,6 +2000,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
             ) : (
               <ClosedConnectionsBody
                 filter={filter}
+                sourceFilter={sourceFilter}
                 sortColumn={sortColumn}
                 sortDirection={sortDirection}
                 onSelect={handleSelectConnection}
@@ -1339,12 +2011,33 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           </Table>
         </div>
       </div>
+      {showMobileLayout && (
+        <MobileConnectionsView
+          filter={mobileFilter}
+          activeTab={mobileTab}
+          sortColumn={mobileSortColumn}
+          sortDirection={mobileSortDirection}
+          onFilterChange={setMobileFilter}
+          onTabChange={setMobileTab}
+          onSortChange={handleMobileSortChange}
+          onSelect={handleSelectConnection}
+          onClose={handleCloseConnection}
+          onBlock={handleBlockConnection}
+          sourceFilter={mobileSourceFilter}
+          onSourceFilterChange={setMobileSourceFilter}
+          searchHiddenColumns={mobileSearchHiddenColumns}
+          onToggleSearchHiddenColumns={toggleMobileSearchHiddenColumns}
+          onCloseVisible={closeVisibleConnections}
+          showSourceName={showSourceName}
+        />
+      )}
       <ConnectionDialog
         open={dialogOpen}
         connId={selectedId}
         onClose={handleCloseDialog}
         onCloseConnection={handleCloseDialogConnection}
         showSourceName={showSourceName}
+        tileMode={showMobileLayout}
       />
     </TooltipProvider>
   )

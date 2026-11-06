@@ -358,6 +358,7 @@ pub struct ClashApiSettings {
     pub proxy_sort_order: String,
     pub auto_dns: String,
     pub close_connections_on_apply: bool,
+    pub mobile_layout: bool,
     pub ping_mode: PingMode,
 }
 
@@ -372,6 +373,7 @@ impl Default for ClashApiSettings {
             proxy_sort_order: "default".into(),
             auto_dns: "disabled".into(),
             close_connections_on_apply: false,
+            mobile_layout: true,
             ping_mode: PingMode::DoubleKeepAlive,
         }
     }

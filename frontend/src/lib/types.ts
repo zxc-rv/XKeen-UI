@@ -21,6 +21,9 @@ export type AutoDnsMode = 'disabled' | 'enabled' | 'with_filter'
 export type EmojiFont = 'twemoji' | 'notocoloremoji'
 
 export interface AppSettings {
+  statusBarStyle: import('./status-bar-style').StatusBarStyle
+  statusBarAccentColor: import('./status-bar-style').StatusBarAccentColor
+  proxyLabelStyle: import('./proxy-label-style').ProxyLabelStyle
   theme: ThemeMode
   autoApply: boolean
   guiRouting: boolean
@@ -36,6 +39,7 @@ export interface AppSettings {
   pingTestTimeout: number
   showSourceName: boolean
   closeConnectionsOnApply: boolean
+  mobileLayout: boolean
   pingMode: PingMode
   hideUnavailableProxies: boolean
   hideUnavailableProxiesCounter: number
