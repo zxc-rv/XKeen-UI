@@ -54,10 +54,12 @@ import { LOCAL_ROUTER_ID } from '../../lib/multi-routers/model'
 import { useRoutersStore } from '../../lib/multi-routers/store'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
+import { findAddedMihomoRuleLines } from '../../lib/mihomo-rules'
 import { cn } from '../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { MassConfirmDialog } from '../log/multi-routers/MassConfirmDialog'
 import { BackupsModal } from '../modals/Backups'
+import { AddMihomoRuleDialog } from '../modals/AddMihomoRule'
 import { ProvidersModal } from '../modals/Providers'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
@@ -67,9 +69,11 @@ import type { CodeMirrorRef } from './CodeMirror'
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
 const GuiLog = lazyLoad(() => import('./xray/GuiLog'), 'GuiLog')
 const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds')
+const MihomoRoutingLazy = lazyLoad(() => import('./mihomo/Routing'), 'MihomoRouting')
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
+import { ConfigNavigation, type MihomoConfigSection } from './mihomo/ConfigNavigation'
 import { Kbd } from '../ui/kbd'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
@@ -355,6 +359,7 @@ export function ConfigPanel({
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
 
   const [isEditorMounted, setIsEditorMounted] = useState(false)
+  const [mihomoConfigSection, setMihomoConfigSection] = useState<MihomoConfigSection>('editor')
 
   const [activePanel, setActivePanel] = useState<'selectors' | 'connections' | 'config' | 'dns'>('selectors')
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['selectors']))
@@ -369,6 +374,13 @@ export function ConfigPanel({
   })
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
+  const [isAddRuleOpen, setIsAddRuleOpen] = useState(false)
+  const [addRuleTarget, setAddRuleTarget] = useState<{
+    operation: 'rules' | 'inline' | 'payload'
+    providerName?: string
+    target?: string
+    groupName?: string
+  } | null>(null)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
   const currentPanel = isRunning ? activePanel : 'config'
   const [massConfirm, setMassConfirm] = useState<{
@@ -451,6 +463,8 @@ export function ConfigPanel({
   )
 
   const activeConfig = configs[activeConfigIndex]
+  const activeConfigName = activeConfig?.file.split('/').pop()?.toLowerCase()
+  const isMihomoMainConfig = activeConfigName === 'config.yaml' || activeConfigName === 'config.yml'
   const fileLanguage = activeConfig ? getFileLanguage(activeConfig.file) : null
   const isJsonOrYaml = fileLanguage === 'json' || fileLanguage === 'yaml'
   const canSave = !!(activeConfig?.isDirty && validationState?.isValid)
@@ -653,6 +667,21 @@ export function ConfigPanel({
 
     await executeSave(targets, cfg, content, targetIndex)
   }
+
+  const handleAddMihomoRule = useCallback(
+    (content: string) => {
+      if (!editorRef.current || !activeConfig) {
+        showToast('Не удалось изменить активный конфиг', 'error')
+        return
+      }
+      const lines = findAddedMihomoRuleLines(editorRef.current.getValue(), content)
+      editorRef.current.replaceAll(content)
+      editorRef.current.validate(activeConfig.file)
+      if (lines) setTimeout(() => editorRef.current?.highlightLines(lines.from, lines.to), 200)
+      showToast('Правило добавлено. Нажмите «Применить»')
+    },
+    [activeConfig, editorRef, showToast]
+  )
 
   function restartActionFor(cfg: Config, content: string) {
     const lang = getFileLanguage(cfg.file)
@@ -898,6 +927,10 @@ export function ConfigPanel({
   )
 
   const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
+  const isMihomoRoutingGui = isMihomo && isMihomoMainConfig && currentPanel === 'config' && mihomoConfigSection === 'routing'
+  useEffect(() => {
+    if (isMihomo && activeConfig && !isMihomoMainConfig) setMihomoConfigSection('editor')
+  }, [isMihomo, activeConfig?.file, isMihomoMainConfig])
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const usefulLinks = [
     { title: 'Инструкция XKeen', url: 'https://github.com/Corvus-Malus/XKeen/' },
@@ -913,7 +946,7 @@ export function ConfigPanel({
           <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
             <div className="flex min-w-0 shrink-0 items-center gap-2">
               {isMihomo ? (
-                <div className="min-w-0 scrollbar-none overflow-x-auto md:overflow-x-visible [&::-webkit-scrollbar]:hidden">
+                <div className="flex min-w-0 scrollbar-none items-center gap-3 overflow-x-auto md:overflow-x-visible [&::-webkit-scrollbar]:hidden">
                   <Tabs
                     value={currentPanel}
                     onValueChange={(value) => {
@@ -933,9 +966,26 @@ export function ConfigPanel({
                       <TabsTrigger value="dns" className="p-0 text-sm font-semibold md:text-lg">
                         DNS
                       </TabsTrigger>
-                      <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
-                        Конфигурация
-                      </TabsTrigger>
+                      <ConfigNavigation
+                        value={isMihomoMainConfig ? mihomoConfigSection : 'editor'}
+                        onChange={(section) => {
+                          if (section === 'routing' && !isMihomoMainConfig) {
+                            const mainIndex = configs.findIndex(
+                              (config) => /(?:^|\/)config\.ya?ml$/i.test(config.file) && !hiddenConfigFiles.includes(config.file)
+                            )
+                            if (mainIndex < 0) {
+                              showToast('Основной конфиг Mihomo не найден', 'error')
+                              return
+                            }
+                            switchTab(mainIndex)
+                          }
+                          setMihomoConfigSection(section)
+                        }}
+                        onOpen={() => {
+                          setActivePanel('config')
+                          setMountedPanels((prev) => (prev.has('config') ? prev : new Set([...prev, 'config'])))
+                        }}
+                      />
                     </TabsList>
                   </Tabs>
                 </div>
@@ -1025,52 +1075,54 @@ export function ConfigPanel({
             )}
 
             {(!isMihomo || currentPanel === 'config') && (
-              <div className="scrollbar-none overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] md:ml-auto [&::-webkit-scrollbar]:hidden">
-                {isConfigsLoading ? (
-                  <div className="flex gap-2">
-                    {[525, 310].map((w) => (
-                      <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
-                    ))}
-                  </div>
-                ) : (
-                  <Tabs
-                    value={activeConfig?.file || ''}
-                    onValueChange={(value) => {
-                      const index = configs.findIndex((c) => c.file === value)
-                      if (index >= 0) switchTab(index)
-                    }}
-                    className="flex-row!"
-                  >
-                    {coreConfigs.length > 0 && (
-                      <TabsList className="shrink-0">
-                        {coreConfigs.map((config) => (
-                          <ConfigTab
-                            key={config.file}
-                            config={config}
-                            currentCore={currentCore}
-                            showToast={showToast}
-                            onRefreshConfigs={refreshConfigsAndEditor}
-                            onHideFile={(file) => void hideConfigFile(file)}
-                            withContextMenu
-                          />
-                        ))}
-                      </TabsList>
-                    )}
-                    {xkeenConfigs.length > 0 && (
-                      <TabsList className="shrink-0">
-                        {xkeenConfigs.map((config) => (
-                          <ConfigTab
-                            key={config.file}
-                            config={config}
-                            currentCore={currentCore}
-                            showToast={showToast}
-                            onRefreshConfigs={refreshConfigsAndEditor}
-                          />
-                        ))}
-                      </TabsList>
-                    )}
-                  </Tabs>
-                )}
+              <div className="flex min-w-0 items-center gap-2 md:ml-auto">
+                <div className="min-w-0 scrollbar-none overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                  {isConfigsLoading ? (
+                    <div className="flex gap-2">
+                      {[525, 310].map((w) => (
+                        <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
+                      ))}
+                    </div>
+                  ) : (
+                    <Tabs
+                      value={activeConfig?.file || ''}
+                      onValueChange={(value) => {
+                        const index = configs.findIndex((c) => c.file === value)
+                        if (index >= 0) switchTab(index)
+                      }}
+                      className="flex-row!"
+                    >
+                      {coreConfigs.length > 0 && (
+                        <TabsList className="shrink-0">
+                          {coreConfigs.map((config) => (
+                            <ConfigTab
+                              key={config.file}
+                              config={config}
+                              currentCore={currentCore}
+                              showToast={showToast}
+                              onRefreshConfigs={refreshConfigsAndEditor}
+                              onHideFile={(file) => void hideConfigFile(file)}
+                              withContextMenu
+                            />
+                          ))}
+                        </TabsList>
+                      )}
+                      {xkeenConfigs.length > 0 && (
+                        <TabsList className="shrink-0">
+                          {xkeenConfigs.map((config) => (
+                            <ConfigTab
+                              key={config.file}
+                              config={config}
+                              currentCore={currentCore}
+                              showToast={showToast}
+                              onRefreshConfigs={refreshConfigsAndEditor}
+                            />
+                          ))}
+                        </TabsList>
+                      )}
+                    </Tabs>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1084,6 +1136,22 @@ export function ConfigPanel({
             )}
             {isEditorMounted && activeConfig && isOutboundsGui && (
               <GuiOutbounds editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            )}
+            {isMihomo && isMihomoMainConfig && currentPanel === 'config' && mihomoConfigSection === 'routing' && activeConfig && (
+              <div className="absolute inset-x-4 top-2 bottom-3">
+                <LazyBoundary>
+                  <MihomoRoutingLazy
+                    content={activeConfig.content}
+                    file={activeConfig.file}
+                    editorRef={editorRef}
+                    onAddRule={() => {
+                      setAddRuleTarget(null)
+                      setIsAddRuleOpen(true)
+                    }}
+                    showToast={showToast}
+                  />
+                </LazyBoundary>
+              </div>
             )}
 
             {isMihomo && (
@@ -1128,7 +1196,8 @@ export function ConfigPanel({
                 className={cn(
                   'absolute inset-0',
                   isAnyGui && 'pointer-events-none invisible opacity-0',
-                  isMihomo && currentPanel !== 'config' && 'hidden'
+                  isMihomo && currentPanel !== 'config' && 'hidden',
+                  isMihomo && isMihomoMainConfig && mihomoConfigSection !== 'editor' && 'hidden'
                 )}
               >
                 <CodeMirrorEditorLazy
@@ -1143,7 +1212,7 @@ export function ConfigPanel({
           </div>
 
           {(!isMihomo || currentPanel === 'config') && (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-3 pb-3 sm:px-4 sm:pb-4">
+            <div className={cn('flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-3 sm:px-4', 'pb-3 sm:pb-4')}>
               <div className="min-w-0 text-xs">
                 {isConfigsLoading ? (
                   <Skeleton className="h-4 w-30" />
@@ -1161,7 +1230,12 @@ export function ConfigPanel({
                   </span>
                 ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div
+                className={cn(
+                  'flex flex-wrap items-center gap-1.5',
+                  isMihomoRoutingGui && 'grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:gap-1.5 [&>button]:w-full sm:[&>button]:w-auto'
+                )}
+              >
                 {isConfigsLoading ? (
                   <div className="flex gap-1.5">
                     {[120, 117, 96, 100].map((w) => (
@@ -1201,7 +1275,8 @@ export function ConfigPanel({
                       <TooltipTrigger
                         render={
                           <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
-                            <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
+                            <IconCode data-icon="inline-start" />{' '}
+                            <span className={cn('hidden sm:inline', isMihomoRoutingGui && 'inline')}>Формат</span>
                           </Button>
                         }
                       />
@@ -1213,7 +1288,8 @@ export function ConfigPanel({
                       <DropdownMenuTrigger
                         render={
                           <Button variant="outline">
-                            <IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span>
+                            <IconDotsFilled data-icon="inline-start" />{' '}
+                            <span className={cn('hidden sm:inline', isMihomoRoutingGui && 'inline')}>Утилиты</span>
                           </Button>
                         }
                       />
@@ -1231,6 +1307,26 @@ export function ConfigPanel({
                           <DropdownMenuItem onClick={onOpenTemplate}>
                             <IconFileText /> Шаблоны конфигураций
                           </DropdownMenuItem>
+                          {isCoreMihomo && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                if (!isMihomoMainConfig) {
+                                  const mainIndex = configs.findIndex(
+                                    (config) => /(?:^|\/)config\.ya?ml$/i.test(config.file) && !hiddenConfigFiles.includes(config.file)
+                                  )
+                                  if (mainIndex < 0) {
+                                    showToast('Основной конфиг Mihomo не найден', 'error')
+                                    return
+                                  }
+                                  switchTab(mainIndex)
+                                }
+                                setAddRuleTarget(null)
+                                setIsAddRuleOpen(true)
+                              }}
+                            >
+                              <IconRoute /> Конструктор правил
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem
                             className="whitespace-nowrap"
                             onClick={(e) => {
@@ -1298,6 +1394,22 @@ export function ConfigPanel({
             clashApiSecret={clashApiSecret ?? null}
             clashApiUnix={activeClashApiUnix ?? null}
             onOpenChange={handleProvidersModalOpenChange}
+          />
+        )}
+        {isCoreMihomo && (
+          <AddMihomoRuleDialog
+            open={isAddRuleOpen}
+            content={activeConfig?.content ?? editorRef.current?.getValue() ?? ''}
+            initialOperation={addRuleTarget?.operation}
+            initialProviderName={addRuleTarget?.providerName}
+            initialTarget={addRuleTarget?.target}
+            initialGroupName={addRuleTarget?.groupName}
+            onOpenChange={(open) => {
+              setIsAddRuleOpen(open)
+              if (!open) setAddRuleTarget(null)
+            }}
+            onInsert={handleAddMihomoRule}
+            showToast={showToast}
           />
         )}
         <BackupsModalContainer onRefreshConfigs={refreshConfigsAndEditor} />

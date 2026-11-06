@@ -1,0 +1,3004 @@
+diff --git a/frontend/src/components/configuration/ConfigPanel.tsx b/frontend/src/components/configuration/ConfigPanel.tsx
+index 5e0011d..54abd93 100644
+--- a/frontend/src/components/configuration/ConfigPanel.tsx
++++ b/frontend/src/components/configuration/ConfigPanel.tsx
+@@ -69,9 +69,11 @@ import type { CodeMirrorRef } from './CodeMirror'
+ const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
+ const GuiLog = lazyLoad(() => import('./xray/GuiLog'), 'GuiLog')
+ const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds')
++const MihomoRoutingLazy = lazyLoad(() => import('./mihomo/Routing'), 'MihomoRouting')
+ const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
+ const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
+ import { DnsPanel } from './mihomo/DnsPanel'
++import { ConfigNavigation, type MihomoConfigSection } from './mihomo/ConfigNavigation'
+ import { Kbd } from '../ui/kbd'
+ const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
+ 
+@@ -357,6 +359,7 @@ export function ConfigPanel({
+   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
+ 
+   const [isEditorMounted, setIsEditorMounted] = useState(false)
++  const [mihomoConfigSection, setMihomoConfigSection] = useState<MihomoConfigSection>('editor')
+ 
+   const [activePanel, setActivePanel] = useState<'selectors' | 'connections' | 'config' | 'dns'>('selectors')
+   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['selectors']))
+@@ -372,6 +375,12 @@ export function ConfigPanel({
+   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
+   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
+   const [isAddRuleOpen, setIsAddRuleOpen] = useState(false)
++  const [addRuleTarget, setAddRuleTarget] = useState<{
++    operation: 'rules' | 'inline' | 'payload'
++    providerName?: string
++    target?: string
++    groupName?: string
++  } | null>(null)
+   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
+   const currentPanel = isRunning ? activePanel : 'config'
+   const [massConfirm, setMassConfirm] = useState<{
+@@ -454,6 +463,8 @@ export function ConfigPanel({
+   )
+ 
+   const activeConfig = configs[activeConfigIndex]
++  const activeConfigName = activeConfig?.file.split('/').pop()?.toLowerCase()
++  const isMihomoMainConfig = activeConfigName === 'config.yaml' || activeConfigName === 'config.yml'
+   const fileLanguage = activeConfig ? getFileLanguage(activeConfig.file) : null
+   const isJsonOrYaml = fileLanguage === 'json' || fileLanguage === 'yaml'
+   const canSave = !!(activeConfig?.isDirty && validationState?.isValid)
+@@ -916,6 +927,10 @@ export function ConfigPanel({
+   )
+ 
+   const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
++  const isMihomoRoutingGui = isMihomo && isMihomoMainConfig && currentPanel === 'config' && mihomoConfigSection === 'routing'
++  useEffect(() => {
++    if (isMihomo && activeConfig && !isMihomoMainConfig) setMihomoConfigSection('editor')
++  }, [isMihomo, activeConfig?.file, isMihomoMainConfig])
+   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+   const usefulLinks = [
+     { title: 'Инструкция XKeen', url: 'https://github.com/Corvus-Malus/XKeen/' },
+@@ -931,7 +946,7 @@ export function ConfigPanel({
+           <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
+             <div className="flex min-w-0 shrink-0 items-center gap-2">
+               {isMihomo ? (
+-                <div className="min-w-0 scrollbar-none overflow-x-auto md:overflow-x-visible [&::-webkit-scrollbar]:hidden">
++                <div className="flex min-w-0 scrollbar-none items-center gap-3 overflow-x-auto md:overflow-x-visible [&::-webkit-scrollbar]:hidden">
+                   <Tabs
+                     value={currentPanel}
+                     onValueChange={(value) => {
+@@ -951,9 +966,26 @@ export function ConfigPanel({
+                       <TabsTrigger value="dns" className="p-0 text-sm font-semibold md:text-lg">
+                         DNS
+                       </TabsTrigger>
+-                      <TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg">
+-                        Конфигурация
+-                      </TabsTrigger>
++                      <ConfigNavigation
++                        value={isMihomoMainConfig ? mihomoConfigSection : 'editor'}
++                        onChange={(section) => {
++                          if (section === 'routing' && !isMihomoMainConfig) {
++                            const mainIndex = configs.findIndex(
++                              (config) => /(?:^|\/)config\.ya?ml$/i.test(config.file) && !hiddenConfigFiles.includes(config.file)
++                            )
++                            if (mainIndex < 0) {
++                              showToast('Основной конфиг Mihomo не найден', 'error')
++                              return
++                            }
++                            switchTab(mainIndex)
++                          }
++                          setMihomoConfigSection(section)
++                        }}
++                        onOpen={() => {
++                          setActivePanel('config')
++                          setMountedPanels((prev) => (prev.has('config') ? prev : new Set([...prev, 'config'])))
++                        }}
++                      />
+                     </TabsList>
+                   </Tabs>
+                 </div>
+@@ -1043,52 +1075,54 @@ export function ConfigPanel({
+             )}
+ 
+             {(!isMihomo || currentPanel === 'config') && (
+-              <div className="scrollbar-none overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] md:ml-auto [&::-webkit-scrollbar]:hidden">
+-                {isConfigsLoading ? (
+-                  <div className="flex gap-2">
+-                    {[525, 310].map((w) => (
+-                      <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
+-                    ))}
+-                  </div>
+-                ) : (
+-                  <Tabs
+-                    value={activeConfig?.file || ''}
+-                    onValueChange={(value) => {
+-                      const index = configs.findIndex((c) => c.file === value)
+-                      if (index >= 0) switchTab(index)
+-                    }}
+-                    className="flex-row!"
+-                  >
+-                    {coreConfigs.length > 0 && (
+-                      <TabsList className="shrink-0">
+-                        {coreConfigs.map((config) => (
+-                          <ConfigTab
+-                            key={config.file}
+-                            config={config}
+-                            currentCore={currentCore}
+-                            showToast={showToast}
+-                            onRefreshConfigs={refreshConfigsAndEditor}
+-                            onHideFile={(file) => void hideConfigFile(file)}
+-                            withContextMenu
+-                          />
+-                        ))}
+-                      </TabsList>
+-                    )}
+-                    {xkeenConfigs.length > 0 && (
+-                      <TabsList className="shrink-0">
+-                        {xkeenConfigs.map((config) => (
+-                          <ConfigTab
+-                            key={config.file}
+-                            config={config}
+-                            currentCore={currentCore}
+-                            showToast={showToast}
+-                            onRefreshConfigs={refreshConfigsAndEditor}
+-                          />
+-                        ))}
+-                      </TabsList>
+-                    )}
+-                  </Tabs>
+-                )}
++              <div className="flex min-w-0 items-center gap-2 md:ml-auto">
++                <div className="min-w-0 scrollbar-none overflow-x-auto overflow-y-hidden [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
++                  {isConfigsLoading ? (
++                    <div className="flex gap-2">
++                      {[525, 310].map((w) => (
++                        <Skeleton key={w} className="h-9 gap-0.5 rounded-lg p-0.75" style={{ width: w }} />
++                      ))}
++                    </div>
++                  ) : (
++                    <Tabs
++                      value={activeConfig?.file || ''}
++                      onValueChange={(value) => {
++                        const index = configs.findIndex((c) => c.file === value)
++                        if (index >= 0) switchTab(index)
++                      }}
++                      className="flex-row!"
++                    >
++                      {coreConfigs.length > 0 && (
++                        <TabsList className="shrink-0">
++                          {coreConfigs.map((config) => (
++                            <ConfigTab
++                              key={config.file}
++                              config={config}
++                              currentCore={currentCore}
++                              showToast={showToast}
++                              onRefreshConfigs={refreshConfigsAndEditor}
++                              onHideFile={(file) => void hideConfigFile(file)}
++                              withContextMenu
++                            />
++                          ))}
++                        </TabsList>
++                      )}
++                      {xkeenConfigs.length > 0 && (
++                        <TabsList className="shrink-0">
++                          {xkeenConfigs.map((config) => (
++                            <ConfigTab
++                              key={config.file}
++                              config={config}
++                              currentCore={currentCore}
++                              showToast={showToast}
++                              onRefreshConfigs={refreshConfigsAndEditor}
++                            />
++                          ))}
++                        </TabsList>
++                      )}
++                    </Tabs>
++                  )}
++                </div>
+               </div>
+             )}
+           </div>
+@@ -1103,6 +1137,22 @@ export function ConfigPanel({
+             {isEditorMounted && activeConfig && isOutboundsGui && (
+               <GuiOutbounds editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+             )}
++            {isMihomo && isMihomoMainConfig && currentPanel === 'config' && mihomoConfigSection === 'routing' && activeConfig && (
++              <div className="absolute inset-x-4 top-2 bottom-3">
++                <LazyBoundary>
++                  <MihomoRoutingLazy
++                    content={activeConfig.content}
++                    file={activeConfig.file}
++                    editorRef={editorRef}
++                    onAddRule={() => {
++                      setAddRuleTarget(null)
++                      setIsAddRuleOpen(true)
++                    }}
++                    showToast={showToast}
++                  />
++                </LazyBoundary>
++              </div>
++            )}
+ 
+             {isMihomo && (
+               <>
+@@ -1146,7 +1196,8 @@ export function ConfigPanel({
+                 className={cn(
+                   'absolute inset-0',
+                   isAnyGui && 'pointer-events-none invisible opacity-0',
+-                  isMihomo && currentPanel !== 'config' && 'hidden'
++                  isMihomo && currentPanel !== 'config' && 'hidden',
++                  isMihomo && isMihomoMainConfig && mihomoConfigSection !== 'editor' && 'hidden'
+                 )}
+               >
+                 <CodeMirrorEditorLazy
+@@ -1161,7 +1212,7 @@ export function ConfigPanel({
+           </div>
+ 
+           {(!isMihomo || currentPanel === 'config') && (
+-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-3 pb-3 sm:px-4 sm:pb-4">
++            <div className={cn('flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-3 sm:px-4', 'pb-3 sm:pb-4')}>
+               <div className="min-w-0 text-xs">
+                 {isConfigsLoading ? (
+                   <Skeleton className="h-4 w-30" />
+@@ -1179,7 +1230,12 @@ export function ConfigPanel({
+                   </span>
+                 ) : null}
+               </div>
+-              <div className="flex flex-wrap items-center gap-1.5">
++              <div
++                className={cn(
++                  'flex flex-wrap items-center gap-1.5',
++                  isMihomoRoutingGui && 'grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:gap-1.5 [&>button]:w-full sm:[&>button]:w-auto'
++                )}
++              >
+                 {isConfigsLoading ? (
+                   <div className="flex gap-1.5">
+                     {[120, 117, 96, 100].map((w) => (
+@@ -1219,7 +1275,8 @@ export function ConfigPanel({
+                       <TooltipTrigger
+                         render={
+                           <Button variant="outline" disabled={!canFormat} onClick={() => editorRef.current?.format()}>
+-                            <IconCode data-icon="inline-start" /> <span className="hidden sm:inline">Формат</span>
++                            <IconCode data-icon="inline-start" />{' '}
++                            <span className={cn('hidden sm:inline', isMihomoRoutingGui && 'inline')}>Формат</span>
+                           </Button>
+                         }
+                       />
+@@ -1231,7 +1288,8 @@ export function ConfigPanel({
+                       <DropdownMenuTrigger
+                         render={
+                           <Button variant="outline">
+-                            <IconDotsFilled data-icon="inline-start" /> <span className="hidden sm:inline">Утилиты</span>
++                            <IconDotsFilled data-icon="inline-start" />{' '}
++                            <span className={cn('hidden sm:inline', isMihomoRoutingGui && 'inline')}>Утилиты</span>
+                           </Button>
+                         }
+                       />
+@@ -1250,8 +1308,23 @@ export function ConfigPanel({
+                             <IconFileText /> Шаблоны конфигураций
+                           </DropdownMenuItem>
+                           {isCoreMihomo && (
+-                            <DropdownMenuItem onClick={() => setIsAddRuleOpen(true)}>
+-                              <IconListDetails /> Добавить правило
++                            <DropdownMenuItem
++                              onClick={() => {
++                                if (!isMihomoMainConfig) {
++                                  const mainIndex = configs.findIndex(
++                                    (config) => /(?:^|\/)config\.ya?ml$/i.test(config.file) && !hiddenConfigFiles.includes(config.file)
++                                  )
++                                  if (mainIndex < 0) {
++                                    showToast('Основной конфиг Mihomo не найден', 'error')
++                                    return
++                                  }
++                                  switchTab(mainIndex)
++                                }
++                                setAddRuleTarget(null)
++                                setIsAddRuleOpen(true)
++                              }}
++                            >
++                              <IconRoute /> Конструктор правил
+                             </DropdownMenuItem>
+                           )}
+                           <DropdownMenuItem
+@@ -1326,8 +1399,15 @@ export function ConfigPanel({
+         {isCoreMihomo && (
+           <AddMihomoRuleDialog
+             open={isAddRuleOpen}
+-            content={editorRef.current?.getValue() ?? activeConfig?.content ?? ''}
+-            onOpenChange={setIsAddRuleOpen}
++            content={activeConfig?.content ?? editorRef.current?.getValue() ?? ''}
++            initialOperation={addRuleTarget?.operation}
++            initialProviderName={addRuleTarget?.providerName}
++            initialTarget={addRuleTarget?.target}
++            initialGroupName={addRuleTarget?.groupName}
++            onOpenChange={(open) => {
++              setIsAddRuleOpen(open)
++              if (!open) setAddRuleTarget(null)
++            }}
+             onInsert={handleAddMihomoRule}
+             showToast={showToast}
+           />
+@@ -1392,4 +1472,3 @@ function hasCriticalChanges(oldContent: string, newContent: string, language: st
+   }
+   return false
+ }
+-
+diff --git a/frontend/src/components/configuration/mihomo/ConditionEditor.tsx b/frontend/src/components/configuration/mihomo/ConditionEditor.tsx
+new file mode 100644
+index 0000000..8825573
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/ConditionEditor.tsx
+@@ -0,0 +1,115 @@
++import { ProviderLabel } from './ProviderLabel'
++import { mihomoRuleColor } from '@/lib/mihomo-rule-color'
++import { cn } from '@/lib/utils'
++import { NetworkSelect } from './NetworkSelect'
++import { Button } from '@/components/ui/button'
++import { Input } from '@/components/ui/input'
++import { Select, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
++import { MIHOMO_RULE_TYPES, type MihomoConditionNode } from '@/lib/mihomo-rules'
++import { IconPlus, IconTrash } from '@tabler/icons-react'
++import { RoutingSelectContent } from './RoutingSelectContent'
++
++export const CONDITION_TYPES = ['RULE-SET', ...MIHOMO_RULE_TYPES, 'AND', 'OR', 'NOT']
++export function emptyCondition(type = 'DOMAIN-SUFFIX'): MihomoConditionNode {
++  return ['AND', 'OR', 'NOT'].includes(type)
++    ? { type, children: [emptyCondition(), ...(type === 'NOT' ? [] : [emptyCondition('NETWORK')])] }
++    : { type, value: '' }
++}
++
++interface Props {
++  node: MihomoConditionNode
++  onChange: (node: MihomoConditionNode) => void
++  providers: string[]
++  depth?: number
++}
++
++export function ConditionEditor({ node, onChange, providers, depth = 0 }: Props) {
++  const logical = ['AND', 'OR', 'NOT'].includes(node.type)
++  const children = node.children ?? []
++  return (
++    <div className="min-w-0 space-y-3 rounded-lg border p-3" aria-label={depth ? 'Условие' : 'Правило конструктора'}>
++      <div className="flex min-w-0 flex-wrap items-center gap-2">
++        <Select value={node.type} onValueChange={(type) => type && onChange(type === node.type ? node : emptyCondition(type))}>
++          <SelectTrigger
++            aria-label={depth ? 'Тип условия' : 'Тип правила'}
++            className={cn('w-full min-w-0 sm:w-52', mihomoRuleColor(node.type, '', false))}
++          >
++            <SelectValue />
++          </SelectTrigger>
++          <RoutingSelectContent>
++            {CONDITION_TYPES.map((type) => (
++              <SelectItem key={type} value={type} className={mihomoRuleColor(type, '', false)}>
++                {type}
++              </SelectItem>
++            ))}
++          </RoutingSelectContent>
++        </Select>
++        {logical ? (
++          <span className="text-muted-foreground text-xs">
++            {node.type === 'AND' ? 'Все условия' : node.type === 'OR' ? 'Любое условие' : 'Не соответствует условию'}
++          </span>
++        ) : node.type === 'RULE-SET' ? (
++          <Select value={node.value ?? ''} onValueChange={(value) => onChange({ ...node, value })}>
++            <SelectTrigger aria-label="Rule-provider условия" className="min-w-0 flex-1">
++              <SelectValue placeholder="Выберите rule-provider">
++                {node.value ? <ProviderLabel name={node.value} /> : 'Выберите rule-provider'}
++              </SelectValue>
++            </SelectTrigger>
++            <RoutingSelectContent>
++              {providers.map((name) => (
++                <SelectItem key={name} value={name}>
++                  <ProviderLabel name={name} />
++                </SelectItem>
++              ))}
++            </RoutingSelectContent>
++          </Select>
++        ) : node.type === 'NETWORK' ? (
++          <div className="min-w-0 flex-1">
++            <NetworkSelect label="Сеть условия" value={node.value ?? ''} onValueChange={(value) => onChange({ ...node, value })} />
++          </div>
++        ) : (
++          <Input
++            aria-label="Значение условия"
++            className="min-w-0 flex-1 basis-40"
++            value={node.value ?? ''}
++            placeholder={node.type === 'NETWORK' ? 'tcp / udp' : 'Значение'}
++            onChange={(event) => onChange({ ...node, value: event.target.value })}
++          />
++        )}
++      </div>
++      {logical && (
++        <div className="space-y-3 border-l-2 pl-3">
++          {children.map((child, index) => (
++            <div key={index} className="flex min-w-0 items-start gap-2">
++              <div className="min-w-0 flex-1">
++                <ConditionEditor
++                  node={child}
++                  providers={providers}
++                  depth={depth + 1}
++                  onChange={(next) => onChange({ ...node, children: children.map((item, i) => (i === index ? next : item)) })}
++                />
++              </div>
++              {node.type !== 'NOT' && (
++                <Button
++                  size="icon-sm"
++                  variant="outline"
++                  aria-label={`Удалить условие ${index + 1}`}
++                  onClick={() => onChange({ ...node, children: children.filter((_, i) => i !== index) })}
++                >
++                  <IconTrash size={16} />
++                </Button>
++              )}
++            </div>
++          ))}
++          {node.type !== 'NOT' && (
++            <Button size="sm" variant="outline" onClick={() => onChange({ ...node, children: [...children, emptyCondition()] })}>
++              <IconPlus size={16} />
++              Добавить условие
++            </Button>
++          )}
++        </div>
++      )}
++      {!!node.options?.length && <p className="text-muted-foreground text-xs">{node.options.join(' · ')}</p>}
++    </div>
++  )
++}
+diff --git a/frontend/src/components/configuration/mihomo/ConditionSummary.tsx b/frontend/src/components/configuration/mihomo/ConditionSummary.tsx
+new file mode 100644
+index 0000000..71d5dce
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/ConditionSummary.tsx
+@@ -0,0 +1,53 @@
++import { Fragment } from 'react'
++import { parseMihomoCondition, type MihomoConditionNode } from '@/lib/mihomo-rules'
++import { mihomoRuleColor } from '@/lib/mihomo-rule-color'
++import { ProviderLabel } from './ProviderLabel'
++
++function ConditionText({ node, nested = false }: { node: MihomoConditionNode; nested?: boolean }) {
++  if (node.type === 'NOT') {
++    const child = <ConditionText node={node.children![0]} nested />
++    return nested ? (
++      <>
++        <span className={mihomoRuleColor('NOT', '', false)}>NOT</span>
++        {' ('}
++        {child}
++        {')'}
++      </>
++    ) : (
++      child
++    )
++  }
++  if (node.type === 'AND' || node.type === 'OR') {
++    return (
++      <>
++        {node.children!.map((child, index) => {
++          const grouped = child.type === 'AND' || child.type === 'OR'
++          return (
++            <Fragment key={index}>
++              {index > 0 ? (node.type === 'AND' ? ' И ' : ' / ') : ''}
++              {grouped ? '(' : ''}
++              <ConditionText node={child} nested />
++              {grouped ? ')' : ''}
++            </Fragment>
++          )
++        })}
++      </>
++    )
++  }
++  return (
++    <>
++      <span className={mihomoRuleColor(node.type, '', false)}>{node.type}</span>
++      {': '}
++      {node.type === 'RULE-SET' ? <ProviderLabel name={node.value ?? ''} /> : node.value}
++      {node.options?.length ? ` [${node.options.join(', ')}]` : ''}
++    </>
++  )
++}
++
++export function ConditionSummary({ raw, fallback }: { raw: string; fallback: string }) {
++  try {
++    return <ConditionText node={parseMihomoCondition(raw)} />
++  } catch {
++    return <>{fallback}</>
++  }
++}
+diff --git a/frontend/src/components/configuration/mihomo/ConfigNavigation.tsx b/frontend/src/components/configuration/mihomo/ConfigNavigation.tsx
+new file mode 100644
+index 0000000..5d18d1b
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/ConfigNavigation.tsx
+@@ -0,0 +1,117 @@
++import { IconCheck, IconChevronDown, IconCode, IconRoute } from '@tabler/icons-react'
++import { useEffect, useRef, useState } from 'react'
++import { TabsTrigger } from '@/components/ui/tabs'
++import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
++import { cn } from '@/lib/utils'
++
++export type MihomoConfigSection = 'editor' | 'routing'
++interface ConfigNavigationProps {
++  value: MihomoConfigSection
++  onChange: (value: MihomoConfigSection) => void
++  onOpen: () => void
++}
++const sections: { value: MihomoConfigSection; label: string }[] = [
++  { value: 'editor', label: 'Редактор' },
++  { value: 'routing', label: 'Маршрутизация' },
++]
++export function ConfigNavigation({ value, onChange, onOpen }: ConfigNavigationProps) {
++  const [open, setOpen] = useState(false)
++  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
++  const pointerType = useRef('mouse')
++  const cancelClose = () => {
++    if (timer.current !== null) {
++      clearTimeout(timer.current)
++      timer.current = null
++    }
++  }
++  const scheduleClose = () => {
++    cancelClose()
++    timer.current = setTimeout(() => setOpen(false), 1500)
++  }
++  useEffect(
++    () => () => {
++      if (timer.current !== null) clearTimeout(timer.current)
++    },
++    []
++  )
++  return (
++    <Popover
++      open={open}
++      onOpenChange={(next, details) => {
++        if (
++          details.reason === 'trigger-press' &&
++          pointerType.current === 'mouse' &&
++          details.event.type !== 'keydown' &&
++          !('detail' in details.event && details.event.detail === 0)
++        ) {
++          details.cancel()
++          cancelClose()
++          setOpen(false)
++          onOpen()
++          return
++        }
++        cancelClose()
++        setOpen(next)
++      }}
++    >
++      <PopoverTrigger
++        onPointerEnter={(event) => {
++          if (event.pointerType !== 'touch') {
++            cancelClose()
++            setOpen(true)
++          }
++        }}
++        onPointerLeave={(event) => {
++          if (event.pointerType !== 'touch') scheduleClose()
++        }}
++        onPointerDown={(event) => {
++          pointerType.current = event.pointerType || 'mouse'
++        }}
++        onKeyDown={(event) => {
++          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
++            event.preventDefault()
++            cancelClose()
++            setOpen(true)
++          }
++        }}
++        render={<TabsTrigger value="config" className="p-0 text-sm font-semibold md:text-lg" />}
++      >
++        Конфигурация
++        <IconChevronDown size={14} className={cn('ml-0.5 transition-transform duration-150', open && 'rotate-180')} />
++      </PopoverTrigger>
++      <PopoverContent
++        align="start"
++        sideOffset={5}
++        initialFocus={false}
++        finalFocus={false}
++        onPointerEnter={cancelClose}
++        onPointerLeave={scheduleClose}
++        onFocusCapture={cancelClose}
++        className="bg-input-background border-border w-48 gap-0.5 rounded-md border p-1 duration-150"
++      >
++        <div role="group" aria-label="Разделы конфигурации" className="flex flex-col gap-0.5">
++          {sections.map((section) => (
++            <button
++              key={section.value}
++              type="button"
++              onClick={() => {
++                cancelClose()
++                onOpen()
++                onChange(section.value)
++                setOpen(false)
++              }}
++              className={cn(
++                'flex w-full cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1.25 text-left text-sm transition-colors outline-none hover:bg-(--menu-active-bg) hover:font-semibold hover:text-[#60a5fa] focus-visible:bg-(--menu-active-bg) focus-visible:text-[#60a5fa]',
++                value === section.value ? 'text-foreground' : 'text-muted-foreground'
++              )}
++            >
++              {section.value === 'editor' ? <IconCode size={16} /> : <IconRoute size={16} />}
++              <span className="flex-1">{section.label}</span>
++              {value === section.value && <IconCheck size={14} />}
++            </button>
++          ))}
++        </div>
++      </PopoverContent>
++    </Popover>
++  )
++}
+diff --git a/frontend/src/components/configuration/mihomo/NetworkSelect.tsx b/frontend/src/components/configuration/mihomo/NetworkSelect.tsx
+new file mode 100644
+index 0000000..52b35ef
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/NetworkSelect.tsx
+@@ -0,0 +1,30 @@
++import { Select, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
++import { cn } from '@/lib/utils'
++import { RoutingSelectContent } from './RoutingSelectContent'
++
++interface Props {
++  value: string
++  onValueChange: (value: string) => void
++  label?: string
++  id?: string
++  className?: string
++}
++
++export function NetworkSelect({ value, onValueChange, label, id, className }: Props) {
++  const selected = value.toLowerCase()
++  const values = [...new Set(['tcp', 'udp', ...(selected ? [selected] : [])])]
++  return (
++    <Select value={selected} items={Object.fromEntries(values.map((item) => [item, item]))} onValueChange={onValueChange}>
++      <SelectTrigger id={id} aria-label={label} className={cn('w-full min-w-0', className)}>
++        <SelectValue placeholder="Выберите сеть" />
++      </SelectTrigger>
++      <RoutingSelectContent>
++        {values.map((item) => (
++          <SelectItem key={item} value={item}>
++            {item}
++          </SelectItem>
++        ))}
++      </RoutingSelectContent>
++    </Select>
++  )
++}
+diff --git a/frontend/src/components/configuration/mihomo/ProviderLabel.tsx b/frontend/src/components/configuration/mihomo/ProviderLabel.tsx
+new file mode 100644
+index 0000000..8309974
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/ProviderLabel.tsx
+@@ -0,0 +1,14 @@
++import { mihomoRuleColor } from '@/lib/mihomo-rule-color'
++
++/** Keep provider names neutral; highlight only their format suffix. */
++export function ProviderLabel({ name }: { name: string }) {
++  const parts = name.match(/^(.*)(@(domain|ipcidr|inline|classical))$/i)
++  if (!parts) return <span className="truncate">{name}</span>
++  const type = { domain: 'DOMAIN', ipcidr: 'IP-CIDR', inline: 'IN-TYPE', classical: 'AND' }[parts[3].toLowerCase()] ?? 'RULE-SET'
++  return (
++    <span className="inline-flex max-w-full min-w-0">
++      <span className="truncate">{parts[1]}</span>
++      <span className={mihomoRuleColor(type, '', false)}>{parts[2]}</span>
++    </span>
++  )
++}
+diff --git a/frontend/src/components/configuration/mihomo/Routing.tsx b/frontend/src/components/configuration/mihomo/Routing.tsx
+new file mode 100644
+index 0000000..ebbed6d
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/Routing.tsx
+@@ -0,0 +1,309 @@
++import {
++  useCallback,
++  useEffect,
++  useMemo,
++  useRef,
++  useState,
++  type MouseEvent as ReactMouseEvent,
++  type TouchEvent as ReactTouchEvent,
++  type RefObject,
++} from 'react'
++import { IconPlus, IconListDetails } from '@tabler/icons-react'
++import { Button } from '@/components/ui/button'
++import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
++import { Textarea } from '@/components/ui/textarea'
++import {
++  deleteMihomoRoutingRule,
++  getMihomoRoutingRules,
++  getMihomoRuleInsertionIndex,
++  getMihomoRoutingTargets,
++  inspectMihomoRuleConfig,
++  reorderMihomoRoutingRules,
++  updateMihomoRoutingRule,
++  updateMihomoRoutingRuleTargets,
++  insertMihomoRoutingRuleAt,
++  completeMihomoRoutingDraft,
++  describeMihomoRoutingRule,
++  parseMihomoCondition,
++  serializeMihomoCondition,
++  getMihomoRuleOptions,
++  type MihomoConditionNode,
++} from '@/lib/mihomo-rules'
++import type { CodeMirrorRef } from '../CodeMirror'
++import { MihomoRoutingRuleRow } from './RoutingRuleRow'
++import { ConditionEditor, emptyCondition } from './ConditionEditor'
++
++interface RoutingProps {
++  content: string
++  file: string
++  editorRef: RefObject<CodeMirrorRef | null>
++  onAddRule: () => void
++  showToast: (msg: string, type?: 'success' | 'error') => void
++}
++export function MihomoRouting({ content, file, editorRef, onAddRule, showToast }: RoutingProps) {
++  const [dragRuleOrder, setDragRuleOrder] = useState<number[] | null>(null)
++  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
++  const ruleRowsRef = useRef<(HTMLDivElement | null)[]>([])
++  const cleanupDragRef = useRef<(() => void) | null>(null)
++  const scrollRef = useRef<HTMLDivElement>(null)
++  const pendingRef = useRef<HTMLDivElement>(null)
++  const [newRule, setNewRule] = useState<string | null>(null)
++  const [draft, setDraft] = useState<{ index: number; raw: string; logical?: MihomoConditionNode } | null>(null)
++  const [draftValue, setDraftValue] = useState('')
++  useEffect(() => {
++    if (newRule !== null) pendingRef.current?.scrollIntoView({ block: 'nearest' })
++  }, [newRule])
++  const parsed = useMemo(() => {
++    try {
++      return { rules: getMihomoRoutingRules(content), error: '' }
++    } catch (error) {
++      return { rules: [] as string[], error: error instanceof Error ? error.message : String(error) }
++    }
++  }, [content])
++  const { rules, error } = parsed
++  const targets = useMemo(() => getMihomoRoutingTargets(content), [content])
++  const options = useMemo(() => inspectMihomoRuleConfig(content), [content])
++  const providers = options.providers.map((p) => p.name)
++  const insertionIndex = getMihomoRuleInsertionIndex(rules)
++  const getContent = useCallback(() => editorRef.current?.getValue() ?? content, [content, editorRef])
++  const write = (next: string) => {
++    if (!editorRef.current) throw new Error('Редактор ещё не готов')
++    editorRef.current.replaceAll(next)
++    if (file) editorRef.current.validate(file)
++  }
++  const attempt = (action: () => string, message: string) => {
++    try {
++      write(action())
++      showToast(`${message}. Нажмите «Применить»`)
++    } catch (error) {
++      showToast(error instanceof Error ? error.message : 'Не удалось изменить правило', 'error')
++    }
++  }
++  useEffect(() => () => cleanupDragRef.current?.(), [])
++  const openEdit = (index: number, raw: string, type?: string) => {
++    const rule = describeMihomoRoutingRule(raw)
++    try {
++      const logical = type
++        ? emptyCondition(type)
++        : ['AND', 'OR', 'NOT'].includes(rule.type)
++          ? parseMihomoCondition(`${rule.type},${rule.matcher}`)
++          : undefined
++      setDraft({ index, raw, logical })
++      setDraftValue(raw)
++    } catch (error) {
++      showToast(error instanceof Error ? error.message : 'Не удалось разобрать условие', 'error')
++    }
++  }
++  let draftError = ''
++  let nextRaw = draftValue.trim()
++  if (draft?.logical) {
++    try {
++      const rule = describeMihomoRoutingRule(draft.raw)
++      nextRaw = [serializeMihomoCondition(draft.logical), rule.target, ...getMihomoRuleOptions(draft.raw)].join(',')
++    } catch (error) {
++      draftError = error instanceof Error ? error.message : 'Заполните условия'
++    }
++  } else if (!nextRaw || /[\r\n]/.test(nextRaw)) draftError = 'Введите одно правило в одну строку'
++  const saveDraft = () => {
++    if (!draft || draftError) return
++    if (draft.index < 0) updateNewRule(nextRaw)
++    else attempt(() => updateMihomoRoutingRule(getContent(), draft.index, nextRaw), 'Правило обновлено')
++    setDraft(null)
++  }
++  const updateNewRule = (raw: string) => {
++    const rule = describeMihomoRoutingRule(raw)
++    if (rule.matcher && rule.target) {
++      try {
++        const validated = completeMihomoRoutingDraft(raw)
++        const currentRules = getMihomoRoutingRules(getContent())
++        const target = describeMihomoRoutingRule(validated).target
++        write(insertMihomoRoutingRuleAt(getContent(), getMihomoRuleInsertionIndex(currentRules, target), validated))
++        setNewRule(null)
++      } catch (error) {
++        showToast(error instanceof Error ? error.message : 'Проверьте правило', 'error')
++      }
++    } else setNewRule(raw)
++  }
++  const startDrag = (event: ReactMouseEvent | ReactTouchEvent, fromIndex: number) => {
++    if (event.cancelable) event.preventDefault()
++    cleanupDragRef.current?.()
++    const initialContent = getContent()
++    let order = rules.map((_, index) => index)
++    const setOrder = setDragRuleOrder
++    const refs = ruleRowsRef
++    let position = fromIndex
++    setOrder(order)
++    setDraggingIndex(fromIndex)
++    const onMove = (moveEvent: MouseEvent | TouchEvent) => {
++      if (moveEvent.cancelable) moveEvent.preventDefault()
++      const y = 'touches' in moveEvent ? moveEvent.touches[0]?.clientY : moveEvent.clientY
++      if (y == null) return
++      for (let i = 0; i < order.length; i++) {
++        if (i === position) continue
++        const rect = refs.current[i]?.getBoundingClientRect()
++        if (!rect || y < rect.top || y > rect.bottom) continue
++        const next = [...order]
++        const [moved] = next.splice(position, 1)
++        next.splice(i, 0, moved)
++        order = next
++        position = i
++        setOrder(next)
++        setDraggingIndex(i)
++        break
++      }
++      const scroll = scrollRef.current
++      if (scroll) {
++        const rect = scroll.getBoundingClientRect()
++        if (y < rect.top + 40) scroll.scrollTop -= 12
++        if (y > rect.bottom - 40) scroll.scrollTop += 12
++      }
++    }
++    const cleanup = () => {
++      document.removeEventListener('mousemove', onMove)
++      document.removeEventListener('mouseup', onEnd)
++      document.removeEventListener('touchmove', onMove)
++      document.removeEventListener('touchend', onEnd)
++      document.removeEventListener('touchcancel', onCancel)
++      setDragRuleOrder(null)
++      setDraggingIndex(null)
++      cleanupDragRef.current = null
++    }
++    const onCancel = () => cleanup()
++    const onEnd = () => {
++      cleanup()
++      if (order.every((value, index) => value === index)) return
++      if (getContent() !== initialContent) {
++        showToast('Конфигурация изменилась во время перемещения. Повторите действие', 'error')
++        return
++      }
++      const nextOrder = order
++      attempt(() => reorderMihomoRoutingRules(initialContent, nextOrder), 'Порядок правил обновлён')
++    }
++    cleanupDragRef.current = cleanup
++    document.addEventListener('mousemove', onMove)
++    document.addEventListener('mouseup', onEnd)
++    document.addEventListener('touchmove', onMove, { passive: false })
++    document.addEventListener('touchend', onEnd)
++    document.addEventListener('touchcancel', onCancel)
++  }
++
++  const pending =
++    newRule !== null ? (
++      <div ref={pendingRef} className="border-chart-2 space-y-2 rounded-lg border border-dashed p-2">
++        <p className="text-muted-foreground px-1 text-xs">
++          Новое правило · заполните значение и маршрут. До заполнения в YAML не добавляется.
++        </p>
++        <MihomoRoutingRuleRow
++          raw={newRule}
++          index={rules.length}
++          targets={targets}
++          providers={providers}
++          icons={options.groupIcons}
++          dragging={false}
++          draft
++          onDragStart={() => {}}
++          onChange={updateNewRule}
++          onTargetChange={(target) => {
++            const r = describeMihomoRoutingRule(newRule)
++            updateNewRule([r.type, r.matcher, target].join(','))
++          }}
++          onEdit={() => openEdit(-1, newRule)}
++          onConstruct={(type) => openEdit(-1, newRule, type)}
++          onDelete={() => setNewRule(null)}
++          onError={(message) => showToast(message, 'error')}
++        />
++      </div>
++    ) : null
++  return (
++    <div className="absolute inset-0 flex min-h-0 flex-col gap-3 font-sans text-sm">
++      <div ref={scrollRef} className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-2 overflow-y-auto pb-1">
++        {error ? (
++          <div className="text-destructive rounded-lg border p-3">{error}</div>
++        ) : (
++          <>
++            {(dragRuleOrder ?? rules.map((_, index) => index)).map((index, position) => (
++              <div key={index}>
++                {index === insertionIndex && pending}
++                <div
++                  ref={(element) => {
++                    ruleRowsRef.current[position] = element
++                  }}
++                >
++                  <MihomoRoutingRuleRow
++                    raw={rules[index]}
++                    index={index}
++                    targets={targets}
++                    providers={providers}
++                    icons={options.groupIcons}
++                    dragging={draggingIndex === position}
++                    onDragStart={(event) => startDrag(event, position)}
++                    onChange={(raw) => attempt(() => updateMihomoRoutingRule(getContent(), index, raw), 'Правило обновлено')}
++                    onTargetChange={(target) =>
++                      attempt(() => updateMihomoRoutingRuleTargets(getContent(), [index], target), 'Маршрут обновлён')
++                    }
++                    onEdit={() => openEdit(index, rules[index])}
++                    onConstruct={(type) => openEdit(index, rules[index], type)}
++                    onDelete={() => attempt(() => deleteMihomoRoutingRule(getContent(), index), 'Правило удалено')}
++                    onError={(message) => showToast(message, 'error')}
++                  />
++                </div>
++              </div>
++            ))}
++            {insertionIndex === rules.length && pending}
++            {rules.length === 0 && !pending && (
++              <p className="text-muted-foreground rounded-lg border p-5 text-center">Правил маршрутизации пока нет</p>
++            )}
++          </>
++        )}
++      </div>
++      <div className="flex shrink-0 flex-wrap gap-2 pt-1">
++        <Button variant="outline" disabled={!!error || newRule !== null} onClick={() => setNewRule('DOMAIN-SUFFIX,,')}>
++          <IconPlus size={17} />
++          Добавить правило
++        </Button>
++        <Button variant="outline" disabled={!!error} onClick={onAddRule}>
++          <IconListDetails size={17} />
++          Конструктор правил
++        </Button>
++      </div>
++      <Dialog
++        open={draft !== null}
++        onOpenChange={(open) => {
++          if (!open) setDraft(null)
++        }}
++      >
++        <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto">
++          <DialogHeader>
++            <DialogTitle>
++              {draft?.logical ? 'Конструктор условий' : 'Изменить правило'}
++              {draft && draft.index >= 0 ? ` #${draft.index + 1}` : ''}
++            </DialogTitle>
++          </DialogHeader>
++          {draft?.logical ? (
++            <ConditionEditor node={draft.logical} providers={providers} onChange={(logical) => setDraft({ ...draft, logical })} />
++          ) : (
++            <Textarea
++              aria-label="Правило Mihomo"
++              value={draftValue}
++              onChange={(event) => setDraftValue(event.target.value)}
++              className="min-h-28 font-mono text-sm"
++            />
++          )}
++          {draftError ? (
++            <p className="text-destructive text-sm">{draftError}</p>
++          ) : (
++            <pre className="bg-muted/40 overflow-x-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">{nextRaw}</pre>
++          )}
++          <DialogFooter>
++            <Button variant="outline" onClick={() => setDraft(null)}>
++              Отмена
++            </Button>
++            <Button disabled={!!draftError} onClick={saveDraft}>
++              Сохранить правило
++            </Button>
++          </DialogFooter>
++        </DialogContent>
++      </Dialog>
++    </div>
++  )
++}
+diff --git a/frontend/src/components/configuration/mihomo/RoutingRuleRow.tsx b/frontend/src/components/configuration/mihomo/RoutingRuleRow.tsx
+new file mode 100644
+index 0000000..127ca3d
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/RoutingRuleRow.tsx
+@@ -0,0 +1,294 @@
++import { ConditionSummary } from './ConditionSummary'
++import { ProviderLabel } from './ProviderLabel'
++import { mihomoRuleColor } from '@/lib/mihomo-rule-color'
++import { NetworkSelect } from './NetworkSelect'
++import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react'
++import { IconPencil, IconGripVertical, IconTrash } from '@tabler/icons-react'
++import { Button } from '@/components/ui/button'
++import { Input } from '@/components/ui/input'
++import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
++import { Select, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
++import {
++  describeMihomoRoutingRule,
++  editMihomoRuleMatcher,
++  getMihomoRuleOptions,
++  setMihomoRuleOptions,
++  summarizeMihomoCondition,
++  MIHOMO_RULE_TYPES,
++} from '@/lib/mihomo-rules'
++import { cn } from '@/lib/utils'
++import { IndexBadge } from '../xray/IndexBadge'
++import { RoutingSelectContent } from './RoutingSelectContent'
++import { SelectorLabel } from './SelectorLabel'
++
++interface Props {
++  draft?: boolean
++  onConstruct: (type: string) => void
++  raw: string
++  index: number
++  targets: string[]
++  providers: string[]
++  icons: Record<string, string>
++  dragging: boolean
++  onDragStart: (event: MouseEvent | TouchEvent) => void
++  onChange: (raw: string) => void
++  onTargetChange: (target: string) => void
++  onEdit: () => void
++  onDelete: () => void
++  onError: (message: string) => void
++}
++
++export function MihomoRoutingRuleRow({
++  draft = false,
++  onConstruct,
++  raw,
++  index,
++  targets,
++  providers,
++  icons,
++  dragging,
++  onDragStart,
++  onChange,
++  onTargetChange,
++  onEdit,
++  onDelete,
++  onError,
++}: Props) {
++  const rule = describeMihomoRoutingRule(raw)
++  const type = rule.type.toUpperCase()
++  const flags = getMihomoRuleOptions(raw)
++  const hasOptions = flags.length > 0 || /^(?:IP-|SRC-IP-|GEOIP$|SRC-GEOIP$)/.test(type)
++  const optionChoices = { none: 'Без параметров', 'no-resolve': 'no-resolve', src: 'src', 'no-resolve,src': 'no-resolve · src' }
++  const optionValue = flags.includes('no-resolve') && flags.includes('src') ? 'no-resolve,src' : (flags[0] ?? 'none')
++  const logical = ['AND', 'OR', 'NOT'].includes(type)
++  let summary = rule.matcher
++  if (logical) {
++    try {
++      summary = summarizeMihomoCondition(`${type},${rule.matcher}`)
++    } catch {
++      /* Keep raw conditions visible when unsupported. */
++    }
++  }
++  const fixedType = ['SUB-RULE', 'MATCH'].includes(type)
++  const types = fixedType ? [type] : [...new Set(['RULE-SET', ...MIHOMO_RULE_TYPES, 'AND', 'OR', 'NOT', type])]
++  const routes = [...new Set([...targets, ...(rule.target ? [rule.target] : [])])].filter((target) => target !== 'REJECT-DROP')
++  const [value, setValue] = useState(rule.matcher)
++  const [confirmOpen, setConfirmOpen] = useState(false)
++  const cancelBlur = useRef(false)
++  useEffect(() => {
++    setValue(rule.matcher)
++  }, [rule.matcher])
++  function edit(nextType: string, nextValue: string) {
++    try {
++      if (['AND', 'OR', 'NOT'].includes(nextType)) {
++        onConstruct(nextType)
++        return
++      }
++      onChange(draft ? [nextType, nextValue.trim(), rule.target].join(',') : editMihomoRuleMatcher(raw, nextType, nextValue))
++    } catch (error) {
++      onError(error instanceof Error ? error.message : 'Не удалось изменить правило')
++      setValue(rule.matcher)
++    }
++  }
++  function commit() {
++    if (cancelBlur.current) {
++      cancelBlur.current = false
++      return
++    }
++    if (value !== rule.matcher) edit(type, value)
++  }
++  return (
++    <article
++      aria-label={`Строка правила ${index + 1}`}
++      className={cn(
++        'bg-input-background grid min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border p-2 text-sm lg:grid-cols-[auto_auto_minmax(0,0.8fr)_minmax(0,1.5fr)_minmax(0,1fr)_auto]',
++        dragging ? 'scale-[0.99] border-[#60a5fa] opacity-80' : 'border-border'
++      )}
++    >
++      <button
++        type="button"
++        disabled={draft}
++        aria-label={`Переместить правило ${index + 1}`}
++        onMouseDown={onDragStart}
++        onTouchStart={onDragStart}
++        className={cn(
++          'text-muted-foreground hover:text-foreground hover:bg-muted/50 touch-none rounded p-1',
++          dragging ? 'cursor-grabbing' : 'cursor-grab'
++        )}
++      >
++        <IconGripVertical size={16} />
++      </button>
++      {draft ? (
++        <span className="text-chart-2 flex h-6 w-6 items-center justify-center" aria-label="Новое правило">
++          +
++        </span>
++      ) : (
++        <IndexBadge index={index} className="mr-0" />
++      )}
++      <Select
++        value={type}
++        items={Object.fromEntries(types.map((item) => [item, item]))}
++        onValueChange={(next) => next && edit(next, rule.matcher)}
++      >
++        <SelectTrigger
++          disabled={fixedType}
++          aria-label={`Тип правила ${index + 1}`}
++          className={cn('w-full min-w-0', mihomoRuleColor(type, '', false))}
++        >
++          <SelectValue />
++        </SelectTrigger>
++        <RoutingSelectContent>
++          {types.map((item) => (
++            <SelectItem key={item} value={item} className={mihomoRuleColor(item, '', false)}>
++              {item}
++            </SelectItem>
++          ))}
++        </RoutingSelectContent>
++      </Select>
++      <div className="bg-input-background border-border col-span-4 flex h-9 min-w-0 items-center overflow-hidden rounded-md border lg:col-auto">
++        <div className="h-full min-w-0 flex-1">
++          {logical ? (
++            <Button
++              variant="outline"
++              aria-label={`Изменить условия правила ${index + 1}`}
++              className="h-full w-full min-w-0 justify-start rounded-none border-0 font-normal"
++              onClick={onEdit}
++            >
++              <span className="min-w-0 truncate">
++                <ConditionSummary raw={`${type},${rule.matcher}`} fallback={summary} />
++              </span>
++            </Button>
++          ) : type === 'RULE-SET' ? (
++            <Select
++              value={rule.matcher}
++              items={Object.fromEntries([...new Set([rule.matcher, ...providers])].map((item) => [item, item]))}
++              onValueChange={(next) => next && edit(type, next)}
++            >
++              <SelectTrigger aria-label={`Значение правила ${index + 1}`} className="h-full w-full min-w-0 rounded-none border-0">
++                <SelectValue>
++                  <ProviderLabel name={rule.matcher} />
++                </SelectValue>
++              </SelectTrigger>
++              <RoutingSelectContent>
++                {[...new Set([rule.matcher, ...providers])].map((item) => (
++                  <SelectItem key={item} value={item}>
++                    <ProviderLabel name={item} />
++                  </SelectItem>
++                ))}
++              </RoutingSelectContent>
++            </Select>
++          ) : type === 'NETWORK' ? (
++            <NetworkSelect
++              label={`Значение правила ${index + 1}`}
++              value={rule.matcher}
++              onValueChange={(next) => edit(type, next)}
++              className="h-full rounded-none border-0"
++            />
++          ) : (
++            <Input
++              className="h-full w-full min-w-0 rounded-none border-0"
++              value={value}
++              readOnly={type === 'MATCH'}
++              placeholder={type === 'MATCH' ? 'Любой трафик' : ''}
++              aria-label={`Значение правила ${index + 1}`}
++              onFocus={() => {
++                cancelBlur.current = false
++              }}
++              onChange={(event) => setValue(event.target.value)}
++              onBlur={commit}
++              onKeyDown={(event) => {
++                if (event.key === 'Enter') {
++                  event.preventDefault()
++                  event.currentTarget.blur()
++                }
++                if (event.key === 'Escape') {
++                  cancelBlur.current = true
++                  setValue(rule.matcher)
++                  event.currentTarget.blur()
++                }
++              }}
++            />
++          )}
++        </div>
++        {hasOptions && (
++          <div className="h-full max-w-[48%] min-w-0 shrink-0">
++            <Select
++              value={optionValue}
++              items={optionChoices}
++              onValueChange={(next) => {
++                try {
++                  onChange(setMihomoRuleOptions(raw, next === 'none' ? [] : next.split(',')))
++                } catch (error) {
++                  onError(error instanceof Error ? error.message : 'Не удалось изменить параметры')
++                }
++              }}
++            >
++              <SelectTrigger aria-label={`Параметры правила ${index + 1}`} className="h-full w-full min-w-0 rounded-none border-0 border-l">
++                <SelectValue>{optionValue === 'none' ? 'Параметры' : optionChoices[optionValue as keyof typeof optionChoices]}</SelectValue>
++              </SelectTrigger>
++              <RoutingSelectContent>
++                {Object.entries(optionChoices).map(([key, label]) => (
++                  <SelectItem key={key} value={key}>
++                    {label}
++                  </SelectItem>
++                ))}
++              </RoutingSelectContent>
++            </Select>
++          </div>
++        )}
++      </div>
++      <div className="col-span-4 min-w-0 lg:col-auto">
++        <Select
++          value={rule.target}
++          items={Object.fromEntries(routes.map((target) => [target, target]))}
++          onValueChange={(next) => next && onTargetChange(next)}
++        >
++          <SelectTrigger disabled={type === 'SUB-RULE'} aria-label={`Маршрут правила ${index + 1}`} className="w-full min-w-0">
++            <SelectValue placeholder="Выберите маршрут">
++              {rule.target ? <SelectorLabel name={rule.target} icon={icons[rule.target]} /> : 'Выберите маршрут'}
++            </SelectValue>
++          </SelectTrigger>
++          <RoutingSelectContent>
++            {routes.map((target) => (
++              <SelectItem key={target} value={target}>
++                <SelectorLabel name={target} icon={icons[target]} />
++              </SelectItem>
++            ))}
++          </RoutingSelectContent>
++        </Select>
++      </div>
++      <div className="col-start-4 row-start-1 flex gap-1 lg:col-start-auto lg:row-start-auto">
++        <Button variant="outline" size="icon-sm" aria-label={`Изменить правило ${index + 1}`} onClick={onEdit}>
++          <IconPencil size={16} />
++        </Button>
++        <Popover open={confirmOpen} onOpenChange={setConfirmOpen}>
++          <PopoverTrigger
++            render={<Button variant="outline" size="icon-sm" aria-label={`Удалить правило ${index + 1}`} className="hover:text-red-400" />}
++          >
++            <IconTrash size={16} />
++          </PopoverTrigger>
++          <PopoverContent align="end">
++            <PopoverHeader>
++              <PopoverTitle>Удалить правило #{index + 1} из конфигурации?</PopoverTitle>
++            </PopoverHeader>
++            <div className="flex justify-end gap-2">
++              <Button size="sm" variant="outline" onClick={() => setConfirmOpen(false)}>
++                Нет
++              </Button>
++              <Button
++                size="sm"
++                variant="destructive"
++                onClick={() => {
++                  setConfirmOpen(false)
++                  onDelete()
++                }}
++              >
++                Да
++              </Button>
++            </div>
++          </PopoverContent>
++        </Popover>
++      </div>
++    </article>
++  )
++}
+diff --git a/frontend/src/components/configuration/mihomo/RoutingSelectContent.tsx b/frontend/src/components/configuration/mihomo/RoutingSelectContent.tsx
+new file mode 100644
+index 0000000..485d9a3
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/RoutingSelectContent.tsx
+@@ -0,0 +1,23 @@
++import type { ReactNode } from 'react'
++import { SelectContent, SelectGroup } from '@/components/ui/select'
++
++/** Same menu styling and grouped item spacing as the Add Rule dialog. */
++export function RoutingSelectContent({
++  children,
++  align = 'center',
++  position = 'item-aligned',
++}: {
++  children: ReactNode
++  align?: 'start' | 'center' | 'end'
++  position?: 'item-aligned' | 'popper'
++}) {
++  return (
++    <SelectContent
++      align={align}
++      position={position}
++      className="max-h-[min(31rem,var(--available-height))] w-117 max-w-[calc(100vw-2rem)] min-w-0!"
++    >
++      <SelectGroup>{children}</SelectGroup>
++    </SelectContent>
++  )
++}
+diff --git a/frontend/src/components/configuration/mihomo/SelectorLabel.tsx b/frontend/src/components/configuration/mihomo/SelectorLabel.tsx
+new file mode 100644
+index 0000000..c428595
+--- /dev/null
++++ b/frontend/src/components/configuration/mihomo/SelectorLabel.tsx
+@@ -0,0 +1,27 @@
++import { cn } from '@/lib/utils'
++/** Shared selector label used in both Add Rule and routing controls. */
++export function SelectorLabel({ name, icon }: { name: string; icon?: string }) {
++  return (
++    <span className="inline-flex min-w-0 items-center gap-2">
++      {icon && (
++        <img
++          src={icon}
++          alt=""
++          className="size-4 shrink-0 rounded-sm object-contain"
++          onError={(event) => {
++            event.currentTarget.style.display = 'none'
++          }}
++        />
++      )}
++      <span
++        className={cn(
++          'truncate',
++          name === 'REJECT' && 'text-red-600 dark:text-red-400',
++          name === 'DIRECT' && 'text-green-700 dark:text-green-400'
++        )}
++      >
++        {name}
++      </span>
++    </span>
++  )
++}
+diff --git a/frontend/src/components/modals/AddMihomoRule.tsx b/frontend/src/components/modals/AddMihomoRule.tsx
+index dc2c12b..6ab9129 100644
+--- a/frontend/src/components/modals/AddMihomoRule.tsx
++++ b/frontend/src/components/modals/AddMihomoRule.tsx
+@@ -1,372 +1,289 @@
++import { ProviderLabel } from '../configuration/mihomo/ProviderLabel'
++import { mihomoRuleColor } from '@/lib/mihomo-rule-color'
++import { cn } from '@/lib/utils'
++import { NetworkSelect } from '../configuration/mihomo/NetworkSelect'
++import { useEffect, useMemo, useState } from 'react'
++import { IconListDetails } from '@tabler/icons-react'
+ import { Button } from '@/components/ui/button'
+ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+-import { Textarea } from '@/components/ui/textarea'
+ import { Label } from '@/components/ui/label'
+ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+-import { IconListDetails } from '@tabler/icons-react'
+-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
++import { Textarea } from '@/components/ui/textarea'
+ import {
+   addMihomoRule,
+   inspectMihomoRuleConfig,
+-  MIHOMO_RULE_TYPES,
+   normalizeMihomoRuleValues,
+-  type MihomoRuleOperation,
++  serializeMihomoCondition,
++  type MihomoConditionNode,
+   type MihomoRuleType,
+-} from '../../lib/mihomo-rules'
++} from '@/lib/mihomo-rules'
++import { SelectorLabel } from '../configuration/mihomo/SelectorLabel'
++import { ConditionEditor, CONDITION_TYPES, emptyCondition } from '../configuration/mihomo/ConditionEditor'
+ 
+ interface Props {
+   open: boolean
+   content: string
++  initialOperation?: 'rules' | 'inline' | 'payload'
++  initialProviderName?: string
++  initialTarget?: string
++  initialGroupName?: string
+   onOpenChange: (open: boolean) => void
+   onInsert: (content: string) => void
+   showToast: (message: string, type?: 'success' | 'error') => void
+ }
+ 
+-const OPERATION_LABELS: Record<MihomoRuleOperation, string> = {
+-  rules: 'Добавить правило в rules',
+-  'rule-set': 'Добавить RULE-SET (rule-provider)',
+-  'provider-import': 'Добавить provider по ссылке',
+-  inline: 'В payload inline-провайдера',
+-  payload: 'В payload текущего файла',
+-}
+-
+-function formatRuleCount(count: number): string {
+-  const last = count % 10
+-  const lastTwo = count % 100
+-  const noun = last === 1 && lastTwo !== 11 ? 'правило' : last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? 'правила' : 'правил'
+-  return `${count} ${noun}`
+-}
+-
+-function SelectorLabel({ name, icon }: { name: string; icon?: string }) {
+-  return <span className="inline-flex min-w-0 items-center gap-2">
+-    {icon && <img src={icon} alt="" className="size-4 shrink-0 rounded-sm object-contain" onError={event => { event.currentTarget.style.display = 'none' }} />}
+-    <span className="truncate">{name}</span>
+-  </span>
+-}
+-
+-const TYPE_LABELS: Partial<Record<MihomoRuleType, string>> = {
+-  DOMAIN: 'Домен (DOMAIN)',
+-  'DOMAIN-SUFFIX': 'Домен и поддомены (DOMAIN-SUFFIX)',
+-  'DOMAIN-KEYWORD': 'Ключевое слово (DOMAIN-KEYWORD)',
+-  'DOMAIN-REGEX': 'Регулярное выражение (DOMAIN-REGEX)',
+-  'DOMAIN-WILDCARD': 'Шаблон домена (DOMAIN-WILDCARD)',
+-  GEOSITE: 'Категория геосайтов (GEOSITE)',
+-  'IP-CIDR': 'IPv4-сеть (IP-CIDR)',
+-  'IP-CIDR6': 'IPv6-сеть (IP-CIDR6)',
+-  'IP-SUFFIX': 'Суффикс IP (IP-SUFFIX)',
+-  GEOIP: 'Страна по IP (GEOIP)',
+-  'SRC-IP-CIDR': 'Исходная IP-сеть (SRC-IP-CIDR)',
+-  'DST-PORT': 'Порт назначения (DST-PORT)',
+-  'SRC-PORT': 'Порт источника (SRC-PORT)',
+-  'PROCESS-NAME': 'Имя процесса (PROCESS-NAME)',
+-  NETWORK: 'Тип сети (NETWORK)',
+-}
+-
+-function getTypeOptions(operation: MihomoRuleOperation, behavior?: string): MihomoRuleType[] {
+-  if (operation === 'inline' && behavior === 'domain') return ['DOMAIN', 'DOMAIN-SUFFIX']
+-  if (operation === 'inline' && behavior === 'ipcidr') return ['IP-CIDR', 'IP-CIDR6']
+-  if (operation === 'inline' && behavior !== 'classical') return []
+-  return [...MIHOMO_RULE_TYPES]
+-}
+-
+-function formatPreview(
+-  operation: MihomoRuleOperation,
+-  ruleType: MihomoRuleType,
+-  value: string,
+-  providerName: string,
+-  target: string,
+-  behavior?: string
+-) {
+-  if (operation === 'provider-import') return value.trim() || 'https://github.com/…/fastly@ipcidr.mrs'
+-  let inputs: string[]
+-  try {
+-    inputs = normalizeMihomoRuleValues(value || 'google.com', ruleType)
+-  } catch {
+-    inputs = value.split(/\r?\n/).filter(Boolean)
+-  }
+-  const route = target || 'Main'
+-  if (operation === 'rule-set') return `RULE-SET,${providerName || 'provider'},${route}`
+-  return inputs
+-    .map((input) => {
+-      if (operation === 'inline') {
+-        const payload =
+-          behavior === 'domain' && ruleType === 'DOMAIN-SUFFIX'
+-            ? `.${input.replace(/^\.+/, '')}`
+-            : behavior === 'domain'
+-              ? input.replace(/^\.+/, '')
+-              : behavior === 'ipcidr'
+-                ? input
+-                : `${ruleType},${input}`
+-        return `payload: ${payload}`
+-      }
+-      if (operation === 'payload') return `payload: ${ruleType},${input}`
+-      return `${ruleType},${input},${route}`
+-    })
+-    .join('\n')
+-}
+-
+-export function AddMihomoRuleDialog({ open, content, onOpenChange, onInsert, showToast }: Props) {
++export function AddMihomoRuleDialog({
++  open,
++  content,
++  initialOperation,
++  initialProviderName,
++  initialTarget,
++  onOpenChange,
++  onInsert,
++  showToast,
++}: Props) {
+   const options = useMemo(() => inspectMihomoRuleConfig(content), [content])
+-  const [operation, setOperation] = useState<MihomoRuleOperation>('rules')
+-  const [ruleType, setRuleType] = useState<MihomoRuleType>('DOMAIN-SUFFIX')
++  const [operation, setOperation] = useState<'rules' | 'inline' | 'payload'>('rules')
++  const [type, setType] = useState('DOMAIN-SUFFIX')
+   const [value, setValue] = useState('')
+   const [providerName, setProviderName] = useState('')
+   const [target, setTarget] = useState('')
+-  const valueRef = useRef<HTMLTextAreaElement>(null)
+-
+-  useLayoutEffect(() => {
+-    const element = valueRef.current
+-    if (!element) return
+-    element.style.height = 'auto'
+-    element.style.height = `${Math.min(element.scrollHeight, 240)}px`
+-  }, [value, operation, open])
+-
+-  const inlineProviders = options.providers.filter((provider) => provider.type === 'inline')
+-  const selectedProvider = options.providers.find((provider) => provider.name === providerName)
+-  const typeOptions = getTypeOptions(operation, selectedProvider?.behavior)
+-  const targetOptions = ['DIRECT', 'REJECT', ...options.groups.filter(name => name !== 'DIRECT' && name !== 'REJECT')]
+-  const providerOptions = operation === 'inline' ? inlineProviders : options.providers
+-  const needsTarget = operation === 'rules' || operation === 'rule-set'
+-  const preview = formatPreview(operation, ruleType, value, providerName, target, selectedProvider?.behavior)
+-
+-  function resetForm() {
+-    setOperation('rules')
+-    setRuleType('DOMAIN-SUFFIX')
++  const [condition, setCondition] = useState<MihomoConditionNode>(emptyCondition('AND'))
++  useEffect(() => {
++    if (!open) return
++    setOperation(initialOperation ?? 'rules')
++    setProviderName(initialProviderName ?? '')
++    setType('DOMAIN-SUFFIX')
+     setValue('')
+-    setProviderName('')
+-    setTarget('')
++    setTarget(initialTarget === 'REJECT-DROP' ? '' : (initialTarget ?? ''))
++    setCondition(emptyCondition('AND'))
++  }, [open, initialOperation, initialProviderName, initialTarget])
++  const inlineProviders = options.providers.filter((p) => p.type === 'inline')
++  const selectedProvider = options.providers.find((p) => p.name === providerName)
++  const behavior = operation === 'inline' ? selectedProvider?.behavior : 'classical'
++  const types =
++    operation === 'inline' && behavior === 'domain'
++      ? ['DOMAIN-SUFFIX', 'DOMAIN']
++      : operation === 'inline' && behavior === 'ipcidr'
++        ? ['IP-CIDR', 'IP-CIDR6']
++        : CONDITION_TYPES.filter((t) => operation === 'rules' || t !== 'RULE-SET')
++  const targets = [...new Set(['DIRECT', 'REJECT', ...options.groups])].filter((t) => t !== 'REJECT-DROP')
++  const logical = ['AND', 'OR', 'NOT'].includes(type)
++  let error = options.error ?? ''
++  let preview = ''
++  let input = value
++  try {
++    if (logical) input = serializeMihomoCondition(condition).slice(type.length + 1)
++    const values = type === 'RULE-SET' ? [providerName] : normalizeMihomoRuleValues(input, type as MihomoRuleType)
++    if (type === 'RULE-SET' && !options.providers.some((p) => p.name === providerName)) throw new Error('Выберите rule-provider')
++    if (operation === 'rules' && !target) throw new Error('Выберите маршрут')
++    if (operation === 'inline' && (!selectedProvider || selectedProvider.type !== 'inline')) throw new Error('Выберите inline-провайдер')
++    preview = values
++      .map((item) => {
++        if (operation === 'inline' && behavior === 'domain') return type === 'DOMAIN-SUFFIX' ? `.${item.replace(/^\.+/, '')}` : item
++        if (operation === 'inline' && behavior === 'ipcidr') return item
++        return `${type},${item}${operation === 'rules' ? `,${target}` : ''}`
++      })
++      .join('\n')
++  } catch (cause) {
++    error = cause instanceof Error ? cause.message : 'Заполните правило'
+   }
+-
+-  function handleOpenChange(nextOpen: boolean) {
+-    if (!nextOpen) resetForm()
+-    onOpenChange(nextOpen)
++  const destinations = [
++    ['rules', 'В rules'],
++    ...(inlineProviders.length ? [['inline', 'В payload inline-провайдера']] : []),
++    ...(options.hasRootPayload ? [['payload', 'В payload текущего файла']] : []),
++  ]
++  function changeType(next: string) {
++    setType(next)
++    if (['AND', 'OR', 'NOT'].includes(next)) setCondition(emptyCondition(next))
+   }
+-
+-  useEffect(() => {
+-    if (typeOptions.length > 0 && !typeOptions.includes(ruleType)) setRuleType(typeOptions[0])
+-  }, [ruleType, typeOptions])
+-
+   function submit() {
++    if (error) return
+     try {
+       onInsert(
+         addMihomoRule(content, {
+-          operation,
+-          ruleType,
+-          value,
++          operation: operation === 'rules' && type === 'RULE-SET' ? 'rule-set' : operation,
++          ruleType: type as MihomoRuleType,
++          value: input,
+           providerName,
+           target,
+         })
+       )
+-      handleOpenChange(false)
+-    } catch (error) {
+-      const message = error instanceof Error ? error.message : 'Не удалось добавить правило'
+-      showToast(message, 'error')
++      onOpenChange(false)
++    } catch (cause) {
++      showToast(cause instanceof Error ? cause.message : 'Не удалось добавить правило', 'error')
+     }
+   }
+-
+-  const validSelection =
+-    !options.error &&
+-    (operation === 'provider-import'
+-      ? value.trim().length > 0
+-      : operation === 'rules'
+-        ? targetOptions.length > 0 && value.trim().length > 0
+-        : operation === 'inline'
+-          ? inlineProviders.length > 0 && !!selectedProvider && typeOptions.includes(ruleType) && value.trim().length > 0
+-          : operation === 'rule-set'
+-            ? options.providers.length > 0 && !!selectedProvider && targetOptions.length > 0
+-            : options.hasRootPayload && value.trim().length > 0)
+-
+   return (
+-    <Dialog open={open} onOpenChange={handleOpenChange}>
+-      <DialogContent className="w-full max-w-[95vw]! p-0! sm:max-w-130!">
++    <Dialog open={open} onOpenChange={onOpenChange}>
++      <DialogContent className={`w-full max-w-[95vw]! p-0! ${logical ? 'sm:max-w-3xl!' : 'sm:max-w-130!'}`}>
+         <div className="flex max-h-[90dvh] flex-col gap-4 overflow-hidden p-5 sm:p-6">
+           <DialogHeader className="shrink-0">
+             <DialogTitle className="flex items-center gap-2 pr-8">
+               <IconListDetails size={22} className="text-chart-2" />
+-              Добавить правило
++              Конструктор правил
+             </DialogTitle>
+-            <DialogDescription>Правило будет вставлено в конфигурацию. Затем нажмите «Применить».</DialogDescription>
++            <DialogDescription>Изменения добавляются в редактор. Для применения конфигурации нажмите «Применить».</DialogDescription>
+           </DialogHeader>
+-
+           <div className="min-h-0 space-y-4 overflow-y-auto pr-1">
+-            {options.error ? (
+-              <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-3 text-sm">
+-                Не удалось разобрать YAML: {options.error}
++            <div className="grid gap-2">
++              <Label htmlFor="mihomo-rule-operation">Куда добавить</Label>
++              <Select
++                value={operation}
++                items={Object.fromEntries(destinations)}
++                onValueChange={(next) => {
++                  setOperation(next as typeof operation)
++                  changeType('DOMAIN-SUFFIX')
++                  if (next === 'inline') {
++                    const p = inlineProviders[0]
++                    setProviderName(p?.name ?? '')
++                    if (p?.behavior === 'ipcidr') changeType('IP-CIDR')
++                  }
++                }}
++              >
++                <SelectTrigger id="mihomo-rule-operation" className="w-full">
++                  <SelectValue />
++                </SelectTrigger>
++                <SelectContent>
++                  <SelectGroup>
++                    {destinations.map(([key, label]) => (
++                      <SelectItem key={key} value={key}>
++                        {label}
++                      </SelectItem>
++                    ))}
++                  </SelectGroup>
++                </SelectContent>
++              </Select>
++            </div>
++            {operation === 'inline' && (
++              <div className="grid gap-2">
++                <Label htmlFor="mihomo-rule-provider">Rule-provider</Label>
++                <Select
++                  value={providerName}
++                  onValueChange={(name) => {
++                    setProviderName(name)
++                    changeType(options.providers.find((p) => p.name === name)?.behavior === 'ipcidr' ? 'IP-CIDR' : 'DOMAIN-SUFFIX')
++                  }}
++                >
++                  <SelectTrigger id="mihomo-rule-provider" className="w-full">
++                    <SelectValue placeholder="Выберите провайдер">
++                      {providerName ? <ProviderLabel name={providerName} /> : 'Выберите провайдер'}
++                    </SelectValue>
++                  </SelectTrigger>
++                  <SelectContent>
++                    <SelectGroup>
++                      {inlineProviders.map((p) => (
++                        <SelectItem key={p.name} value={p.name}>
++                          <ProviderLabel name={p.name} />
++                        </SelectItem>
++                      ))}
++                    </SelectGroup>
++                  </SelectContent>
++                </Select>
+               </div>
++            )}
++            {logical ? (
++              <ConditionEditor
++                node={condition}
++                providers={options.providers.map((p) => p.name)}
++                onChange={(node) => {
++                  setCondition(node)
++                  setType(node.type)
++                  setValue(node.value ?? '')
++                }}
++              />
+             ) : (
+               <>
+                 <div className="grid gap-2">
+-                  <Label htmlFor="mihomo-rule-operation">Куда добавить</Label>
+-                  <Select
+-                    value={operation}
+-                    items={Object.fromEntries(
+-                      Object.entries(OPERATION_LABELS).filter(([key]) => {
+-                        if (key === 'inline') return inlineProviders.length > 0
+-                        if (key === 'rule-set') return options.providers.length > 0
+-                        if (key === 'payload') return options.hasRootPayload
+-                        return true
+-                      })
+-                    )}
+-                    onValueChange={(next) => {
+-                      setOperation(next as MihomoRuleOperation)
+-                      setRuleType('DOMAIN-SUFFIX')
+-                      if (next === 'inline' && inlineProviders[0]) setProviderName(inlineProviders[0].name)
+-                      else if (next === 'rule-set' && options.providers[0]) setProviderName(options.providers[0].name)
+-                    }}
+-                  >
+-                    <SelectTrigger id="mihomo-rule-operation" className="w-full">
++                  <Label htmlFor="mihomo-rule-type">Тип правила</Label>
++                  <Select value={type} onValueChange={changeType}>
++                    <SelectTrigger id="mihomo-rule-type" className={cn('w-full', mihomoRuleColor(type, '', false))}>
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectGroup>
+-                        {Object.entries(OPERATION_LABELS)
+-                          .filter(([key]) => {
+-                            if (key === 'inline') return inlineProviders.length > 0
+-                            if (key === 'rule-set') return options.providers.length > 0
+-                            if (key === 'payload') return options.hasRootPayload
+-                            return true
+-                          })
+-                          .map(([key, label]) => (
+-                            <SelectItem key={key} value={key}>
+-                              {label}
+-                            </SelectItem>
+-                          ))}
++                        {types.map((t) => (
++                          <SelectItem key={t} value={t} className={mihomoRuleColor(t, '', false)}>
++                            {t}
++                          </SelectItem>
++                        ))}
+                       </SelectGroup>
+                     </SelectContent>
+                   </Select>
+                 </div>
+-
+-                {operation === 'inline' || operation === 'rule-set' ? (
++                {type === 'RULE-SET' ? (
+                   <div className="grid gap-2">
+                     <Label htmlFor="mihomo-rule-provider">Rule-provider</Label>
+-                    <Select
+-                      value={providerName}
+-                      items={Object.fromEntries(providerOptions.map((provider) => [provider.name, provider.name]))}
+-                      onValueChange={(next) => {
+-                        setProviderName(next)
+-                        setRuleType('DOMAIN-SUFFIX')
+-                      }}
+-                    >
++                    <Select value={providerName} onValueChange={setProviderName}>
+                       <SelectTrigger id="mihomo-rule-provider" className="w-full">
+-                        <SelectValue />
++                        <SelectValue placeholder="Выберите провайдер">
++                          {providerName ? <ProviderLabel name={providerName} /> : 'Выберите провайдер'}
++                        </SelectValue>
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectGroup>
+-                          {providerOptions.map((provider) => (
+-                            <SelectItem key={provider.name} value={provider.name}>
+-                              {provider.name}
+-                              {provider.behavior ? ` · ${provider.behavior}` : ''}
++                          {options.providers.map((p) => (
++                            <SelectItem key={p.name} value={p.name}>
++                              <ProviderLabel name={p.name} />
+                             </SelectItem>
+                           ))}
+                         </SelectGroup>
+                       </SelectContent>
+                     </Select>
+-                    {operation === 'inline' && selectedProvider && (
+-                      <p className="text-muted-foreground text-xs">{formatRuleCount(selectedProvider.payloadCount)}</p>
+-                    )}
+                   </div>
+-                ) : null}
+-
+-                {operation === 'provider-import' && (
++                ) : (
+                   <div className="grid gap-2">
+-                    <Label htmlFor="provider-import">Ссылки или готовые записи rule-providers</Label>
+-                    <Textarea
+-                      id="provider-import"
+-                      value={value}
+-                      onChange={(event) => setValue(event.target.value)}
+-                      placeholder="https://…/fastly@ipcidr.mrs"
+-                      className="min-h-32 font-mono text-xs"
+-                    />
+-                  </div>
+-                )}
+-                {operation !== 'rule-set' && operation !== 'provider-import' && (
+-                  <>
+-                    <div className="grid gap-2">
+-                      <Label htmlFor="mihomo-rule-type">Тип правила</Label>
+-                      <Select
+-                        value={ruleType}
+-                        items={Object.fromEntries(typeOptions.map((type) => [type, TYPE_LABELS[type] ?? type]))}
+-                        onValueChange={(next) => setRuleType(next as MihomoRuleType)}
+-                      >
+-                        <SelectTrigger id="mihomo-rule-type" className="w-full">
+-                          <SelectValue />
+-                        </SelectTrigger>
+-                        <SelectContent>
+-                          <SelectGroup>
+-                            {typeOptions.map((type) => (
+-                              <SelectItem key={type} value={type}>
+-                                {TYPE_LABELS[type] ?? type}
+-                              </SelectItem>
+-                            ))}
+-                          </SelectGroup>
+-                        </SelectContent>
+-                      </Select>
+-                    </div>
+-                    <div className="grid gap-2">
+-                      <Label htmlFor="mihomo-rule-value">Значение</Label>
+-                      <Textarea
+-                        ref={valueRef}
+-                        rows={1}
+-                        className="min-h-9! resize-none overflow-y-auto max-md:placeholder:text-sm"
+-                        id="mihomo-rule-value"
+-                        value={value}
+-                        onChange={(event) => setValue(event.target.value)}
+-                        placeholder={ruleType.startsWith('IP-') ? '192.168.1.0/24' : 'google.com'}
+-                        autoComplete="off"
+-                        onKeyDown={(event) => {
+-                          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+-                            event.preventDefault()
+-                            if (validSelection) submit()
+-                          }
+-                        }}
+-                      />
+-                      <p className="text-muted-foreground text-xs">Один домен на строку</p>
+-                    </div>
+-                  </>
+-                )}
+-
+-                {needsTarget && (
+-                  <div className="grid gap-2">
+-                    <Label htmlFor="mihomo-rule-target">Селектор / маршрут</Label>
+-                    <Select value={target} items={Object.fromEntries(targetOptions.map((item) => [item, item]))} onValueChange={setTarget}>
+-                      <SelectTrigger id="mihomo-rule-target" className="w-full">
+-                        <SelectValue placeholder="Выберите селектор">
+-                          {target ? <SelectorLabel name={target} icon={options.groupIcons[target]} /> : 'Выберите селектор'}
+-                        </SelectValue>
+-                      </SelectTrigger>
+-                      <SelectContent>
+-                        <SelectGroup>
+-                          {targetOptions.map((item) => (
+-                            <SelectItem key={item} value={item}>
+-                              <SelectorLabel name={item} icon={options.groupIcons[item]} />
+-                            </SelectItem>
+-                          ))}
+-                        </SelectGroup>
+-                      </SelectContent>
+-                    </Select>
+-                    {options.groups.length === 0 && <p className="text-destructive text-xs">В конфигурации не найдены proxy-groups</p>}
++                    <Label htmlFor="mihomo-rule-value">Значение</Label>
++                    {type === 'NETWORK' ? (
++                      <NetworkSelect id="mihomo-rule-value" value={value} onValueChange={setValue} />
++                    ) : (
++                      <>
++                        <Textarea
++                          id="mihomo-rule-value"
++                          rows={1}
++                          className="max-h-60 min-h-9! resize-y"
++                          value={value}
++                          onChange={(event) => setValue(event.target.value)}
++                          placeholder={type.startsWith('IP-') ? '192.168.1.0/24' : 'google.com'}
++                        />
++                        <p className="text-muted-foreground text-xs">Одно значение на строку</p>{' '}
++                      </>
++                    )}
+                   </div>
+                 )}
+-
+-                {operation === 'payload' && (
+-                  <p className="text-muted-foreground rounded-md border px-3 py-2 text-xs">
+-                    В payload добавляется условие без маршрута. Маршрут задаётся ссылкой RULE-SET в основном разделе rules.
+-                  </p>
+-                )}
+-
+-                <div className="bg-muted/40 overflow-hidden rounded-lg border p-3">
+-                  <p className="text-muted-foreground mb-1 text-xs">Предпросмотр</p>
+-                  <pre className="text-foreground overflow-x-auto text-xs break-all whitespace-pre-wrap">{preview}</pre>
+-                </div>
+               </>
+             )}
++            {operation === 'rules' && (
++              <div className="grid gap-2">
++                <Label htmlFor="mihomo-rule-target">Селектор / маршрут</Label>
++                <Select value={target} items={Object.fromEntries(targets.map((t) => [t, t]))} onValueChange={setTarget}>
++                  <SelectTrigger id="mihomo-rule-target" className="w-full">
++                    <SelectValue placeholder="Выберите селектор">
++                      {target ? <SelectorLabel name={target} icon={options.groupIcons[target]} /> : 'Выберите селектор'}
++                    </SelectValue>
++                  </SelectTrigger>
++                  <SelectContent>
++                    <SelectGroup>
++                      {targets.map((t) => (
++                        <SelectItem key={t} value={t}>
++                          <SelectorLabel name={t} icon={options.groupIcons[t]} />
++                        </SelectItem>
++                      ))}
++                    </SelectGroup>
++                  </SelectContent>
++                </Select>
++              </div>
++            )}
++            <div className="bg-muted/40 rounded-lg border p-3">
++              <p className="text-muted-foreground mb-1 text-xs">Предпросмотр</p>
++              <pre className="overflow-x-auto text-xs break-all whitespace-pre-wrap">{preview || error}</pre>
++            </div>
+           </div>
+-
+           <DialogFooter className="shrink-0">
+-            <Button variant="outline" onClick={() => handleOpenChange(false)}>
++            <Button variant="outline" onClick={() => onOpenChange(false)}>
+               Отмена
+             </Button>
+-            <Button onClick={submit} disabled={!validSelection}>
++            <Button disabled={!!error} onClick={submit}>
+               Добавить правило
+             </Button>
+           </DialogFooter>
+@@ -375,4 +292,3 @@ export function AddMihomoRuleDialog({ open, content, onOpenChange, onInsert, sho
+     </Dialog>
+   )
+ }
+-
+diff --git a/frontend/src/lib/mihomo-rule-color.ts b/frontend/src/lib/mihomo-rule-color.ts
+new file mode 100644
+index 0000000..8175712
+--- /dev/null
++++ b/frontend/src/lib/mihomo-rule-color.ts
+@@ -0,0 +1,23 @@
++const tones = {
++  red: ['text-red-600 dark:text-red-400', 'bg-red-400/10 dark:bg-red-400/15 border-red-400/25'],
++  blue: ['text-blue-600 dark:text-blue-400', 'bg-blue-400/10 dark:bg-blue-400/15 border-blue-400/25'],
++  purple: ['text-purple-600 dark:text-purple-400', 'bg-purple-400/10 dark:bg-purple-400/15 border-purple-400/25'],
++  yellow: ['text-amber-700 dark:text-yellow-400', 'bg-yellow-400/10 dark:bg-yellow-400/15 border-yellow-400/25'],
++  green: ['text-green-700 dark:text-green-400', 'bg-green-400/10 dark:bg-green-400/15 border-green-400/25'],
++  teal: ['text-teal-700 dark:text-teal-400', 'bg-teal-400/10 dark:bg-teal-400/15 border-teal-400/25'],
++  neutral: ['text-muted-foreground', 'bg-muted/30 border-border'],
++} as const
++
++/** Same condition categories as Xray GuiRouting, with readable light-theme text. */
++export function mihomoRuleColor(type: string, matcher = '', background = true): string {
++  const field = type.toUpperCase()
++  let tone: keyof typeof tones = 'teal'
++  if (field === 'MATCH') tone = 'neutral'
++  else if (['AND', 'OR', 'NOT'].includes(field)) tone = 'purple'
++  else if (field.includes('DOMAIN') || field === 'GEOSITE' || (field === 'RULE-SET' && /@domain$/i.test(matcher))) tone = 'red'
++  else if (field.startsWith('SRC-IP') || field === 'SRC-GEOIP' || field.startsWith('PROCESS') || field === 'UID') tone = 'purple'
++  else if (field.includes('IP') || field === 'NETWORK' || (field === 'RULE-SET' && /@ipcidr$/i.test(matcher))) tone = 'blue'
++  else if (field.includes('PORT') || field === 'DSCP') tone = 'yellow'
++  else if (field.startsWith('IN-')) tone = 'green'
++  return background ? tones[tone].join(' ') : tones[tone][0]
++}
+diff --git a/frontend/src/lib/mihomo-rules.ts b/frontend/src/lib/mihomo-rules.ts
+index 12ceb96..b97251f 100644
+--- a/frontend/src/lib/mihomo-rules.ts
++++ b/frontend/src/lib/mihomo-rules.ts
+@@ -1,11 +1,11 @@
+ import { Alias, isAlias, isMap, isScalar, isSeq, parseDocument, visit, type Document, type YAMLMap, type YAMLSeq } from 'yaml'
+ 
+ export const MIHOMO_RULE_TYPES = [
+-  'DOMAIN',
+   'DOMAIN-SUFFIX',
+   'DOMAIN-KEYWORD',
+   'DOMAIN-REGEX',
+   'DOMAIN-WILDCARD',
++  'DOMAIN',
+   'GEOSITE',
+   'IP-CIDR',
+   'IP-CIDR6',
+@@ -31,7 +31,7 @@ export const MIHOMO_RULE_TYPES = [
+   'DSCP',
+ ] as const
+ 
+-export type MihomoRuleType = (typeof MIHOMO_RULE_TYPES)[number]
++export type MihomoRuleType = (typeof MIHOMO_RULE_TYPES)[number] | 'AND' | 'OR' | 'NOT'
+ export type MihomoRuleOperation = 'rules' | 'inline' | 'rule-set' | 'payload' | 'provider-import'
+ 
+ export interface MihomoRuleProviderOption {
+@@ -58,6 +58,8 @@ export interface AddMihomoRuleRequest {
+   value?: string
+   providerName?: string
+   target?: string
++  groupName?: string
++  insertionIndex?: number
+ }
+ 
+ function getString(node: unknown): string | undefined {
+@@ -65,8 +67,9 @@ function getString(node: unknown): string | undefined {
+   return String(node.value)
+ }
+ 
+-function getCount(node: unknown): number {
+-  return isSeq(node) ? node.items.length : 0
++function getCount(node: unknown, doc?: Document): number {
++  const resolved = doc && isAlias(node) ? node.resolve(doc) : node
++  return isSeq(resolved) ? resolved.items.length : 0
+ }
+ 
+ function inheritedValue(doc: Document, map: YAMLMap, key: string, seen = new Set<YAMLMap>()): unknown {
+@@ -126,16 +129,18 @@ export function inspectMihomoRuleConfig(content: string): MihomoRuleConfigOption
+     : []
+ 
+   const providersNode = root.get('rule-providers', true)
+-  const providers = isMap(providersNode)
+-    ? providersNode.items.flatMap(({ key, value }) => {
++  const resolvedProviders = isAlias(providersNode) ? providersNode.resolve(doc) : providersNode
++  const providers = isMap(resolvedProviders)
++    ? resolvedProviders.items.flatMap(({ key, value }) => {
+         const name = getString(key)
+-        if (!name || !isMap(value)) return []
++        const provider = isAlias(value) ? value.resolve(doc) : value
++        if (!name || !isMap(provider)) return []
+         return [
+           {
+             name,
+-            type: getString(inheritedValue(doc, value, 'type')) ?? '',
+-            behavior: getString(inheritedValue(doc, value, 'behavior')) ?? 'classical',
+-            payloadCount: getCount(value.get('payload', true)),
++            type: getString(inheritedValue(doc, provider, 'type')) ?? '',
++            behavior: getString(inheritedValue(doc, provider, 'behavior')) ?? 'classical',
++            payloadCount: getCount(inheritedValue(doc, provider, 'payload'), doc),
+           },
+         ]
+       })
+@@ -149,8 +154,9 @@ export function inspectMihomoRuleConfig(content: string): MihomoRuleConfigOption
+     providers,
+     hasRules: isSeq(rulesNode),
+     rulesCount: getCount(rulesNode),
+-    hasRootPayload: isSeq(payloadNode),
+-    rootPayloadCount: getCount(payloadNode),
++    hasRootPayload:
++      root.has('payload') && (isSeq(payloadNode) || isAlias(payloadNode) || (isScalar(payloadNode) && payloadNode.value == null)),
++    rootPayloadCount: getCount(payloadNode, doc),
+   }
+ }
+ 
+@@ -175,17 +181,508 @@ function prependUnique(doc: Document, seq: YAMLSeq, value: string): boolean {
+   return true
+ }
+ 
+-function insertRoutingRule(doc: Document, seq: YAMLSeq, value: string): void {
++export function getMihomoRuleInsertionIndex(rules: string[], _target = ''): number {
++  const rejectIndexes = rules.flatMap((raw, index) =>
++    /^REJECT(?:-DROP)?$/i.test(describeMihomoRoutingRule(raw).target) ? [index] : []
++  )
++  return rejectIndexes.length ? rejectIndexes[rejectIndexes.length - 1] : 0
++}
++
++function insertRoutingRule(doc: Document, seq: YAMLSeq, value: string, groupName?: string): void {
+   if (seq.items.some((item) => getString(item) === value)) return
+-  const index = seq.items.findIndex((item) => {
+-    const fields = getString(item)
+-      ?.split(',')
+-      .map((field) => field.trim())
+-    return fields?.[0]?.toUpperCase() === 'RULE-SET'
+-      && /^quic(?:@[^,]+)?$/i.test(fields[1] ?? '')
+-      && /^REJECT(?:-DROP)?$/i.test(fields[2] ?? '')
++  const node = doc.createNode(value)
++  if (groupName) node.comment = ` xkeen-ui-group: ${groupName.replace(/[\r\n]/g, ' ').trim()}`
++  seq.items.splice(getMihomoRuleInsertionIndex(seq.items.map((item) => getString(item) ?? ''), describeMihomoRoutingRule(value).target), 0, node)
++}
++
++export interface MihomoRoutingRule {
++  raw: string
++  type: string
++  matcher: string
++  target: string
++}
++
++export interface MihomoPayloadGroup {
++  name: string
++  rules: string[]
++  behavior?: string
++}
++
++export interface MihomoRuleCondition {
++  field: string
++  value: string
++}
++
++export interface MihomoConditionNode {
++  type: string
++  value?: string
++  children?: MihomoConditionNode[]
++  options?: string[]
++}
++
++export function parseMihomoCondition(raw: string): MihomoConditionNode {
++  const fields = splitRuleFields(raw)
++  const type = fields[0].toUpperCase()
++  if (['AND', 'OR', 'NOT'].includes(type)) {
++    const body = fields[1] ?? ''
++    if (!body.startsWith('(') || !body.endsWith(')')) throw new Error('Некорректные скобки условия')
++    const children = splitRuleFields(body.slice(1, -1)).map((part) => {
++      if (!part.startsWith('(') || !part.endsWith(')')) throw new Error('Некорректные скобки условия')
++      return parseMihomoCondition(part.slice(1, -1))
++    })
++    const node = { type, children, options: fields.slice(2) }
++    serializeMihomoCondition(node)
++    return node
++  }
++  const node = { type, value: fields[1] ?? '', options: fields.slice(2) }
++  serializeMihomoCondition(node)
++  return node
++}
++
++export function serializeMihomoCondition(node: MihomoConditionNode): string {
++  const type = node.type.toUpperCase()
++  const flags = node.options ?? []
++  if (flags.some((flag) => !['no-resolve', 'src'].includes(flag))) throw new Error('Неизвестные параметры условия')
++  if (['AND', 'OR', 'NOT'].includes(type)) {
++    const children = node.children ?? []
++    if (!children.length || (type === 'NOT' && children.length !== 1)) throw new Error('NOT требует одно условие; AND/OR — хотя бы одно')
++    return [type, `(${children.map((child) => `(${serializeMihomoCondition(child)})`).join(',')})`, ...flags].join(',')
++  }
++  if (![...MIHOMO_RULE_TYPES, 'RULE-SET'].includes(type as MihomoRuleType)) throw new Error('Неподдерживаемый тип условия')
++  const value = node.value?.trim() ?? ''
++  if (!value || /[\r\n,]/.test(value)) throw new Error('Введите значение условия в одну строку без запятых')
++  return [type, value, ...flags].join(',')
++}
++
++export function summarizeMihomoCondition(raw: string): string {
++  const format = (node: MihomoConditionNode): string => {
++    if (node.type === 'NOT') return `NOT (${format(node.children![0])})`
++    if (node.type === 'AND' || node.type === 'OR') {
++      return node
++        .children!.map((child) => {
++          const text = format(child)
++          return child.type === 'AND' || child.type === 'OR' ? `(${text})` : text
++        })
++        .join(node.type === 'AND' ? ' И ' : ' / ')
++    }
++    return `${node.type}: ${node.value}${node.options?.length ? ` [${node.options.join(', ')}]` : ''}`
++  }
++  const node = parseMihomoCondition(raw)
++  return node.type === 'NOT' ? format(node.children![0]) : format(node)
++}
++
++export function insertMihomoRoutingRuleAt(content: string, index: number, raw: string): string {
++  const doc = parseDocument(content)
++  if (doc.errors.length) throw new Error(doc.errors[0].message)
++  const rules = asSequence(doc, ensureRootMap(doc), 'rules')
++  if (!Number.isInteger(index) || index < 0 || index > rules.items.length) throw new Error('Некорректная позиция правила')
++  rules.items.splice(index, 0, doc.createNode(raw))
++  return doc.toString({ lineWidth: 0 })
++}
++
++export function completeMihomoRoutingDraft(raw: string): string {
++  const rule = describeMihomoRoutingRule(raw)
++  if (!rule.matcher || !rule.target) throw new Error('Заполните значение и маршрут')
++  ensureTarget(rule.target)
++  if (['AND', 'OR', 'NOT'].includes(rule.type)) {
++    return [serializeMihomoCondition(parseMihomoCondition(`${rule.type},${rule.matcher}`)), rule.target, ...getMihomoRuleOptions(raw)].join(
++      ','
++    )
++  }
++  return editMihomoRuleMatcher(raw, rule.type, rule.matcher)
++}
++
++function splitRuleFields(rule: string): string[] {
++  const fields: string[] = []
++  let start = 0
++  let depth = 0
++  let quote = ''
++  let escaped = false
++  for (let index = 0; index < rule.length; index++) {
++    const char = rule[index]
++    if (quote) {
++      if (escaped) escaped = false
++      else if (char === '\\') escaped = true
++      else if (char === quote) quote = ''
++      continue
++    }
++    if (char === '"' || char === "'") {
++      quote = char
++    } else if (char === '(' || char === '[' || char === '{') {
++      depth++
++    } else if (char === ')' || char === ']' || char === '}') {
++      depth = Math.max(0, depth - 1)
++    } else if (char === ',' && depth === 0) {
++      fields.push(rule.slice(start, index).trim())
++      start = index + 1
++    }
++  }
++  fields.push(rule.slice(start).trim())
++  return fields
++}
++
++function getRuleTargetIndex(fields: string[]): number {
++  const type = (fields[0] ?? '').toUpperCase()
++  if (type === 'MATCH') return 1
++  if (type === 'RULE-SET') return 2
++  let index = fields.length - 1
++  // A destination is required before flags. Do not confuse a proxy named
++  // "src" or "no-resolve" with an option when it occupies that position.
++  while (index > 2 && ['no-resolve', 'src'].includes(fields[index].toLowerCase())) {
++    index--
++  }
++  return index
++}
++
++export function getMihomoRuleOptions(rule: string, payload = false): string[] {
++  const fields = splitRuleFields(rule)
++  if (payload) return fields.slice(2).every((field) => ['no-resolve', 'src'].includes(field.toLowerCase())) ? fields.slice(2) : []
++  return fields.slice(getRuleTargetIndex(fields) + 1)
++}
++
++export function setMihomoRuleOptions(rule: string, options: string[]): string {
++  if (options.some((option) => !['no-resolve', 'src'].includes(option))) throw new Error('Неизвестный параметр правила')
++  const fields = splitRuleFields(rule)
++  const targetIndex = getRuleTargetIndex(fields)
++  if (targetIndex < 2 || !fields[targetIndex]) throw new Error('Не удалось определить маршрут правила')
++  return [...fields.slice(0, targetIndex + 1), ...new Set(options)].join(',')
++}
++
++/** Edits a single condition without changing its destination or trailing options. */
++export function editMihomoRuleMatcher(rule: string, type: string, matcher: string, payload = false, behavior = 'classical'): string {
++  const value = matcher.trim()
++  if (!value || /[\r\n]/.test(value)) throw new Error('Введите непустое значение в одну строку')
++  if (!/^[A-Z][A-Z0-9-]*$/.test(type)) throw new Error('Некорректный тип правила')
++  if (!['AND', 'OR', 'NOT', 'SUB-RULE'].includes(type) && value.includes(',')) throw new Error('Значение не должно содержать запятых')
++  if (payload && behavior === 'domain') {
++    if (type === 'DOMAIN-SUFFIX') {
++      if (/^\+?\./.test(value)) return value
++      return `${rule.startsWith('.') ? '.' : '+.'}${value}`
++    }
++    return value.replace(/^\+?\./, '')
++  }
++  if (payload && behavior === 'ipcidr') return value
++  if (payload) return [type, value, ...getMihomoRuleOptions(rule, true)].join(',')
++  const original = describeMihomoRoutingRule(rule)
++  if (!original.target) throw new Error('Не удалось определить маршрут правила')
++  return [type, value, original.target, ...getMihomoRuleOptions(rule)].join(',')
++}
++
++export function describeMihomoRoutingRule(rule: string): MihomoRoutingRule {
++  const fields = splitRuleFields(rule)
++  const type = fields[0] || 'RULE'
++  const normalizedType = type.toUpperCase()
++  const isComposite = ['AND', 'OR', 'NOT'].includes(normalizedType)
++  const targetIndex = getRuleTargetIndex(fields)
++  const matcher =
++    isComposite || normalizedType === 'RULE-SET'
++      ? fields.slice(1, targetIndex).join(', ')
++      : fields.slice(1, Math.max(1, targetIndex)).join(', ')
++  const target = fields[targetIndex] ?? ''
++  return { raw: rule, type, matcher, target }
++}
++
++export function groupMihomoRoutingRules(
++  rules: string[],
++  comments: string[] = []
++): { key: string; label: string; target: string; indices: number[]; subrule: boolean }[] {
++  const groups = new Map<string, { key: string; label: string; target: string; indices: number[]; subrule: boolean }>()
++  rules.forEach((raw, index) => {
++    const rule = describeMihomoRoutingRule(raw)
++    const type = rule.type.toUpperCase()
++    const subrule = type === 'SUB-RULE'
++    const name = comments[index]
++      ?.split('\n')
++      .find((line) => line.trim().startsWith('xkeen-ui-group:'))
++      ?.trim()
++      .slice('xkeen-ui-group:'.length)
++      .trim()
++    const key =
++      type === 'MATCH' ? `MATCH:${index}` : subrule ? `SUB-RULE:${rule.target}` : `group:${name || rule.target}:route:${rule.target}`
++    const group = groups.get(key)
++    if (group) group.indices.push(index)
++    else
++      groups.set(key, {
++        key,
++        label: type === 'MATCH' ? 'Остальной трафик · MATCH' : name || rule.target || rule.type,
++        target: rule.target,
++        indices: [index],
++        subrule,
++      })
++  })
++  return [...groups.values()]
++}
++
++/** Move only the selected block; all other rules retain their relative priority. */
++export function moveMihomoRuleGroup(count: number, indices: number[], beforeIndex: number): number[] {
++  const selected = new Set(indices)
++  if (
++    !indices.length ||
++    selected.size !== indices.length ||
++    indices.some((index) => !Number.isInteger(index) || index < 0 || index >= count) ||
++    !Number.isInteger(beforeIndex) ||
++    beforeIndex < 0 ||
++    beforeIndex > count ||
++    selected.has(beforeIndex)
++  )
++    throw new Error('Некорректная позиция перемещения блока')
++  const order = Array.from({ length: count }, (_, index) => index).filter((index) => !selected.has(index))
++  const position = beforeIndex === count ? order.length : order.indexOf(beforeIndex)
++  order.splice(position, 0, ...[...indices].sort((a, b) => a - b))
++  return order
++}
++
++function stripOuterParentheses(value: string): string {
++  let result = value.trim()
++  while (result.startsWith('(') && result.endsWith(')')) {
++    let depth = 0
++    let quote = ''
++    let escaped = false
++    let closesAtEnd = false
++    for (let index = 0; index < result.length; index++) {
++      const char = result[index]
++      if (quote) {
++        if (escaped) escaped = false
++        else if (char === '\\') escaped = true
++        else if (char === quote) quote = ''
++        continue
++      }
++      if (char === '"' || char === "'") quote = char
++      else if (char === '(') depth++
++      else if (char === ')' && --depth === 0) {
++        closesAtEnd = index === result.length - 1
++        break
++      }
++    }
++    if (!closesAtEnd) break
++    result = result.slice(1, -1).trim()
++  }
++  return result
++}
++
++function collectMihomoRuleConditions(expression: string, depth = 0): MihomoRuleCondition[] {
++  if (depth > 8) return []
++  const normalized = stripOuterParentheses(expression)
++  const fields = splitRuleFields(normalized)
++  if (fields.length === 2 && /^[a-z0-9_-]+$/i.test(fields[0]) && fields[1]) {
++    return [{ field: fields[0], value: fields[1] }]
++  }
++  return fields.flatMap((field) => collectMihomoRuleConditions(field, depth + 1))
++}
++
++export function getMihomoRuleConditions(rule: string, payload = false): MihomoRuleCondition[] {
++  const fields = splitRuleFields(rule)
++  if (!['AND', 'OR', 'NOT'].includes((fields[0] ?? '').toUpperCase())) return []
++  return collectMihomoRuleConditions(fields.slice(1, payload ? undefined : getRuleTargetIndex(fields)).join(','))
++}
++
++function parseMihomoRulesDocument(content: string): { doc: Document; rules: YAMLSeq } {
++  const doc = parseDocument(content)
++  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
++  const root = ensureRootMap(doc)
++  const node = root.get('rules', true)
++  const rules = isAlias(node) ? node.resolve(doc) : node
++  if (!isSeq(rules)) throw new Error('Раздел «rules» должен быть списком YAML')
++  return { doc, rules }
++}
++
++export function getMihomoRoutingRules(content: string): string[] {
++  const doc = parseDocument(content)
++  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
++  const root = ensureRootMap(doc)
++  const node = root.get('rules', true)
++  if (node === undefined) return []
++  const rules = isAlias(node) ? node.resolve(doc) : node
++  if (isScalar(rules) && rules.value == null) return []
++  if (!isSeq(rules)) throw new Error('Раздел «rules» должен быть списком YAML')
++  return rules.items.map((item) => {
++    if (!isScalar(item) || item.value == null) throw new Error('Правила в разделе «rules» должны быть строками')
++    return String(item.value)
++  })
++}
++
++export function getMihomoRoutingRuleComments(content: string): string[] {
++  const doc = parseDocument(content)
++  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
++  const root = ensureRootMap(doc)
++  const node = root.get('rules', true)
++  const rules = isAlias(node) ? node.resolve(doc) : node
++  if (rules === undefined || (isScalar(rules) && rules.value == null)) return []
++  if (!isSeq(rules)) throw new Error('Раздел «rules» должен быть списком YAML')
++  return rules.items.map((item) => (isScalar(item) ? [item.commentBefore, item.comment].filter(Boolean).join('\n').trim() : ''))
++}
++
++export function getMihomoPayloadGroups(content: string): MihomoPayloadGroup[] {
++  const doc = parseDocument(content)
++  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
++  const root = ensureRootMap(doc)
++  const groups: MihomoPayloadGroup[] = []
++  const getPayloadRules = (node: unknown, source: string, includeEmpty = false): MihomoPayloadGroup | undefined => {
++    const resolved = isAlias(node) ? node.resolve(doc) : node
++    if (resolved === undefined || (isScalar(resolved) && resolved.value == null))
++      return includeEmpty ? { name: source, rules: [] } : undefined
++    if (!isSeq(resolved)) throw new Error(`Payload в «${source}» должен быть списком YAML`)
++    const rules = resolved.items.map((item) => {
++      if (!isScalar(item) || item.value == null) throw new Error(`Элементы payload в «${source}» должны быть строками`)
++      return String(item.value)
++    })
++    return { name: source, rules }
++  }
++
++  const rootPayload = getPayloadRules(root.get('payload', true), 'payload', root.has('payload'))
++  if (rootPayload) groups.push(rootPayload)
++
++  const providersNode = root.get('rule-providers', true)
++  const providers = isAlias(providersNode) ? providersNode.resolve(doc) : providersNode
++  if (isMap(providers)) {
++    for (const { key, value } of providers.items) {
++      const name = getString(key)
++      const provider = isAlias(value) ? value.resolve(doc) : value
++      if (!name || !isMap(provider)) continue
++      const payload = inheritedValue(doc, provider, 'payload')
++      const inline = getString(inheritedValue(doc, provider, 'type')) === 'inline'
++      if (payload === undefined && !inline) continue
++      const group = getPayloadRules(payload, name, inline)
++      if (group) groups.push({ ...group, behavior: getString(inheritedValue(doc, provider, 'behavior')) ?? 'classical' })
++    }
++  }
++  return groups
++}
++
++export function describeMihomoPayloadRule(rule: string, behavior = 'classical'): MihomoRoutingRule {
++  if (behavior === 'domain')
++    return { raw: rule, type: rule.startsWith('.') || rule.startsWith('+.') ? 'DOMAIN-SUFFIX' : 'DOMAIN', matcher: rule, target: '' }
++  if (behavior === 'ipcidr') return { raw: rule, type: rule.includes(':') ? 'IP-CIDR6' : 'IP-CIDR', matcher: rule, target: '' }
++  const fields = splitRuleFields(rule)
++  const options = getMihomoRuleOptions(rule, true)
++  return { raw: rule, type: fields[0] || 'PAYLOAD', matcher: fields.slice(1, fields.length - options.length).join(', '), target: '' }
++}
++
++export function reorderMihomoRoutingRules(content: string, order: number[]): string {
++  const { doc, rules } = parseMihomoRulesDocument(content)
++  if (order.length !== rules.items.length) throw new Error('Не удалось переставить правила: изменился их список')
++  if (order.some((index) => !Number.isInteger(index) || index < 0 || index >= rules.items.length) || new Set(order).size !== order.length) {
++    throw new Error('Не удалось переставить правила: некорректный порядок')
++  }
++  if (order.every((index, position) => index === position)) return content
++  const originalItems = [...rules.items]
++  rules.items.splice(0, rules.items.length, ...order.map((index) => originalItems[index]))
++  return doc.toString({ lineWidth: 0 })
++}
++
++export function updateMihomoRoutingRule(content: string, index: number, value: string): string {
++  const { doc, rules } = parseMihomoRulesDocument(content)
++  const current = rules.items[index]
++  if (!current || !isScalar(current)) throw new Error('Не найдено правило для изменения')
++  current.value = value
++  return doc.toString({ lineWidth: 0 })
++}
++
++export function updateMihomoRoutingRuleTargets(content: string, indices: number[], target: string, groupName?: string): string {
++  const normalizedTarget = ensureTarget(target)
++  const { doc, rules } = parseMihomoRulesDocument(content)
++  const uniqueIndices = [...new Set(indices)]
++  if (!uniqueIndices.length || uniqueIndices.some((index) => !Number.isInteger(index) || index < 0 || index >= rules.items.length)) {
++    throw new Error('Не найдены правила для изменения маршрута')
++  }
++  for (const index of uniqueIndices) {
++    const item = rules.items[index]
++    if (!isScalar(item) || item.value == null) throw new Error('Правило должно быть строкой YAML')
++    const fields = splitRuleFields(String(item.value))
++    if (fields[0]?.toUpperCase() === 'SUB-RULE') throw new Error('SUB-RULE ссылается на подправило, а не на маршрут прокси')
++    const targetIndex = getRuleTargetIndex(fields)
++    if (targetIndex <= 0 || targetIndex >= fields.length) throw new Error('Не удалось определить маршрут правила')
++    fields[targetIndex] = normalizedTarget
++    item.value = fields.join(',')
++    if (groupName && fields[0]?.toUpperCase() !== 'MATCH') {
++      const otherComments = item.comment ? item.comment.split('\n').filter((line) => !line.trim().startsWith('xkeen-ui-group:')) : []
++      item.comment = [...otherComments, ` xkeen-ui-group: ${groupName.replace(/[\r\n]/g, ' ').trim()}`].join('\n')
++    }
++  }
++  return doc.toString({ lineWidth: 0 })
++}
++
++export function getMihomoRoutingTargets(content: string): string[] {
++  const options = inspectMihomoRuleConfig(content)
++  return [...new Set(['DIRECT', 'REJECT', ...options.groups])].filter((target) => target !== 'REJECT-DROP')
++}
++
++export function deleteMihomoRoutingRule(content: string, index: number): string {
++  const { doc, rules } = parseMihomoRulesDocument(content)
++  if (index < 0 || index >= rules.items.length) throw new Error('Не найдено правило для удаления')
++  rules.items.splice(index, 1)
++  return doc.toString({ lineWidth: 0 })
++}
++
++function clonePayloadOwner<T extends YAMLMap | YAMLSeq>(doc: Document, node: T): T {
++  const copy = node.clone(doc.schema) as T
++  // The original alias target stays in the document. Copies must not shadow
++  // its anchors; existing alias references continue to refer to that source.
++  visit(copy, {
++    Node(_, child) {
++      if (isMap(child) || isSeq(child) || isScalar(child)) child.anchor = undefined
++    },
+   })
+-  seq.items.splice(index >= 0 ? index + 1 : 0, 0, doc.createNode(value))
++  return copy
++}
++
++function parseMihomoPayloadSequence(doc: Document, name: string, createEmpty = false): YAMLSeq {
++  const root = ensureRootMap(doc)
++  let owner = root
++  if (name !== 'payload') {
++    const providerNode = root.get('rule-providers', true)
++    const providersValue = isAlias(providerNode) ? providerNode.resolve(doc) : providerNode
++    if (!isMap(providersValue)) throw new Error('В конфигурации нет раздела rule-providers')
++    let providers: YAMLMap = providersValue
++    if (isAlias(providerNode)) {
++      providers = clonePayloadOwner(doc, providers)
++      providers.anchor = undefined
++      root.set('rule-providers', providers)
++    }
++    const rawProvider = providers.get(name, true)
++    const providerValue = isAlias(rawProvider) ? rawProvider.resolve(doc) : rawProvider
++    if (!isMap(providerValue)) throw new Error(`Не найден rule-provider «${name}»`)
++    let provider: YAMLMap = providerValue
++    if (isAlias(rawProvider)) {
++      provider = clonePayloadOwner(doc, provider)
++      provider.anchor = undefined
++      providers.set(name, provider)
++    }
++    owner = provider
++  }
++  const ownPayload: unknown = owner.get('payload', true)
++  const payload = inheritedValue(doc, owner, 'payload')
++  const resolved = isAlias(payload) ? payload.resolve(doc) : payload
++  if (createEmpty && (resolved === undefined || (isScalar(resolved) && resolved.value == null))) return asSequence(doc, owner, 'payload')
++  if (!isSeq(resolved)) throw new Error(`Payload в «${name}» должен быть списком YAML`)
++  if (ownPayload !== resolved || isAlias(payload)) {
++    const copy = clonePayloadOwner(doc, resolved)
++    copy.anchor = undefined
++    owner.set('payload', copy)
++    return copy
++  }
++  return resolved
++}
++
++export function updateMihomoPayloadRule(content: string, name: string, index: number, value: string): string {
++  const doc = parseDocument(content)
++  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
++  const rules = parseMihomoPayloadSequence(doc, name)
++  const current = rules.items[index]
++  if (!current || !isScalar(current)) throw new Error('Не найдено правило payload для изменения')
++  const normalized = value.trim()
++  if (!normalized || /[\r\n]/.test(normalized)) throw new Error('Правило payload должно занимать одну непустую строку')
++  current.value = normalized
++  return doc.toString({ lineWidth: 0 })
++}
++
++export function deleteMihomoPayloadRule(content: string, name: string, index: number): string {
++  const doc = parseDocument(content)
++  if (doc.errors.length > 0) throw new Error(`Не удалось разобрать YAML: ${doc.errors[0].message}`)
++  const rules = parseMihomoPayloadSequence(doc, name)
++  if (index < 0 || index >= rules.items.length) throw new Error('Не найдено правило payload для удаления')
++  rules.items.splice(index, 1)
++  return doc.toString({ lineWidth: 0 })
+ }
+ 
+ function normalizeValue(value: string): string {
+@@ -204,6 +701,8 @@ export function normalizeMihomoRuleValues(value: string, ruleType: MihomoRuleTyp
+   return [
+     ...new Set(
+       lines.map((line) => {
++        if (['AND', 'OR', 'NOT'].includes(ruleType))
++          return serializeMihomoCondition(parseMihomoCondition(`${ruleType},${line}`)).slice(ruleType.length + 1)
+         let input = normalizeValue(line)
+         if (ruleType === 'DOMAIN' || ruleType === 'DOMAIN-SUFFIX') {
+           try {
+@@ -297,9 +796,7 @@ function ensureRootMap(doc: Document): YAMLMap {
+ }
+ 
+ function insertProviderBeforeInline(doc: Document, providers: YAMLMap, name: string, node: unknown): void {
+-  const inlineIndex = providers.items.findIndex(({ value }) =>
+-    isMap(value) && getString(inheritedValue(doc, value, 'type')) === 'inline'
+-  )
++  const inlineIndex = providers.items.findIndex(({ value }) => isMap(value) && getString(inheritedValue(doc, value, 'type')) === 'inline')
+   if (inlineIndex < 0) {
+     providers.set(name, node)
+     return
+@@ -307,10 +804,10 @@ function insertProviderBeforeInline(doc: Document, providers: YAMLMap, name: str
+   providers.items.splice(inlineIndex, 0, doc.createPair(name, node))
+ }
+ 
+-function ensureRuleReference(doc: Document, providerName: string, target: string): void {
++function ensureRuleReference(doc: Document, providerName: string, target: string, groupName?: string): void {
+   const root = ensureRootMap(doc)
+   const rules = asSequence(doc, root, 'rules')
+-  insertRoutingRule(doc, rules, `RULE-SET,${providerName},${target}`)
++  insertRoutingRule(doc, rules, `RULE-SET,${providerName},${target}`, groupName)
+ }
+ 
+ export function addMihomoRule(content: string, request: AddMihomoRuleRequest): string {
+@@ -363,11 +860,18 @@ export function addMihomoRule(content: string, request: AddMihomoRuleRequest): s
+   if (request.operation === 'rule-set') {
+     const providerName = request.providerName?.trim()
+     if (!providerName) throw new Error('Выберите rule-provider')
+-    const providers = root.get('rule-providers', true)
+-    const provider = isMap(providers) ? providers.get(providerName, true) : undefined
++    const rawProviders = root.get('rule-providers', true)
++    const providers = isAlias(rawProviders) ? rawProviders.resolve(doc) : rawProviders
++    const rawProvider = isMap(providers) ? providers.get(providerName, true) : undefined
++    const provider = isAlias(rawProvider) ? rawProvider.resolve(doc) : rawProvider
+     if (!isMap(provider)) throw new Error(`Не найден rule-provider «${providerName}»`)
+     const target = ensureTarget(request.target ?? '')
+-    ensureRuleReference(doc, providerName, target)
++    if (request.insertionIndex === undefined) ensureRuleReference(doc, providerName, target, request.groupName)
++    else {
++      const rules = asSequence(doc, root, 'rules')
++      if (request.insertionIndex < 0 || request.insertionIndex > rules.items.length) throw new Error('Некорректная позиция правила')
++      rules.items.splice(request.insertionIndex, 0, doc.createNode(`RULE-SET,${providerName},${target}`))
++    }
+     return doc.toString({ lineWidth: 0 })
+   }
+ 
+@@ -378,26 +882,35 @@ export function addMihomoRule(content: string, request: AddMihomoRuleRequest): s
+   if (request.operation === 'rules') {
+     const target = ensureTarget(request.target ?? '')
+     const rules = asSequence(doc, root, 'rules')
+-    for (const input of [...inputs].reverse()) insertRoutingRule(doc, rules, `${ruleType},${input},${target}`)
++    const index = request.insertionIndex ?? getMihomoRuleInsertionIndex(rules.items.map((item) => getString(item) ?? ''), target)
++    if (!Number.isInteger(index) || index < 0 || index > rules.items.length) throw new Error('Некорректная позиция правила')
++    const nodes = inputs.map((input) => {
++      const node = doc.createNode(`${ruleType},${input},${target}`)
++      if (request.groupName) node.comment = ` xkeen-ui-group: ${request.groupName.replace(/[\r\n]/g, ' ').trim()}`
++      return node
++    })
++    rules.items.splice(index, 0, ...nodes)
+     return doc.toString({ lineWidth: 0 })
+   }
+ 
+   if (request.operation === 'payload') {
+-    const payload = asSequence(doc, root, 'payload')
++    const payload = parseMihomoPayloadSequence(doc, 'payload', true)
+     for (const input of [...inputs].reverse()) prependUnique(doc, payload, buildProviderPayloadRule('classical', ruleType, input))
+     return doc.toString({ lineWidth: 0 })
+   }
+ 
+   const providerName = request.providerName?.trim()
+   if (!providerName) throw new Error('Выберите inline rule-provider')
+-  const providerMap = root.get('rule-providers', true)
++  const rawProviderMap = root.get('rule-providers', true)
++  const providerMap = isAlias(rawProviderMap) ? rawProviderMap.resolve(doc) : rawProviderMap
+   if (!isMap(providerMap)) throw new Error('В конфигурации нет раздела rule-providers')
+-  const providerNode = providerMap.get(providerName, true)
++  const rawProviderNode = providerMap.get(providerName, true)
++  const providerNode = isAlias(rawProviderNode) ? rawProviderNode.resolve(doc) : rawProviderNode
+   if (!isMap(providerNode)) throw new Error(`Не найден rule-provider «${providerName}»`)
+   const providerType = getString(inheritedValue(doc, providerNode, 'type'))
+   if (providerType !== 'inline') throw new Error(`Provider «${providerName}» не является inline`)
+   const behavior = getString(inheritedValue(doc, providerNode, 'behavior')) ?? 'classical'
+-  const payload = asSequence(doc, providerNode, 'payload')
++  const payload = parseMihomoPayloadSequence(doc, providerName, true)
+   for (const input of [...inputs].reverse()) prependUnique(doc, payload, buildProviderPayloadRule(behavior, ruleType, input))
+ 
+   return doc.toString({ lineWidth: 0 })
+@@ -410,7 +923,7 @@ export function findAddedMihomoRuleLines(before: string, after: string): { from:
+   const newItemOffsets = (oldNode: unknown, newNode: unknown): [number, number][] => {
+     if (!isSeq(newNode)) return []
+     const existing = new Set(isSeq(oldNode) ? oldNode.items.map(getString) : [])
+-    return newNode.items.flatMap(item => {
++    return newNode.items.flatMap((item) => {
+       if (existing.has(getString(item)) || !isScalar(item) || !item.range) return []
+       return [[item.range[0], item.range[1]]]
+     })
+@@ -446,4 +959,3 @@ export function findAddedMihomoRuleLines(before: string, after: string): { from:
+   }
+   return undefined
+ }
+-
+diff --git a/frontend/tests/mihomo-routing.test.mjs b/frontend/tests/mihomo-routing.test.mjs
+new file mode 100644
+index 0000000..01306a1
+--- /dev/null
++++ b/frontend/tests/mihomo-routing.test.mjs
+@@ -0,0 +1,307 @@
++import assert from 'node:assert/strict'
++import test from 'node:test'
++import { parse } from 'yaml'
++import * as routing from '../src/lib/mihomo-rules.ts'
++
++test('logical row summary displays domains and nested operators', () => {
++  assert.equal(
++    routing.summarizeMihomoCondition('OR,((DOMAIN-SUFFIX,example.org),(NETWORK,udp))'),
++    'DOMAIN-SUFFIX: example.org / NETWORK: udp'
++  )
++  assert.equal(routing.summarizeMihomoCondition('NOT,((DOMAIN,example.net))'), 'DOMAIN: example.net')
++  assert.equal(
++    routing.summarizeMihomoCondition('AND,((DOMAIN,example.com),(NOT,((NETWORK,udp))))'),
++    'DOMAIN: example.com И NOT (NETWORK: udp)'
++  )
++})
++
++test('ordinary routing rules follow all REJECT rules and new REJECT rules insert first', () => {
++  const input =
++    'rule-providers: {p: {type: inline, behavior: classical, payload: []}}\nrules: ["DOMAIN,first.test,DIRECT", "DOMAIN,ads.test,REJECT", "GEOIP,private,REJECT,no-resolve", "MATCH,DIRECT"]\n'
++  for (const request of [
++    { operation: 'rules', ruleType: 'DOMAIN-SUFFIX', value: 'new.test', target: 'DIRECT' },
++    { operation: 'rule-set', providerName: 'p', target: 'DIRECT' },
++  ]) {
++    const next = routing.getMihomoRoutingRules(routing.addMihomoRule(input, request))
++    assert.equal(next[0], 'DOMAIN,first.test,DIRECT')
++    assert.deepEqual(next.slice(1, 4), [
++      'DOMAIN,ads.test,REJECT',
++      request.ruleType === 'DOMAIN-SUFFIX' ? 'DOMAIN-SUFFIX,new.test,DIRECT' : 'RULE-SET,p,DIRECT',
++      'GEOIP,private,REJECT,no-resolve',
++    ])
++  }
++  const normalThenRuleSet = routing.getMihomoRoutingRules(routing.addMihomoRule(
++    routing.addMihomoRule(input, { operation: 'rules', ruleType: 'DOMAIN-SUFFIX', value: 'new.test', target: 'DIRECT' }),
++    { operation: 'rule-set', providerName: 'p', target: 'DIRECT' }
++  ))
++  assert.deepEqual(normalThenRuleSet.slice(1, 4), [
++    'DOMAIN,ads.test,REJECT',
++    'DOMAIN-SUFFIX,new.test,DIRECT',
++    'RULE-SET,p,DIRECT',
++  ])
++  const reject = routing.getMihomoRoutingRules(routing.addMihomoRule(input, {
++    operation: 'rules', ruleType: 'NOT', value: '((DOMAIN,new.test))', target: 'REJECT',
++  }))
++  assert.deepEqual(reject.slice(0, 4), [
++    'DOMAIN,first.test,DIRECT',
++    'DOMAIN,ads.test,REJECT',
++    'NOT,((DOMAIN,new.test)),REJECT',
++    'GEOIP,private,REJECT,no-resolve',
++  ])
++})
++
++test('insertion falls back to first without REJECT and preserves multiple input order', () => {
++  const base = 'rules: ["DOMAIN,keep.test,DIRECT", "GEOIP,private,REJECT,no-resolve", "MATCH,DIRECT"]\n'
++  assert.equal(routing.getMihomoRuleInsertionIndex(routing.getMihomoRoutingRules(base)), 1)
++  assert.equal(routing.getMihomoRuleInsertionIndex(['MATCH,DIRECT']), 0)
++  const next = routing.addMihomoRule(base, { operation: 'rules', ruleType: 'DOMAIN', value: 'a.test\nb.test', target: 'DIRECT' })
++  assert.deepEqual(routing.getMihomoRoutingRules(next).slice(0, 4), [
++    'DOMAIN,keep.test,DIRECT',
++    'DOMAIN,a.test,DIRECT',
++    'DOMAIN,b.test,DIRECT',
++    'GEOIP,private,REJECT,no-resolve',
++  ])
++  const noReject = routing.addMihomoRule('rules: ["MATCH,DIRECT"]\n', {
++    operation: 'rules',
++    ruleType: 'DOMAIN',
++    value: 'a.test',
++    target: 'REJECT',
++  })
++  assert.equal(routing.getMihomoRoutingRules(noReject)[0], 'DOMAIN,a.test,REJECT')
++})
++
++test('editable rule options preserve matcher and destination, including nested logical rules', () => {
++  assert.equal(routing.setMihomoRuleOptions('GEOIP,private,DIRECT,no-resolve', []), 'GEOIP,private,DIRECT')
++  assert.equal(routing.setMihomoRuleOptions('IP-CIDR,10.0.0.0/8,Main', ['no-resolve', 'src']), 'IP-CIDR,10.0.0.0/8,Main,no-resolve,src')
++  assert.equal(routing.setMihomoRuleOptions('GEOIP,private,no-resolve', ['src']), 'GEOIP,private,no-resolve,src')
++  assert.equal(
++    routing.setMihomoRuleOptions('AND,((GEOIP,private),(NETWORK,tcp)),Main,no-resolve', ['src']),
++    'AND,((GEOIP,private),(NETWORK,tcp)),Main,src'
++  )
++  assert.throws(() => routing.setMihomoRuleOptions('GEOIP,private,DIRECT', ['bogus']))
++})
++
++test('logical constructor round trips nested conditions and flags', () => {
++  const raw = 'AND,((DOMAIN,baidu.com),(OR,((NETWORK,UDP),(NOT,((DST-PORT,443)))))),DIRECT,no-resolve'
++  const parsed = routing.parseMihomoCondition(
++    routing.describeMihomoRoutingRule(raw).type + ',' + routing.describeMihomoRoutingRule(raw).matcher
++  )
++  assert.equal(routing.serializeMihomoCondition(parsed), raw.slice(0, raw.lastIndexOf(',DIRECT')))
++  assert.equal(parsed.children[1].children[1].type, 'NOT')
++  assert.throws(() => routing.serializeMihomoCondition({ type: 'NOT', children: [] }))
++  assert.throws(() => routing.serializeMihomoCondition({ type: 'DOMAIN', value: '' }))
++  assert.throws(() => routing.parseMihomoCondition('AND,((NETWORK,UDP)'))
++})
++
++test('indexed insertion preserves priority and comments, including empty drafts', () => {
++  const input = 'dns: {enable: true}\nrules:\n  - DOMAIN,a.com,DIRECT # first\n  - MATCH,DIRECT\n'
++  const next = routing.insertMihomoRoutingRuleAt(input, 1, 'DOMAIN-SUFFIX,,DIRECT')
++  assert.deepEqual(routing.getMihomoRoutingRules(next), ['DOMAIN,a.com,DIRECT', 'DOMAIN-SUFFIX,,DIRECT', 'MATCH,DIRECT'])
++  assert.match(next, /# first/)
++  assert.deepEqual(parse(next).dns, { enable: true })
++  assert.throws(() => routing.insertMihomoRoutingRuleAt(input, 4, 'x'))
++})
++
++test('constructor inserts logical rules at selected position and classical payload without a route', () => {
++  const input =
++    'rule-providers:\n  inline: {type: inline, behavior: classical, payload: []}\nrules: ["DOMAIN,a.com,DIRECT", "MATCH,DIRECT"]\n'
++  const request = { operation: 'rules', ruleType: 'AND', value: '((DOMAIN,baidu.com),(NETWORK,UDP))', target: 'REJECT', insertionIndex: 1 }
++  const next = routing.addMihomoRule(input, request)
++  assert.deepEqual(parse(next).rules, ['DOMAIN,a.com,DIRECT', 'AND,((DOMAIN,baidu.com),(NETWORK,UDP)),REJECT', 'MATCH,DIRECT'])
++  const payload = routing.addMihomoRule(input, { ...request, operation: 'inline', providerName: 'inline' })
++  assert.deepEqual(parse(payload)['rule-providers'].inline.payload, ['AND,((DOMAIN,baidu.com),(NETWORK,UDP))'])
++  assert.throws(() => routing.addMihomoRule(input, { ...request, value: '((DOMAIN,))' }))
++})
++
++test('draft completion rejects comma-injected values and missing fields', () => {
++  assert.throws(() => routing.completeMihomoRoutingDraft('DOMAIN-SUFFIX,foo,bar,DIRECT'))
++  assert.throws(() => routing.completeMihomoRoutingDraft('DOMAIN-SUFFIX,,DIRECT'))
++  assert.throws(() => routing.completeMihomoRoutingDraft('DOMAIN-SUFFIX,example.com,'))
++  assert.equal(routing.completeMihomoRoutingDraft('DOMAIN-SUFFIX,example.com,DIRECT'), 'DOMAIN-SUFFIX,example.com,DIRECT')
++  assert.equal(routing.completeMihomoRoutingDraft('NOT,((NETWORK,udp)),DIRECT'), 'NOT,((NETWORK,udp)),DIRECT')
++})
++
++test('constructor adds to an aliased root payload without mutating its source', () => {
++  const input = 'base: &items ["DOMAIN,a.com"]\npayload: *items\n'
++  const next = parse(routing.addMihomoRule(input, { operation: 'payload', ruleType: 'DOMAIN', value: 'b.com' }))
++  assert.deepEqual(next.base, ['DOMAIN,a.com'])
++  assert.deepEqual(next.payload, ['DOMAIN,b.com', 'DOMAIN,a.com'])
++})
++const {
++  describeMihomoRoutingRule,
++  describeMihomoPayloadRule,
++  getMihomoRuleConditions,
++  updateMihomoRoutingRuleTargets,
++  updateMihomoRoutingRule,
++  deleteMihomoPayloadRule,
++  reorderMihomoRoutingRules,
++} = routing
++
++test('route choices omit REJECT-DROP without changing configured rules', () => {
++  const yaml = 'proxy-groups: [{name: Main}, {name: REJECT-DROP}]\nrules: ["MATCH,REJECT-DROP"]\n'
++  assert.deepEqual(routing.getMihomoRoutingTargets(yaml), ['DIRECT', 'REJECT', 'Main'])
++  assert.deepEqual(routing.getMihomoRoutingRules(yaml), ['MATCH,REJECT-DROP'])
++})
++
++test('IP rules keep flags out of destination and preserve flags on route changes', () => {
++  for (const type of ['IP-CIDR', 'IP-CIDR6', 'IP-ASN', 'GEOIP']) {
++    const raw = `${type},10.0.0.0/8,DIRECT,no-resolve,src`
++    assert.equal(describeMihomoRoutingRule(raw).target, 'DIRECT')
++    assert.equal(describeMihomoRoutingRule(raw).matcher, '10.0.0.0/8')
++    assert.deepEqual(parse(updateMihomoRoutingRuleTargets(`rules:\n  - ${raw}\n`, [0], 'Proxy')).rules, [
++      `${type},10.0.0.0/8,Proxy,no-resolve,src`,
++    ])
++  }
++})
++test('a route whose name is a flag remains a route', () => {
++  assert.equal(describeMihomoRoutingRule('DOMAIN,example.com,src').target, 'src')
++  assert.equal(describeMihomoRoutingRule('MATCH,no-resolve').target, 'no-resolve')
++})
++test('compound payload displays every condition including the last', () => {
++  assert.deepEqual(getMihomoRuleConditions('AND,((DST-PORT,443),(NETWORK,UDP))', true), [
++    { field: 'DST-PORT', value: '443' },
++    { field: 'NETWORK', value: 'UDP' },
++  ])
++})
++test('domain and IP payloads are described using provider behavior', () => {
++  assert.equal(describeMihomoPayloadRule('+.example.com', 'domain').matcher, '+.example.com')
++  assert.equal(describeMihomoPayloadRule('10.0.0.0/8', 'ipcidr').type, 'IP-CIDR')
++  assert.equal(describeMihomoPayloadRule('2001:db8::/32', 'ipcidr').type, 'IP-CIDR6')
++})
++test('inline matcher edits preserve route flags and payload format', () => {
++  assert.equal(
++    routing.editMihomoRuleMatcher('IP-CIDR,10.0.0.0/8,Proxy,no-resolve', 'IP-CIDR', '192.168.0.0/16'),
++    'IP-CIDR,192.168.0.0/16,Proxy,no-resolve'
++  )
++  assert.equal(routing.editMihomoRuleMatcher('+.old.test', 'DOMAIN-SUFFIX', 'new.test', true, 'domain'), '+.new.test')
++  assert.equal(routing.editMihomoRuleMatcher('10.0.0.0/8', 'IP-CIDR', '192.168.0.0/16', true, 'ipcidr'), '192.168.0.0/16')
++  assert.throws(() => routing.editMihomoRuleMatcher('NETWORK,tcp,DIRECT', 'NETWORK', ''), /значение/i)
++  assert.throws(() => routing.editMihomoRuleMatcher('DOMAIN,old.test,DIRECT', 'DOMAIN', 'new.test,REJECT'), /запят/i)
++})
++test('edits and reordering preserve unrelated YAML data, aliases and comments', () => {
++  const yaml =
++    '# user config\ndns: &dns {enable: true, nameserver: [1.1.1.1]}\ncopy: *dns\nrules:\n  # first\n  - DOMAIN,one.test,DIRECT\n  # second\n  - MATCH,Proxy\nrule-providers:\n  inline: {type: inline, behavior: classical, payload: [NETWORK,UDP]}\n'
++  const changed = updateMihomoRoutingRule(yaml, 0, 'DOMAIN,two.test,DIRECT')
++  assert.deepEqual(parse(changed).dns, parse(yaml).dns)
++  assert.ok(changed.includes('&dns'))
++  assert.ok(changed.includes('*dns'))
++  assert.ok(changed.includes('# first'))
++  assert.deepEqual(parse(reorderMihomoRoutingRules(changed, [1, 0])).rules, ['MATCH,Proxy', 'DOMAIN,two.test,DIRECT'])
++  assert.deepEqual(parse(deleteMihomoPayloadRule(yaml, 'inline', 0)).rules, parse(yaml).rules)
++})
++
++test('classical payload edits preserve trailing IP flags', () => {
++  assert.equal(describeMihomoPayloadRule('IP-CIDR,10.0.0.0/8,no-resolve,src').matcher, '10.0.0.0/8')
++  assert.equal(
++    routing.editMihomoRuleMatcher('IP-CIDR,10.0.0.0/8,no-resolve,src', 'IP-CIDR', '192.168.0.0/16', true),
++    'IP-CIDR,192.168.0.0/16,no-resolve,src'
++  )
++})
++test('domain payload edits retain explicit wildcard semantics', () => {
++  assert.equal(routing.editMihomoRuleMatcher('.old.test', 'DOMAIN-SUFFIX', '.new.test', true, 'domain'), '.new.test')
++  assert.equal(routing.editMihomoRuleMatcher('.old.test', 'DOMAIN-SUFFIX', 'new.test', true, 'domain'), '.new.test')
++  assert.equal(routing.editMihomoRuleMatcher('+.old.test', 'DOMAIN-SUFFIX', 'new.test', true, 'domain'), '+.new.test')
++})
++test('proxy destination changes do not overwrite a SUB-RULE reference', () => {
++  assert.throws(() => updateMihomoRoutingRuleTargets('rules:\n  - SUB-RULE,(NETWORK,tcp),custom-rules\n', [0], 'DIRECT'), /SUB-RULE/)
++})
++test('named service cards collect conditions without changing their real order', () => {
++  const rules = ['RULE-SET,cloudflare@ipcidr,CDN', 'RULE-SET,speedtest@domain,Speedtest', 'GEOSITE,amazon,CDN', 'MATCH,DIRECT']
++  assert.deepEqual(
++    routing.groupMihomoRoutingRules(rules).map((group) => ({ label: group.label, indices: group.indices })),
++    [
++      { label: 'CDN', indices: [0, 2] },
++      { label: 'Speedtest', indices: [1] },
++      { label: 'Остальной трафик · MATCH', indices: [3] },
++    ]
++  )
++  assert.equal(rules[1], 'RULE-SET,speedtest@domain,Speedtest')
++})
++test('moving one service block keeps unrelated priorities and MATCH intact', () => {
++  assert.deepEqual(routing.moveMihomoRuleGroup(7, [1, 4], 6), [0, 2, 3, 5, 1, 4, 6])
++  assert.deepEqual(routing.moveMihomoRuleGroup(7, [1, 4], 0), [1, 4, 0, 2, 3, 5, 6])
++  assert.throws(() => routing.moveMihomoRuleGroup(3, [1], 1), /позици/i)
++})
++test('a named service block keeps its identity when its route changes', () => {
++  const yaml = 'rules:\n  # user note\n  - GEOSITE,amazon,CDN\n  - GEOIP,cloudflare,CDN,no-resolve\n'
++  const changed = updateMihomoRoutingRuleTargets(yaml, [0, 1], 'DIRECT', 'CDN')
++  const groups = routing.groupMihomoRoutingRules(routing.getMihomoRoutingRules(changed), routing.getMihomoRoutingRuleComments(changed))
++  assert.equal(groups[0].label, 'CDN')
++  assert.equal(groups[0].target, 'DIRECT')
++  assert.ok(changed.includes('# user note'))
++})
++test('new rules join an existing named block after a route round trip', () => {
++  let yaml = updateMihomoRoutingRuleTargets('rules:\n  - GEOSITE,amazon,CDN\n', [0], 'DIRECT', 'CDN')
++  yaml = updateMihomoRoutingRuleTargets(yaml, [0], 'CDN', 'CDN')
++  yaml += '  - GEOSITE,cloudflare,CDN\n'
++  assert.equal(routing.groupMihomoRoutingRules(routing.getMihomoRoutingRules(yaml), routing.getMihomoRoutingRuleComments(yaml)).length, 1)
++})
++test('empty inline payloads remain visible alongside populated providers', () => {
++  const yaml =
++    'inline: &inline {type: inline, behavior: classical}\nrule-providers:\n  empty:\n    <<: *inline\n    payload:\n  missing:\n    <<: *inline\n  populated:\n    <<: *inline\n    payload: ["NETWORK,UDP"]\n'
++  assert.deepEqual(
++    routing.getMihomoPayloadGroups(yaml).map((group) => ({ name: group.name, count: group.rules.length })),
++    [
++      { name: 'empty', count: 0 },
++      { name: 'missing', count: 0 },
++      { name: 'populated', count: 1 },
++    ]
++  )
++})
++test('payloads inherited through YAML merges are read', () => {
++  const yaml =
++    'defaults: &defaults {type: inline, behavior: domain, payload: [example.test]}\nrule-providers:\n  inherited:\n    <<: *defaults\n'
++  assert.deepEqual(routing.getMihomoPayloadGroups(yaml), [{ name: 'inherited', rules: ['example.test'], behavior: 'domain' }])
++})
++test('editing inherited or aliased payload changes only the chosen provider', () => {
++  for (const payload of ['    <<: *defaults\n', '    type: inline\n    behavior: domain\n    payload: *shared\n']) {
++    const yaml =
++      'shared: &shared [example.test]\ndefaults: &defaults {type: inline, behavior: domain, payload: *shared}\nrule-providers:\n  first:\n' +
++      payload +
++      '  second:\n    <<: *defaults\n'
++    const changed = routing.updateMihomoPayloadRule(yaml, 'first', 0, 'new.test')
++    assert.deepEqual(
++      routing.getMihomoPayloadGroups(changed).map((group) => group.rules),
++      [['new.test'], ['example.test']]
++    )
++    assert.deepEqual(parse(changed).shared, ['example.test'])
++  }
++})
++test('prepending inside a named block keeps its identity and existing order', () => {
++  let yaml = updateMihomoRoutingRuleTargets(
++    'rules:\n  - DOMAIN,ads.test,REJECT\n  - DOMAIN,old.test,CDN\nrule-providers:\n  test: {type: http, behavior: domain, url: https://example.test/rules}\n',
++    [1],
++    'DIRECT',
++    'CDN'
++  )
++  yaml = routing.addMihomoRule(yaml, { operation: 'rules', ruleType: 'DOMAIN-KEYWORD', value: 'new', target: 'DIRECT', groupName: 'CDN' })
++  yaml = routing.addMihomoRule(yaml, { operation: 'rule-set', providerName: 'test', target: 'DIRECT', groupName: 'CDN' })
++  assert.equal(routing.getMihomoRoutingRules(yaml)[0], 'DOMAIN-KEYWORD,new,DIRECT')
++  assert.equal(routing.getMihomoRoutingRules(yaml)[1], 'RULE-SET,test,DIRECT')
++  assert.equal(routing.getMihomoRoutingRules(yaml)[2], 'DOMAIN,ads.test,REJECT')
++  const groups = routing.groupMihomoRoutingRules(routing.getMihomoRoutingRules(yaml), routing.getMihomoRoutingRuleComments(yaml))
++  assert.deepEqual(
++    groups.map((group) => ({ label: group.label, count: group.indices.length })),
++    [
++      { label: 'CDN', count: 3 },
++      { label: 'REJECT', count: 1 },
++    ]
++  )
++})
++test('editing an aliased provider does not shadow nested anchors used by other providers', () => {
++  const yaml =
++    'defaults: &defaults {type: inline, behavior: domain, payload: &shared [example.test]}\nrule-providers:\n  first: *defaults\n  second: {type: inline, behavior: domain, payload: *shared}\n'
++  const changed = routing.updateMihomoPayloadRule(yaml, 'first', 0, 'new.test')
++  assert.deepEqual(
++    routing.getMihomoPayloadGroups(changed).map((group) => group.rules),
++    [['new.test'], ['example.test']]
++  )
++})
++test('RULE-SET insertion accepts an aliased provider listed by the inspector', () => {
++  const yaml =
++    'defaults: &defaults {type: inline, behavior: domain, payload: [example.test]}\nrule-providers: {aliased: *defaults}\nrules: []\n'
++  assert.equal(routing.inspectMihomoRuleConfig(yaml).providers[0].name, 'aliased')
++  assert.deepEqual(parse(routing.addMihomoRule(yaml, { operation: 'rule-set', providerName: 'aliased', target: 'DIRECT' })).rules, [
++    'RULE-SET,aliased,DIRECT',
++  ])
++})
