@@ -399,7 +399,6 @@ function matchesMobileConnectionFilter(conn: Connection, query: string, searchHi
     conn.metadata.destinationPort,
     conn.metadata.destinationGeoIP ?? '',
     conn.metadata.destinationIPASN ?? '',
-    conn.metadata.destinationPort,
     conn.metadata.inboundName,
     conn.metadata.inboundUser ?? '',
     conn.metadata.inboundIP,
