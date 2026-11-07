@@ -668,6 +668,10 @@ const SelectorCombobox = memo(function SelectorCombobox({
       open={visible ? open : false}
       itemToStringLabel={(item) => item}
       itemToStringValue={(item) => item}
+      filter={(item, query) => {
+        const normalizedQuery = query.trim().toLowerCase()
+        return !normalizedQuery || normalizedQuery === value?.trim().toLowerCase() || item.toLowerCase().includes(normalizedQuery)
+      }}
       onOpenChange={setOpen}
       onValueChange={(proxyName) => proxyName && !disabledOptions[proxyName] && onSelect(selectorName, proxyName)}
       autoHighlight
