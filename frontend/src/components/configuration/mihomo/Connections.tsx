@@ -636,7 +636,6 @@ const ConnectionRow = memo(function ConnectionRow({
                 }}
               >
                 <span className="truncate">{host}</span>
-                {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
               </button>
             }
           />
@@ -656,6 +655,7 @@ const ConnectionRow = memo(function ConnectionRow({
             }}
           >
             {protocol}
+            {conn.metadata.destinationPort ? `/${conn.metadata.destinationPort}` : ''}
           </button>
         ) : (
           protocol
@@ -783,7 +783,6 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
             render={
               <span className="flex w-fit max-w-full items-center overflow-hidden">
                 <span className="truncate">{host}</span>
-                {conn.metadata.destinationPort && <span className="text-muted-foreground shrink-0">:{conn.metadata.destinationPort}</span>}
               </span>
             }
           />
@@ -792,7 +791,10 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
           </TooltipContent>
         </Tooltip>
       </TableCell>
-      <TableCell className="text-muted-foreground text-[13px]">{protocol}</TableCell>
+      <TableCell className="text-muted-foreground text-[13px]">
+        {protocol}
+        {conn.metadata.destinationPort ? `/${conn.metadata.destinationPort}` : ''}
+      </TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
           <TooltipTrigger render={<span className="block w-fit max-w-full truncate">{source}</span>} />
@@ -1222,7 +1224,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 const columns: { key: SortColumn; label: string; className: string }[] = [
   { key: 'chains', label: 'Цепочка', className: 'w-[50%] pl-3 md:w-[35%]' },
   { key: 'host', label: 'Хост', className: 'w-[24%] md:w-[31%]' },
-  { key: 'protocol', label: 'Тип', className: 'w-[4%]' },
+  { key: 'protocol', label: 'Тип', className: 'w-[6%]' },
   { key: 'source', label: 'Источник', className: 'w-[14%] max-w-[220px] md:w-[10%] md:max-w-[190px]' },
   { key: 'upload', label: 'Трафик', className: 'w-[10%]' },
   { key: 'start', label: 'Время', className: 'w-[10%]' },
