@@ -380,7 +380,7 @@ function matchesMobileConnectionFilter(conn: Connection, query: string, searchHi
   const source = getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
   const visibleValues = [
     getConnectionHostLabel(conn),
-    getConnectionProtocol(conn),
+    getConnectionProtocolLabel(conn),
     ...conn.chains,
     formatBytes(conn.download),
     formatBytes(conn.upload),
@@ -429,6 +429,11 @@ function matchesMobileConnectionFilter(conn: Connection, query: string, searchHi
 
 function getConnectionProtocol(conn: Connection): string {
   return conn.metadata.network?.toUpperCase() || '—'
+}
+
+function getConnectionProtocolLabel(conn: Connection): string {
+  const protocol = getConnectionProtocol(conn)
+  return conn.metadata.destinationPort ? `${protocol}/${conn.metadata.destinationPort}` : protocol
 }
 
 function getConnectionSourceLabel(conn: Connection, sourceName?: string | null): string {
@@ -572,7 +577,6 @@ const ConnectionRow = memo(function ConnectionRow({
 
   const conn = useConnectionsStore.getState().map.get(connId)!
   const host = getConnectionHost(conn)
-  const hostLabel = getConnectionHostLabel(conn)
   const protocol = getConnectionProtocol(conn)
   const source = getConnectionSourceDisplayLabel(conn, sourceName)
   const sourceCopy = getConnectionSourceCopyValue(conn, sourceName)
@@ -639,8 +643,8 @@ const ConnectionRow = memo(function ConnectionRow({
               </button>
             }
           />
-          <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
-            {hostLabel}
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={host}>
+            {host}
           </TooltipContent>
         </Tooltip>
       </TableCell>
@@ -651,7 +655,7 @@ const ConnectionRow = memo(function ConnectionRow({
             className="cursor-copy hover:text-blue-400"
             onClick={(e) => {
               e.stopPropagation()
-              onApplyFilter(conn.metadata.network)
+              onApplyFilter(getConnectionProtocolLabel(conn))
             }}
           >
             {protocol}
@@ -744,8 +748,6 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
   const first = reversedChains[0]
   const last = reversedChains.at(-1)
   const host = getConnectionHost(conn)
-  const hostLabel = getConnectionHostLabel(conn)
-  const protocol = getConnectionProtocol(conn)
   const source = getConnectionSourceDisplayLabel(conn, sourceName)
   const sourceCopy = getConnectionSourceCopyValue(conn, sourceName)
 
@@ -786,14 +788,13 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
               </span>
             }
           />
-          <TooltipContent side="top" className="text-[13px]" copyTextValue={hostLabel}>
-            {hostLabel}
+          <TooltipContent side="top" className="text-[13px]" copyTextValue={host}>
+            {host}
           </TooltipContent>
         </Tooltip>
       </TableCell>
       <TableCell className="text-muted-foreground text-[13px]">
-        {protocol}
-        {conn.metadata.destinationPort ? `/${conn.metadata.destinationPort}` : ''}
+        {getConnectionProtocolLabel(conn)}
       </TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
@@ -1315,7 +1316,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
             match(conn.metadata.host) ||
             match(conn.metadata.destinationIP) ||
             match(conn.metadata.network) ||
-            match(getConnectionProtocol(conn)) ||
+            match(getConnectionProtocolLabel(conn)) ||
             match(sourceLabel) ||
             match(conn.metadata.sourceIP) ||
             match(conn.rule) ||
@@ -1399,7 +1400,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
             match(conn.metadata.host) ||
             match(conn.metadata.destinationIP) ||
             match(conn.metadata.network) ||
-            match(getConnectionProtocol(conn)) ||
+            match(getConnectionProtocolLabel(conn)) ||
             match(sourceLabel) ||
             match(conn.metadata.sourceIP) ||
             match(conn.rule) ||
@@ -1502,8 +1503,7 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="text-muted-foreground min-w-0 truncate text-xs">
-          {getConnectionProtocol(conn)}
-          {conn.metadata.destinationPort ? `/${conn.metadata.destinationPort}` : ''}
+          {getConnectionProtocolLabel(conn)}
         </span>
         <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-xs tabular-nums">
           <span className="text-emerald-400">↓ {formatBytes(conn.download)}</span>
