@@ -4,7 +4,7 @@ import { ClearIcon } from '@/components/ui/clear-icon'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -960,7 +960,7 @@ function ConnectionDialogTraffic({ conn }: { conn: Connection }) {
 
 const ConnectionDialogTitle = memo(function ConnectionDialogTitle({ conn }: { conn: Connection }) {
   const title = getConnectionHost(conn) || 'Соединение'
-  return <DialogTitle className="truncate pr-8 text-base">{title}</DialogTitle>
+  return <DialogTitle className="min-w-0 text-base truncate">{title}</DialogTitle>
 })
 
 const ConnectionDialog = memo(function ConnectionDialog({
@@ -983,56 +983,69 @@ const ConnectionDialog = memo(function ConnectionDialog({
   const displayConn = liveConn ?? frozenConn
   const isClosed = !!connId && !liveConn
   const renderedConn = displayConn
-  const [detailsTab, setDetailsTab] = useState<'overview' | 'raw'>('overview')
+  const [detailsTab, setDetailsTab] = useState<'ui' | 'json'>('ui')
+  const [bodyHeight, setBodyHeight] = useState<number | null>(null)
+  const detailsBodyRef = useRef<HTMLDivElement>(null)
   const rawJsonLines = useMemo(() => (renderedConn ? highlightConnectionJson(JSON.stringify(renderedConn, null, 2)) : null), [renderedConn])
 
-  useEffect(() => setDetailsTab('overview'), [connId])
+  useEffect(() => {
+    setDetailsTab('ui')
+    setBodyHeight(null)
+  }, [connId])
 
   return (
     <Dialog open={open && !!connId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={`flex max-h-[80dvh]! max-w-lg! flex-col overflow-hidden ${tileMode ? 'max-h-[88dvh]! max-w-[calc(100vw-1.5rem)]!' : ''}`}
       >
-        <DialogHeader className="shrink-0">{renderedConn && <ConnectionDialogTitle conn={renderedConn} />}</DialogHeader>
-
-        {tileMode ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-2">
-            <Select
-              value={detailsTab}
-              items={{ overview: 'Обзор', raw: 'Raw' }}
-              onValueChange={(value) => setDetailsTab(value as 'overview' | 'raw')}
-            >
-              <SelectTrigger aria-label="Раздел сведений о соединении" className="h-9 w-[132px] shrink-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent align="start" sideOffset={4}>
-                <SelectGroup>
-                  <SelectItem value="overview">Обзор</SelectItem>
-                  <SelectItem value="raw">Raw</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            {detailsTab === 'overview' ? (
-              <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
-                {renderedConn && <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} showExtended />}
-              </div>
-            ) : (
-              <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
-                {renderedConn && (
-                  <pre className="text-muted-foreground rounded-lg border p-3 font-mono text-xs break-all whitespace-pre-wrap">
-                    {rawJsonLines?.map((line, index) => (
-                      <div key={index}>{line}</div>
-                    ))}
-                  </pre>
-                )}
+        <Tabs
+          value={detailsTab}
+          onValueChange={(value) => {
+            const tab = value as 'ui' | 'json'
+            // measure the ui body synchronously: it is still mounted until the state update below
+            if (tab === 'json' && detailsTab === 'ui') setBodyHeight(detailsBodyRef.current?.offsetHeight ?? null)
+            else if (tab === 'ui') setBodyHeight(null)
+            setDetailsTab(tab)
+          }}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <DialogHeader className="shrink-0">
+            {renderedConn && (
+              <div className="flex min-w-0 items-center gap-3 pr-13">
+                <ConnectionDialogTitle conn={renderedConn} />
+                <TabsList className="shrink-0">
+                  <TabsTrigger value="ui" className="data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!">
+                    UI
+                  </TabsTrigger>
+                  <TabsTrigger value="json" className="data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!">
+                    JSON
+                  </TabsTrigger>
+                </TabsList>
               </div>
             )}
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
-            {renderedConn && <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} />}
-          </div>
-        )}
+          </DialogHeader>
+
+          <TabsContent ref={detailsBodyRef} value="ui" className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+            {renderedConn && <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} showExtended={tileMode} />}
+          </TabsContent>
+          <TabsContent
+            value="json"
+            className="scrollbar-thin min-h-0 overflow-y-auto"
+            style={
+              bodyHeight != null
+                ? { flex: `0 0 ${bodyHeight}px`, height: bodyHeight }
+                : { maxHeight: '50dvh' }
+            }
+          >
+            {renderedConn && (
+              <pre className="text-muted-foreground rounded-lg border p-3 font-mono text-xs break-all whitespace-pre-wrap">
+                {rawJsonLines?.map((line, index) => (
+                  <div key={index}>{line}</div>
+                ))}
+              </pre>
+            )}
+          </TabsContent>
+        </Tabs>
 
         {renderedConn && (
           <div>
