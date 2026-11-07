@@ -381,7 +381,6 @@ function matchesMobileConnectionFilter(conn: Connection, query: string, searchHi
   const visibleValues = [
     getConnectionHostLabel(conn),
     getConnectionProtocol(conn),
-    conn.metadata.type,
     ...conn.chains,
     formatBytes(conn.download),
     formatBytes(conn.upload),
@@ -397,6 +396,7 @@ function matchesMobileConnectionFilter(conn: Connection, query: string, searchHi
     conn.metadata.sourcePort,
     conn.metadata.host,
     conn.metadata.destinationIP,
+    conn.metadata.destinationPort,
     conn.metadata.destinationGeoIP ?? '',
     conn.metadata.destinationIPASN ?? '',
     conn.metadata.destinationPort,
@@ -1449,7 +1449,7 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
 }) {
   const reversedChains = [...conn.chains].reverse()
   const displayedChains = reversedChains.length > 2 ? [reversedChains[0], reversedChains[reversedChains.length - 1]] : reversedChains
-  const host = getConnectionHostLabel(conn) || '—'
+  const host = getConnectionHost(conn) || '—'
   const smartBlockState = useConnectionsStore((s) => s.map.get(conn.id)?.metadata.smartBlock)
   const canSmartBlock = !closed && smartBlockState === 'normal'
   return (
@@ -1501,7 +1501,8 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
         <span className="text-muted-foreground min-w-0 truncate text-xs">
-          {conn.metadata.type || '—'} | {getConnectionProtocol(conn)}
+          {getConnectionProtocol(conn)}
+          {conn.metadata.destinationPort ? `/${conn.metadata.destinationPort}` : ''}
         </span>
         <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-xs tabular-nums">
           <span className="text-emerald-400">↓ {formatBytes(conn.download)}</span>
