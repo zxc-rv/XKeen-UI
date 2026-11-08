@@ -52,6 +52,7 @@ import {
 } from '../../lib/multi-routers/actions'
 import { LOCAL_ROUTER_ID } from '../../lib/multi-routers/model'
 import { useRoutersStore } from '../../lib/multi-routers/store'
+import { setRuleProvidersInterval } from '../../lib/rule-provider-interval'
 import { syncClashApiPort, useAppContext, useConnectionsSync, useModalContext, useSettings } from '../../lib/store'
 import type { Config } from '../../lib/types'
 import { cn } from '../../lib/utils'
@@ -525,6 +526,31 @@ export function ConfigPanel({
   }, [])
 
   const handleProvidersModalOpenChange = useCallback((open: boolean) => setIsProvidersModalOpen(open), [])
+
+  const handleRuleProvidersIntervalChange = useCallback(
+    (intervalSeconds: number) => {
+      if (!activeConfig) {
+        showToast('Не удалось изменить активный конфиг', 'error')
+        return false
+      }
+      try {
+        const currentContent = editorRef.current?.getValue() ?? activeConfig.content
+        const updated = setRuleProvidersInterval(currentContent, intervalSeconds)
+        const isDirty = updated !== activeConfig.savedContent
+        dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: activeConfigIndex, isDirty, content: updated })
+        if (editorRef.current) {
+          editorRef.current.replaceAll(updated)
+          editorRef.current.validate(activeConfig.file)
+        }
+        showToast('Интервал обновления провайдеров правил изменён. Нажмите «Применить»')
+        return true
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Не удалось изменить интервал', 'error')
+        return false
+      }
+    },
+    [activeConfig, activeConfigIndex, dispatch, editorRef, showToast]
+  )
 
   const refreshConfigsAndEditor = useCallback(async () => {
     const currentCfg = configsRef.current[activeIndexRef.current]
@@ -1299,6 +1325,8 @@ export function ConfigPanel({
             clashApiPort={activeClashApiPort ?? ''}
             clashApiSecret={clashApiSecret ?? null}
             clashApiUnix={activeClashApiUnix ?? null}
+            configContent={activeConfig?.content ?? ''}
+            onRuleProvidersIntervalChange={handleRuleProvidersIntervalChange}
             onOpenChange={handleProvidersModalOpenChange}
           />
         )}

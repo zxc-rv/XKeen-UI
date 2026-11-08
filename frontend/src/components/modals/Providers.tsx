@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
@@ -13,6 +14,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
   IconDatabase,
   IconDeviceFloppy,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconClock,
   IconEye,
   IconFilter,
   IconLetterCase,
@@ -20,8 +25,10 @@ import {
   IconRefresh,
   IconStack2,
 } from '@tabler/icons-react'
-import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml'
+import { getRuleProvidersInterval } from '../../lib/rule-provider-interval'
 import { apiCall, clashFetch } from '../../lib/api'
 import { fetchClashProxies, fetchClashRuleProviders, useAppActions, useProxiesStore } from '../../lib/store'
 import type { ProxyProvider, ProxySubscriptionInfo, RuleProvider } from '../../lib/types'
@@ -39,6 +46,8 @@ interface Props {
   clashApiPort: string
   clashApiSecret: string | null
   clashApiUnix?: string | null
+  configContent: string
+  onRuleProvidersIntervalChange: (intervalSeconds: number) => boolean
   onOpenChange: (open: boolean) => void
 }
 
@@ -251,7 +260,16 @@ function LoadingTable() {
   )
 }
 
-export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clashApiUnix, onOpenChange }: Props) {
+export function ProvidersModal({
+  open,
+  kind,
+  clashApiPort,
+  clashApiSecret,
+  clashApiUnix,
+  configContent,
+  onRuleProvidersIntervalChange,
+  onOpenChange,
+}: Props) {
   const { showToast } = useAppActions()
   const proxyProviders = useProxiesStore((state) => state.proxyProviders)
   const ruleProviders = useProxiesStore((state) => state.ruleProviders)
@@ -266,11 +284,32 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   const [onlyProxies, setOnlyProxies] = useState(true)
   const [filter, setFilter] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
+  const [intervalMenuOpen, setIntervalMenuOpen] = useState(false)
+  const [customIntervalOpen, setCustomIntervalOpen] = useState(false)
+  const [intervalValue, setIntervalValue] = useState('24')
+  const intervalMenuRef = useRef<HTMLDivElement>(null)
 
   const rows: Provider[] = kind === 'proxies' ? proxyProviders : ruleProviders
   const KindIcon = kind === 'proxies' ? IconDatabase : IconStack2
   const isUpdating = updatingNames.length > 0
   const updatableNames = rows.filter(isUpdatable).map((provider) => provider.name)
+  const commonInterval = useMemo(() => {
+    if (kind !== 'rules') return undefined
+    try {
+      return getRuleProvidersInterval(configContent)
+    } catch {
+      return undefined
+    }
+  }, [kind, configContent])
+
+  useEffect(() => {
+    if (!intervalMenuOpen) return
+    const onPointerDown = (event: PointerEvent) => {
+      if (!intervalMenuRef.current?.contains(event.target as Node)) setIntervalMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [intervalMenuOpen])
 
   const isViewEditable = !!viewContent && normalizeVehicleType(viewContent.vehicleType) === 'FILE' && !isMrsFormat(viewContent.format)
   const isViewDirty = isViewEditable && editContent !== viewContent?.content
@@ -371,6 +410,22 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
     } finally {
       setViewingName('')
     }
+  }
+
+  function setRuleProvidersInterval(hours: number) {
+    const intervalSeconds = hours * 3600
+    setIntervalMenuOpen(false)
+    if (commonInterval === intervalSeconds) return
+    onRuleProvidersIntervalChange(intervalSeconds)
+  }
+
+  function saveCustomInterval() {
+    const hours = Number(intervalValue)
+    if (!Number.isSafeInteger(hours) || hours < 1 || hours > Math.floor(Number.MAX_SAFE_INTEGER / 3600)) {
+      showToast('Укажите целое количество часов больше нуля', 'error')
+      return
+    }
+    setRuleProvidersInterval(hours)
   }
 
   async function saveViewContent() {
@@ -484,17 +539,174 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
                         </TableHead>
                       ))}
                       <TableHead className="w-28 text-right">
-                        <ActionButton
-                          busy={updatingNames.length > 1}
-                          icon={<IconRefresh className="size-4" />}
-                          onClick={() =>
-                            void updateProviders(
-                              updatableNames,
-                              kind === 'proxies' ? 'Провайдеры прокси обновлены' : 'Провайдеры правил обновлены'
-                            )
-                          }
-                          disabled={isUpdating || updatableNames.length === 0}
-                        />
+                        <div className="flex items-center justify-end gap-0.5">
+                          {kind === 'rules' && (
+                            <div className="relative" ref={intervalMenuRef}>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                aria-label="Интервал обновления провайдеров правил"
+                                aria-haspopup="menu"
+                                aria-expanded={intervalMenuOpen}
+                                title={`Интервал: ${commonInterval === 86400 ? 'по умолчанию' : commonInterval ? `${commonInterval / 3600} ч` : 'разный'}`}
+                                disabled={isUpdating || updatableNames.length === 0}
+                                onClick={() => {
+                                  setIntervalValue(commonInterval && commonInterval % 3600 === 0 ? String(commonInterval / 3600) : '24')
+                                  setCustomIntervalOpen(false)
+                                  setIntervalMenuOpen((open) => !open)
+                                }}
+                              >
+                                <IconClock className="size-4" />
+                              </Button>
+                              <AnimatePresence>
+                                {intervalMenuOpen && (
+                                  <motion.div
+                                    key="rule-providers-interval-menu"
+                                    role="menu"
+                                    aria-label="Интервал обновления провайдеров правил"
+                                    initial={{ opacity: 0, scale: 0.95, y: -8 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                                    style={{ transformOrigin: 'top right' }}
+                                    className="border-border bg-input-background text-popover-foreground absolute top-[calc(100%+0.25rem)] right-0 z-[80] w-56 rounded-md border p-1 text-sm shadow-md"
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Escape') setIntervalMenuOpen(false)
+                                    }}
+                                  >
+                                    <div className="text-muted-foreground px-2 py-1.5 text-left text-xs font-medium">
+                                      Интервал обновления
+                                    </div>
+                                    {[
+                                      { hours: 24, label: 'По умолчанию · 24 часа' },
+                                      { hours: 6, label: '6 часов' },
+                                      { hours: 12, label: '12 часов' },
+                                      { hours: 18, label: '18 часов' },
+                                      { hours: 48, label: '48 часов' },
+                                    ].map(({ hours, label }) => (
+                                      <button
+                                        key={label}
+                                        type="button"
+                                        role="menuitemradio"
+                                        aria-checked={commonInterval === hours * 3600}
+                                        className="relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.25 pr-8 pl-1.5 text-left text-sm outline-hidden select-none hover:bg-(--menu-active-bg) hover:font-semibold hover:text-[#60a5fa] focus:bg-(--menu-active-bg) focus:font-semibold focus:text-[#60a5fa]"
+                                        onClick={() => setRuleProvidersInterval(hours)}
+                                      >
+                                        {label}
+                                        {commonInterval === hours * 3600 && (
+                                          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
+                                            <IconCheck className="pointer-events-none size-3.5 stroke-3" />
+                                          </span>
+                                        )}
+                                      </button>
+                                    ))}
+                                    <div className="border-border mt-1 border-t pt-1">
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        aria-expanded={customIntervalOpen}
+                                        aria-controls="rule-providers-custom-interval"
+                                        className="flex w-full cursor-default items-center justify-between gap-2 rounded-sm py-1.25 pr-1.5 pl-1.5 text-left text-sm outline-hidden select-none hover:bg-(--menu-active-bg) hover:font-semibold hover:text-[#60a5fa] focus:bg-(--menu-active-bg) focus:font-semibold focus:text-[#60a5fa]"
+                                        onClick={() => setCustomIntervalOpen((open) => !open)}
+                                      >
+                                        Своё значение
+                                        <IconChevronDown
+                                          className={`size-3.5 transition-transform duration-200 ${customIntervalOpen ? 'rotate-180' : ''}`}
+                                        />
+                                      </button>
+                                      <AnimatePresence initial={false}>
+                                        {customIntervalOpen && (
+                                          <motion.div
+                                            id="rule-providers-custom-interval"
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                                            className="overflow-hidden"
+                                          >
+                                            <div className="space-y-2 px-1.5 pt-2 pb-1">
+                                              <Label
+                                                htmlFor="rule-providers-interval"
+                                                className="text-muted-foreground text-xs font-medium"
+                                              >
+                                                Интервал, часов
+                                              </Label>
+                                              <div className="flex items-center gap-1.5">
+                                                <div className="relative min-w-0 flex-1">
+                                                  <Input
+                                                    id="rule-providers-interval"
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    pattern="[0-9]*"
+                                                    value={intervalValue}
+                                                    onChange={(event) => setIntervalValue(event.target.value.replace(/\D/g, ''))}
+                                                    aria-label="Свой интервал в часах"
+                                                    className="h-8 pr-7 pl-2 tabular-nums"
+                                                  />
+                                                  <div className="absolute top-1/2 right-1 flex -translate-y-1/2 flex-col">
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="icon-xs"
+                                                      aria-label="Увеличить интервал на час"
+                                                      className="text-muted-foreground size-3.5 rounded-sm p-0 hover:bg-(--menu-active-bg) hover:text-[#60a5fa]"
+                                                      onMouseDown={(event) => event.preventDefault()}
+                                                      onClick={() =>
+                                                        setIntervalValue(String(Math.max(1, Number(intervalValue || '24') + 1)))
+                                                      }
+                                                    >
+                                                      <IconChevronUp className="size-3" />
+                                                    </Button>
+                                                    <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="icon-xs"
+                                                      aria-label="Уменьшить интервал на час"
+                                                      className="text-muted-foreground size-3.5 rounded-sm p-0 hover:bg-(--menu-active-bg) hover:text-[#60a5fa]"
+                                                      onMouseDown={(event) => event.preventDefault()}
+                                                      onClick={() =>
+                                                        setIntervalValue(String(Math.max(1, Number(intervalValue || '24') - 1)))
+                                                      }
+                                                    >
+                                                      <IconChevronDown className="size-3" />
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                                <Button
+                                                  size="sm"
+                                                  disabled={
+                                                    !Number.isSafeInteger(Number(intervalValue)) ||
+                                                    Number(intervalValue) < 1 ||
+                                                    Number(intervalValue) > Math.floor(Number.MAX_SAFE_INTEGER / 3600) ||
+                                                    commonInterval === Number(intervalValue) * 3600
+                                                  }
+                                                  onClick={saveCustomInterval}
+                                                >
+                                                  Применить
+                                                </Button>
+                                              </div>
+                                            </div>
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          )}
+                          <ActionButton
+                            busy={updatingNames.length > 1}
+                            icon={<IconRefresh className="size-4" />}
+                            onClick={() =>
+                              void updateProviders(
+                                updatableNames,
+                                kind === 'proxies' ? 'Провайдеры прокси обновлены' : 'Провайдеры правил обновлены'
+                              )
+                            }
+                            disabled={isUpdating || updatableNames.length === 0}
+                          />
+                        </div>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
