@@ -1,4 +1,5 @@
 import { historyField, indentWithTab } from '@codemirror/commands'
+import { startCompletion } from '@codemirror/autocomplete'
 import { foldedRanges, foldEffect, syntaxHighlighting, unfoldEffect } from '@codemirror/language'
 import { setDiagnostics } from '@codemirror/lint'
 import { selectSelectionMatches } from '@codemirror/search'
@@ -9,6 +10,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { createPortal } from 'react-dom'
 import { getFileLanguage } from '../../lib/api'
 import { configAutocompletion } from './editor/completion'
+import { isMihomoRuleTargetStart } from './editor/completion/mihomoRuleTargets'
 import { editorHighlight, editorTheme, getLanguageExtension } from './editor/highlighting'
 import { formatWithPrettier } from './editor/format'
 import { SearchPanel } from './editor/search/SearchPanel'
@@ -166,6 +168,20 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         autocorrect: 'off',
       }),
       EditorView.updateListener.of((update) => {
+        if (update.docChanged && !suppressRef.current && languageRef.current === 'yaml') {
+          const cursor = update.state.selection.main
+          if (cursor.empty) {
+            update.changes.iterChanges((_fromA, _toA, fromB, toB, inserted) => {
+              if (inserted.toString() === ',' && toB === fromB + 1 && cursor.head === toB) {
+                if (isMihomoRuleTargetStart(update.state, toB)) {
+                  queueMicrotask(() => {
+                    if (update.view.state.selection.main.head === toB) startCompletion(update.view)
+                  })
+                }
+              }
+            })
+          }
+        }
         if (!update.docChanged || suppressRef.current) return
         const content = update.state.doc.toString()
         const isDirty = content !== savedContentRef.current

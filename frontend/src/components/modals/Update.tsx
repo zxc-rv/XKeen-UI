@@ -1,14 +1,22 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { CodeBlock, CodeBlockContent } from '@/components/ui/code-block'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Spinner } from '@/components/ui/spinner'
-import { IconCancel, IconDownload, IconLogs, IconPlaylistX, IconRefresh, IconWorldShare } from '@tabler/icons-react'
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from '@/components/ui/trace'
+import { IconAlertCircle, IconCancel, IconCircleCheck, IconDownload, IconLogs, IconPlaylistX, IconRefresh, IconWorldShare } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -32,6 +40,13 @@ const LEVEL_CLASSES: Record<string, string> = {
   info: 'text-foreground/80',
   warn: 'text-amber-400',
   error: 'text-red-400',
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  prepare: 'Подготовка',
+  download: 'Загрузка',
+  install: 'Установка',
+  restart: 'Перезапуск',
 }
 
 const mdClass = `
@@ -83,7 +98,16 @@ interface LogLine {
 }
 
 /** Записи журнала: обычные строки лога и «живые» строки прогресса (по одной на файл). */
-type Entry = { kind: 'log'; id: number; line: LogLine } | { kind: 'progress'; id: number; downloaded: number; total: number; speed: number }
+type Entry =
+  | { kind: 'stage'; id: number; stage: string }
+  | { kind: 'log'; id: number; line: LogLine }
+  | { kind: 'progress'; id: number; downloaded: number; total: number; speed: number }
+
+interface StageGroup {
+  id: number
+  stage: string
+  items: Exclude<Entry, { kind: 'stage' }>[]
+}
 
 function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore, onInstalled, onStartFailed, onClose }: ProcessProps) {
   const { dispatch, showToast } = useAppContext()
@@ -91,11 +115,12 @@ function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore
   /** Записи журнала: обычные строки лога и «живые» строки прогресса (по одной на файл). */
   const [entries, setEntries] = useState<Entry[]>([])
   const [stage, setStage] = useState('')
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({})
   const [running, setRunning] = useState(true)
   const [started, setStarted] = useState(false)
   const [result, setResult] = useState<{ success: boolean; error: string | null } | null>(null)
 
-  const logRef = useRef<HTMLPreElement>(null)
+  const logRef = useRef<HTMLDivElement>(null)
   const doneHandledRef = useRef(false)
   const startedRef = useRef(false)
   const lastSeqRef = useRef(0)
@@ -135,6 +160,10 @@ function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore
         case 'stage':
           setStage(ev.stage ?? '')
           if (ev.stage !== 'download') activeProgressIdRef.current = null
+          if (ev.stage) {
+            const stageName = ev.stage
+            setEntries((prev) => [...prev.slice(-199), { kind: 'stage' as const, id: nextEntryIdRef.current++, stage: stageName }])
+          }
           break
         case 'progress': {
           const values = { downloaded: ev.downloaded ?? 0, total: ev.total ?? 0, speed: ev.speed ?? 0 }
@@ -263,7 +292,7 @@ function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore
     return (
       <div key={`p${e.id}`} className="flex items-center gap-2 wrap-anywhere">
         <Progress value={pct} className="min-w-16 flex-1 [&_[data-slot=progress-track]]:h-1.5" />
-        <span className="text-muted-foreground shrink-0 font-mono">
+        <span className="text-muted-foreground shrink-0">
           {pct !== null && `${Math.round(pct)}% · `}
           {formatBytes(e.downloaded)}
           {running && e.id === activeProgressIdRef.current && e.speed > 0 && ` · ${formatBytes(e.speed)}/с`}
@@ -271,6 +300,40 @@ function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore
       </div>
     )
   }
+  const groups = entries.reduce<StageGroup[]>((accumulator, entry) => {
+    if (entry.kind === 'stage') {
+      accumulator.push({ id: entry.id, stage: entry.stage, items: [] })
+      return accumulator
+    }
+    if (accumulator.length === 0) accumulator.push({ id: 0, stage: '', items: [] })
+    accumulator[accumulator.length - 1].items.push(entry)
+    return accumulator
+  }, [])
+
+  const renderGroup = (group: StageGroup, index: number) => {
+    const isLast = index === groups.length - 1
+    const status = isLast && running ? 'running' : isLast && result && !result.success ? 'error' : undefined
+    return (
+      <TraceCollapsible
+        key={group.id}
+        open={expanded[group.id] ?? isLast}
+        onOpenChange={(value) => setExpanded((previous) => ({ ...previous, [group.id]: value }))}
+      >
+        <TraceCollapsibleTrigger>
+          <TraceLine status={status}>
+            <TraceIcon>{status === 'running' ? <Spinner /> : status === 'error' ? <IconAlertCircle /> : <IconCircleCheck />}</TraceIcon>
+            <TraceTitle>{STAGE_LABELS[group.stage] ?? 'Запуск'}</TraceTitle>
+          </TraceLine>
+        </TraceCollapsibleTrigger>
+        <TraceCollapsibleContent>
+          <div className="text-[13px]">
+            {group.items.map((item) => (item.kind === 'log' ? renderLogLine(item) : renderProgressLine(item)))}
+          </div>
+        </TraceCollapsibleContent>
+      </TraceCollapsible>
+    )
+  }
+
   const selfRestarting = core === 'self' && result?.success
   // Управление доступно, пока идёт загрузка; после неё процесс доводится до конца.
   const canControl = running && (stage === '' || stage === 'prepare' || stage === 'download')
@@ -286,25 +349,19 @@ function UpdateProcessModal({ open, core, coreLabel, version, assets, backupCore
             </DialogTitle>
           </DialogHeader>
 
-          <CodeBlock size="sm" className="bg-muted/30 ring-ring/10 border-none ring-1">
-            <CodeBlockContent
-              ref={logRef}
-              wrap
-              className="h-90 [&>code:has([data-slot=empty])]:h-full [&>code:has([data-slot=empty])]:content-center"
-            >
-              {entries.length === 0 ? (
-                <Empty className="p-2 font-sans">
-                  <EmptyMedia variant="icon">
-                    <IconLogs />
-                  </EmptyMedia>
-                  <EmptyTitle>Журнал пуст</EmptyTitle>
-                  <EmptyDescription>Ожидание событий обновления...</EmptyDescription>
-                </Empty>
-              ) : (
-                entries.map((e) => (e.kind === 'log' ? renderLogLine(e) : renderProgressLine(e)))
-              )}
-            </CodeBlockContent>
-          </CodeBlock>
+          <Trace ref={logRef} className="h-90 scrollbar-thin overflow-y-auto [&:has([data-slot=empty])]:justify-center">
+            {groups.length === 0 ? (
+              <Empty className="p-2">
+                <EmptyMedia variant="icon">
+                  <IconLogs />
+                </EmptyMedia>
+                <EmptyTitle>Журнал пуст</EmptyTitle>
+                <EmptyDescription>Ожидание событий обновления...</EmptyDescription>
+              </Empty>
+            ) : (
+              groups.map(renderGroup)
+            )}
+          </Trace>
 
           <DialogFooter className="shrink-0">
             {running ? (

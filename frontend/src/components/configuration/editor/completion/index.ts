@@ -12,6 +12,8 @@ import {
 } from '@codemirror/autocomplete'
 import { Prec, type Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
+import { useProxiesStore } from '../../../../lib/store'
+import { mihomoRuleTargetOptionsAt } from './mihomoRuleTargets'
 import type { EditorLanguage, ThemeSpec } from '../types'
 import { jsonKeyInsertion, jsonValueInsertion, toTransactionSpec, yamlKeyInsertion, yamlValueInsertion } from './apply'
 import { resolveJsonContext, type ResolvedContext } from './jsonContext'
@@ -104,6 +106,11 @@ export function configCompletionSource(getTarget: () => CompletionTarget): Compl
     const root = schemaForFile(file, language)
     if (!root) return null
 
+    if (language === 'yaml') {
+      const ruleTarget = mihomoRuleTargetOptionsAt(context.state, context.pos)
+      if (ruleTarget) return ruleTarget
+    }
+
     const resolve = language === 'json' ? resolveJsonContext : language === 'yaml' ? resolveYamlContext : null
     if (!resolve) return null
 
@@ -141,9 +148,50 @@ export function configAutocompletion(getTarget: () => CompletionTarget): Extensi
       defaultKeymap: true,
       maxRenderedOptions: 60,
       activateOnCompletion: (completion) => completion.type === 'key-enum',
+      addToOptions: [{
+        position: 20,
+        render(completion) {
+          if (completion.type !== 'selector-target') return null
+
+          const iconUrl = (useProxiesStore.getState().proxies as Record<string, { icon?: string } | undefined>)[completion.label]?.icon
+          if (iconUrl) {
+            const image = document.createElement('img')
+            image.src = iconUrl
+            image.alt = ''
+            image.setAttribute('aria-hidden', 'true')
+            image.width = 16
+            image.height = 16
+            image.style.cssText = 'width:16px;height:16px;flex:none;object-fit:contain;border-radius:2px;margin-right:4px'
+            image.addEventListener('error', () => image.replaceWith(selectorGlyph()), { once: true })
+            return image
+          }
+
+          return selectorGlyph()
+        },
+      }],
     }),
     Prec.high(keymap.of([{ key: 'Tab', run: acceptOrFirstCompletion }])),
   ]
+}
+
+function selectorGlyph(): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('width', '16')
+  svg.setAttribute('height', '16')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.style.cssText = 'width:16px;height:16px;flex:none;color:#38bdf8;margin-right:4px'
+  for (const d of ['m12 3 9 5-9 5-9-5 9-5Z', 'm3 12 9 5 9-5', 'm3 16 9 5 9-5']) {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+    path.setAttribute('d', d)
+    path.setAttribute('fill', 'none')
+    path.setAttribute('stroke', 'currentColor')
+    path.setAttribute('stroke-width', '2')
+    path.setAttribute('stroke-linecap', 'round')
+    path.setAttribute('stroke-linejoin', 'round')
+    svg.append(path)
+  }
+  return svg
 }
 
 export const completionThemeSpec: ThemeSpec = {

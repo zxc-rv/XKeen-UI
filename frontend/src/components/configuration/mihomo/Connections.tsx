@@ -1,12 +1,22 @@
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ClearIcon } from '@/components/ui/clear-icon'
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import {
   IconActivity,
   IconArrowDown,
@@ -18,13 +28,14 @@ import {
   IconLetterCase,
   IconLoader2,
   IconPlugX,
+  IconSearch,
   IconX,
 } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { apiCall, clashFetch } from '../../../lib/api'
-import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useSettings, useWsConnected } from '../../../lib/store'
+import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useSettings } from '../../../lib/store'
 interface ConnectionMetadata {
   network: string
   type: string
@@ -752,7 +763,7 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
   const sourceCopy = getConnectionSourceCopyValue(conn, sourceName)
 
   return (
-    <TableRow className="hover:bg-muted/50 h-9.75 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
+    <TableRow className="hover:bg-muted/50 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
       <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
         <Tooltip>
           <TooltipTrigger
@@ -813,7 +824,9 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
       <TableCell className="text-muted-foreground text-[13px] tabular-nums">
         <TimeAgoCell isoString={conn.start} />
       </TableCell>
-      <TableCell />
+      <TableCell>
+        <span className="block size-5" aria-hidden="true" />
+      </TableCell>
     </TableRow>
   )
 })
@@ -1123,41 +1136,92 @@ function uniqueSourceLabels(sourceIPs: string[], showSourceName: boolean): strin
   return Array.from(labels)
 }
 
-function toggleSourceFilter(selected: string[], label: string): string[] {
-  return selected.includes(label) ? selected.filter((value) => value !== label) : [...selected, label]
-}
+const ConnectionsEmpty = memo(function ConnectionsEmpty({ className }: { className?: string }) {
+  return (
+    <Empty className={className}>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <IconPlugX />
+        </EmptyMedia>
+        <EmptyTitle className="text-sm tracking-normal">Нет соединений</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
+  )
+})
 
-const SourceDeviceBadges = memo(function SourceDeviceBadges({
+const ALL_DEVICES_VALUE = '__all_devices__'
+
+const SourceDeviceCombobox = memo(function SourceDeviceCombobox({
   labels,
   selectedLabels,
-  onToggleLabel,
-  onClear,
+  onChange,
+  className,
 }: {
   labels: string[]
   selectedLabels: string[]
-  onToggleLabel: (label: string) => void
-  onClear: () => void
+  onChange: (labels: string[]) => void
+  className?: string
 }) {
   const ghostLabels = selectedLabels.filter((label) => !labels.includes(label))
   const allLabels = ghostLabels.length ? [...labels, ...ghostLabels] : labels
+  const items = [ALL_DEVICES_VALUE, ...allLabels]
+  const value = selectedLabels.length ? selectedLabels : [ALL_DEVICES_VALUE]
+  const displayText = selectedLabels.length ? selectedLabels.join(', ') : 'Все устройства'
+
   if (!allLabels.length) return null
-  const badgeStyles = 'h-7 rounded-md px-3 text-xs cursor-pointer select-none'
+
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <Badge variant={selectedLabels.length ? 'outline' : 'default'} className={badgeStyles + ' hover:bg-primary/90'} onClick={onClear}>
-        Все устройства
-      </Badge>
-      {allLabels.map((label) => (
-        <Badge
-          key={label}
-          variant={selectedLabels.includes(label) ? 'default' : 'outline'}
-          className={badgeStyles + ' hover:bg-muted max-w-45'}
-          onClick={() => onToggleLabel(label)}
+    <Combobox
+      multiple
+      items={items}
+      value={value}
+      onValueChange={(next) => {
+        const nextLabels = next.filter((label) => label !== ALL_DEVICES_VALUE)
+        if (next.includes(ALL_DEVICES_VALUE) && nextLabels.length > 0 && selectedLabels.length > 0) {
+          onChange([])
+          return
+        }
+        onChange(nextLabels)
+      }}
+      autoHighlight
+    >
+      <ComboboxTrigger
+        render={<Button variant="outline" />}
+        aria-label="Фильтр по устройствам"
+        className={cn('cursor-pointer! justify-between font-normal', className)}
+      >
+        <span className={cn('min-w-0 truncate', !selectedLabels.length && 'text-muted-foreground')}>{displayText}</span>
+      </ComboboxTrigger>
+      <ComboboxContent className="min-w-56 border-blue-500/40">
+        <ComboboxInput
+          fullWidth
+          showTrigger={false}
+          placeholder="Поиск устройства"
+          className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
         >
-          <span className="min-w-0 truncate">{label}</span>
-        </Badge>
-      ))}
-    </div>
+          <InputGroupAddon align="inline-start">
+            <IconSearch />
+          </InputGroupAddon>
+        </ComboboxInput>
+        <ComboboxEmpty>Ничего не найдено</ComboboxEmpty>
+        <ComboboxList>
+          {(item: string) =>
+            item === ALL_DEVICES_VALUE ? (
+              <ComboboxItem key={item} value={item} className="font-medium">
+                Все устройства
+              </ComboboxItem>
+            ) : (
+              <ComboboxItem key={item} value={item}>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="min-w-0 flex-1 truncate">{item}</span>} />
+                  <TooltipContent className="max-w-80 break-all">{item}</TooltipContent>
+                </Tooltip>
+              </ComboboxItem>
+            )
+          }
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   )
 })
 
@@ -1172,8 +1236,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onToggleCaseSensitive,
   sourceLabels,
   selectedSourceLabels,
-  onToggleSourceLabel,
-  onClearSourceFilter,
+  onSourceFilterChange,
 }: {
   filter: string
   activeTab: 'active' | 'closed'
@@ -1185,15 +1248,21 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onToggleCaseSensitive: () => void
   sourceLabels: string[]
   selectedSourceLabels: string[]
-  onToggleSourceLabel: (label: string) => void
-  onClearSourceFilter: () => void
+  onSourceFilterChange: (labels: string[]) => void
 }) {
   return (
     <div className="border-border flex shrink-0 flex-col gap-2.5 border-b p-3">
       <div className="flex min-w-0 items-center gap-2">
         <ConnectionsTabs activeTab={activeTab} onTabChange={onTabChange} />
 
-        <InputGroup>
+        <SourceDeviceCombobox
+          labels={sourceLabels}
+          selectedLabels={selectedSourceLabels}
+          onChange={onSourceFilterChange}
+          className="h-9 w-44 shrink-0"
+        />
+
+        <InputGroup className="min-w-0 flex-1">
           <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
           <InputGroupAddon>
             <IconFilter />
@@ -1223,12 +1292,6 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 
         {activeTab === 'active' && <CloseAllBtn onCloseAll={onCloseAll} />}
       </div>
-      <SourceDeviceBadges
-        labels={sourceLabels}
-        selectedLabels={selectedSourceLabels}
-        onToggleLabel={onToggleSourceLabel}
-        onClear={onClearSourceFilter}
-      />
     </div>
   )
 })
@@ -1293,6 +1356,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onApplyFilter,
   showSourceName,
   caseSensitive,
+  onEmptyChange,
 }: {
   filter: string
   sourceFilter: string[]
@@ -1304,8 +1368,8 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onApplyFilter: (value: string) => void
   showSourceName: boolean
   caseSensitive: boolean
+  onEmptyChange: (empty: boolean) => void
 }) {
-  const connected = useWsConnected()
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
 
   const filteredIds = useConnectionsStore(
@@ -1350,27 +1414,23 @@ const ConnectionsBody = memo(function ConnectionsBody({
     })
   )
 
+  useEffect(() => {
+    onEmptyChange(filteredIds.length === 0)
+  }, [filteredIds.length, onEmptyChange])
+
   return (
     <TableBody>
-      {filteredIds.length === 0 ? (
-        <TableRow>
-          <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-            {!connected ? 'Подключение...' : filter || sourceFilter.length ? 'Нет совпадений' : 'Нет активных соединений'}
-          </TableCell>
-        </TableRow>
-      ) : (
-        filteredIds.map((id) => (
-          <ConnectionRow
-            key={id}
-            connId={id}
-            onSelect={onSelect}
-            onClose={onClose}
-            onBlock={onBlock}
-            onApplyFilter={onApplyFilter}
-            showSourceName={showSourceName}
-          />
-        ))
-      )}
+      {filteredIds.map((id) => (
+        <ConnectionRow
+          key={id}
+          connId={id}
+          onSelect={onSelect}
+          onClose={onClose}
+          onBlock={onBlock}
+          onApplyFilter={onApplyFilter}
+          showSourceName={showSourceName}
+        />
+      ))}
     </TableBody>
   )
 })
@@ -1383,6 +1443,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   onSelect,
   showSourceName,
   caseSensitive,
+  onEmptyChange,
 }: {
   filter: string
   sourceFilter: string[]
@@ -1391,6 +1452,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   onSelect: (conn: Connection) => void
   showSourceName: boolean
   caseSensitive: boolean
+  onEmptyChange: (empty: boolean) => void
 }) {
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const filteredConns = useConnectionsStore(
@@ -1432,17 +1494,15 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
     })
   )
 
+  useEffect(() => {
+    onEmptyChange(filteredConns.length === 0)
+  }, [filteredConns.length, onEmptyChange])
+
   return (
     <TableBody>
-      {filteredConns.length === 0 ? (
-        <TableRow>
-          <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-            {filter || sourceFilter.length ? 'Нет совпадений' : 'Нет закрытых соединений'}
-          </TableCell>
-        </TableRow>
-      ) : (
-        filteredConns.map((conn) => <ClosedConnectionRow key={conn.id} conn={conn} onSelect={onSelect} showSourceName={showSourceName} />)
-      )}
+      {filteredConns.map((conn) => (
+        <ClosedConnectionRow key={conn.id} conn={conn} onSelect={onSelect} showSourceName={showSourceName} />
+      ))}
     </TableBody>
   )
 })
@@ -1594,7 +1654,6 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   onToggleSearchHiddenColumns: () => void
   showSourceName: boolean
 }) {
-  const connected = useWsConnected()
   const sourceNameVersion = useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const [visibleLimit, setVisibleLimit] = useState(50)
   const liveMaps = useConnectionsStore(useShallow((s) => ({ active: s.map, closed: s.closedMap })))
@@ -1612,7 +1671,6 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
     [sourceSets]
   )
   const sourceLabels = useMemo(() => uniqueSourceLabels(sourceIPs, showSourceName), [sourceIPs, showSourceName, sourceNameVersion])
-  const toggleSourceLabel = (label: string) => onSourceFilterChange(toggleSourceFilter(sourceFilter, label))
   const connections = useMemo(() => {
     let result: { conn: Connection; closed: boolean }[] = []
     if (activeTab !== 'closed') result.push(...sourceSets.active.map((conn) => ({ conn, closed: false })))
@@ -1709,8 +1767,26 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
+          {activeTab !== 'closed' && (
+            <Button
+              variant="destructive"
+              size="icon"
+              aria-label="Закрыть все"
+              className="shrink-0"
+              disabled={!connections.some((item) => !item.closed)}
+              onClick={() => onCloseVisible(connections.filter((item) => !item.closed).map((item) => item.conn.id))}
+            >
+              <IconPlugX size={16} />
+            </Button>
+          )}
         </div>
         <div className="flex min-w-0 items-center gap-2">
+          <SourceDeviceCombobox
+            labels={sourceLabels}
+            selectedLabels={sourceFilter}
+            onChange={onSourceFilterChange}
+            className="h-9 min-w-0 flex-[1.2]"
+          />
           <Select
             value={`${sortColumn ?? 'host'}:${sortDirection}`}
             items={sortItems}
@@ -1732,24 +1808,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
               </SelectGroup>
             </SelectContent>
           </Select>
-          {activeTab !== 'closed' && (
-            <Button
-              variant="destructive"
-              className="h-9 shrink-0 px-2.5 text-xs"
-              disabled={!connections.some((item) => !item.closed)}
-              onClick={() => onCloseVisible(connections.filter((item) => !item.closed).map((item) => item.conn.id))}
-            >
-              <IconPlugX size={16} />
-              Закрыть все
-            </Button>
-          )}
         </div>
-        <SourceDeviceBadges
-          labels={sourceLabels}
-          selectedLabels={sourceFilter}
-          onToggleLabel={toggleSourceLabel}
-          onClear={() => onSourceFilterChange([])}
-        />
       </div>
       <div className="bg-input-background min-h-0 flex-1 overflow-y-auto p-2.5">
         {connections.length ? (
@@ -1772,9 +1831,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
             )}
           </div>
         ) : (
-          <div className="text-muted-foreground py-10 text-center text-sm">
-            {!connected ? 'Подключение…' : filter || sourceFilter.length ? 'Нет совпадений' : 'Нет соединений'}
-          </div>
+          <ConnectionsEmpty className="h-full min-h-60" />
         )}
       </div>
     </div>
@@ -1820,6 +1877,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   const dialogCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [caseSensitive, setCaseSensitive] = useState(() => localStorage.getItem('conn_filter_cs') === 'true')
+  const [desktopEmpty, setDesktopEmpty] = useState(false)
   const toggleCaseSensitive = useCallback(() => {
     setCaseSensitive((prev) => {
       const next = !prev
@@ -1839,8 +1897,6 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
     })
   )
   const sourceLabels = useMemo(() => uniqueSourceLabels(sourceIPs, showSourceName), [sourceIPs, showSourceName, sourceNameRefreshTick])
-  const toggleSourceLabel = useCallback((label: string) => setSourceFilter((prev) => toggleSourceFilter(prev, label)), [])
-  const clearSourceFilter = useCallback(() => setSourceFilter([]), [])
   useEffect(() => {
     writeSourceFilter(sourceFilter)
   }, [sourceFilter])
@@ -1993,10 +2049,9 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           onToggleCaseSensitive={toggleCaseSensitive}
           sourceLabels={sourceLabels}
           selectedSourceLabels={sourceFilter}
-          onToggleSourceLabel={toggleSourceLabel}
-          onClearSourceFilter={clearSourceFilter}
+          onSourceFilterChange={setSourceFilter}
         />
-        <div className="flex-1 scrollbar-thin overflow-auto">
+        <div className="flex min-h-0 flex-1 flex-col scrollbar-thin overflow-auto [&>[data-slot=table-container]]:shrink-0">
           <Table className="min-w-240 md:min-w-190">
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
             {activeTab === 'active' ? (
@@ -2011,6 +2066,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onApplyFilter={handleApplyFilter}
                 showSourceName={showSourceName}
                 caseSensitive={caseSensitive}
+                onEmptyChange={setDesktopEmpty}
               />
             ) : (
               <ClosedConnectionsBody
@@ -2021,9 +2077,15 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onSelect={handleSelectConnection}
                 showSourceName={showSourceName}
                 caseSensitive={caseSensitive}
+                onEmptyChange={setDesktopEmpty}
               />
             )}
           </Table>
+          {desktopEmpty && (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <ConnectionsEmpty className="h-full" />
+            </div>
+          )}
         </div>
       </div>
       {showMobileLayout && (

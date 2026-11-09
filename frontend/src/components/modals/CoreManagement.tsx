@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator'
 import { IconAlertCircle, IconCpu } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useAppContext, useDnsStatusStore, useModalContext } from '../../lib/store'
+import { CoreLogo } from '../ui/core-logo'
 
 interface Props {
   onSwitchCore: (core: string) => void
@@ -69,7 +70,10 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium">{core.label}</span>
+                        <span className="flex items-center gap-2">
+                          <CoreLogo core={core.id} />
+                          <span className="text-sm font-medium">{core.label}</span>
+                        </span>
                         {isActive && (
                           <Badge variant="outline" className="rounded-sm border-none bg-green-500/10 px-2 text-xs text-green-400">
                             Активно

@@ -94,7 +94,7 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            'border-border bg-input-background text-popover-foreground relative z-50 max-h-(--available-height) min-w-(--anchor-width) origin-(--transform-origin) overflow-hidden rounded-md border shadow-md',
+            'border-border bg-input-background text-popover-foreground relative z-50 max-h-(--available-height) min-w-(--anchor-width) origin-(--transform-origin) overflow-y-auto overscroll-contain rounded-md border shadow-md',
             position === 'popper'
               ? 'data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 data-[side=bottom]:data-open:slide-in-from-top-2 data-[side=bottom]:data-closed:slide-out-to-top-2 data-[side=top]:data-open:slide-in-from-bottom-2 data-[side=top]:data-closed:slide-out-to-bottom-2 duration-200'
               : 'transition duration-200 ease-out data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0',

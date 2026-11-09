@@ -30,16 +30,6 @@ fn now_ts() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
-fn get_client_ip(headers: &HeaderMap, addr: SocketAddr) -> String {
-    headers
-        .get("x-real-ip")
-        .or_else(|| headers.get("x-forwarded-for"))
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.split(',').next().unwrap_or("").trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| addr.ip().to_string())
-}
-
 fn get_session_cookie(headers: &HeaderMap) -> Option<&str> {
     headers
         .get("cookie")?
@@ -149,7 +139,7 @@ pub async fn post_login(
     State(state): State<AppState>, ConnectInfo(addr): ConnectInfo<SocketAddr>, headers: HeaderMap,
     Json(req): Json<PasswordReq>,
 ) -> Response {
-    let ip = get_client_ip(&headers, addr);
+    let ip = addr.ip().to_string();
     {
         let mut cache = BRUTE_CACHE.lock().unwrap();
         cache.retain(|_, (_, t)| t.elapsed() < Duration::from_secs(LOCKOUT_SECS * 2));
