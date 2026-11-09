@@ -100,7 +100,7 @@ function ComboboxInput({
   const { setAnchorElement } = React.useContext(ComboboxAnchorContext)
 
   return (
-    <div ref={setAnchorElement} className={cn('min-w-0', fullWidth ? 'w-full' : 'inline-block w-auto')}>
+    <div ref={showTrigger ? setAnchorElement : undefined} className={cn('min-w-0', fullWidth ? 'w-full' : 'inline-block w-auto')}>
       <InputGroup
         className={cn(
           fullWidth ? 'w-full' : 'w-auto',
@@ -110,7 +110,7 @@ function ComboboxInput({
           className
         )}
         style={
-          open
+          open && showTrigger
             ? {
                 borderColor: openBorderColor,
                 boxShadow: `0 0 0 3px ${openShadowColor}`,

@@ -1,6 +1,15 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from '@/components/ui/combobox'
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+  ComboboxValue,
+} from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Empty, EmptyContent, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Input } from '@/components/ui/input'
@@ -666,38 +675,39 @@ const SelectorCombobox = memo(function SelectorCombobox({
       items={options}
       value={value}
       open={visible ? open : false}
-      itemToStringLabel={(item) => item}
-      itemToStringValue={(item) => item}
-      filter={(item, query) => {
-        const normalizedQuery = query.trim().toLowerCase()
-        return !normalizedQuery || normalizedQuery === value?.trim().toLowerCase() || item.toLowerCase().includes(normalizedQuery)
-      }}
       onOpenChange={setOpen}
       onValueChange={(proxyName) => proxyName && !disabledOptions[proxyName] && onSelect(selectorName, proxyName)}
       autoHighlight
     >
-      <ComboboxInput
-        fullWidth
+      <ComboboxTrigger
+        render={<Button variant="outline" />}
         className={cn(
-          'w-full *:data-[slot=input-group-control]:bg-transparent! *:data-[slot=input-group-control]:hover:bg-transparent! *:data-[slot=input-group-control]:focus:bg-transparent! *:data-[slot=input-group-control]:focus-visible:bg-transparent!',
-          isFixed && 'border-purple-400! hover:border-purple-400!'
+          'w-full cursor-pointer! justify-between text-[13px] font-normal',
+          isFixed
+            ? 'border-purple-400 dark:border-purple-400 hover:border-purple-400 dark:hover:border-purple-400 data-popup-open:border-[#c084fc]! data-popup-open:shadow-[0_0_0_3px_rgba(192,132,252,0.2)]'
+            : 'border-blue-500/40 dark:border-blue-500/40 hover:border-blue-500/40 dark:hover:border-blue-500/40 data-popup-open:border-[#60a5fa]! data-popup-open:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
         )}
-        openBorderColor={isFixed ? '#c084fc' : undefined}
-        openShadowColor={isFixed ? 'rgba(192,132,252,0.2)' : undefined}
-        placeholder={lockSelection || isSmart ? 'Автовыбор' : 'Выберите прокси'}
       >
-        {selectedProxy?.icon && (
-          <InputGroupAddon align="inline-start">
+        <span className="flex min-w-0 items-center gap-2">
+          {selectedProxy?.icon && (
             <img
               src={selectedProxy.icon}
               alt=""
               className="size-4 shrink-0 object-contain"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
+          )}
+          <span className={cn('truncate', !value && 'text-muted-foreground')}>
+            <ComboboxValue>{(proxyName: string | null) => proxyName ?? (lockSelection || isSmart ? 'Автовыбор' : 'Выберите прокси')}</ComboboxValue>
+          </span>
+        </span>
+      </ComboboxTrigger>
+      <ComboboxContent className="border-blue-500/40">
+        <ComboboxInput fullWidth showTrigger={false} placeholder="Поиск" className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! has-[[data-slot=input-group-control]:focus-visible]:ring-0! m-1 h-8 w-auto shadow-none">
+          <InputGroupAddon align="inline-start">
+            <IconSearch />
           </InputGroupAddon>
-        )}
-      </ComboboxInput>
-      <ComboboxContent>
+        </ComboboxInput>
         <ComboboxEmpty>Ничего не найдено</ComboboxEmpty>
         <ComboboxList>
           {(proxyName: string) => (
