@@ -43,7 +43,7 @@ import {
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
-import { deleteConfigHistory, saveConfigRevision, supportsConfigHistory } from '../../lib/config-history'
+import { saveConfigRevision, supportsConfigHistory } from '../../lib/config-history'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
 import {
   runMassTask,
@@ -934,13 +934,10 @@ export function ConfigPanel({
     [configs, hiddenConfigFiles, activeConfigFile, dispatch, showToast]
   )
 
-  async function rollbackConfig(file: string, content: string, revisionId: string, applying = false) {
+  async function rollbackConfig(file: string, content: string, applying = false) {
     const configIndex = configsRef.current.findIndex((config) => config.file === file)
     const config = configsRef.current[configIndex]
     if (!config) throw new Error('Конфигурация недоступна')
-
-    const deleteError = await deleteConfigHistory(file, revisionId)
-    if (deleteError) throw new Error(deleteError)
 
     const isDirty = content !== config.savedContent
     dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: configIndex, content, isDirty })
@@ -954,8 +951,8 @@ export function ConfigPanel({
     if (!applying) showToast('Изменение отменено в редакторе. Сохраните файл, чтобы применить.', 'success')
   }
 
-  async function rollbackConfigAndApply(file: string, content: string, revisionId: string) {
-    await rollbackConfig(file, content, revisionId, true)
+  async function rollbackConfigAndApply(file: string, content: string) {
+    await rollbackConfig(file, content, true)
     await saveAndApply()
   }
 
@@ -982,8 +979,8 @@ export function ConfigPanel({
                 file={configHistoryFile}
                 currentContent={configs.find((config) => config.file === configHistoryFile)?.content ?? ''}
                 onClose={() => setConfigHistoryFile(null)}
-                onRollback={(file, content, revisionId) => rollbackConfig(file, content, revisionId).catch(showRollbackError)}
-                onRollbackAndApply={(file, content, revisionId) => rollbackConfigAndApply(file, content, revisionId).catch(showRollbackError)}
+                onRollback={(file, content) => rollbackConfig(file, content).catch(showRollbackError)}
+                onRollbackAndApply={(file, content) => rollbackConfigAndApply(file, content).catch(showRollbackError)}
               />
             </div>
           )}

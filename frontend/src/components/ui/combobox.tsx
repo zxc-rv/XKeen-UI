@@ -57,7 +57,13 @@ function ComboboxTrigger({ className, children, ...props }: ComboboxPrimitive.Tr
     <ComboboxPrimitive.Trigger
       data-slot="combobox-trigger"
       data-popup-open={open || undefined}
-      className={cn('cursor-default! active:translate-y-0 [&_svg:not([class*=size-])]:size-4', className)}
+      className={cn(
+        // Keep the trigger background stable while the popup is open. The `dark:` variant is
+        // required because `dark:hover:*` utilities are emitted after plain `data-*` ones with
+        // the same specificity, so they would otherwise win in dark mode.
+        'cursor-default! active:translate-y-0 data-popup-open:bg-input-background! data-popup-open:hover:bg-input-background! dark:data-popup-open:hover:bg-input-background! [&_svg:not([class*=size-])]:size-4',
+        className
+      )}
       {...props}
     >
       {children}

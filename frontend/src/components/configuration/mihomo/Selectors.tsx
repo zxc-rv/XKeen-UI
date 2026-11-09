@@ -662,6 +662,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
     )
   )
   const [open, setOpen] = useState(false)
+  const isOpen = visible && open
 
   useEffect(() => {
     if (!visible) {
@@ -674,7 +675,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
     <Combobox
       items={options}
       value={value}
-      open={visible ? open : false}
+      open={isOpen}
       onOpenChange={setOpen}
       onValueChange={(proxyName) => proxyName && !disabledOptions[proxyName] && onSelect(selectorName, proxyName)}
       autoHighlight
@@ -683,9 +684,14 @@ const SelectorCombobox = memo(function SelectorCombobox({
         render={<Button variant="outline" />}
         className={cn(
           'w-full cursor-pointer! justify-between font-normal',
+          isFixed ? 'border-emerald-400 dark:border-emerald-400' : 'border-blue-500/40 dark:border-blue-500/40',
           isFixed
-            ? 'border-emerald-400 dark:border-emerald-400 hover:border-emerald-400 dark:hover:border-emerald-400 data-popup-open:border-[#34d399]! data-popup-open:shadow-[0_0_0_3px_rgba(52,211,153,0.2)]'
-            : 'border-blue-500/40 dark:border-blue-500/40 hover:border-blue-500/40 dark:hover:border-blue-500/40 data-popup-open:border-[#60a5fa]! data-popup-open:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
+            ? 'hover:border-emerald-400 dark:hover:border-emerald-400 hover:bg-emerald-500/10! dark:hover:bg-emerald-500/10!'
+            : 'hover:border-blue-500/40 dark:hover:border-blue-500/40 hover:bg-blue-500/10! dark:hover:bg-blue-500/10!',
+          isOpen &&
+            (isFixed
+              ? 'border-[#34d399]! shadow-[0_0_0_3px_rgba(52,211,153,0.2)]!'
+              : 'border-[#60a5fa]! shadow-[0_0_0_3px_rgba(59,130,246,0.15)]!')
         )}
       >
         <span className="flex min-w-0 items-center gap-2">
