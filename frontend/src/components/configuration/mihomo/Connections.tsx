@@ -1,12 +1,21 @@
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ClearIcon } from '@/components/ui/clear-icon'
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxTrigger,
+} from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import {
   IconActivity,
   IconArrowDown,
@@ -18,6 +27,7 @@ import {
   IconLetterCase,
   IconLoader2,
   IconPlugX,
+  IconSearch,
   IconX,
 } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -1123,41 +1133,79 @@ function uniqueSourceLabels(sourceIPs: string[], showSourceName: boolean): strin
   return Array.from(labels)
 }
 
-function toggleSourceFilter(selected: string[], label: string): string[] {
-  return selected.includes(label) ? selected.filter((value) => value !== label) : [...selected, label]
-}
+const ALL_DEVICES_VALUE = '__all_devices__'
 
-const SourceDeviceBadges = memo(function SourceDeviceBadges({
+const SourceDeviceCombobox = memo(function SourceDeviceCombobox({
   labels,
   selectedLabels,
-  onToggleLabel,
-  onClear,
+  onChange,
+  className,
 }: {
   labels: string[]
   selectedLabels: string[]
-  onToggleLabel: (label: string) => void
-  onClear: () => void
+  onChange: (labels: string[]) => void
+  className?: string
 }) {
   const ghostLabels = selectedLabels.filter((label) => !labels.includes(label))
   const allLabels = ghostLabels.length ? [...labels, ...ghostLabels] : labels
+  const items = [ALL_DEVICES_VALUE, ...allLabels]
+  const value = selectedLabels.length ? selectedLabels : [ALL_DEVICES_VALUE]
+  const displayText = selectedLabels.length ? selectedLabels.join(', ') : 'Все устройства'
+
   if (!allLabels.length) return null
-  const badgeStyles = 'h-7 rounded-md px-3 text-xs cursor-pointer select-none'
+
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <Badge variant={selectedLabels.length ? 'outline' : 'default'} className={badgeStyles + ' hover:bg-primary/90'} onClick={onClear}>
-        Все устройства
-      </Badge>
-      {allLabels.map((label) => (
-        <Badge
-          key={label}
-          variant={selectedLabels.includes(label) ? 'default' : 'outline'}
-          className={badgeStyles + ' hover:bg-muted max-w-45'}
-          onClick={() => onToggleLabel(label)}
+    <Combobox
+      multiple
+      items={items}
+      value={value}
+      onValueChange={(next) => {
+        const nextLabels = next.filter((label) => label !== ALL_DEVICES_VALUE)
+        if (next.includes(ALL_DEVICES_VALUE) && nextLabels.length > 0 && selectedLabels.length > 0) {
+          onChange([])
+          return
+        }
+        onChange(nextLabels)
+      }}
+      autoHighlight
+    >
+      <ComboboxTrigger
+        render={<Button variant="outline" />}
+        aria-label="Фильтр по устройствам"
+        className={cn('cursor-pointer! justify-between font-normal', className)}
+      >
+        <span className={cn('min-w-0 truncate', !selectedLabels.length && 'text-muted-foreground')}>{displayText}</span>
+      </ComboboxTrigger>
+      <ComboboxContent className="min-w-56 border-blue-500/40">
+        <ComboboxInput
+          fullWidth
+          showTrigger={false}
+          placeholder="Поиск устройства"
+          className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
         >
-          <span className="min-w-0 truncate">{label}</span>
-        </Badge>
-      ))}
-    </div>
+          <InputGroupAddon align="inline-start">
+            <IconSearch />
+          </InputGroupAddon>
+        </ComboboxInput>
+        <ComboboxEmpty>Ничего не найдено</ComboboxEmpty>
+        <ComboboxList>
+          {(item: string) =>
+            item === ALL_DEVICES_VALUE ? (
+              <ComboboxItem key={item} value={item} className="font-medium">
+                Все устройства
+              </ComboboxItem>
+            ) : (
+              <ComboboxItem key={item} value={item}>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="min-w-0 flex-1 truncate">{item}</span>} />
+                  <TooltipContent className="max-w-80 break-all">{item}</TooltipContent>
+                </Tooltip>
+              </ComboboxItem>
+            )
+          }
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   )
 })
 
@@ -1172,8 +1220,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onToggleCaseSensitive,
   sourceLabels,
   selectedSourceLabels,
-  onToggleSourceLabel,
-  onClearSourceFilter,
+  onSourceFilterChange,
 }: {
   filter: string
   activeTab: 'active' | 'closed'
@@ -1185,15 +1232,21 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   onToggleCaseSensitive: () => void
   sourceLabels: string[]
   selectedSourceLabels: string[]
-  onToggleSourceLabel: (label: string) => void
-  onClearSourceFilter: () => void
+  onSourceFilterChange: (labels: string[]) => void
 }) {
   return (
     <div className="border-border flex shrink-0 flex-col gap-2.5 border-b p-3">
       <div className="flex min-w-0 items-center gap-2">
         <ConnectionsTabs activeTab={activeTab} onTabChange={onTabChange} />
 
-        <InputGroup>
+        <SourceDeviceCombobox
+          labels={sourceLabels}
+          selectedLabels={selectedSourceLabels}
+          onChange={onSourceFilterChange}
+          className="h-9 w-44 shrink-0"
+        />
+
+        <InputGroup className="min-w-0 flex-1">
           <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
           <InputGroupAddon>
             <IconFilter />
@@ -1223,12 +1276,6 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 
         {activeTab === 'active' && <CloseAllBtn onCloseAll={onCloseAll} />}
       </div>
-      <SourceDeviceBadges
-        labels={sourceLabels}
-        selectedLabels={selectedSourceLabels}
-        onToggleLabel={onToggleSourceLabel}
-        onClear={onClearSourceFilter}
-      />
     </div>
   )
 })
@@ -1612,7 +1659,6 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
     [sourceSets]
   )
   const sourceLabels = useMemo(() => uniqueSourceLabels(sourceIPs, showSourceName), [sourceIPs, showSourceName, sourceNameVersion])
-  const toggleSourceLabel = (label: string) => onSourceFilterChange(toggleSourceFilter(sourceFilter, label))
   const connections = useMemo(() => {
     let result: { conn: Connection; closed: boolean }[] = []
     if (activeTab !== 'closed') result.push(...sourceSets.active.map((conn) => ({ conn, closed: false })))
@@ -1709,8 +1755,26 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
               </InputGroupButton>
             </InputGroupAddon>
           </InputGroup>
+          {activeTab !== 'closed' && (
+            <Button
+              variant="destructive"
+              size="icon"
+              aria-label="Закрыть все"
+              className="shrink-0"
+              disabled={!connections.some((item) => !item.closed)}
+              onClick={() => onCloseVisible(connections.filter((item) => !item.closed).map((item) => item.conn.id))}
+            >
+              <IconPlugX size={16} />
+            </Button>
+          )}
         </div>
         <div className="flex min-w-0 items-center gap-2">
+          <SourceDeviceCombobox
+            labels={sourceLabels}
+            selectedLabels={sourceFilter}
+            onChange={onSourceFilterChange}
+            className="h-9 min-w-0 flex-[1.2]"
+          />
           <Select
             value={`${sortColumn ?? 'host'}:${sortDirection}`}
             items={sortItems}
@@ -1732,24 +1796,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
               </SelectGroup>
             </SelectContent>
           </Select>
-          {activeTab !== 'closed' && (
-            <Button
-              variant="destructive"
-              className="h-9 shrink-0 px-2.5 text-xs"
-              disabled={!connections.some((item) => !item.closed)}
-              onClick={() => onCloseVisible(connections.filter((item) => !item.closed).map((item) => item.conn.id))}
-            >
-              <IconPlugX size={16} />
-              Закрыть все
-            </Button>
-          )}
         </div>
-        <SourceDeviceBadges
-          labels={sourceLabels}
-          selectedLabels={sourceFilter}
-          onToggleLabel={toggleSourceLabel}
-          onClear={() => onSourceFilterChange([])}
-        />
       </div>
       <div className="bg-input-background min-h-0 flex-1 overflow-y-auto p-2.5">
         {connections.length ? (
@@ -1839,8 +1886,6 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
     })
   )
   const sourceLabels = useMemo(() => uniqueSourceLabels(sourceIPs, showSourceName), [sourceIPs, showSourceName, sourceNameRefreshTick])
-  const toggleSourceLabel = useCallback((label: string) => setSourceFilter((prev) => toggleSourceFilter(prev, label)), [])
-  const clearSourceFilter = useCallback(() => setSourceFilter([]), [])
   useEffect(() => {
     writeSourceFilter(sourceFilter)
   }, [sourceFilter])
@@ -1993,8 +2038,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           onToggleCaseSensitive={toggleCaseSensitive}
           sourceLabels={sourceLabels}
           selectedSourceLabels={sourceFilter}
-          onToggleSourceLabel={toggleSourceLabel}
-          onClearSourceFilter={clearSourceFilter}
+          onSourceFilterChange={setSourceFilter}
         />
         <div className="flex-1 scrollbar-thin overflow-auto">
           <Table className="min-w-240 md:min-w-190">

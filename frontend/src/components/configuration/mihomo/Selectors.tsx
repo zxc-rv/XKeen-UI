@@ -682,7 +682,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
       <ComboboxTrigger
         render={<Button variant="outline" />}
         className={cn(
-          'w-full cursor-pointer! justify-between text-[13px] font-normal',
+          'w-full cursor-pointer! justify-between font-normal',
           isFixed
             ? 'border-purple-400 dark:border-purple-400 hover:border-purple-400 dark:hover:border-purple-400 data-popup-open:border-[#c084fc]! data-popup-open:shadow-[0_0_0_3px_rgba(192,132,252,0.2)]'
             : 'border-blue-500/40 dark:border-blue-500/40 hover:border-blue-500/40 dark:hover:border-blue-500/40 data-popup-open:border-[#60a5fa]! data-popup-open:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
