@@ -428,7 +428,7 @@ async fn run_update_inner(state: &AppState, req: &UpdateReq) -> Result<(), Updat
             Some(a) => a,
             None => {
                 let msg = if matches!(arch, "aarch64" | "mips") {
-                    "Не найден ассет для этой архитектуры в релизе"
+                    "Не найден подходящий ассет"
                 } else {
                     "Архитектура не поддерживается"
                 };
