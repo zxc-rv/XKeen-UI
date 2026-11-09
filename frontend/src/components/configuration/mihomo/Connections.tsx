@@ -763,7 +763,7 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
   const sourceCopy = getConnectionSourceCopyValue(conn, sourceName)
 
   return (
-    <TableRow className="hover:bg-muted/50 h-9.75 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
+    <TableRow className="hover:bg-muted/50 cursor-pointer opacity-60 transition-colors" onClick={() => onSelect(conn)}>
       <TableCell className="max-w-120 pl-3 text-[13px] md:max-w-40">
         <Tooltip>
           <TooltipTrigger
@@ -824,7 +824,9 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
       <TableCell className="text-muted-foreground text-[13px] tabular-nums">
         <TimeAgoCell isoString={conn.start} />
       </TableCell>
-      <TableCell />
+      <TableCell>
+        <span className="block size-5" aria-hidden="true" />
+      </TableCell>
     </TableRow>
   )
 })
