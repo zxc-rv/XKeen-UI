@@ -92,70 +92,97 @@ export function getConfigChangeLines(before: string, after: string): ConfigChang
   })
 }
 
-interface ChangeHunk {
-  start: number
-  end: number
+interface ChangeBlock {
+  afterStart: number
   before: string[]
   after: string[]
 }
 
-function makeChangeHunks(before: string, after: string): ChangeHunk[] {
+function makeChangeBlocks(before: string, after: string): ChangeBlock[] {
   const rows = diffConfigLines(before, after)
-  const changedRanges: Array<{ start: number; end: number }> = []
+  const blocks: ChangeBlock[] = []
+  let rightLineCount = 0
   for (let index = 0; index < rows.length;) {
     if (rows[index].kind === 'same') {
+      if (rows[index].right !== undefined) rightLineCount++
       index++
       continue
     }
-    const start = index
-    while (index < rows.length && rows[index].kind !== 'same') index++
-    changedRanges.push({ start, end: index })
+    const changedRows: ConfigDiffRow[] = []
+    while (index < rows.length && rows[index].kind !== 'same') changedRows.push(rows[index++])
+    const firstRightLine = changedRows.find((row) => row.rightLine !== undefined)?.rightLine
+    blocks.push({
+      afterStart: firstRightLine === undefined ? rightLineCount : firstRightLine - 1,
+      before: changedRows.flatMap((row) => (row.left === undefined ? [] : [row.left])),
+      after: changedRows.flatMap((row) => (row.right === undefined ? [] : [row.right])),
+    })
+    rightLineCount += changedRows.filter((row) => row.right !== undefined).length
   }
+  return blocks
+}
 
-  const context = 2
-  const merged: Array<{ start: number; end: number }> = []
-  for (const range of changedRanges) {
-    const next = { start: Math.max(0, range.start - context), end: Math.min(rows.length, range.end + context) }
-    const previous = merged.at(-1)
-    if (previous && next.start <= previous.end) previous.end = Math.max(previous.end, next.end)
-    else merged.push(next)
-  }
-
-  return merged.map(({ start, end }) => {
-    const hunkRows = rows.slice(start, end)
-    return {
-      start,
-      end,
-      before: hunkRows.flatMap((row) => (row.left === undefined ? [] : [row.left])),
-      after: hunkRows.flatMap((row) => (row.right === undefined ? [] : [row.right])),
+function mapSnapshotLinesToCurrent(snapshot: string[], current: string[]): Map<number, number> {
+  const mapping = new Map<number, number>()
+  for (const row of diffConfigLines(snapshot.join('\n'), current.join('\n'))) {
+    if (row.kind === 'same' && row.leftLine !== undefined && row.rightLine !== undefined) {
+      mapping.set(row.leftLine - 1, row.rightLine - 1)
     }
-  })
-}
-
-function findUniqueSequence(lines: string[], sequence: string[]): number {
-  if (sequence.length === 0) return lines.length === 0 ? 0 : -1
-  let found = -1
-  for (let start = 0; start <= lines.length - sequence.length; start++) {
-    if (!sequence.every((line, offset) => lines[start + offset] === line)) continue
-    if (found !== -1) return -1
-    found = start
   }
-  return found
+  return mapping
 }
 
+function findInsertionPoint(afterStart: number, mapping: Map<number, number>, currentLength: number): number {
+  let previous: number | undefined
+  let next: number | undefined
+  for (let index = afterStart - 1; index >= 0; index--) {
+    const mapped = mapping.get(index)
+    if (mapped !== undefined) {
+      previous = mapped
+      break
+    }
+  }
+  for (let index = afterStart; index >= 0; index++) {
+    const mapped = mapping.get(index)
+    if (mapped !== undefined) {
+      next = mapped
+      break
+    }
+  }
+  if (previous !== undefined && next !== undefined) {
+    if (previous >= next) return -1
+    return next
+  }
+  if (next !== undefined) return next
+  if (previous !== undefined) return previous + 1
+  return currentLength === 0 ? 0 : -1
+}
+
+/** Reverse one saved change while preserving unrelated edits made afterwards. */
 export function revertConfigChange(current: string, before: string, after: string): string {
   const ending = current.includes('\r\n') ? '\r\n' : '\n'
   const lines = current.split(/\r?\n/)
-  const hunks = makeChangeHunks(before, after)
+  const blocks = makeChangeBlocks(before, after)
 
-  if (hunks.length === 0) throw new Error('В выбранной версии нет изменений для отмены')
+  if (blocks.length === 0) throw new Error('В выбранной версии нет изменений для отмены')
 
-  for (const hunk of hunks.reverse()) {
-    const index = findUniqueSequence(lines, hunk.after)
-    if (index < 0) {
+  const afterLines = after.split(/\r?\n/)
+  const mapping = mapSnapshotLinesToCurrent(afterLines, lines)
+  for (const block of blocks.reverse()) {
+    let index: number
+    if (block.after.length === 0) {
+      index = findInsertionPoint(block.afterStart, mapping, lines.length)
+    } else {
+      const mapped = block.after.map((_, offset) => mapping.get(block.afterStart + offset))
+      if (mapped.some((line) => line === undefined)) {
+        throw new Error('Не удалось безопасно отменить изменение: изменённая строка была удалена или изменена позже')
+      }
+      index = mapped[0]!
+      if (mapped.some((line, offset) => line !== index + offset)) index = -1
+    }
+    if (index < 0 || index > lines.length) {
       throw new Error('Не удалось безопасно отменить изменение: затронутые строки изменились позже или совпадают в нескольких местах')
     }
-    lines.splice(index, hunk.after.length, ...hunk.before)
+    lines.splice(index, block.after.length, ...block.before)
   }
 
   return lines.join(ending)

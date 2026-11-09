@@ -4,6 +4,7 @@ import { apiCall } from '@/lib/api'
 import { deleteConfigHistory } from '@/lib/config-history'
 import { cn } from '@/lib/utils'
 import { IconArrowLeft, IconChevronDown, IconHistory, IconLoader2, IconRestore, IconTrash } from '@tabler/icons-react'
+import { CodeBlock, CodeBlockContent, CodeBlockLine } from '@/components/ui/code-block'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getConfigChangeLines, revertConfigChange } from '../configuration/config-history-diff'
@@ -24,7 +25,8 @@ interface Props {
   file: string
   currentContent: string
   onClose: () => void
-  onRollback: (file: string, content: string) => Promise<void>
+  onRollback: (file: string, content: string, revisionId: string) => Promise<void>
+  onRollbackAndApply: (file: string, content: string, revisionId: string) => Promise<void>
 }
 
 type HistoryResponse = { success: boolean; history?: ConfigRevision[]; error?: string }
@@ -38,7 +40,7 @@ function getFileName(file: string) {
   return file.split(/[\\/]/).filter(Boolean).at(-1) || file
 }
 
-export function ConfigHistoryView({ file, currentContent, onClose, onRollback }: Props) {
+export function ConfigHistoryView({ file, currentContent, onClose, onRollback, onRollbackAndApply }: Props) {
   const [history, setHistory] = useState<ConfigRevision[]>([])
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   const [isLoading, setIsLoading] = useState(true)
@@ -107,12 +109,13 @@ export function ConfigHistoryView({ file, currentContent, onClose, onRollback }:
     return () => document.removeEventListener('pointerdown', handleOutsidePointerDown)
   }, [closeHistory, confirmClear, confirmDeleteId])
 
-  async function rollback(entry: HistoryChange) {
+  async function rollback(entry: HistoryChange, apply = false) {
     setRollingBackId(entry.revision.id)
     setError('')
     try {
       const patchedContent = revertConfigChange(currentContent, entry.before.content, entry.revision.content)
-      await onRollback(file, patchedContent)
+      if (apply) await onRollbackAndApply(file, patchedContent, entry.revision.id)
+      else await onRollback(file, patchedContent, entry.revision.id)
       await loadHistory()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось отменить изменение')
@@ -263,27 +266,33 @@ export function ConfigHistoryView({ file, currentContent, onClose, onRollback }:
                     >
                     <div className="border-t border-border px-3 py-3 sm:px-4 sm:py-4">
                       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="order-2 min-w-0 w-full overflow-hidden rounded-lg border border-border bg-background/40 font-mono text-xs sm:order-1 sm:w-1/2 sm:flex-none sm:text-[13px]">
+                        <CodeBlock size="sm" className="order-2 min-w-0 w-full bg-background/40 sm:order-1 sm:w-1/2 sm:flex-none">
+                          <CodeBlockContent className="max-h-64">
                           {diff.map((change, changeIndex) => (
-                            <div
+                            <CodeBlockLine
                               key={`${change.kind}-${change.line}-${changeIndex}`}
+                              variant={change.kind}
+                              data-line={change.line}
                               className={cn(
-                                'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 border-b border-border/50 px-2 py-1 last:border-b-0 sm:px-3',
+                                'before:ms-1 before:me-1 before:content-[attr(data-line)]',
                                 change.kind === 'removed' ? 'bg-red-500/10 text-red-800 dark:text-red-200' : 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
                               )}
                             >
-                              <span className="flex select-none items-start gap-1 whitespace-nowrap text-muted-foreground/70">
-                                {change.line}
-                                <span className="font-semibold text-foreground">{change.kind === 'removed' ? '−' : '+'}</span>
-                              </span>
-                              <pre className="m-0 min-w-0 max-w-full overflow-x-auto whitespace-pre">{change.text.trimStart() || ' '}</pre>
-                            </div>
+                              {change.text.trimStart() || ' '}
+                            </CodeBlockLine>
                           ))}
+                          </CodeBlockContent>
+                        </CodeBlock>
+                        <div className="order-1 flex w-full flex-wrap gap-2 sm:order-2 sm:w-auto sm:shrink-0 sm:justify-end">
+                          <Button className="w-fit whitespace-nowrap" size="sm" variant="outline" disabled={!!rollingBackId || isLoading || !!deletingId} onClick={() => void rollback(entry)}>
+                            {rollingBackId === revision.id ? <IconLoader2 className="animate-spin" /> : <IconRestore />}
+                            Отменить изменение
+                          </Button>
+                          <Button className="w-fit whitespace-nowrap" size="sm" disabled={!!rollingBackId || isLoading || !!deletingId} onClick={() => void rollback(entry, true)}>
+                            {rollingBackId === revision.id ? <IconLoader2 className="animate-spin" /> : <IconRestore />}
+                            Откатить и применить
+                          </Button>
                         </div>
-                        <Button className="order-1 w-fit self-start whitespace-nowrap sm:order-2 sm:shrink-0 sm:self-auto" size="sm" variant="outline" disabled={!!rollingBackId || isLoading || !!deletingId} onClick={() => void rollback(entry)}>
-                          {rollingBackId === revision.id ? <IconLoader2 className="animate-spin" /> : <IconRestore />}
-                          Отменить изменение
-                        </Button>
                       </div>
                     </div>
                     </motion.div>

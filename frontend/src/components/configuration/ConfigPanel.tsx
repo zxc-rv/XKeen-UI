@@ -43,8 +43,7 @@ import {
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
-import { saveConfigRevision, supportsConfigHistory } from '../../lib/config-history'
-import { rollbackRestartAction } from '../../lib/config-history-policy'
+import { deleteConfigHistory, saveConfigRevision, supportsConfigHistory } from '../../lib/config-history'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
 import {
   runMassTask,
@@ -689,8 +688,7 @@ export function ConfigPanel({
     baseUrl: string | null,
     cfg: Config,
     content: string,
-    onHistoryError: (message: string) => void,
-    options: { rollback?: boolean } = {}
+    onHistoryError: (message: string) => void
   ) {
     let core = currentCore
     if (baseUrl) {
@@ -707,7 +705,7 @@ export function ConfigPanel({
     let validate = ''
     if (!isXkeenFile(cfg.file) && (core === 'mihomo' || core === 'xray')) {
       validate = `?validate=${core}`
-      if (core === 'mihomo' && closeConnsOnApply && !options.rollback) validate += '&closeConns=true'
+      if (core === 'mihomo' && closeConnsOnApply) validate += '&closeConns=true'
     }
     const saveResult = await apiCall<ApiResult>(
       'PUT',
@@ -718,14 +716,6 @@ export function ConfigPanel({
       }
     )
     const hotReloadUnavailable = saveResult.error === HOT_RELOAD_UNAVAILABLE
-    const rollbackAction = options.rollback ? rollbackRestartAction(core, closeConnsOnApply) : undefined
-    if (hotReloadUnavailable && rollbackAction === null) {
-      const restore = await apiCall<ApiResult>('PUT', 'configs', { file: cfg.file, content: cfg.savedContent }, { baseUrl })
-      if (!restore?.success) {
-        throw new Error('Clash API недоступен; исходное содержимое файла не удалось восстановить')
-      }
-      throw new Error('Clash API недоступен. Полный перезапуск отключён настройкой «Автозакрытие при применении»')
-    }
     if (!saveResult.success && !hotReloadUnavailable) {
       throw new Error(
         saveResult.error === 'Validation failed'
@@ -739,17 +729,13 @@ export function ConfigPanel({
 
     if (hotReloadUnavailable) showToast('Clash API недоступен, выполняем полный рестарт', 'warning')
 
-    const action = options.rollback
-      ? hotReloadUnavailable
-        ? 'hardRestart'
-        : rollbackAction
-      : hotReloadUnavailable
-        ? 'hardRestart'
-        : isHotReload
-          ? hasCriticalChanges(cfg.savedContent, content, 'yaml')
-            ? 'hardRestart'
-            : null
-          : restartActionFor(cfg, content)
+    const action = hotReloadUnavailable
+      ? 'hardRestart'
+      : isHotReload
+        ? hasCriticalChanges(cfg.savedContent, content, 'yaml')
+          ? 'hardRestart'
+          : null
+        : restartActionFor(cfg, content)
     if (!action) return false
 
     const restartResult = await apiCall<ApiResult>('POST', 'control', { action, core }, { baseUrl })
@@ -947,38 +933,29 @@ export function ConfigPanel({
     [configs, hiddenConfigFiles, activeConfigFile, dispatch, showToast]
   )
 
-  async function rollbackConfig(file: string, content: string) {
-    const configIndex = configsRef.current.findIndex((item) => item.file === file)
+  async function rollbackConfig(file: string, content: string, revisionId: string, applying = false) {
+    const configIndex = configsRef.current.findIndex((config) => config.file === file)
     const config = configsRef.current[configIndex]
     if (!config) throw new Error('Конфигурация недоступна')
 
-    dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Откат изменения...' })
-    let historyError = ''
-    try {
-      await applyToHost(null, config, content, (message) => {
-        historyError = message
-      }, { rollback: true })
-      dispatch({ type: 'SAVE_CONFIG', index: configIndex, content })
-      if (configsRef.current[activeIndexRef.current]?.file === file) {
-        const editorViewState = editorRef.current?.saveViewState()
-        editorRef.current?.setValue(content)
-        editorRef.current?.setSavedContent(content)
-        editorRef.current?.validate(file)
-        if (editorViewState) editorRef.current?.restoreViewState(editorViewState)
-        saveViewState(file, false)
-      }
-      dispatch({ type: 'SET_SERVICE_STATUS', status: 'running' })
-      syncClashApiPort(200)
+    const deleteError = await deleteConfigHistory(file, revisionId)
+    if (deleteError) throw new Error(deleteError)
 
-      if (historyError) {
-        showToast(`Изменение отменено и применено, но запись журнала не сохранена: ${historyError}`, 'warning')
-      } else {
-        showToast('Изменение отменено и применено', 'success')
-      }
-    } catch (error) {
-      dispatch({ type: 'SET_SERVICE_STATUS', status: isRunning ? 'running' : 'stopped' })
-      throw error
+    const isDirty = content !== config.savedContent
+    dispatch({ type: 'UPDATE_CONFIG_DIRTY', index: configIndex, content, isDirty })
+    if (configsRef.current[activeIndexRef.current]?.file === file) {
+      const editorViewState = editorRef.current?.saveViewState()
+      editorRef.current?.setValue(content)
+      editorRef.current?.validate(file)
+      if (editorViewState) editorRef.current?.restoreViewState(editorViewState)
+      saveViewState(file, isDirty)
     }
+    if (!applying) showToast('Изменение отменено в редакторе. Сохраните файл, чтобы применить.', 'success')
+  }
+
+  async function rollbackConfigAndApply(file: string, content: string, revisionId: string) {
+    await rollbackConfig(file, content, revisionId, true)
+    await saveAndApply()
   }
 
   const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
@@ -1001,6 +978,7 @@ export function ConfigPanel({
                 currentContent={configs.find((config) => config.file === configHistoryFile)?.content ?? ''}
                 onClose={() => setConfigHistoryFile(null)}
                 onRollback={rollbackConfig}
+                onRollbackAndApply={rollbackConfigAndApply}
               />
             </div>
           )}

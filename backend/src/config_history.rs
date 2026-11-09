@@ -10,7 +10,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const HISTORY_DIR: &str = "/opt/var/lib/xkeen-ui/config-history";
+const HISTORY_DIR: &str = "/opt/etc/xkeen/config-history";
+const LEGACY_HISTORY_DIR: &str = "/opt/var/lib/xkeen-ui/config-history";
 static HISTORY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -46,9 +47,14 @@ pub struct DeleteConfigHistory {
     id: Option<String>,
 }
 
-fn history_path(file: &str) -> PathBuf {
+fn history_dir(file: &str) -> PathBuf {
     let key = format!("{:x}", md5::compute(file.as_bytes()));
-    PathBuf::from(HISTORY_DIR).join(format!("{key}.json"))
+    PathBuf::from(HISTORY_DIR).join(key)
+}
+
+fn legacy_history_path(file: &str) -> PathBuf {
+    let key = format!("{:x}", md5::compute(file.as_bytes()));
+    PathBuf::from(LEGACY_HISTORY_DIR).join(format!("{key}.json"))
 }
 
 fn supports_history(file: &str) -> bool {
@@ -86,18 +92,9 @@ pub async fn get_config_history(
     }
 
     let _guard = HISTORY_LOCK.lock().await;
-    let path = history_path(&request.file);
-    let history = match tokio::fs::read_to_string(&path).await {
-        Ok(contents) => match serde_json::from_str::<ConfigHistory>(&contents) {
-            Ok(history) if history.file == request.file => history,
-            Ok(_) => return error("History file mismatch", StatusCode::CONFLICT).into_response(),
-            Err(_) => return error("History data is corrupted", StatusCode::INTERNAL_SERVER_ERROR).into_response(),
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => ConfigHistory {
-            file: request.file.clone(),
-            history: Vec::new(),
-        },
-        Err(_) => return error("Could not read config history", StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+    let history = match read_history(&request.file).await {
+        Ok(history) => history,
+        Err(status) => return error("Could not read config history", status).into_response(),
     };
 
     Json(serde_json::json!({ "success": true, "history": history.history })).into_response()
@@ -123,36 +120,25 @@ pub async fn put_config_history(
     }
 
     let _guard = HISTORY_LOCK.lock().await;
-    let path = history_path(&request.file);
-    let mut history = match tokio::fs::read_to_string(&path).await {
-        Ok(contents) => match serde_json::from_str::<ConfigHistory>(&contents) {
-            Ok(history) if history.file == request.file => history,
-            Ok(_) => return error("History file mismatch", StatusCode::CONFLICT).into_response(),
-            Err(_) => return error("History data is corrupted", StatusCode::INTERNAL_SERVER_ERROR).into_response(),
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => ConfigHistory {
-            file: request.file.clone(),
-            history: Vec::new(),
-        },
-        Err(_) => return error("Could not read config history", StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+    let path = history_dir(&request.file);
+    let mut history = match read_history(&request.file).await {
+        Ok(history) => history,
+        Err(status) => return error("Could not read config history", status).into_response(),
     };
 
-    let before_len = history.history.len();
     let date = valid_date(&request.date);
-    let appended = append_snapshot(
+    if !append_snapshot(
         &mut history,
         max_snapshots,
         request.previous_content.as_deref(),
         &request.content,
         &date,
-    );
-    if !appended {
+    ) {
         if let Some(last) = history.history.last().filter(|last| last.content == request.content) {
             return Json(serde_json::json!({ "success": true, "id": last.id })).into_response();
         }
-        return Json(serde_json::json!({ "success": true, "full": true })).into_response();
+        return Json(serde_json::json!({ "success": true, "disabled": max_snapshots == 0 })).into_response();
     }
-    debug_assert!(history.history.len() > before_len);
     let id = history.history.last().map(|revision| revision.id.clone());
 
     if let Err(e) = write_history(&path, &history).await {
@@ -166,14 +152,9 @@ pub async fn put_config_history(
     Json(serde_json::json!({ "success": true, "id": id })).into_response()
 }
 
-/// Append-only retention: the first entry is a comparison baseline; the configured
-/// limit counts rollback changes after it. Existing history is never pruned.
+/// Keep the newest configured number of changes plus one comparison baseline.
 fn append_snapshot(
-    history: &mut ConfigHistory,
-    max_snapshots: usize,
-    previous_content: Option<&str>,
-    content: &str,
-    date: &str,
+    history: &mut ConfigHistory, max_snapshots: usize, previous_content: Option<&str>, content: &str, date: &str,
 ) -> bool {
     if max_snapshots == 0 || history.history.last().is_some_and(|last| last.content == content) {
         return false;
@@ -183,7 +164,11 @@ fn append_snapshot(
     if history.history.is_empty() {
         if let Some(previous) = previous_content.filter(|previous| *previous != content) {
             let baseline_date = DateTime::parse_from_rfc3339(date)
-                .map(|parsed| (parsed - chrono::Duration::milliseconds(1)).with_timezone(&Utc).to_rfc3339())
+                .map(|parsed| {
+                    (parsed - chrono::Duration::milliseconds(1))
+                        .with_timezone(&Utc)
+                        .to_rfc3339()
+                })
                 .unwrap_or_else(|_| date.to_string());
             additions.push(new_revision(previous.to_string(), baseline_date));
         }
@@ -191,17 +176,23 @@ fn append_snapshot(
         && history.history.last().is_some_and(|last| last.content != previous)
         && previous != content
     {
-        additions.push(new_revision(previous.to_string(), date.to_string()));
+        let previous_date = DateTime::parse_from_rfc3339(date)
+            .map(|parsed| {
+                (parsed - chrono::Duration::milliseconds(1))
+                    .with_timezone(&Utc)
+                    .to_rfc3339()
+            })
+            .unwrap_or_else(|_| date.to_string());
+        additions.push(new_revision(previous.to_string(), previous_date));
     }
     additions.push(new_revision(content.to_string(), date.to_string()));
 
-    let existing_changes = history.history.len().saturating_sub(1);
-    let added_changes = additions.len() - usize::from(history.history.is_empty());
-    if existing_changes.saturating_add(added_changes) > max_snapshots {
-        return false;
-    }
-
     history.history.extend(additions);
+    let keep = max_snapshots.saturating_add(1);
+    if history.history.len() > keep {
+        let remove = history.history.len() - keep;
+        history.history.drain(..remove);
+    }
     true
 }
 
@@ -220,18 +211,10 @@ pub async fn delete_config_history(
     }
 
     let _guard = HISTORY_LOCK.lock().await;
-    let path = history_path(&request.file);
-    let mut history = match tokio::fs::read_to_string(&path).await {
-        Ok(contents) => match serde_json::from_str::<ConfigHistory>(&contents) {
-            Ok(history) if history.file == request.file => history,
-            Ok(_) => return error("History file mismatch", StatusCode::CONFLICT).into_response(),
-            Err(_) => return error("History data is corrupted", StatusCode::INTERNAL_SERVER_ERROR).into_response(),
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => ConfigHistory {
-            file: request.file,
-            history: Vec::new(),
-        },
-        Err(_) => return error("Could not read config history", StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+    let path = history_dir(&request.file);
+    let mut history = match read_history(&request.file).await {
+        Ok(history) => history,
+        Err(status) => return error("Could not read config history", status).into_response(),
     };
 
     if let Err(status) = delete_revision(&mut history, request.id.as_deref()) {
@@ -239,7 +222,7 @@ pub async fn delete_config_history(
     }
 
     if history.history.is_empty() {
-        if let Err(e) = tokio::fs::remove_file(&path).await
+        if let Err(e) = tokio::fs::remove_dir_all(&path).await
             && e.kind() != std::io::ErrorKind::NotFound
         {
             return error(
@@ -282,27 +265,131 @@ fn new_revision(content: String, date: String) -> ConfigRevision {
 }
 
 async fn write_history(path: &PathBuf, history: &ConfigHistory) -> std::io::Result<()> {
-    tokio::fs::create_dir_all(HISTORY_DIR).await?;
-    tokio::fs::set_permissions(HISTORY_DIR, std::fs::Permissions::from_mode(0o700)).await?;
+    tokio::fs::create_dir_all(path).await?;
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).await?;
 
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let temp = path.with_extension(format!("tmp-{}-{nonce}", std::process::id()));
-    let contents = serde_json::to_vec(history).map_err(std::io::Error::other)?;
-    tokio::fs::write(&temp, contents).await?;
-    tokio::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o600)).await?;
-    if let Err(e) = tokio::fs::rename(&temp, path).await {
-        let _ = tokio::fs::remove_file(&temp).await;
-        return Err(e);
+    let mut keep = Vec::with_capacity(history.history.len());
+    for revision in &history.history {
+        let date_ms = DateTime::parse_from_rfc3339(&revision.date)
+            .map(|date| date.timestamp_millis())
+            .unwrap_or_else(|_| Utc::now().timestamp_millis());
+        let snapshot_path = path.join(format!("{}__{}.snapshot", revision.id, date_ms));
+        keep.push(snapshot_path.clone());
+        if let Ok(existing) = tokio::fs::read_to_string(&snapshot_path).await
+            && existing == revision.content
+        {
+            continue;
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let temp = path.join(format!(".tmp-{}-{nonce}", std::process::id()));
+        tokio::fs::write(&temp, revision.content.as_bytes()).await?;
+        tokio::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o600)).await?;
+        if let Err(e) = tokio::fs::rename(&temp, &snapshot_path).await {
+            let _ = tokio::fs::remove_file(&temp).await;
+            return Err(e);
+        }
+    }
+
+    let mut entries = tokio::fs::read_dir(path).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let entry_path = entry.path();
+        if entry_path.extension().is_some_and(|extension| extension == "snapshot")
+            && !keep.iter().any(|kept| kept == &entry_path)
+        {
+            tokio::fs::remove_file(entry_path).await?;
+        }
     }
     Ok(())
 }
 
+async fn read_history(file: &str) -> Result<ConfigHistory, StatusCode> {
+    let directory = history_dir(file);
+    let mut history = ConfigHistory {
+        file: file.to_string(),
+        history: Vec::new(),
+    };
+    match tokio::fs::read_dir(&directory).await {
+        Ok(mut entries) => {
+            while let Some(entry) = entries
+                .next_entry()
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            {
+                let path = entry.path();
+                if !path.extension().is_some_and(|extension| extension == "snapshot") {
+                    continue;
+                }
+                let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
+                    continue;
+                };
+                let Some((id, timestamp)) = stem.rsplit_once("__") else {
+                    continue;
+                };
+                let Ok(timestamp) = timestamp.parse::<i64>() else {
+                    continue;
+                };
+                let content = tokio::fs::read_to_string(&path)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                let date = DateTime::<Utc>::from_timestamp_millis(timestamp)
+                    .unwrap_or_else(Utc::now)
+                    .to_rfc3339();
+                history.history.push(ConfigRevision {
+                    id: id.to_string(),
+                    date,
+                    content,
+                });
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+    sort_history(&mut history);
+    let legacy_path = legacy_history_path(file);
+    match tokio::fs::read_to_string(&legacy_path).await {
+        Ok(contents) => {
+            let legacy = serde_json::from_str::<ConfigHistory>(&contents)
+                .ok()
+                .filter(|history| history.file == file)
+                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+            for revision in legacy.history {
+                if !history.history.iter().any(|existing| existing.id == revision.id) {
+                    history.history.push(revision);
+                }
+            }
+            sort_history(&mut history);
+            write_history(&directory, &history)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            tokio::fs::remove_file(legacy_path)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+    Ok(history)
+}
+
+fn sort_history(history: &mut ConfigHistory) {
+    history.history.sort_by(|left, right| {
+        let left_date = DateTime::parse_from_rfc3339(&left.date)
+            .map(|date| date.timestamp_millis())
+            .unwrap_or_default();
+        let right_date = DateTime::parse_from_rfc3339(&right.date)
+            .map(|date| date.timestamp_millis())
+            .unwrap_or_default();
+        left_date.cmp(&right_date).then_with(|| left.id.cmp(&right.id))
+    });
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ConfigHistory, ConfigRevision, delete_revision, append_snapshot};
+    use super::{ConfigHistory, ConfigRevision, append_snapshot, delete_revision, sort_history, write_history};
 
     fn history() -> ConfigHistory {
         ConfigHistory {
@@ -312,7 +399,7 @@ mod tests {
                 .map(|id| ConfigRevision {
                     id: id.into(),
                     date: String::new(),
-                    content: String::new(),
+                    content: id.into(),
                 })
                 .collect(),
         }
@@ -336,6 +423,36 @@ mod tests {
     }
 
     #[test]
+    fn sort_history_orders_oldest_first_and_newest_last() {
+        let mut history = ConfigHistory {
+            file: "/opt/etc/mihomo/config.yaml".into(),
+            history: [
+                ("new", "2026-11-09T20:02:00Z"),
+                ("old", "2026-11-09T19:58:00Z"),
+                ("middle", "2026-11-09T20:00:00Z"),
+            ]
+            .into_iter()
+            .map(|(id, date)| ConfigRevision {
+                id: id.into(),
+                date: date.into(),
+                content: id.into(),
+            })
+            .collect(),
+        };
+
+        sort_history(&mut history);
+
+        assert_eq!(
+            history
+                .history
+                .iter()
+                .map(|revision| revision.id.as_str())
+                .collect::<Vec<_>>(),
+            ["old", "middle", "new"]
+        );
+    }
+
+    #[test]
     fn delete_revision_rejects_unknown_id() {
         let mut history = history();
         assert!(delete_revision(&mut history, Some("missing")).is_err());
@@ -351,18 +468,94 @@ mod tests {
     }
 
     #[test]
-    fn full_history_stops_recording_without_overwriting_old_entries() {
+    fn full_history_records_new_change_and_discards_oldest_change() {
         let mut history = history();
-        assert!(!append_snapshot(&mut history, 2, None, "four", "date"));
-        assert_eq!(history.history.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(), ["one", "two", "three"]);
+        assert!(append_snapshot(&mut history, 2, None, "four", "date"));
+        assert_eq!(
+            history
+                .history
+                .iter()
+                .map(|item| item.content.as_str())
+                .collect::<Vec<_>>(),
+            ["two", "three", "four"]
+        );
     }
 
     #[test]
-    fn cap_counts_changes_after_the_initial_baseline() {
-        let mut history = ConfigHistory { file: String::new(), history: Vec::new() };
+    fn retention_keeps_the_previous_snapshot_and_latest_change() {
+        let mut history = ConfigHistory {
+            file: String::new(),
+            history: Vec::new(),
+        };
         assert!(append_snapshot(&mut history, 1, Some("baseline"), "first", "date"));
-        assert_eq!(history.history.iter().map(|item| item.content.as_str()).collect::<Vec<_>>(), ["baseline", "first"]);
-        assert!(!append_snapshot(&mut history, 1, Some("first"), "second", "later"));
-        assert_eq!(history.history.iter().map(|item| item.content.as_str()).collect::<Vec<_>>(), ["baseline", "first"]);
+        assert_eq!(
+            history
+                .history
+                .iter()
+                .map(|item| item.content.as_str())
+                .collect::<Vec<_>>(),
+            ["baseline", "first"]
+        );
+        assert!(append_snapshot(&mut history, 1, Some("first"), "second", "later"));
+        assert_eq!(
+            history
+                .history
+                .iter()
+                .map(|item| item.content.as_str())
+                .collect::<Vec<_>>(),
+            ["first", "second"]
+        );
+    }
+
+    #[tokio::test]
+    async fn snapshots_are_plain_text_files_and_pruned_files_are_removed() {
+        let directory = std::env::temp_dir().join(format!("xkeen-history-{}", uuid::Uuid::new_v4()));
+        let mut history = history();
+        for revision in &mut history.history {
+            revision.date = chrono::Utc::now().to_rfc3339();
+        }
+        let date = chrono::Utc::now().to_rfc3339();
+        assert!(append_snapshot(&mut history, 2, None, "four", &date));
+        assert_eq!(
+            history
+                .history
+                .iter()
+                .map(|item| item.content.as_str())
+                .collect::<Vec<_>>(),
+            ["two", "three", "four"]
+        );
+        write_history(&directory, &history).await.unwrap();
+
+        let entries = std::fs::read_dir(&directory)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(entries.len(), 3);
+        assert!(entries.iter().all(|entry| {
+            entry
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "snapshot")
+        }));
+        assert!(
+            !entries
+                .iter()
+                .any(|entry| entry.file_name().to_string_lossy().starts_with("one__"))
+        );
+        let newest_prefix = format!("{}__", history.history.last().unwrap().id);
+        let newest = entries
+            .iter()
+            .find(|entry| entry.file_name().to_string_lossy().starts_with(&newest_prefix))
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(newest.path()).unwrap(), "four");
+
+        history.history.remove(0);
+        write_history(&directory, &history).await.unwrap();
+        let remaining = std::fs::read_dir(&directory)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(remaining.len(), 2);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }
