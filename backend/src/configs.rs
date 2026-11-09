@@ -167,7 +167,7 @@ fn is_path_allowed(file: &str, prefixes: &[String]) -> bool {
     })
 }
 
-fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
+pub(crate) fn check_access(file: &str, state: &AppState) -> Result<bool, &'static str> {
     if file.contains("..") {
         return Err("Invalid path");
     }

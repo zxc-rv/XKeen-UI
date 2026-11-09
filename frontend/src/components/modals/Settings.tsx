@@ -259,6 +259,81 @@ const IntervalSettingField = memo(function IntervalSettingField({
   )
 })
 
+const ConfigHistorySnapshotsField = memo(function ConfigHistorySnapshotsField({
+  value,
+  onSave,
+}: {
+  value: number
+  onSave: (value: number) => Promise<boolean>
+}) {
+  const [draft, setDraft] = useState(String(value))
+
+  useEffect(() => setDraft(String(value)), [value])
+
+  const save = useCallback(() => {
+    const count = Number(draft)
+    if (!Number.isInteger(count) || count < 0 || count > 100) {
+      setDraft(String(value))
+      return
+    }
+    if (count !== value) void onSave(count)
+  }, [draft, onSave, value])
+
+  const step = useCallback((delta: number) => {
+    const current = Number(draft)
+    const base = Number.isInteger(current) && current >= 0 && current <= 100 ? current : value
+    const next = Math.max(0, Math.min(100, base + delta))
+    setDraft(String(next))
+    if (next !== value) void onSave(next)
+  }, [draft, onSave, value])
+
+  return (
+    <Field orientation="horizontal" className="px-0 py-3">
+      <FieldContent>
+        <FieldLabel htmlFor="config-history-max-snapshots">Количество снимков</FieldLabel>
+        <FieldDescription className="text-[13px]">
+          Количество записываемых снимков в журнале изменений (1–100)
+          <br />0 — выкл
+        </FieldDescription>
+      </FieldContent>
+      <InputGroup className="w-15 shrink-0">
+        <InputGroupInput
+          id="config-history-max-snapshots"
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          inputMode="numeric"
+          className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => event.key === 'Enter' && save()}
+          onBlur={save}
+          aria-label="Количество снимков журнала изменений"
+        />
+        <InputGroupAddon align="inline-end" className="flex flex-col gap-0">
+          <InputGroupButton
+            aria-label="Увеличить количество снимков"
+            className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => step(1)}
+          >
+            <IconChevronUp />
+          </InputGroupButton>
+          <InputGroupButton
+            aria-label="Уменьшить количество снимков"
+            className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => step(-1)}
+          >
+            <IconChevronDown />
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    </Field>
+  )
+})
+
 const SwitchSettingField = memo(function SwitchSettingField({
   item,
   checked,
@@ -790,7 +865,7 @@ export function SettingsModal() {
       const [section, key] = path.split('.')
       try {
         const body: Record<string, unknown> = {}
-        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins', 'ui'].includes(section))
+        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins', 'ui', 'config_history'].includes(section))
           body[section] = key ? { [key]: value } : value
         const result = await apiCall<any>('PATCH', 'settings', body)
         if (!result.success) {
@@ -837,6 +912,17 @@ export function SettingsModal() {
       if (ok) dispatch({ type: 'SET_SETTINGS', settings: { authEnabled: value } })
     },
     [dispatch, saveSetting]
+  )
+
+  const setConfigHistoryMaxSnapshots = useCallback(
+    async (value: number) => {
+      const count = Math.max(0, Math.min(100, Math.trunc(value)))
+      if (count === settings.configHistoryMaxSnapshots) return true
+      const ok = await saveSetting('config_history.max_snapshots', count)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { configHistoryMaxSnapshots: count } })
+      return ok
+    },
+    [dispatch, saveSetting, settings.configHistoryMaxSnapshots]
   )
 
   const setEmojiFont = useCallback(
@@ -1112,6 +1198,8 @@ export function SettingsModal() {
                   <Separator className="my-2" />
                   <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Редактор</p>
                   <HiddenFilesField hiddenFiles={settings.hiddenConfigFiles} onRemoveFile={removeHiddenFile} />
+                  <Separator className="my-2" />
+                  <ConfigHistorySnapshotsField value={settings.configHistoryMaxSnapshots} onSave={setConfigHistoryMaxSnapshots} />
                   <Separator className="my-2" />
                   <p className="text-muted-foreground pt-3 pb-1 text-xs font-medium tracking-wider uppercase">Авторизация</p>
                   <AuthSettingsField authEnabled={settings.authEnabled} onToggle={toggleAuth} showToast={showToast} />

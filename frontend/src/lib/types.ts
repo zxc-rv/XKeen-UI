@@ -49,6 +49,7 @@ export interface AppSettings {
   authEnabled: boolean
   multiRouter: boolean
   hiddenConfigFiles: string[]
+  configHistoryMaxSnapshots: number
   emojiFont: EmojiFont
 }
 

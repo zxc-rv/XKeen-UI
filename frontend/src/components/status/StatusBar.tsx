@@ -27,6 +27,7 @@ import {
 import { CoreLogo } from '../ui/core-logo'
 import { useEffect, useRef, useState } from 'react'
 import { apiCall, capitalize, clashFetch } from '../../lib/api'
+import { saveConfigRevision } from '../../lib/config-history'
 import { ensureDnsEnabled, setDnsEnabled, DEFAULT_DNS_CONFIG } from '../configuration/mihomo/DnsPanel'
 import { syncClashApiPort, getAppState, useAppContext, bumpDnsRefresh, fetchDnsStatus, useDnsStatusStore } from '../../lib/store'
 import { cn } from '../../lib/utils'
@@ -49,7 +50,13 @@ async function applyAutoDns(setupFilter: boolean) {
   const yamlConfig = configsResult.success ? configsResult.configs?.find((c) => c.file.endsWith('/config.yaml')) : undefined
   if (!yamlConfig) return
   const configContent = ensureDnsEnabled(yamlConfig.content, DEFAULT_DNS_CONFIG)
-  await apiCall('POST', 'dns', { config_content: configContent, setup_filter: setupFilter })
+  const result = await apiCall<{ success: boolean; error?: string }>('POST', 'dns', {
+    config_content: configContent,
+    setup_filter: setupFilter,
+  })
+  if (!result.success) throw new Error(result.error || 'Не удалось сохранить конфигурацию DNS')
+  const historyError = await saveConfigRevision(yamlConfig.file, configContent, undefined, yamlConfig.content)
+  if (historyError) throw new Error(`Конфигурация DNS сохранена, но история не записана: ${historyError}`)
 }
 
 async function persistDnsEnabled(enabled: boolean) {
@@ -57,7 +64,10 @@ async function persistDnsEnabled(enabled: boolean) {
   const yamlConfig = configsResult.success ? configsResult.configs?.find((c) => c.file.endsWith('/config.yaml')) : undefined
   if (!yamlConfig) return
   const updated = setDnsEnabled(yamlConfig.content, enabled)
-  await apiCall('PUT', 'configs', { file: yamlConfig.file, content: updated })
+  const result = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: yamlConfig.file, content: updated })
+  if (!result.success) throw new Error(result.error || 'Не удалось сохранить конфигурацию DNS')
+  const historyError = await saveConfigRevision(yamlConfig.file, updated, undefined, yamlConfig.content)
+  if (historyError) throw new Error(`Конфигурация DNS сохранена, но история не записана: ${historyError}`)
 }
 
 export function StatusBar({
