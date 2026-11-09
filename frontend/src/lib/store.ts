@@ -52,6 +52,8 @@ const initialSettings: AppSettings = {
   authEnabled: false,
   multiRouter: false,
   hiddenConfigFiles: [],
+  configHistoryEnabled: true,
+  configHistoryMaxSnapshots: 10,
   emojiFont: getStoredEmojiFont(),
 }
 

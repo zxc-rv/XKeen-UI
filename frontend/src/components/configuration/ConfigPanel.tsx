@@ -30,6 +30,7 @@ import {
   IconFilePlus,
   IconFileText,
   IconFileUpload,
+  IconHistory,
   IconLink,
   IconListDetails,
   IconPencil,
@@ -42,6 +43,8 @@ import {
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import { apiCall, capitalize, clashFetch, getFileLanguage } from '../../lib/api'
+import { saveConfigRevision, supportsConfigHistory } from '../../lib/config-history'
+import { rollbackRestartAction } from '../../lib/config-history-policy'
 import { LazyBoundary, lazyLoad, useLazyMount } from '../../lib/loader'
 import {
   runMassTask,
@@ -58,6 +61,7 @@ import { cn } from '../../lib/utils'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { MassConfirmDialog } from '../log/multi-routers/MassConfirmDialog'
 import { BackupsModal } from '../modals/Backups'
+import { ConfigHistoryView } from '../modals/ConfigHistory'
 import { ProvidersModal } from '../modals/Providers'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
@@ -127,6 +131,7 @@ interface ConfigTabProps {
   onRefreshConfigs: () => Promise<Config[]>
   withContextMenu?: boolean
   onHideFile?: (file: string) => void
+  onOpenHistory: (file: string) => void
 }
 
 type DialogState =
@@ -135,7 +140,7 @@ type DialogState =
   | { type: 'delete'; file: string }
   | null
 
-function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFile, withContextMenu = false }: ConfigTabProps) {
+function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFile, onOpenHistory, withContextMenu = false }: ConfigTabProps) {
   const [dialogData, setDialogData] = useState<DialogState>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
 
@@ -232,6 +237,11 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
             }
           }}
         >
+          {supportsConfigHistory(config.file) && (
+            <ContextMenuItem onSelect={() => onOpenHistory(config.file)}>
+              <IconHistory /> Журнал изменений
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             onSelect={() => {
               const dir = config.file.substring(0, config.file.lastIndexOf('/'))
@@ -330,6 +340,7 @@ export function ConfigPanel({
   const multiRouter = useSettings((s) => s.multiRouter)
   const closeConnsOnApply = useSettings((s) => s.closeConnectionsOnApply)
   const hiddenConfigFiles = useSettings((s) => s.hiddenConfigFiles)
+  const [configHistoryFile, setConfigHistoryFile] = useState<string | null>(null)
   const applyTargets = useRoutersStore((s) => s.applyTargets)
   const getMassTargets = () => {
     if (!multiRouter) return [LOCAL_ROUTER_ID]
@@ -458,6 +469,14 @@ export function ConfigPanel({
   const canApply = canSave && isRunning && !isPending
   const canFormat = !!(isJsonOrYaml && validationState?.isValid)
 
+  const openConfigHistory = useCallback((file: string) => {
+    setActiveConfigFile(file)
+    localStorage.setItem('lastSelectedTab', file)
+    setActivePanel('config')
+    setMountedPanels((current) => (current.has('config') ? current : new Set([...current, 'config'])))
+    setConfigHistoryFile(file)
+  }, [])
+
   const loadConfigIntoEditor = useCallback(
     (config: Config) => {
       if (!editorRef.current) return
@@ -578,6 +597,8 @@ export function ConfigPanel({
     const results = await runMassTask(targets, async (_id, baseUrl) => {
       const result = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: cfg.file, content }, { baseUrl })
       if (!result.success) throw new Error(result.error || 'ошибка сохранения')
+      const historyError = await saveConfigRevision(cfg.file, content, baseUrl, cfg.savedContent)
+      if (historyError && !baseUrl) showToast(`Не удалось записать историю: ${historyError}`, 'error')
     })
 
     const localOk = results.find((r) => r.id === LOCAL_ROUTER_ID)?.ok
@@ -696,6 +717,9 @@ export function ConfigPanel({
           : saveResult.error || 'Ошибка сохранения'
       )
     }
+
+    const historyError = await saveConfigRevision(cfg.file, content, baseUrl, cfg.savedContent)
+    if (historyError && !baseUrl) showToast(`Не удалось записать историю: ${historyError}`, 'error')
 
     if (hotReloadUnavailable) showToast('Clash API недоступен, выполняем полный рестарт', 'warning')
 
@@ -898,6 +922,35 @@ export function ConfigPanel({
     [configs, hiddenConfigFiles, activeConfigFile, dispatch, showToast]
   )
 
+  const rollbackConfig = useCallback(async (file: string, content: string) => {
+    const config = configsRef.current.find((item) => item.file === file)
+    if (!config) throw new Error('Конфигурация не найдена')
+    const lang = getFileLanguage(file)
+    const core = currentCore
+    let endpoint = 'configs'
+    if (!isXkeenFile(file) && (lang === 'yaml' || lang === 'json')) {
+      endpoint += core === 'mihomo' ? `?validate=mihomo${closeConnsOnApply ? '&closeConns=true' : ''}` : '?validate=xray'
+    }
+    let result = await apiCall<ApiResult>('PUT', endpoint, { file, content })
+    if (!result.success && result.error === HOT_RELOAD_UNAVAILABLE && core === 'mihomo') {
+      result = await apiCall<ApiResult>('PUT', 'configs', { file, content })
+      if (result.success) {
+        const restart = await apiCall<ApiResult>('POST', 'control', { action: 'hardRestart', core })
+        if (!restart.success) throw new Error(restart.error || 'Не удалось перезапустить Mihomo')
+      }
+    }
+    if (!result.success) throw new Error(result.error || 'Не удалось восстановить конфигурацию')
+    if (core === 'xray' && !isXkeenFile(file)) {
+      const restart = await apiCall<ApiResult>('POST', 'control', { action: rollbackRestartAction(core, closeConnsOnApply) ?? 'hardRestart', core })
+      if (!restart.success) throw new Error(restart.error || 'Не удалось перезапустить Xray')
+    }
+    const historyError = await saveConfigRevision(file, content, null, config.content)
+    if (historyError) showToast(`Изменение отменено, но история не записана: ${historyError}`, 'error')
+    const index = configsRef.current.findIndex((item) => item.file === file)
+    if (index >= 0) dispatch({ type: 'SAVE_CONFIG', index, content })
+    if (configsRef.current[activeIndexRef.current]?.file === file) editorRef.current?.setSavedContent(content)
+  }, [closeConnsOnApply, currentCore, dispatch, editorRef, showToast])
+
   const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const usefulLinks = [
@@ -910,7 +963,7 @@ export function ConfigPanel({
   return (
     <TooltipProvider delayDuration={700} timeout={0}>
       <>
-        <div className="border-border bg-card flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
+        <div className="border-border bg-card relative flex flex-col overflow-hidden rounded-xl border md:min-h-0 md:flex-1">
           <div className={cn('flex shrink-0 flex-col gap-2 px-3 pt-3 sm:px-4 sm:pt-4 md:flex-row md:items-start')}>
             <div className="flex min-w-0 shrink-0 items-center gap-2">
               {isMihomo ? (
@@ -1052,6 +1105,7 @@ export function ConfigPanel({
                             currentCore={currentCore}
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
+                            onOpenHistory={openConfigHistory}
                             onHideFile={(file) => void hideConfigFile(file)}
                             withContextMenu
                           />
@@ -1067,6 +1121,7 @@ export function ConfigPanel({
                             currentCore={currentCore}
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
+                            onOpenHistory={openConfigHistory}
                           />
                         ))}
                       </TabsList>
@@ -1292,6 +1347,16 @@ export function ConfigPanel({
             </div>
           )}
         </div>
+        {configHistoryFile && (
+          <div className="absolute inset-0 z-30 min-h-0 overflow-hidden rounded-xl">
+            <ConfigHistoryView
+              file={configHistoryFile}
+              currentContent={configs.find((config) => config.file === configHistoryFile)?.content ?? ''}
+              onClose={() => setConfigHistoryFile(null)}
+              onRollback={rollbackConfig}
+            />
+          </div>
+        )}
         {providersModalKind && mountProvidersModal && (
           <ProvidersModal
             open={isProvidersModalOpen}

@@ -739,7 +739,7 @@ export function SettingsModal() {
       const [section, key] = path.split('.')
       try {
         const body: Record<string, unknown> = {}
-        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins', 'ui'].includes(section))
+        if (['gui', 'updater', 'log', 'auth', 'clash_api', 'plugins', 'ui', 'config_history'].includes(section))
           body[section] = key ? { [key]: value } : value
         const result = await apiCall<any>('PATCH', 'settings', body)
         if (!result.success) {
@@ -786,6 +786,24 @@ export function SettingsModal() {
       if (ok) dispatch({ type: 'SET_SETTINGS', settings: { authEnabled: value } })
     },
     [dispatch, saveSetting]
+  )
+
+  const setConfigHistoryEnabled = useCallback(
+    async (value: boolean) => {
+      const ok = await saveSetting('config_history.enabled', value)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { configHistoryEnabled: value } })
+    },
+    [dispatch, saveSetting]
+  )
+
+  const setConfigHistoryMaxSnapshots = useCallback(
+    async (value: number) => {
+      const next = Math.max(0, Math.min(100, Math.trunc(value)))
+      if (next === settings.configHistoryMaxSnapshots) return
+      const ok = await saveSetting('config_history.max_snapshots', next)
+      if (ok) dispatch({ type: 'SET_SETTINGS', settings: { configHistoryMaxSnapshots: next } })
+    },
+    [dispatch, saveSetting, settings.configHistoryMaxSnapshots]
   )
 
   const setEmojiFont = useCallback(
@@ -948,6 +966,7 @@ export function SettingsModal() {
               <TabsTrigger value="clash-api">Mihomo</TabsTrigger>
               <TabsTrigger value="updates">Обновления</TabsTrigger>
               <TabsTrigger value="plugins">Плагины</TabsTrigger>
+              <TabsTrigger value="config-history">Журнал изменений</TabsTrigger>
             </TabsList>
           </div>
 
@@ -1151,6 +1170,40 @@ export function SettingsModal() {
                       {index < guiSettings.length - 1 && <Separator className="my-0" />}
                     </Fragment>
                   ))}
+                </FieldGroup>
+              </TabsContent>
+
+              <TabsContent value="config-history">
+                <FieldGroup className="gap-0!">
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="config-history-enabled">Журнал изменений</FieldLabel>
+                      <FieldDescription className="text-[13px]">Записывать изменения конфигураций Mihomo и Xray</FieldDescription>
+                    </FieldContent>
+                    <Switch
+                      id="config-history-enabled"
+                      checked={settings.configHistoryEnabled}
+                      onCheckedChange={setConfigHistoryEnabled}
+                      aria-label="Включить журнал изменений"
+                    />
+                  </Field>
+                  <Separator className="my-2" />
+                  <Field orientation="horizontal" className="px-0 py-3">
+                    <FieldContent>
+                      <FieldLabel htmlFor="config-history-snapshots">Количество снимков</FieldLabel>
+                      <FieldDescription className="text-[13px]">Количество записываемых снимков в журнале изменений (1–100, 0 — выкл.)</FieldDescription>
+                    </FieldContent>
+                    <InputGroup className="w-24 shrink-0">
+                      <InputGroupInput
+                        id="config-history-snapshots"
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={settings.configHistoryMaxSnapshots}
+                        onChange={(event) => void setConfigHistoryMaxSnapshots(Number(event.target.value))}
+                      />
+                    </InputGroup>
+                  </Field>
                 </FieldGroup>
               </TabsContent>
 

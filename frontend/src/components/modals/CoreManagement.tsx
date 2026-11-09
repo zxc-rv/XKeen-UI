@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Separator } from '@/components/ui/separator'
 import { IconAlertCircle, IconCpu } from '@tabler/icons-react'
 import { useState } from 'react'
+import { CoreLogo } from '../ui/core-logo'
 import { useAppContext, useDnsStatusStore, useModalContext } from '../../lib/store'
 
 interface Props {
@@ -68,7 +69,8 @@ export function CoreManageModal({ onSwitchCore, onOpenUpdate }: Props) {
                   {i > 0 && <Separator className="mb-4" />}
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <CoreLogo core={core.id} className="size-4" />
                         <span className="text-sm font-medium">{core.label}</span>
                         {isActive && (
                           <Badge variant="outline" className="rounded-sm border-none bg-green-500/10 px-2 text-xs text-green-400">

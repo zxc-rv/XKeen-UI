@@ -279,6 +279,8 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             authEnabled: !!data.auth?.enabled,
             multiRouter: data.plugins?.multi_router ?? false,
             hiddenConfigFiles: data.ui?.hidden_files ?? [],
+            configHistoryEnabled: data.config_history?.enabled ?? true,
+            configHistoryMaxSnapshots: data.config_history?.max_snapshots ?? 10,
           },
         })
         if (Array.isArray(data.plugins?.routers)) {
