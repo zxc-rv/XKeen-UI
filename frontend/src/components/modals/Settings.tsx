@@ -20,7 +20,7 @@ import {
   IconCornerDownLeft,
   IconTrash,
 } from '@tabler/icons-react'
-import { Fragment, memo, useCallback, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
 import { apiCall } from '../../lib/api'
 import { saveStatusBarAccentColor, saveStatusBarStyle, type StatusBarAccentColor } from '../../lib/status-bar-style'
 import { applyEmojiFont } from '../../lib/theme'
@@ -179,26 +179,77 @@ const IntervalSettingField = memo(function IntervalSettingField({
   value: number
   onChangeInterval: IntervalSettingHandler
 }) {
+  const [draft, setDraft] = useState(() => String(value))
+  const focusedRef = useRef(false)
+
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(String(value))
+  }, [value])
+
+  const applyValue = useCallback(
+    (raw: string | number) => {
+      const parsed = typeof raw === 'number' ? raw : Number.parseInt(raw, 10)
+      if (!Number.isFinite(parsed)) {
+        setDraft(String(value))
+        return
+      }
+      const hours = Math.max(0, Math.min(24, Math.trunc(parsed)))
+      setDraft(String(hours))
+      if (hours !== value) onChangeInterval(item, hours)
+    },
+    [item, onChangeInterval, value]
+  )
+
+  const step = useCallback(
+    (delta: number) => {
+      const parsed = Number.parseInt(draft, 10)
+      applyValue((Number.isNaN(parsed) ? value : parsed) + delta)
+    },
+    [applyValue, draft, value]
+  )
+
   return (
     <Field orientation="horizontal" className="px-0 py-3">
       <FieldContent>
         <FieldLabel htmlFor={item.id}>{item.title}</FieldLabel>
         <FieldDescription className="text-[13px]">{item.description}</FieldDescription>
       </FieldContent>
-      <InputGroup className="w-15">
-        <InputGroupInput id={item.id} readOnly value={value} />
+      <InputGroup className="w-17">
+        <InputGroupInput
+          id={item.id}
+          inputMode="numeric"
+          className="px-2"
+          value={draft}
+          onFocus={() => {
+            focusedRef.current = true
+          }}
+          onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ''))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur()
+            } else if (e.key === 'Escape') {
+              setDraft(String(value))
+              focusedRef.current = false
+              e.currentTarget.blur()
+            }
+          }}
+          onBlur={() => {
+            focusedRef.current = false
+            applyValue(draft)
+          }}
+        />
         <InputGroupAddon align="inline-end" className="flex flex-col gap-0">
           <InputGroupButton
             aria-label="Увеличить"
             className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
-            onClick={() => onChangeInterval(item, value + 1)}
+            onClick={() => step(1)}
           >
             <IconChevronUp />
           </InputGroupButton>
           <InputGroupButton
             aria-label="Уменьшить"
             className="text-muted-foreground hover:text-foreground h-[calc(50%-0.5px)]! min-h-0! px-1 text-[9px]"
-            onClick={() => onChangeInterval(item, value - 1)}
+            onClick={() => step(-1)}
           >
             <IconChevronDown />
           </InputGroupButton>
