@@ -408,6 +408,21 @@ pub struct UiSettings {
     pub hidden_files: Vec<String>,
 }
 
+pub const DEFAULT_CONFIG_HISTORY_MAX_SNAPSHOTS: usize = 10;
+pub const MAX_CONFIG_HISTORY_SNAPSHOTS: usize = 100;
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ConfigHistorySettings {
+    pub max_snapshots: usize,
+}
+
+impl Default for ConfigHistorySettings {
+    fn default() -> Self {
+        Self { max_snapshots: DEFAULT_CONFIG_HISTORY_MAX_SNAPSHOTS }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct PluginsSettings {
@@ -425,6 +440,7 @@ pub struct AppSettings {
     pub auth: AuthSettings,
     pub plugins: PluginsSettings,
     pub ui: UiSettings,
+    pub config_history: ConfigHistorySettings,
 }
 
 impl<'de> Deserialize<'de> for AppSettings {
@@ -450,6 +466,8 @@ impl<'de> Deserialize<'de> for AppSettings {
             plugins: PluginsSettings,
             #[serde(default)]
             ui: UiSettings,
+            #[serde(default)]
+            config_history: ConfigHistorySettings,
             #[serde(rename = "timezoneOffset")]
             legacy_tz: Option<i32>,
         }
@@ -466,6 +484,7 @@ impl<'de> Deserialize<'de> for AppSettings {
             auth: raw.auth,
             plugins: raw.plugins,
             ui: raw.ui,
+            config_history: raw.config_history,
         })
     }
 }
