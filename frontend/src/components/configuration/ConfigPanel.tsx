@@ -228,6 +228,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
           </Tooltip>
         </ContextMenuTrigger>
         <ContextMenuContent
+          className="min-w-46"
           onCloseAutoFocus={(e) => {
             if (pendingInputFocusRef.current) {
               e.preventDefault()
@@ -266,7 +267,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
           )}
           {supportsConfigHistory(config.file) && (
             <ContextMenuItem onSelect={() => onOpenHistory(config.file)}>
-              <IconHistory /> Журнал изменений
+              <IconHistory /> История изменений
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -958,6 +959,10 @@ export function ConfigPanel({
     await saveAndApply()
   }
 
+  function showRollbackError(reason: unknown) {
+    showToast(reason instanceof Error ? reason.message : 'Не удалось отменить изменение', 'error')
+  }
+
   const isMihomo = isCoreMihomo && (!!activeClashApiPort || !!activeClashApiUnix)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const usefulLinks = [
@@ -977,8 +982,8 @@ export function ConfigPanel({
                 file={configHistoryFile}
                 currentContent={configs.find((config) => config.file === configHistoryFile)?.content ?? ''}
                 onClose={() => setConfigHistoryFile(null)}
-                onRollback={rollbackConfig}
-                onRollbackAndApply={rollbackConfigAndApply}
+                onRollback={(file, content, revisionId) => rollbackConfig(file, content, revisionId).catch(showRollbackError)}
+                onRollbackAndApply={(file, content, revisionId) => rollbackConfigAndApply(file, content, revisionId).catch(showRollbackError)}
               />
             </div>
           )}
