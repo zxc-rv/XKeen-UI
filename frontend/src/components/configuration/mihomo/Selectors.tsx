@@ -25,11 +25,11 @@ import {
   IconChevronUp,
   IconCircleArrowRightFilled,
   IconLoader2,
-  IconLock,
   IconPlugX,
   IconSearch,
   IconScaleOff,
   IconX,
+  IconPin,
 } from '@tabler/icons-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DISPLAY_EVENT, readSelectorDisplay } from './SelectorDisplaySettings'
@@ -315,7 +315,7 @@ const ProxyCard = memo(function ProxyCard({
         'text-foreground flex flex-col gap-2.5 rounded-md border px-3 py-2.5 text-sm transition-all',
         selectionDisabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer',
         isFixed
-          ? 'border-purple-400 bg-linear-to-b from-purple-500/25 to-purple-500/15'
+          ? 'border-emerald-400 bg-linear-to-b from-emerald-500/25 to-emerald-500/15'
           : isActive
             ? ACTIVE_CARD_CLASSES
             : selectionDisabled
@@ -548,12 +548,12 @@ const SelectorStatusRow = memo(function SelectorStatusRow({
                 render={
                   <button
                     type="button"
-                    className="flex size-4 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:text-purple-300 disabled:opacity-50"
+                    className="flex size-4 shrink-0 items-center justify-center rounded-sm text-emerald-400 transition-colors hover:text-emerald-300 disabled:opacity-50"
                     onClick={handleClearFixed}
                     disabled={isClearingFixed}
                     aria-label="Снять фиксацию выбора"
                   >
-                    {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconLock size={17} />}
+                    {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconPin size={17} />}
                   </button>
                 }
               />
@@ -684,7 +684,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
         className={cn(
           'w-full cursor-pointer! justify-between font-normal',
           isFixed
-            ? 'border-purple-400 dark:border-purple-400 hover:border-purple-400 dark:hover:border-purple-400 data-popup-open:border-[#c084fc]! data-popup-open:shadow-[0_0_0_3px_rgba(192,132,252,0.2)]'
+            ? 'border-emerald-400 dark:border-emerald-400 hover:border-emerald-400 dark:hover:border-emerald-400 data-popup-open:border-[#34d399]! data-popup-open:shadow-[0_0_0_3px_rgba(52,211,153,0.2)]'
             : 'border-blue-500/40 dark:border-blue-500/40 hover:border-blue-500/40 dark:hover:border-blue-500/40 data-popup-open:border-[#60a5fa]! data-popup-open:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]'
         )}
       >
@@ -702,8 +702,8 @@ const SelectorCombobox = memo(function SelectorCombobox({
           </span>
         </span>
       </ComboboxTrigger>
-      <ComboboxContent className="border-blue-500/40">
-        <ComboboxInput fullWidth showTrigger={false} placeholder="Поиск" className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! has-[[data-slot=input-group-control]:focus-visible]:ring-0! m-1 h-8 w-auto shadow-none">
+      <ComboboxContent className={isFixed ? 'border-emerald-400/40' : 'border-blue-500/40'}>
+        <ComboboxInput fullWidth showTrigger={false} placeholder="Поиск" className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! has-[[data-slot=input-group-control]:focus-visible]:shadow-none! has-[[data-slot=input-group-control]:focus-visible]:ring-0! m-1 h-8 w-auto shadow-none">
           <InputGroupAddon align="inline-start">
             <IconSearch />
           </InputGroupAddon>
@@ -1003,12 +1003,12 @@ const SelectorRow = memo(function SelectorRow({
               render={
                 <button
                   type="button"
-                  className="flex size-4 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:text-purple-300 disabled:opacity-50"
+                  className="flex size-4 shrink-0 items-center justify-center rounded-sm text-emerald-400 transition-colors hover:text-emerald-300 disabled:opacity-50"
                   onClick={handleClearFixed}
                   disabled={isClearingFixed}
                   aria-label="Снять фиксацию выбора"
                 >
-                  {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconLock size={17} />}
+                  {isClearingFixed ? <IconLoader2 size={12} className="animate-spin" /> : <IconPin size={17} />}
                 </button>
               }
             />

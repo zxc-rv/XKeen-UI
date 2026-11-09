@@ -1188,16 +1188,19 @@ const SourceDeviceCombobox = memo(function SourceDeviceCombobox({
       <ComboboxTrigger
         render={<Button variant="outline" />}
         aria-label="Фильтр по устройствам"
-        className={cn('cursor-pointer! justify-between font-normal', className)}
+        className={cn(
+          'cursor-pointer! justify-between font-normal data-popup-open:border-[#60a5fa]! data-popup-open:shadow-[0_0_0_3px_rgba(59,130,246,0.15)]!',
+          className
+        )}
       >
         <span className={cn('min-w-0 truncate', !selectedLabels.length && 'text-muted-foreground')}>{displayText}</span>
       </ComboboxTrigger>
-      <ComboboxContent className="min-w-56 border-blue-500/40">
+      <ComboboxContent className="min-w-56">
         <ComboboxInput
           fullWidth
           showTrigger={false}
           placeholder="Поиск устройства"
-          className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
+          className="border-input! has-[[data-slot=input-group-control]:focus-visible]:border-input! has-[[data-slot=input-group-control]:focus-visible]:shadow-none! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
         >
           <InputGroupAddon align="inline-start">
             <IconSearch />
