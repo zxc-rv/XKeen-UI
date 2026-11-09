@@ -10,6 +10,7 @@ import {
   ComboboxTrigger,
 } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -34,7 +35,7 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { apiCall, clashFetch } from '../../../lib/api'
-import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useSettings, useWsConnected } from '../../../lib/store'
+import { getConnections, subscribeConnections, useNowStore, useProxiesStore, useSettings } from '../../../lib/store'
 interface ConnectionMetadata {
   network: string
   type: string
@@ -1133,6 +1134,19 @@ function uniqueSourceLabels(sourceIPs: string[], showSourceName: boolean): strin
   return Array.from(labels)
 }
 
+const ConnectionsEmpty = memo(function ConnectionsEmpty({ className }: { className?: string }) {
+  return (
+    <Empty className={className}>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <IconPlugX />
+        </EmptyMedia>
+        <EmptyTitle className="text-sm tracking-normal">Нет соединений</EmptyTitle>
+      </EmptyHeader>
+    </Empty>
+  )
+})
+
 const ALL_DEVICES_VALUE = '__all_devices__'
 
 const SourceDeviceCombobox = memo(function SourceDeviceCombobox({
@@ -1340,6 +1354,7 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onApplyFilter,
   showSourceName,
   caseSensitive,
+  onEmptyChange,
 }: {
   filter: string
   sourceFilter: string[]
@@ -1351,8 +1366,8 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onApplyFilter: (value: string) => void
   showSourceName: boolean
   caseSensitive: boolean
+  onEmptyChange: (empty: boolean) => void
 }) {
-  const connected = useWsConnected()
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
 
   const filteredIds = useConnectionsStore(
@@ -1397,27 +1412,23 @@ const ConnectionsBody = memo(function ConnectionsBody({
     })
   )
 
+  useEffect(() => {
+    onEmptyChange(filteredIds.length === 0)
+  }, [filteredIds.length, onEmptyChange])
+
   return (
     <TableBody>
-      {filteredIds.length === 0 ? (
-        <TableRow>
-          <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-            {!connected ? 'Подключение...' : filter || sourceFilter.length ? 'Нет совпадений' : 'Нет активных соединений'}
-          </TableCell>
-        </TableRow>
-      ) : (
-        filteredIds.map((id) => (
-          <ConnectionRow
-            key={id}
-            connId={id}
-            onSelect={onSelect}
-            onClose={onClose}
-            onBlock={onBlock}
-            onApplyFilter={onApplyFilter}
-            showSourceName={showSourceName}
-          />
-        ))
-      )}
+      {filteredIds.map((id) => (
+        <ConnectionRow
+          key={id}
+          connId={id}
+          onSelect={onSelect}
+          onClose={onClose}
+          onBlock={onBlock}
+          onApplyFilter={onApplyFilter}
+          showSourceName={showSourceName}
+        />
+      ))}
     </TableBody>
   )
 })
@@ -1430,6 +1441,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   onSelect,
   showSourceName,
   caseSensitive,
+  onEmptyChange,
 }: {
   filter: string
   sourceFilter: string[]
@@ -1438,6 +1450,7 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   onSelect: (conn: Connection) => void
   showSourceName: boolean
   caseSensitive: boolean
+  onEmptyChange: (empty: boolean) => void
 }) {
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const filteredConns = useConnectionsStore(
@@ -1479,17 +1492,15 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
     })
   )
 
+  useEffect(() => {
+    onEmptyChange(filteredConns.length === 0)
+  }, [filteredConns.length, onEmptyChange])
+
   return (
     <TableBody>
-      {filteredConns.length === 0 ? (
-        <TableRow>
-          <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-            {filter || sourceFilter.length ? 'Нет совпадений' : 'Нет закрытых соединений'}
-          </TableCell>
-        </TableRow>
-      ) : (
-        filteredConns.map((conn) => <ClosedConnectionRow key={conn.id} conn={conn} onSelect={onSelect} showSourceName={showSourceName} />)
-      )}
+      {filteredConns.map((conn) => (
+        <ClosedConnectionRow key={conn.id} conn={conn} onSelect={onSelect} showSourceName={showSourceName} />
+      ))}
     </TableBody>
   )
 })
@@ -1641,7 +1652,6 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   onToggleSearchHiddenColumns: () => void
   showSourceName: boolean
 }) {
-  const connected = useWsConnected()
   const sourceNameVersion = useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const [visibleLimit, setVisibleLimit] = useState(50)
   const liveMaps = useConnectionsStore(useShallow((s) => ({ active: s.map, closed: s.closedMap })))
@@ -1819,9 +1829,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
             )}
           </div>
         ) : (
-          <div className="text-muted-foreground py-10 text-center text-sm">
-            {!connected ? 'Подключение…' : filter || sourceFilter.length ? 'Нет совпадений' : 'Нет соединений'}
-          </div>
+          <ConnectionsEmpty className="h-full min-h-60" />
         )}
       </div>
     </div>
@@ -1867,6 +1875,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   const dialogCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [caseSensitive, setCaseSensitive] = useState(() => localStorage.getItem('conn_filter_cs') === 'true')
+  const [desktopEmpty, setDesktopEmpty] = useState(false)
   const toggleCaseSensitive = useCallback(() => {
     setCaseSensitive((prev) => {
       const next = !prev
@@ -2040,7 +2049,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           selectedSourceLabels={sourceFilter}
           onSourceFilterChange={setSourceFilter}
         />
-        <div className="flex-1 scrollbar-thin overflow-auto">
+        <div className="flex min-h-0 flex-1 flex-col scrollbar-thin overflow-auto [&>[data-slot=table-container]]:shrink-0">
           <Table className="min-w-240 md:min-w-190">
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
             {activeTab === 'active' ? (
@@ -2055,6 +2064,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onApplyFilter={handleApplyFilter}
                 showSourceName={showSourceName}
                 caseSensitive={caseSensitive}
+                onEmptyChange={setDesktopEmpty}
               />
             ) : (
               <ClosedConnectionsBody
@@ -2065,9 +2075,15 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onSelect={handleSelectConnection}
                 showSourceName={showSourceName}
                 caseSensitive={caseSensitive}
+                onEmptyChange={setDesktopEmpty}
               />
             )}
           </Table>
+          {desktopEmpty && (
+            <div className="flex min-h-0 flex-1 items-center justify-center">
+              <ConnectionsEmpty className="h-full" />
+            </div>
+          )}
         </div>
       </div>
       {showMobileLayout && (
