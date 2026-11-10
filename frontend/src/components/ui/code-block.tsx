@@ -184,7 +184,7 @@ const codeBlockLineVariants = cva(
     variants: {
       variant: {
         default: "",
-        added: "bg-muted after:content-['+']",
+        added: "bg-muted after:text-emerald-600 after:content-['+'] dark:after:text-emerald-300",
         removed: "bg-destructive/10 after:text-destructive after:content-['−']",
         highlighted: "bg-muted",
       },
