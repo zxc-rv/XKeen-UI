@@ -1,5 +1,5 @@
-use crate::logger::log;
 use crate::healthchecker::serve_config;
+use crate::logger::log;
 use crate::types::*;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
@@ -119,12 +119,13 @@ pub async fn get_configs(
             let path = entry.path();
             let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             if (path.extension().is_some_and(|e| e == "lst") || name == "xkeen.json")
-                && let Ok(content) = tokio::fs::read_to_string(&path).await {
-                    lst_configs.push(ConfigItem {
-                        file: path.to_string_lossy().into(),
-                        content,
-                    });
-                }
+                && let Ok(content) = tokio::fs::read_to_string(&path).await
+            {
+                lst_configs.push(ConfigItem {
+                    file: path.to_string_lossy().into(),
+                    content,
+                });
+            }
         }
     }
 
@@ -180,12 +181,11 @@ pub(crate) fn check_access(file: &str, state: &AppState) -> Result<bool, &'stati
 }
 
 pub async fn put_config(
-    State(state): State<AppState>, Query(params): Query<HashMap<String, String>>,
-    Json(req): Json<ConfigReq>,
+    State(state): State<AppState>, Query(params): Query<HashMap<String, String>>, Json(req): Json<ConfigReq>,
 ) -> impl IntoResponse {
     let is_lst = match check_access(&req.file, &state) {
         Ok(val) => val,
-        Err(error) => return api_error(error)
+        Err(error) => return api_error(error),
     };
     let content = if is_lst {
         req.content.replace("\r\n", "\n")
@@ -250,7 +250,7 @@ pub async fn put_config(
 pub async fn post_config(State(state): State<AppState>, Json(req): Json<ConfigReq>) -> impl IntoResponse {
     let is_lst = match check_access(&req.file, &state) {
         Ok(val) => val,
-        Err(error) => return api_error(error)
+        Err(error) => return api_error(error),
     };
     if Path::new(&req.file).exists() {
         return api_error("File already exists");
@@ -406,7 +406,11 @@ async fn bind_config_socket(file: &str) -> Result<(UnixListener, String), String
     const MAX_ATTEMPTS: u32 = 100;
     let base = socket_name_base(file);
     for attempt in 1..=MAX_ATTEMPTS {
-        let name = if attempt == 1 { base.clone() } else { format!("{base}-{attempt}") };
+        let name = if attempt == 1 {
+            base.clone()
+        } else {
+            format!("{base}-{attempt}")
+        };
         match UnixListener::bind(format!("\0{name}")) {
             Ok(listener) => return Ok((listener, name)),
             Err(e) if attempt == MAX_ATTEMPTS => {
@@ -436,7 +440,13 @@ fn socket_name_base(file: &str) -> String {
         .and_then(|n| n.to_str())
         .unwrap_or_default()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if name.is_empty() {
         name = "config.json".into();
@@ -463,11 +473,19 @@ struct MihomoError {
 }
 
 fn api_ok() -> Json<ApiResponse<()>> {
-    Json(ApiResponse { success: true, error: None, data: None })
+    Json(ApiResponse {
+        success: true,
+        error: None,
+        data: None,
+    })
 }
 
 fn api_error(error: impl Into<String>) -> Json<ApiResponse<()>> {
-    Json(ApiResponse { success: false, error: Some(error.into()), data: None })
+    Json(ApiResponse {
+        success: false,
+        error: Some(error.into()),
+        data: None,
+    })
 }
 
 struct MihomoApiCreds {
@@ -487,7 +505,11 @@ fn yaml_value_to_string(value: &yaml_rust2::Yaml) -> Option<String> {
 }
 
 fn parse_mihomo_api_creds(yaml_content: &str) -> MihomoApiCreds {
-    let mut creds = MihomoApiCreds { port: None, secret: None, unix_path: None };
+    let mut creds = MihomoApiCreds {
+        port: None,
+        secret: None,
+        unix_path: None,
+    };
     let Ok(docs) = yaml_rust2::YamlLoader::load_from_str(yaml_content) else {
         return creds;
     };
@@ -499,17 +521,18 @@ fn parse_mihomo_api_creds(yaml_content: &str) -> MihomoApiCreds {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .filter(|n| !n.is_empty())
-            {
-                creds.unix_path = Some(format!("{}/{}", MIHOMO_CONF_DIR, name));
-            }
+        {
+            creds.unix_path = Some(format!("{}/{}", MIHOMO_CONF_DIR, name));
+        }
     }
     if let Some(controller) = yaml_value_to_string(&doc["external-controller"])
-        && let Some(port_str) = controller.trim().rsplit(':').next() {
-            let port_str = port_str.trim().trim_matches(|c| c == '"' || c == '\'');
-            if let Ok(port) = port_str.parse::<u16>() {
-                creds.port = Some(port);
-            }
+        && let Some(port_str) = controller.trim().rsplit(':').next()
+    {
+        let port_str = port_str.trim().trim_matches(|c| c == '"' || c == '\'');
+        if let Ok(port) = port_str.parse::<u16>() {
+            creds.port = Some(port);
         }
+    }
     if let Some(secret) = yaml_value_to_string(&doc["secret"]) {
         let trimmed = secret.trim().to_string();
         if !trimmed.is_empty() {
@@ -538,7 +561,11 @@ async fn apply_mihomo_hot_reload(
             Ok(client) => (client, "http://127.0.0.1".to_string(), None),
             Err(_) => return api_error(HOT_RELOAD_UNAVAILABLE),
         },
-        (None, Some(port)) => (state.http_client.clone(), format!("http://127.0.0.1:{port}"), creds.secret),
+        (None, Some(port)) => (
+            state.http_client.clone(),
+            format!("http://127.0.0.1:{port}"),
+            creds.secret,
+        ),
         (None, None) => return api_error(HOT_RELOAD_UNAVAILABLE),
     };
 
@@ -556,7 +583,9 @@ async fn apply_mihomo_hot_reload(
     let status = response.status();
     if status == StatusCode::NO_CONTENT {
         if close_conns {
-            let mut req = client.delete(format!("{base_url}/connections")).timeout(Duration::from_secs(15));
+            let mut req = client
+                .delete(format!("{base_url}/connections"))
+                .timeout(Duration::from_secs(15));
             if let Some(secret) = secret.as_deref() {
                 req = req.bearer_auth(secret);
             }
@@ -592,7 +621,10 @@ mod tests {
     use super::*;
 
     fn req(file: &str, content: &str) -> ConfigReq {
-        ConfigReq { file: file.to_string(), content: content.to_string() }
+        ConfigReq {
+            file: file.to_string(),
+            content: content.to_string(),
+        }
     }
 
     // Требует xray в PATH; без него просто пропускается.
@@ -640,7 +672,10 @@ mod tests {
             return;
         }
         let files = vec![
-            req("/opt/etc/xray/10-out.json", r#"{"outbounds":[{"protocol":"freedom","settings":{}}]}"#),
+            req(
+                "/opt/etc/xray/10-out.json",
+                r#"{"outbounds":[{"protocol":"freedom","settings":{}}]}"#,
+            ),
             req("/opt/etc/xray/00-log.json", r#"{"log":{"loglevel":"none"}}"#),
             req("/opt/etc/xray/20-in.json", r#"{"inbounds":[]}"#),
         ];
@@ -662,7 +697,10 @@ mod tests {
         assert_eq!(socket_name_base("/opt/etc/xray/00-out.json"), "00-out.json");
         // Небезопасные символы (пробел, ':', '/' — последний Xray считает разделителем
         // HTTP-пути, ':' ломает SplitHTTPUnixURL) уводятся в '_'.
-        assert_eq!(socket_name_base("/opt/etc/xray/main config:v2.json"), "main_config_v2.json");
+        assert_eq!(
+            socket_name_base("/opt/etc/xray/main config:v2.json"),
+            "main_config_v2.json"
+        );
         assert_eq!(socket_name_base("/opt/etc/xray/a@b.json"), "a_b.json");
         // Не-UTF8-имя или вообще пустое — безопасный фолбэк.
         assert_eq!(socket_name_base("/"), "config.json");
@@ -700,7 +738,10 @@ mod tests {
         }
         let files = vec![
             req("/opt/etc/xray2/10-part.json", r#"{"log":{"loglevel":"none"}}"#),
-            req("/opt/etc/xray/10-part.json", r#"{"outbounds":[{"protocol":"freedom","settings":{}}]}"#),
+            req(
+                "/opt/etc/xray/10-part.json",
+                r#"{"outbounds":[{"protocol":"freedom","settings":{}}]}"#,
+            ),
         ];
         assert_eq!(validate_core(&files).await, Ok(()));
     }

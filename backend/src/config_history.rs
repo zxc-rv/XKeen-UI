@@ -210,7 +210,9 @@ fn append_snapshot(
     if max_snapshots == 0 || history.history.last().is_some_and(|last| last.content == previous) {
         return false;
     }
-    history.history.push(new_revision(previous.to_string(), date.to_string()));
+    history
+        .history
+        .push(new_revision(previous.to_string(), date.to_string()));
     if history.history.len() > max_snapshots {
         let remove = history.history.len() - max_snapshots;
         history.history.drain(..remove);
@@ -301,7 +303,11 @@ async fn load_content(file: &str, revision: &mut ConfigRevision) -> Result<(), S
 }
 
 async fn write_history(path: &Path, history: &ConfigHistory) -> std::io::Result<()> {
-    tokio::fs::DirBuilder::new().recursive(true).mode(0o700).create(path).await?;
+    tokio::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)
+        .await?;
 
     let mut keep = Vec::with_capacity(history.history.len());
     for revision in &history.history {
@@ -412,9 +418,18 @@ struct DiffCell {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum DiffRow {
-    Equal { left_line: usize, right_line: usize, text: String },
-    Change { left: Option<DiffCell>, right: Option<DiffCell> },
-    Skipped { count: usize },
+    Equal {
+        left_line: usize,
+        right_line: usize,
+        text: String,
+    },
+    Change {
+        left: Option<DiffCell>,
+        right: Option<DiffCell>,
+    },
+    Skipped {
+        count: usize,
+    },
 }
 
 fn line_text(line: &str) -> &str {
@@ -459,8 +474,14 @@ fn inline_cells(left_line: usize, left: &str, right_line: usize, right: &str) ->
         }
     }
     (
-        DiffCell { line: left_line, segments: left_segments },
-        DiffCell { line: right_line, segments: right_segments },
+        DiffCell {
+            line: left_line,
+            segments: left_segments,
+        },
+        DiffCell {
+            line: right_line,
+            segments: right_segments,
+        },
     )
 }
 
@@ -488,7 +509,9 @@ fn build_rows(before: &str, after: &str) -> Vec<DiffRow> {
                 rows.extend((0..length).map(&visible));
             } else {
                 rows.extend((0..head).map(&visible));
-                rows.push(DiffRow::Skipped { count: length - head - tail });
+                rows.push(DiffRow::Skipped {
+                    count: length - head - tail,
+                });
                 rows.extend((length - tail..length).map(&visible));
             }
             continue;
@@ -501,7 +524,10 @@ fn build_rows(before: &str, after: &str) -> Vec<DiffRow> {
             rows.push(match (old, new) {
                 (Some((left_line, left)), Some((right_line, right))) => {
                     let (left, right) = inline_cells(left_line, left, right_line, right);
-                    DiffRow::Change { left: Some(left), right: Some(right) }
+                    DiffRow::Change {
+                        left: Some(left),
+                        right: Some(right),
+                    }
                 }
                 (old, new) => DiffRow::Change {
                     left: old.map(|(line, text)| plain_cell(line, text)),
@@ -515,7 +541,9 @@ fn build_rows(before: &str, after: &str) -> Vec<DiffRow> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConfigHistory, ConfigRevision, append_snapshot, build_rows, delete_revision, sort_history, write_history};
+    use super::{
+        ConfigHistory, ConfigRevision, append_snapshot, build_rows, delete_revision, sort_history, write_history,
+    };
 
     fn history() -> ConfigHistory {
         ConfigHistory {
@@ -616,9 +644,7 @@ mod tests {
 
     #[test]
     fn only_previous_versions_are_kept_up_to_the_limit() {
-        let mut history = ConfigHistory {
-            history: Vec::new(),
-        };
+        let mut history = ConfigHistory { history: Vec::new() };
         for (previous, content) in [("a", "b"), ("b", "c"), ("c", "d")] {
             assert!(append_snapshot(&mut history, 2, Some(previous), content, "date"));
         }
@@ -712,7 +738,10 @@ mod tests {
         let json = serde_json::to_value(build_rows("a:  1\n", "a: 1\n")).unwrap();
         let left = json[0]["left"]["segments"].as_array().unwrap();
         let right = json[0]["right"]["segments"].as_array().unwrap();
-        assert!(left.iter().any(|segment| segment["emphasized"] == true && segment["text"] == " "));
+        assert!(
+            left.iter()
+                .any(|segment| segment["emphasized"] == true && segment["text"] == " ")
+        );
         assert!(right.iter().all(|segment| segment["emphasized"] == false));
     }
 

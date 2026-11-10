@@ -48,19 +48,19 @@ pub fn find_init_file(log_enabled: bool) -> Option<String> {
             .map(String::from)
     });
 
-    if log_enabled
-        && let Some(p) = &final_path {
-            println!("{} [INFO] Defined initd_file ({}): {}", crate::logger::ts(), source, p);
-        }
+    if log_enabled && let Some(p) = &final_path {
+        println!("{} [INFO] Defined initd_file ({}): {}", crate::logger::ts(), source, p);
+    }
 
     final_path
 }
 
 async fn resolve_init_file(state: &AppState) -> Result<String, String> {
     if let Some(path) = state.init_file.read().unwrap().clone()
-        && Path::new(&path).exists() {
-            return Ok(path);
-        }
+        && Path::new(&path).exists()
+    {
+        return Ok(path);
+    }
     let new_path = tokio::task::spawn_blocking(|| find_init_file(false))
         .await
         .map_err(|e| e.to_string())?
@@ -189,7 +189,11 @@ pub async fn get_control(State(state): State<AppState>) -> impl IntoResponse {
     let mut current_core = state.core.read().unwrap().clone();
 
     if !running.contains(current_core.name.as_str()) {
-        let alt_core = if current_core.name == "mihomo" { "xray" } else { "mihomo" };
+        let alt_core = if current_core.name == "mihomo" {
+            "xray"
+        } else {
+            "mihomo"
+        };
 
         current_core = if running.contains(alt_core) {
             get_core_info(alt_core)
@@ -225,10 +229,7 @@ async fn check_core_config(core: &str) -> Result<(), String> {
     if core == "xray" {
         fs::create_dir_all(XRAY_CONF_DIR).await.ok();
         let has_json = std::fs::read_dir(XRAY_CONF_DIR)
-            .map(|dir| {
-                dir.flatten()
-                    .any(|e| e.path().extension().is_some_and(|x| x == "json"))
-            })
+            .map(|dir| dir.flatten().any(|e| e.path().extension().is_some_and(|x| x == "json")))
             .unwrap_or(false);
         if !has_json {
             return Err(
@@ -252,7 +253,10 @@ pub async fn wait_mihomo_ready(start_offset: usize) -> Result<(), String> {
     while tokio::time::Instant::now() < deadline {
         let content = fs::read(error_log_path()).await.unwrap_or_default();
         let fresh = content.get(start_offset..).unwrap_or(&content);
-        if fresh.windows(MARKER.len()).any(|window| window.eq_ignore_ascii_case(MARKER)) {
+        if fresh
+            .windows(MARKER.len())
+            .any(|window| window.eq_ignore_ascii_case(MARKER))
+        {
             return Ok(());
         }
         if tokio::task::spawn_blocking(|| get_pid("mihomo"))
@@ -336,14 +340,13 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                     data: None,
                 });
             }
-            if is_mihomo
-                && let Err(e) = wait_mihomo_ready(log_offset).await {
-                    return Json(ApiResponse {
-                        success: false,
-                        error: Some(e),
-                        data: None,
-                    });
-                }
+            if is_mihomo && let Err(e) = wait_mihomo_ready(log_offset).await {
+                return Json(ApiResponse {
+                    success: false,
+                    error: Some(e),
+                    data: None,
+                });
+            }
         }
         "softRestart" => {
             if let Err(e) = soft_restart("xray").await {
@@ -363,18 +366,19 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
 
             let cur_name = state.core.read().unwrap().name.clone();
             if (a == "start" || a == "hardRestart")
-                && let Err(e) = check_core_config(&cur_name).await {
-                    log("ERROR", e);
-                    return Json(ApiResponse {
-                        success: false,
-                        error: Some(format!(
-                            "Не удалось запустить {}{}",
-                            cur_name[..1].to_uppercase(),
-                            &cur_name[1..]
-                        )),
-                        data: None,
-                    });
-                }
+                && let Err(e) = check_core_config(&cur_name).await
+            {
+                log("ERROR", e);
+                return Json(ApiResponse {
+                    success: false,
+                    error: Some(format!(
+                        "Не удалось запустить {}{}",
+                        cur_name[..1].to_uppercase(),
+                        &cur_name[1..]
+                    )),
+                    data: None,
+                });
+            }
             if cur_name == "mihomo" && (a == "start" || a == "hardRestart") {
                 _ = fs::write(error_log_path(), b"").await;
             }
@@ -397,14 +401,13 @@ pub async fn post_control(State(state): State<AppState>, Json(req): Json<Control
                 });
             }
 
-            if mihomo_boot
-                && let Err(e) = wait_mihomo_ready(boot_log_offset).await {
-                    return Json(ApiResponse {
-                        success: false,
-                        error: Some(e),
-                        data: None,
-                    });
-                }
+            if mihomo_boot && let Err(e) = wait_mihomo_ready(boot_log_offset).await {
+                return Json(ApiResponse {
+                    success: false,
+                    error: Some(e),
+                    data: None,
+                });
+            }
         }
         _ => {
             return Json(ApiResponse {

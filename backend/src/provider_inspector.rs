@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::Query;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde::Deserialize;
 use std::path::Path;
 use std::sync::{Arc, LazyLock, RwLock};
@@ -87,7 +87,10 @@ fn provider_file_path(provider: &Yaml, section: &str) -> Result<(String, bool), 
     }
     let url = provider["url"].as_str().ok_or("В провайдере нет ни path, ни url")?;
     let subdirectory = if section == RULE_PROVIDERS { "rules" } else { "proxies" };
-    Ok((format!("{MIHOMO_CONF_DIR}/{subdirectory}/{:x}", md5::compute(url)), false))
+    Ok((
+        format!("{MIHOMO_CONF_DIR}/{subdirectory}/{:x}", md5::compute(url)),
+        false,
+    ))
 }
 
 fn inline_payload(provider: &Yaml, section: &str) -> Option<String> {
@@ -154,8 +157,7 @@ pub async fn get_proxy_provider_content(Query(query): Query<ProviderQuery>) -> R
 }
 
 pub async fn put_rule_providers_content(
-    Query(query): Query<ProviderQuery>,
-    Json(request): Json<SaveProviderRequest>,
+    Query(query): Query<ProviderQuery>, Json(request): Json<SaveProviderRequest>,
 ) -> Response {
     respond(
         write_provider(RULE_PROVIDERS, &query, &request.content)
@@ -165,8 +167,7 @@ pub async fn put_rule_providers_content(
 }
 
 pub async fn put_proxy_provider_content(
-    Query(query): Query<ProviderQuery>,
-    Json(request): Json<SaveProviderRequest>,
+    Query(query): Query<ProviderQuery>, Json(request): Json<SaveProviderRequest>,
 ) -> Response {
     respond(
         write_provider(PROXY_PROVIDERS, &query, &request.content)
@@ -189,7 +190,10 @@ pub(crate) async fn convert_mrs(mrs_path: &str, behavior: &str) -> Result<String
         return Err(format!("MRS файл не найден: {mrs_path}"));
     }
 
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
     let tmp_path = format!("/tmp/convert-ruleset_{}_{nanos:x}", std::process::id());
 
     let output = Command::new("/opt/sbin/mihomo")

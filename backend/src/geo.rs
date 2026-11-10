@@ -18,6 +18,8 @@ use tokio::task;
 pub struct GeoFilesResponse {
     site_files: Vec<String>,
     ip_files: Vec<String>,
+    /// Время изменения файла (unix-секунды), по имени файла.
+    mtimes: HashMap<String, i64>,
 }
 
 #[derive(Serialize)]
@@ -199,6 +201,7 @@ fn detect_geo_file_type(data: &[u8]) -> (bool, bool) {
 pub fn list_geo_files(cache_arc: Arc<RwLock<crate::types::GeoCache>>) -> Result<GeoFilesResponse, String> {
     let mut site_files = Vec::new();
     let mut ip_files = Vec::new();
+    let mut mtimes = HashMap::new();
     let mut new_cache_entries = Vec::new();
 
     for entry in std::fs::read_dir(XRAY_ASSET_DIR).map_err(|e| e.to_string())?.flatten() {
@@ -228,6 +231,15 @@ pub fn list_geo_files(cache_arc: Arc<RwLock<crate::types::GeoCache>>) -> Result<
                 result
             }
         };
+        if is_site || is_ip {
+            mtimes.insert(
+                name.clone(),
+                mtime
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0),
+            );
+        }
         if is_site {
             site_files.push(name.clone());
         }
@@ -245,7 +257,11 @@ pub fn list_geo_files(cache_arc: Arc<RwLock<crate::types::GeoCache>>) -> Result<
 
     site_files.sort();
     ip_files.sort();
-    Ok(GeoFilesResponse { site_files, ip_files })
+    Ok(GeoFilesResponse {
+        site_files,
+        ip_files,
+        mtimes,
+    })
 }
 
 pub async fn get_geo(State(state): State<AppState>) -> impl IntoResponse {

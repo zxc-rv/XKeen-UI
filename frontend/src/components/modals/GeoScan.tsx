@@ -20,6 +20,12 @@ type FileStatus = {
   status: 'idle' | 'scanning' | 'found' | 'not-found' | 'error'
 }
 
+function formatMtime(seconds: number) {
+  const d = new Date(seconds * 1000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${String(d.getFullYear()).slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export function GeoScanModal() {
   const { showToast } = useAppContext()
   const { modals, dispatch } = useModalContext()
@@ -30,6 +36,7 @@ export function GeoScanModal() {
     ip: [],
   })
   const [selectedFiles, setSelectedFiles] = useState<string[]>([])
+  const [mtimes, setMtimes] = useState<Record<string, number>>({})
   const [fileStatuses, setFileStatuses] = useState<Record<string, FileStatus>>({})
   const [scanning, setScanning] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -51,6 +58,7 @@ export function GeoScanModal() {
           ip: data.ip_files || [],
         }
         setGeoFiles(files)
+        setMtimes(data.mtimes || {})
         setSelectedFiles(files.domain)
         initStatuses(files.domain)
       }
@@ -200,6 +208,11 @@ export function GeoScanModal() {
                       <Label htmlFor={`file-${file}`} className="flex-1 cursor-pointer truncate text-xs font-normal tracking-wide">
                         {file}
                       </Label>
+                      {mtimes[file] != null && (
+                        <span className="text-muted-foreground shrink-0 text-[11px] tracking-wide">
+                          обновлен: {formatMtime(mtimes[file])}
+                        </span>
+                      )}
                       {status && status.status !== 'idle' && (
                         <span
                           className={cn('shrink-0 font-mono text-xs', {
@@ -251,7 +264,9 @@ export function GeoScanModal() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !scanning && scan()}
-            placeholder={geoType === 'ip' ? 'IP-Адрес или полный домен, например 1.1.1.1 или www.google.com' : 'Полный домен, например www.google.com'}
+            placeholder={
+              geoType === 'ip' ? 'IP-Адрес или полный домен, например 1.1.1.1 или www.google.com' : 'Полный домен, например www.google.com'
+            }
           />
           <InputGroupAddon align="inline-end">
             {input && (

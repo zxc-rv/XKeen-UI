@@ -32,8 +32,12 @@ pub struct DnsStatusFields {
 }
 
 fn check_dns_mihomo() -> bool {
-    let Ok(content) = std::fs::read_to_string(MIHOMO_CONF) else { return false };
-    let Ok(documents) = yaml_rust2::YamlLoader::load_from_str(&content) else { return false };
+    let Ok(content) = std::fs::read_to_string(MIHOMO_CONF) else {
+        return false;
+    };
+    let Ok(documents) = yaml_rust2::YamlLoader::load_from_str(&content) else {
+        return false;
+    };
     documents.first().is_some_and(|document| {
         document["dns"]["enable"].as_bool().unwrap_or(false) && document["dns"]["listen"].as_str() == Some("0.0.0.0:53")
     })
@@ -84,9 +88,10 @@ fn get_br0_ip() -> Result<String, String> {
     for line in stdout.lines() {
         let line = line.trim();
         if let Some(rest) = line.strip_prefix("inet ")
-            && let Some(ip) = rest.split('/').next() {
-                return Ok(ip.to_string());
-            }
+            && let Some(ip) = rest.split('/').next()
+        {
+            return Ok(ip.to_string());
+        }
     }
     Err("Не удалось получить IP адрес br0".into())
 }
@@ -141,10 +146,7 @@ async fn post_rci_batch(state: &AppState, commands: &[serde_json::Value]) -> Res
         req = req.header("X-Ndma-Tkn", token);
     }
 
-    let response = req
-        .send()
-        .await
-        .map_err(|e| format!("Ошибка POST RCI batch: {e}"))?;
+    let response = req.send().await.map_err(|e| format!("Ошибка POST RCI batch: {e}"))?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -231,7 +233,11 @@ fn port_53_inodes(table: &str, protocol: &str) -> Vec<u64> {
         .filter(|fields| {
             fields.len() >= 10
                 && fields[1].ends_with(":0035")
-                && if only_listening { fields[3] == "0A" } else { fields[2].ends_with(":0000") }
+                && if only_listening {
+                    fields[3] == "0A"
+                } else {
+                    fields[2].ends_with(":0000")
+                }
         })
         .filter_map(|fields| fields[9].parse::<u64>().ok())
         .filter(|inode| *inode != 0)
@@ -242,7 +248,11 @@ fn port_53_listener() -> Option<String> {
     let mut sockets = HashSet::new();
     for protocol in ["tcp", "udp", "tcp6", "udp6"] {
         let table = std::fs::read_to_string(format!("/proc/net/{protocol}")).unwrap_or_default();
-        sockets.extend(port_53_inodes(&table, protocol).into_iter().map(|inode| format!("socket:[{inode}]")));
+        sockets.extend(
+            port_53_inodes(&table, protocol)
+                .into_iter()
+                .map(|inode| format!("socket:[{inode}]")),
+        );
     }
     if sockets.is_empty() {
         return None;
@@ -250,7 +260,9 @@ fn port_53_listener() -> Option<String> {
 
     let mut names = BTreeSet::new();
     for process in std::fs::read_dir("/proc").ok()?.flatten() {
-        let Ok(descriptors) = std::fs::read_dir(process.path().join("fd")) else { continue };
+        let Ok(descriptors) = std::fs::read_dir(process.path().join("fd")) else {
+            continue;
+        };
         let is_listener = descriptors.flatten().any(|descriptor| {
             std::fs::read_link(descriptor.path()).is_ok_and(|link| sockets.contains(link.to_string_lossy().as_ref()))
         });
@@ -334,10 +346,7 @@ pub async fn post_dns(State(state): State<AppState>, Json(req): Json<DnsEnableRe
             json!({"ip": {"name-server": [{"address": br0_ip}]}}),
         ));
     }
-    steps.push((
-        "Включение opkg dns-override",
-        json!({"opkg": {"dns-override": {}}}),
-    ));
+    steps.push(("Включение opkg dns-override", json!({"opkg": {"dns-override": {}}})));
     steps.push((
         "Сохранение конфигурации",
         json!({"system": {"configuration": {"save": {}}}}),
@@ -515,11 +524,14 @@ mod tests {
         assert!(err.contains("not found"), "unexpected: {err}");
     }
 
-    const TABLE_HEADER: &str = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n";
+    const TABLE_HEADER: &str =
+        "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n";
     const UNCONNECTED_REMOTE: &str = "00000000:0000";
 
     fn table_row(local: &str, remote: &str, state: &str, inode: u64) -> String {
-        format!("   0: {local} {remote} {state} 00000000:00000000 00:00000000 00000000     0        0 {inode} 1 0000000000000000 100 0 0 10 0\n")
+        format!(
+            "   0: {local} {remote} {state} 00000000:00000000 00:00000000 00000000     0        0 {inode} 1 0000000000000000 100 0 0 10 0\n"
+        )
     }
 
     #[test]

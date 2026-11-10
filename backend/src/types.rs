@@ -419,7 +419,9 @@ pub struct ConfigHistorySettings {
 
 impl Default for ConfigHistorySettings {
     fn default() -> Self {
-        Self { max_snapshots: DEFAULT_CONFIG_HISTORY_MAX_SNAPSHOTS }
+        Self {
+            max_snapshots: DEFAULT_CONFIG_HISTORY_MAX_SNAPSHOTS,
+        }
     }
 }
 

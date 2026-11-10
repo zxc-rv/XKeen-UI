@@ -46,9 +46,10 @@ fn is_session_valid(session_ids: &[String], cookie: &str) -> bool {
             return true;
         }
         if let Some((uid, exp_str)) = id.split_once(':')
-            && uid == cookie {
-                return exp_str.parse::<u64>().unwrap_or(0) > ts;
-            }
+            && uid == cookie
+        {
+            return exp_str.parse::<u64>().unwrap_or(0) > ts;
+        }
         false
     })
 }

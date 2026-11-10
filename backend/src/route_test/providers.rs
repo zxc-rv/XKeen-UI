@@ -17,11 +17,11 @@
 //! буфера (без промежуточного `Vec<String>` на каждую строку) и копируются один раз — в саму
 //! арену.
 
+use crate::provider_inspector;
 use crate::route_test::cidr::{Cidr, Range};
 use crate::route_test::dns::Resolver;
 use crate::route_test::idle_cache::IdleCache;
 use crate::route_test::mihomo::{EvalState, RuleKind, Verdict, parse_predicate};
-use crate::provider_inspector;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;

@@ -1,8 +1,8 @@
 mod api_relay;
 mod auth;
 mod backuper;
-mod configs;
 mod config_history;
+mod configs;
 mod controller;
 mod dns;
 mod frontend_embedder;
@@ -494,7 +494,10 @@ async fn main() {
                 .put(config_history::put_config_history)
                 .delete(config_history::delete_config_history),
         )
-        .route("/api/configs/history/diff", post(config_history::post_config_history_diff))
+        .route(
+            "/api/configs/history/diff",
+            post(config_history::post_config_history_diff),
+        )
         .route(
             "/api/backup",
             get(backuper::get_backups)

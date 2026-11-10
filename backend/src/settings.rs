@@ -112,4 +112,3 @@ fn json_merge(a: &mut serde_json::Value, b: serde_json::Value) {
         (a, b) => *a = b,
     }
 }
-

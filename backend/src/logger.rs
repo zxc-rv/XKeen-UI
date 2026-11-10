@@ -53,20 +53,22 @@ pub fn process_log_line(line: String, tz: i32) -> String {
         }
     } else {
         let bytes = out.as_bytes();
-        if bytes.len() > 19 && bytes[4] == b'/' && out.is_char_boundary(19)
-            && let Ok(t) = NaiveDateTime::parse_from_str(&out[..19], "%Y/%m/%d %H:%M:%S") {
-                let rest = &out[19..];
-                let rest_bytes = rest.as_bytes();
-                let trim_micros = rest_bytes.len() >= 10
-                    && rest_bytes[0] == b'.'
-                    && rest_bytes[1..10].iter().all(|b| b.is_ascii_digit());
-                let formatted_ts = (t + offset).format("%Y/%m/%d %H:%M:%S").to_string();
-                out = if trim_micros {
-                    format!("{}{}{}", formatted_ts, &rest[..7], &rest[10..])
-                } else {
-                    format!("{}{}", formatted_ts, rest)
-                };
-            }
+        if bytes.len() > 19
+            && bytes[4] == b'/'
+            && out.is_char_boundary(19)
+            && let Ok(t) = NaiveDateTime::parse_from_str(&out[..19], "%Y/%m/%d %H:%M:%S")
+        {
+            let rest = &out[19..];
+            let rest_bytes = rest.as_bytes();
+            let trim_micros =
+                rest_bytes.len() >= 10 && rest_bytes[0] == b'.' && rest_bytes[1..10].iter().all(|b| b.is_ascii_digit());
+            let formatted_ts = (t + offset).format("%Y/%m/%d %H:%M:%S").to_string();
+            out = if trim_micros {
+                format!("{}{}{}", formatted_ts, &rest[..7], &rest[10..])
+            } else {
+                format!("{}{}", formatted_ts, rest)
+            };
+        }
     }
 
     out = ANSI_RE

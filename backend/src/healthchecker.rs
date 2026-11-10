@@ -29,6 +29,7 @@ use axum::extract::{Json, State};
 use axum::response::IntoResponse;
 use chrono::SecondsFormat;
 use futures_util::stream::{self, StreamExt};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::future::Future;
@@ -40,7 +41,6 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio::sync::{Mutex, oneshot};
 use tokio_rustls::TlsConnector;
-use reqwest::Url;
 
 /// Пинги идут по одному запуску xray за раз: на Keenetic несколько ядер сразу — лишняя нагрузка.
 static PING_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -136,7 +136,9 @@ struct PingReply {
     status: u16,
 }
 
-pub async fn post_healthcheck(State(state): State<AppState>, Json(request): Json<OutboundPingReq>) -> impl IntoResponse {
+pub async fn post_healthcheck(
+    State(state): State<AppState>, Json(request): Json<OutboundPingReq>,
+) -> impl IntoResponse {
     if !request.outbound.is_object() {
         return Json(serde_json::json!({ "success": false, "error": "Outbound не является объектом" }));
     }
@@ -178,7 +180,9 @@ pub async fn post_healthcheck(State(state): State<AppState>, Json(request): Json
 /// «Тест всех»: список аутбаундов → один процесс xray, замеры по всем параллельно.
 /// Ответ — по одному элементу на тег; если xray не запустился, отдаётся `success: false`,
 /// причина пишется в лог, а история замеров не меняется.
-pub async fn post_healthcheck_all(State(state): State<AppState>, Json(request): Json<HealthcheckAllReq>) -> impl IntoResponse {
+pub async fn post_healthcheck_all(
+    State(state): State<AppState>, Json(request): Json<HealthcheckAllReq>,
+) -> impl IntoResponse {
     let params = match resolve_ping_params(&state, request.url.as_deref(), request.timeout_ms) {
         Ok(params) => params,
         Err(error) => return Json(serde_json::json!({ "success": false, "error": error })),
@@ -234,13 +238,18 @@ fn resolve_ping_params(state: &AppState, url: Option<&str>, timeout_ms: Option<u
             settings.clash_api.ping_mode,
         )
     };
-    let url = url.map(str::trim).filter(|url| !url.is_empty()).unwrap_or(&settings_url);
+    let url = url
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+        .unwrap_or(&settings_url);
     let target = match Url::parse(url) {
         Ok(target) if target.host_str().is_some() => target,
         Ok(_) => return Err("В URL пинга нет хоста".into()),
         Err(error) => return Err(format!("Некорректный URL пинга: {error}")),
     };
-    let timeout_ms = timeout_ms.unwrap_or(settings_timeout).clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
+    let timeout_ms = timeout_ms
+        .unwrap_or(settings_timeout)
+        .clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
     let label = if timeout_ms.is_multiple_of(1000) {
         format!("{} с", timeout_ms / 1000)
     } else {
@@ -391,8 +400,14 @@ async fn ping_all(outbounds: &[serde_json::Value], params: PingParams) -> Result
                         let params = params.clone();
                         async move { execute_request(&socket, params).await }
                     });
-                    let measurements = stream::iter(futures).buffered(PING_CONCURRENCY).collect::<Vec<_>>().await;
-                    match measurements.iter().find_map(|result| result.as_ref().err().filter(|error| error.starts_with(SOCKET_ERROR))) {
+                    let measurements = stream::iter(futures)
+                        .buffered(PING_CONCURRENCY)
+                        .collect::<Vec<_>>()
+                        .await;
+                    match measurements
+                        .iter()
+                        .find_map(|result| result.as_ref().err().filter(|error| error.starts_with(SOCKET_ERROR)))
+                    {
                         Some(error) => Err(error.clone()),
                         None => Ok(measurements),
                     }
@@ -460,12 +475,13 @@ async fn run_ping(
 }
 
 /// Запуск xray с конфигом из `config_socket`: процесс, канал готовности и задача сбора вывода.
-async fn start_xray(config_socket: &str) -> Result<(Child, oneshot::Receiver<()>, tokio::task::JoinHandle<Vec<u8>>), String> {
+async fn start_xray(
+    config_socket: &str,
+) -> Result<(Child, oneshot::Receiver<()>, tokio::task::JoinHandle<Vec<u8>>), String> {
     let mut cmd = Command::new("xray");
     // `-format json` обязателен: автоопределение формата (`core::GetFormat`) смотрит на
     // расширение аргумента, а у абстрактного сокета его нет (`Failed to get format of @…`).
-    cmd.args(["-format", "json", "-c"])
-        .arg(format!("@{config_socket}"));
+    cmd.args(["-format", "json", "-c"]).arg(format!("@{config_socket}"));
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     cmd.kill_on_drop(true);
@@ -480,7 +496,9 @@ async fn start_xray(config_socket: &str) -> Result<(Child, oneshot::Receiver<()>
 /// сигнал готовности. Её xray пишет на уровне warning после старта всех inbound, поэтому в
 /// тестовом конфиге `loglevel: warning`; при смене формата строки все пинги упадут по
 /// таймауту запуска — ловят e2e-тесты с настоящим xray.
-async fn collect_output(stdout: Option<ChildStdout>, stderr: Option<ChildStderr>, ready: oneshot::Sender<()>) -> Vec<u8> {
+async fn collect_output(
+    stdout: Option<ChildStdout>, stderr: Option<ChildStderr>, ready: oneshot::Sender<()>,
+) -> Vec<u8> {
     let read_stdout = async {
         let mut buffer = Vec::new();
         let Some(stdout) = stdout else {
@@ -512,9 +530,7 @@ async fn collect_output(stdout: Option<ChildStdout>, stderr: Option<ChildStderr>
 /// Ждёт готовности ядра. Ранний выход xray — ошибка с последней строкой вывода, отсутствие
 /// сигнала до `startup_deadline` — таймаут запуска.
 async fn wait_xray_ready(
-    child: &mut Child,
-    startup_deadline: Instant,
-    ready: oneshot::Receiver<()>,
+    child: &mut Child, startup_deadline: Instant, ready: oneshot::Receiver<()>,
     output_task: tokio::task::JoinHandle<Vec<u8>>,
 ) -> Result<(), String> {
     let exit = tokio::select! {
@@ -532,11 +548,10 @@ async fn wait_xray_ready(
         };
         let output = String::from_utf8_lossy(&buffer);
         return Err(match status {
-            Ok(status) => output
-                .lines()
-                .rev()
-                .find(|line| !line.trim().is_empty())
-                .map_or_else(|| format!("Xray завершился ({status})"), |line| line.chars().take(500).collect()),
+            Ok(status) => output.lines().rev().find(|line| !line.trim().is_empty()).map_or_else(
+                || format!("Xray завершился ({status})"),
+                |line| line.chars().take(500).collect(),
+            ),
             Err(error) => error.to_string(),
         });
     }
@@ -558,13 +573,21 @@ static TLS_CONFIG: LazyLock<Arc<rustls::ClientConfig>> = LazyLock::new(|| {
 async fn execute_request(socket_name: &str, params: PingParams) -> PingResult {
     let target = &params.target;
     let host = target.host_str().ok_or("В URL пинга нет хоста")?;
-    let host_header = target.port().map_or_else(|| host.to_string(), |port| format!("{host}:{port}"));
+    let host_header = target
+        .port()
+        .map_or_else(|| host.to_string(), |port| format!("{host}:{port}"));
     let mut path = target.path().to_string();
     if let Some(query) = target.query() {
         path = format!("{path}?{query}");
     }
-    let connection = if params.mode == PingMode::DoubleKeepAlive { "keep-alive" } else { "close" };
-    let request = format!("HEAD {path} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: XKeen-UI\r\nConnection: {connection}\r\n\r\n");
+    let connection = if params.mode == PingMode::DoubleKeepAlive {
+        "keep-alive"
+    } else {
+        "close"
+    };
+    let request = format!(
+        "HEAD {path} HTTP/1.1\r\nHost: {host_header}\r\nUser-Agent: XKeen-UI\r\nConnection: {connection}\r\n\r\n"
+    );
 
     let connect_plain = move || async move {
         UnixStream::connect(format!("\0{socket_name}"))
@@ -630,7 +653,9 @@ where
     Ok((tunnel, status, started.elapsed()))
 }
 
-async fn within<T>(budget: Duration, label: &str, future: impl Future<Output = Result<T, String>>) -> Result<T, String> {
+async fn within<T>(
+    budget: Duration, label: &str, future: impl Future<Output = Result<T, String>>,
+) -> Result<T, String> {
     tokio::time::timeout(budget, future)
         .await
         .unwrap_or_else(|_| Err(format!("Таймаут {label}")))
@@ -765,9 +790,12 @@ mod tests {
             serde_json::json!({ "tag": "a", "protocol": "freedom", "settings": {} }),
             serde_json::json!({ "tag": "b", "protocol": "freedom", "settings": {} }),
         ];
-        let results = ping_all(&outbounds, test_params(&format!("http://127.0.0.1:{port}/"), PingMode::Single))
-            .await
-            .unwrap();
+        let results = ping_all(
+            &outbounds,
+            test_params(&format!("http://127.0.0.1:{port}/"), PingMode::Single),
+        )
+        .await
+        .unwrap();
         assert_eq!(results.len(), 3);
         for (tag, result) in results {
             let reply = result.unwrap_or_else(|error| panic!("«{tag}»: {error}"));
@@ -787,9 +815,12 @@ mod tests {
             serde_json::json!({ "tag": "broken", "protocol": "nonsense" }),
             serde_json::json!({ "tag": "good", "protocol": "freedom", "settings": {} }),
         ];
-        let error = ping_all(&outbounds, test_params(&format!("http://127.0.0.1:{port}/"), PingMode::Single))
-            .await
-            .unwrap_err();
+        let error = ping_all(
+            &outbounds,
+            test_params(&format!("http://127.0.0.1:{port}/"), PingMode::Single),
+        )
+        .await
+        .unwrap_err();
         assert!(error.contains("nonsense"), "{error}");
     }
 
@@ -838,7 +869,10 @@ mod tests {
         let outbound = serde_json::json!({ "protocol": "freedom", "settings": {} });
         let url = format!("http://127.0.0.1:{port}/");
         for mode in PING_MODES {
-            let reply = ping_outbound(&outbound, test_params(&url, mode)).await.unwrap().unwrap();
+            let reply = ping_outbound(&outbound, test_params(&url, mode))
+                .await
+                .unwrap()
+                .unwrap();
             assert_eq!(reply.status, 204);
             assert!(reply.latency_ms >= 1);
         }
@@ -851,7 +885,9 @@ mod tests {
         }
         let outbound = serde_json::json!({ "tag": "dead", "protocol": "freedom", "settings": {} });
         for mode in PING_MODES {
-            let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", mode)).await.unwrap();
+            let result = ping_outbound(&outbound, test_params("http://127.0.0.1:1/", mode))
+                .await
+                .unwrap();
             assert!(result.is_err());
         }
     }
