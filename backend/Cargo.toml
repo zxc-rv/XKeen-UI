@@ -57,6 +57,7 @@ uuid = { version = "1", features = ["v4"] }
 yaml-rust2 = { version = "0.13", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 semver = "1.0.28"
+similar = "3.2.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

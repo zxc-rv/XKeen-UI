@@ -494,6 +494,7 @@ async fn main() {
                 .put(config_history::put_config_history)
                 .delete(config_history::delete_config_history),
         )
+        .route("/api/configs/changes/diff", post(config_history::post_config_history_diff))
         .route(
             "/api/backup",
             get(backuper::get_backups)

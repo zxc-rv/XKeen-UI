@@ -334,6 +334,8 @@ export function ConfigPanel({
 }: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
   const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
+  const configHistoryMaxSnapshots = useSettings((s) => s.configHistoryMaxSnapshots)
+  const isLocalHistoryEnabled = configHistoryMaxSnapshots > 0
   const guiRouting = useSettings((s) => s.guiRouting)
   const guiLog = useSettings((s) => s.guiLog)
   const guiOutbounds = useSettings((s) => s.guiOutbounds)
@@ -598,7 +600,7 @@ export function ConfigPanel({
     const results = await runMassTask(targets, async (id, baseUrl) => {
       const result = await apiCall<{ success: boolean; error?: string }>('PUT', 'configs', { file: cfg.file, content }, { baseUrl })
       if (!result.success) throw new Error(result.error || 'ошибка сохранения')
-      const historyError = await saveConfigRevision(cfg.file, content, baseUrl, cfg.savedContent)
+      const historyError = baseUrl || isLocalHistoryEnabled ? await saveConfigRevision(cfg.file, content, baseUrl, cfg.savedContent) : null
       if (historyError) historyErrors.push(`${targetLabel(id)}: ${historyError}`)
     })
 
@@ -725,7 +727,7 @@ export function ConfigPanel({
       )
     }
 
-    const historyError = await saveConfigRevision(cfg.file, content, baseUrl, cfg.savedContent)
+    const historyError = baseUrl || isLocalHistoryEnabled ? await saveConfigRevision(cfg.file, content, baseUrl, cfg.savedContent) : null
     if (historyError) onHistoryError(historyError)
 
     if (hotReloadUnavailable) showToast('Clash API недоступен, выполняем полный рестарт', 'warning')

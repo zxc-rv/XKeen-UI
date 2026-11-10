@@ -8,10 +8,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
+use similar::{ChangeTag, DiffTag, TextDiff};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const HISTORY_DIR: &str = "/opt/etc/xkeen/config-history";
-const LEGACY_HISTORY_DIR: &str = "/opt/var/lib/xkeen-ui/config-history";
 static HISTORY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -23,7 +23,6 @@ struct ConfigRevision {
 
 #[derive(Deserialize, Serialize)]
 struct ConfigHistory {
-    file: String,
     history: Vec<ConfigRevision>,
 }
 
@@ -42,6 +41,13 @@ pub struct GetConfigHistory {
 }
 
 #[derive(Deserialize)]
+pub struct DiffConfigChange {
+    file: String,
+    id: String,
+    current_content: String,
+}
+
+#[derive(Deserialize)]
 pub struct DeleteConfigHistory {
     file: String,
     id: Option<String>,
@@ -50,11 +56,6 @@ pub struct DeleteConfigHistory {
 fn history_dir(file: &str) -> PathBuf {
     let key = format!("{:x}", md5::compute(file.as_bytes()));
     PathBuf::from(HISTORY_DIR).join(key)
-}
-
-fn legacy_history_path(file: &str) -> PathBuf {
-    let key = format!("{:x}", md5::compute(file.as_bytes()));
-    PathBuf::from(LEGACY_HISTORY_DIR).join(format!("{key}.json"))
 }
 
 fn supports_history(file: &str) -> bool {
@@ -97,7 +98,49 @@ pub async fn get_config_history(
         Err(status) => return error("Could not read config history", status).into_response(),
     };
 
-    Json(serde_json::json!({ "success": true, "history": history.history })).into_response()
+    let snapshots = history
+        .history
+        .iter()
+        .map(|revision| serde_json::json!({ "id": revision.id, "date": revision.date }))
+        .collect::<Vec<_>>();
+
+    Json(serde_json::json!({ "success": true, "history": snapshots })).into_response()
+}
+
+pub async fn post_config_history_diff(
+    State(state): State<AppState>, Json(request): Json<DiffConfigChange>,
+) -> impl IntoResponse {
+    if !supports_history(&request.file) {
+        return error(
+            "Change history supports YAML and JSON files only",
+            StatusCode::BAD_REQUEST,
+        )
+        .into_response();
+    }
+    if let Err(message) = check_access(&request.file, &state) {
+        return error(message, StatusCode::FORBIDDEN).into_response();
+    }
+
+    let history = {
+        let _guard = HISTORY_LOCK.lock().await;
+        read_history(&request.file).await
+    };
+    let history = match history {
+        Ok(history) => history.history,
+        Err(status) => return error("Could not read config history", status).into_response(),
+    };
+    let Some(index) = history.iter().position(|revision| revision.id == request.id) else {
+        return error("History entry not found", StatusCode::NOT_FOUND).into_response();
+    };
+
+    let snapshot = &history[index].content;
+
+    Json(serde_json::json!({
+        "success": true,
+        "rows": build_rows(snapshot, &request.current_content),
+        "content": snapshot,
+    }))
+    .into_response()
 }
 
 pub async fn put_config_history(
@@ -134,10 +177,7 @@ pub async fn put_config_history(
         &request.content,
         &date,
     ) {
-        if let Some(last) = history.history.last().filter(|last| last.content == request.content) {
-            return Json(serde_json::json!({ "success": true, "id": last.id })).into_response();
-        }
-        return Json(serde_json::json!({ "success": true, "disabled": max_snapshots == 0 })).into_response();
+        return Json(serde_json::json!({ "success": true })).into_response();
     }
     let id = history.history.last().map(|revision| revision.id.clone());
 
@@ -152,45 +192,19 @@ pub async fn put_config_history(
     Json(serde_json::json!({ "success": true, "id": id })).into_response()
 }
 
-/// Keep the newest configured number of changes plus one comparison baseline.
+/// Keep the newest configured number of previous versions.
 fn append_snapshot(
     history: &mut ConfigHistory, max_snapshots: usize, previous_content: Option<&str>, content: &str, date: &str,
 ) -> bool {
-    if max_snapshots == 0 || history.history.last().is_some_and(|last| last.content == content) {
+    let Some(previous) = previous_content.filter(|previous| *previous != content) else {
+        return false;
+    };
+    if max_snapshots == 0 || history.history.last().is_some_and(|last| last.content == previous) {
         return false;
     }
-
-    let mut additions = Vec::new();
-    if history.history.is_empty() {
-        if let Some(previous) = previous_content.filter(|previous| *previous != content) {
-            let baseline_date = DateTime::parse_from_rfc3339(date)
-                .map(|parsed| {
-                    (parsed - chrono::Duration::milliseconds(1))
-                        .with_timezone(&Utc)
-                        .to_rfc3339()
-                })
-                .unwrap_or_else(|_| date.to_string());
-            additions.push(new_revision(previous.to_string(), baseline_date));
-        }
-    } else if let Some(previous) = previous_content
-        && history.history.last().is_some_and(|last| last.content != previous)
-        && previous != content
-    {
-        let previous_date = DateTime::parse_from_rfc3339(date)
-            .map(|parsed| {
-                (parsed - chrono::Duration::milliseconds(1))
-                    .with_timezone(&Utc)
-                    .to_rfc3339()
-            })
-            .unwrap_or_else(|_| date.to_string());
-        additions.push(new_revision(previous.to_string(), previous_date));
-    }
-    additions.push(new_revision(content.to_string(), date.to_string()));
-
-    history.history.extend(additions);
-    let keep = max_snapshots.saturating_add(1);
-    if history.history.len() > keep {
-        let remove = history.history.len() - keep;
+    history.history.push(new_revision(previous.to_string(), date.to_string()));
+    if history.history.len() > max_snapshots {
+        let remove = history.history.len() - max_snapshots;
         history.history.drain(..remove);
     }
     true
@@ -275,9 +289,7 @@ async fn write_history(path: &PathBuf, history: &ConfigHistory) -> std::io::Resu
             .unwrap_or_else(|_| Utc::now().timestamp_millis());
         let snapshot_path = path.join(format!("{}__{}.snapshot", revision.id, date_ms));
         keep.push(snapshot_path.clone());
-        if let Ok(existing) = tokio::fs::read_to_string(&snapshot_path).await
-            && existing == revision.content
-        {
+        if tokio::fs::try_exists(&snapshot_path).await.unwrap_or(false) {
             continue;
         }
 
@@ -308,10 +320,7 @@ async fn write_history(path: &PathBuf, history: &ConfigHistory) -> std::io::Resu
 
 async fn read_history(file: &str) -> Result<ConfigHistory, StatusCode> {
     let directory = history_dir(file);
-    let mut history = ConfigHistory {
-        file: file.to_string(),
-        history: Vec::new(),
-    };
+    let mut history = ConfigHistory { history: Vec::new() };
     match tokio::fs::read_dir(&directory).await {
         Ok(mut entries) => {
             while let Some(entry) = entries
@@ -349,29 +358,6 @@ async fn read_history(file: &str) -> Result<ConfigHistory, StatusCode> {
         Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
     sort_history(&mut history);
-    let legacy_path = legacy_history_path(file);
-    match tokio::fs::read_to_string(&legacy_path).await {
-        Ok(contents) => {
-            let legacy = serde_json::from_str::<ConfigHistory>(&contents)
-                .ok()
-                .filter(|history| history.file == file)
-                .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-            for revision in legacy.history {
-                if !history.history.iter().any(|existing| existing.id == revision.id) {
-                    history.history.push(revision);
-                }
-            }
-            sort_history(&mut history);
-            write_history(&directory, &history)
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            tokio::fs::remove_file(legacy_path)
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
     Ok(history)
 }
 
@@ -387,13 +373,131 @@ fn sort_history(history: &mut ConfigHistory) {
     });
 }
 
+const DIFF_CONTEXT: usize = 3;
+const INLINE_SIMILARITY: f32 = 0.5;
+
+#[derive(Serialize)]
+struct DiffSegment {
+    text: String,
+    emphasized: bool,
+}
+
+#[derive(Serialize)]
+struct DiffCell {
+    line: usize,
+    segments: Vec<DiffSegment>,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum DiffRow {
+    Equal { left_line: usize, right_line: usize, text: String },
+    Change { left: Option<DiffCell>, right: Option<DiffCell> },
+    Skipped { count: usize },
+}
+
+fn line_text(line: &str) -> &str {
+    line.trim_end_matches(['\r', '\n'])
+}
+
+fn plain_cell(line: usize, text: &str) -> DiffCell {
+    DiffCell {
+        line,
+        segments: vec![DiffSegment {
+            text: text.to_string(),
+            emphasized: false,
+        }],
+    }
+}
+
+fn push_segment(segments: &mut Vec<DiffSegment>, text: &str, emphasized: bool) {
+    match segments.last_mut() {
+        Some(last) if last.emphasized == emphasized => last.text.push_str(text),
+        _ => segments.push(DiffSegment {
+            text: text.to_string(),
+            emphasized,
+        }),
+    }
+}
+
+fn inline_cells(left_line: usize, left: &str, right_line: usize, right: &str) -> (DiffCell, DiffCell) {
+    let diff = TextDiff::from_chars(left, right);
+    if diff.ratio() < INLINE_SIMILARITY {
+        return (plain_cell(left_line, left), plain_cell(right_line, right));
+    }
+    let mut left_segments = Vec::new();
+    let mut right_segments = Vec::new();
+    for change in diff.iter_all_changes() {
+        match change.tag() {
+            ChangeTag::Equal => {
+                push_segment(&mut left_segments, change.value(), false);
+                push_segment(&mut right_segments, change.value(), false);
+            }
+            ChangeTag::Delete => push_segment(&mut left_segments, change.value(), true),
+            ChangeTag::Insert => push_segment(&mut right_segments, change.value(), true),
+        }
+    }
+    (
+        DiffCell { line: left_line, segments: left_segments },
+        DiffCell { line: right_line, segments: right_segments },
+    )
+}
+
+fn build_rows(before: &str, after: &str) -> Vec<DiffRow> {
+    let diff = TextDiff::from_lines(before, after);
+    let operations = diff.ops();
+    if operations.iter().all(|operation| operation.tag() == DiffTag::Equal) {
+        return Vec::new();
+    }
+    let old_line = |index: usize| line_text(diff.old_slice(index).unwrap_or_default());
+    let new_line = |index: usize| line_text(diff.new_slice(index).unwrap_or_default());
+    let mut rows = Vec::new();
+    for (index, operation) in operations.iter().enumerate() {
+        let (tag, old_range, new_range) = operation.as_tag_tuple();
+        if tag == DiffTag::Equal {
+            let length = old_range.len();
+            let head = if index == 0 { 0 } else { DIFF_CONTEXT };
+            let tail = if index + 1 == operations.len() { 0 } else { DIFF_CONTEXT };
+            let visible = |offset: usize| DiffRow::Equal {
+                left_line: old_range.start + offset + 1,
+                right_line: new_range.start + offset + 1,
+                text: old_line(old_range.start + offset).to_string(),
+            };
+            if length <= head + tail + 1 {
+                rows.extend((0..length).map(&visible));
+            } else {
+                rows.extend((0..head).map(&visible));
+                rows.push(DiffRow::Skipped { count: length - head - tail });
+                rows.extend((length - tail..length).map(&visible));
+            }
+            continue;
+        }
+        for offset in 0..old_range.len().max(new_range.len()) {
+            let old_index = old_range.start + offset;
+            let new_index = new_range.start + offset;
+            let old = (offset < old_range.len()).then(|| (old_index + 1, old_line(old_index)));
+            let new = (offset < new_range.len()).then(|| (new_index + 1, new_line(new_index)));
+            rows.push(match (old, new) {
+                (Some((left_line, left)), Some((right_line, right))) => {
+                    let (left, right) = inline_cells(left_line, left, right_line, right);
+                    DiffRow::Change { left: Some(left), right: Some(right) }
+                }
+                (old, new) => DiffRow::Change {
+                    left: old.map(|(line, text)| plain_cell(line, text)),
+                    right: new.map(|(line, text)| plain_cell(line, text)),
+                },
+            });
+        }
+    }
+    rows
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ConfigHistory, ConfigRevision, append_snapshot, delete_revision, sort_history, write_history};
+    use super::{ConfigHistory, ConfigRevision, append_snapshot, build_rows, delete_revision, sort_history, write_history};
 
     fn history() -> ConfigHistory {
         ConfigHistory {
-            file: "/opt/etc/mihomo/config.yaml".into(),
             history: ["one", "two", "three"]
                 .into_iter()
                 .map(|id| ConfigRevision {
@@ -425,7 +529,6 @@ mod tests {
     #[test]
     fn sort_history_orders_oldest_first_and_newest_last() {
         let mut history = ConfigHistory {
-            file: "/opt/etc/mihomo/config.yaml".into(),
             history: [
                 ("new", "2026-11-09T20:02:00Z"),
                 ("old", "2026-11-09T19:58:00Z"),
@@ -463,14 +566,23 @@ mod tests {
     fn zero_limit_keeps_existing_history_and_does_not_append() {
         let mut history = history();
         let before = history.history.len();
-        assert!(!append_snapshot(&mut history, 0, None, "four", "date"));
+        assert!(!append_snapshot(&mut history, 0, Some("old"), "four", "date"));
         assert_eq!(history.history.len(), before);
+    }
+
+    #[test]
+    fn nothing_is_recorded_without_a_new_previous_version() {
+        let mut history = history();
+        assert!(!append_snapshot(&mut history, 5, None, "new", "date"));
+        assert!(!append_snapshot(&mut history, 5, Some("new"), "new", "date"));
+        assert!(!append_snapshot(&mut history, 5, Some("three"), "new", "date"));
+        assert_eq!(history.history.len(), 3);
     }
 
     #[test]
     fn full_history_records_new_change_and_discards_oldest_change() {
         let mut history = history();
-        assert!(append_snapshot(&mut history, 2, None, "four", "date"));
+        assert!(append_snapshot(&mut history, 3, Some("four"), "five", "date"));
         assert_eq!(
             history
                 .history
@@ -482,28 +594,20 @@ mod tests {
     }
 
     #[test]
-    fn retention_keeps_the_previous_snapshot_and_latest_change() {
+    fn only_previous_versions_are_kept_up_to_the_limit() {
         let mut history = ConfigHistory {
-            file: String::new(),
             history: Vec::new(),
         };
-        assert!(append_snapshot(&mut history, 1, Some("baseline"), "first", "date"));
+        for (previous, content) in [("a", "b"), ("b", "c"), ("c", "d")] {
+            assert!(append_snapshot(&mut history, 2, Some(previous), content, "date"));
+        }
         assert_eq!(
             history
                 .history
                 .iter()
                 .map(|item| item.content.as_str())
                 .collect::<Vec<_>>(),
-            ["baseline", "first"]
-        );
-        assert!(append_snapshot(&mut history, 1, Some("first"), "second", "later"));
-        assert_eq!(
-            history
-                .history
-                .iter()
-                .map(|item| item.content.as_str())
-                .collect::<Vec<_>>(),
-            ["first", "second"]
+            ["b", "c"]
         );
     }
 
@@ -515,7 +619,7 @@ mod tests {
             revision.date = chrono::Utc::now().to_rfc3339();
         }
         let date = chrono::Utc::now().to_rfc3339();
-        assert!(append_snapshot(&mut history, 2, None, "four", &date));
+        assert!(append_snapshot(&mut history, 3, Some("four"), "five", &date));
         assert_eq!(
             history
                 .history
@@ -557,5 +661,60 @@ mod tests {
             .unwrap();
         assert_eq!(remaining.len(), 2);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn identical_contents_have_no_rows() {
+        assert!(build_rows("a\nb\n", "a\nb\n").is_empty());
+    }
+
+    #[test]
+    fn replaced_line_pairs_left_with_right() {
+        let json = serde_json::to_value(build_rows("port: 7890\nmode: rule\n", "port: 7891\nmode: rule\n")).unwrap();
+        assert_eq!(json[0]["type"], "change");
+        assert_eq!(json[0]["left"]["line"], 1);
+        assert_eq!(json[0]["left"]["segments"][1]["text"], "0");
+        assert_eq!(json[0]["left"]["segments"][1]["emphasized"], true);
+        assert_eq!(json[0]["right"]["segments"][1]["text"], "1");
+        assert_eq!(json[1]["type"], "equal");
+        assert_eq!(json[1]["text"], "mode: rule");
+    }
+
+    #[test]
+    fn indentation_is_preserved() {
+        let json = serde_json::to_value(build_rows("a:\n  b: 1\n", "a:\n  b: 2\n")).unwrap();
+        assert_eq!(json[1]["left"]["segments"][0]["text"], "  b: ");
+    }
+
+    #[test]
+    fn removed_whitespace_is_emphasized() {
+        let json = serde_json::to_value(build_rows("a:  1\n", "a: 1\n")).unwrap();
+        let left = json[0]["left"]["segments"].as_array().unwrap();
+        let right = json[0]["right"]["segments"].as_array().unwrap();
+        assert!(left.iter().any(|segment| segment["emphasized"] == true && segment["text"] == " "));
+        assert!(right.iter().all(|segment| segment["emphasized"] == false));
+    }
+
+    #[test]
+    fn long_equal_runs_are_collapsed() {
+        let current = (1..=20).map(|index| format!("line {index}\n")).collect::<String>();
+        let snapshot = current.replace("line 10\n", "changed\n");
+        let json = serde_json::to_value(build_rows(&current, &snapshot)).unwrap();
+        let rows = json.as_array().unwrap();
+        let skipped = rows
+            .iter()
+            .filter(|row| row["type"] == "skipped")
+            .map(|row| row["count"].as_u64().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(skipped, [6, 7]);
+        assert_eq!(rows.len(), 9);
+    }
+
+    #[test]
+    fn inserted_lines_have_one_sided_rows() {
+        let json = serde_json::to_value(build_rows("a\nb\n", "a\nb\nc\n")).unwrap();
+        let last = json.as_array().unwrap().last().unwrap();
+        assert!(last["left"].is_null());
+        assert_eq!(last["right"]["line"], 3);
     }
 }
