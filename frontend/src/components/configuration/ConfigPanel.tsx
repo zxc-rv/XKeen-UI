@@ -261,7 +261,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
             <IconPencil /> Переименовать
           </ContextMenuItem>
           {onHideFile && (
-            <ContextMenuItem onSelect={() => onHideFile(config.file)}>
+            <ContextMenuItem disabled={isProtected} onSelect={() => onHideFile(config.file)}>
               <IconEyeOff /> Скрыть файл
             </ContextMenuItem>
           )}
