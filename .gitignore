@@ -9,7 +9,6 @@ config.json
 *.tmp
 .zed
 target
-Cargo.lock
 
 # Logs
 logs
