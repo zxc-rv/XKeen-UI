@@ -6,20 +6,23 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
+  AlertDialogMedia,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
-import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle, IconX } from '@tabler/icons-react'
+import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle, IconSearch, IconTrash, IconX } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
@@ -29,6 +32,48 @@ import type { Config } from '../../../lib/types'
 
 const SETUP_FILTER_STORAGE_KEY = 'dnsSetupFilter'
 const FAKE_IP_WARNING_STORAGE_KEY = 'dnsFakeIpFilterWarningDismissed'
+
+const DNS_QUERY_TYPES = ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS', 'SRV', 'HTTPS', 'CAA', 'PTR', 'SOA'] as const
+const DNS_QUERY_TYPE_ITEMS = Object.fromEntries(DNS_QUERY_TYPES.map((type) => [type, type]))
+
+const DNS_RECORD_TYPE_NAMES: Record<number, string> = {
+  1: 'A',
+  2: 'NS',
+  5: 'CNAME',
+  6: 'SOA',
+  12: 'PTR',
+  15: 'MX',
+  16: 'TXT',
+  28: 'AAAA',
+  33: 'SRV',
+  35: 'NAPTR',
+  43: 'DS',
+  46: 'RRSIG',
+  47: 'NSEC',
+  48: 'DNSKEY',
+  64: 'SVCB',
+  65: 'HTTPS',
+  257: 'CAA',
+}
+
+interface DnsQueryRecord {
+  name?: string
+  type?: number
+  TTL?: number
+  data?: string
+}
+
+interface DnsQueryResponse {
+  Status?: number
+  Answer?: DnsQueryRecord[]
+  Authority?: DnsQueryRecord[]
+  Additional?: DnsQueryRecord[]
+}
+
+function formatDnsRecordType(type?: number): string {
+  if (type == null) return '—'
+  return DNS_RECORD_TYPE_NAMES[type] ?? String(type)
+}
 
 function formatPortListener(listener: string): string {
   return listener
@@ -230,6 +275,13 @@ export const DnsPanel = memo(function DnsPanel() {
   const [disableOpen, setDisableOpen] = useState(false)
   const [config, setConfig] = useState<DnsConfig>(DEFAULT_DNS_CONFIG)
   const [isApplying, setIsApplying] = useState(false)
+  const [flushingCache, setFlushingCache] = useState<'fakeip' | 'dns' | null>(null)
+  const [confirmFlush, setConfirmFlush] = useState<'fakeip' | 'dns' | null>(null)
+  const [dnsQueryName, setDnsQueryName] = useState('')
+  const [dnsQueryType, setDnsQueryType] = useState<string>('A')
+  const [isQueryingDns, setIsQueryingDns] = useState(false)
+  const [dnsQueryResult, setDnsQueryResult] = useState<DnsQueryResponse | null>(null)
+  const [dnsQueryError, setDnsQueryError] = useState<string | null>(null)
 
   const yamlConfig = useMemo(() => configs.find((c: Config) => c.file.endsWith('/config.yaml')), [configs])
 
@@ -456,6 +508,56 @@ export const DnsPanel = memo(function DnsPanel() {
     setConfig((prev) => ({ ...prev, ...patch }))
   }, [])
 
+  const handleFlushCache = useCallback(
+    async (kind: 'fakeip' | 'dns') => {
+      setFlushingCache(kind)
+      try {
+        await clashFetch(clashApiPort ?? '', kind === 'fakeip' ? 'cache/fakeip/flush' : 'cache/dns/flush', {
+          method: 'POST',
+          secret: clashApiSecret,
+          unix: clashApiUnix ?? null,
+          retry: false,
+        })
+        showToast(kind === 'fakeip' ? 'Кэш Fake-IP очищен' : 'Кэш DNS очищен')
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        showToast(`Ошибка очистки кэша: ${msg}`, 'error')
+      } finally {
+        setFlushingCache(null)
+      }
+    },
+    [clashApiPort, clashApiSecret, clashApiUnix, showToast]
+  )
+
+  const handleConfirmFlush = useCallback(
+    (kind: 'fakeip' | 'dns') => {
+      setConfirmFlush(null)
+      void handleFlushCache(kind)
+    },
+    [handleFlushCache]
+  )
+
+  const handleDnsQuery = useCallback(async () => {
+    const name = dnsQueryName.trim()
+    if (!name) return
+
+    setIsQueryingDns(true)
+    setDnsQueryError(null)
+    try {
+      const data = await clashFetch<DnsQueryResponse>(
+        clashApiPort ?? '',
+        `dns/query?name=${encodeURIComponent(name)}&type=${encodeURIComponent(dnsQueryType)}`,
+        { secret: clashApiSecret, unix: clashApiUnix ?? null, retry: false }
+      )
+      setDnsQueryResult(data)
+    } catch (e) {
+      setDnsQueryResult(null)
+      setDnsQueryError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setIsQueryingDns(false)
+    }
+  }, [dnsQueryName, dnsQueryType, clashApiPort, clashApiSecret, clashApiUnix])
+
   const dismissFakeIpWarning = useCallback(() => {
     setFakeIpWarningDismissed(true)
     localStorage.setItem(FAKE_IP_WARNING_STORAGE_KEY, 'true')
@@ -465,7 +567,7 @@ export const DnsPanel = memo(function DnsPanel() {
     <TooltipProvider delayDuration={300}>
       <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
         <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
-          <legend className="px-1 text-sm font-medium">Статус DNS</legend>
+          <legend className="px-1 text-sm font-medium">Статус</legend>
           <div className="flex flex-col gap-3 pt-1">
             {dnsStatus && dnsStatus.hasProviderNameservers && (
               <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
@@ -507,7 +609,169 @@ export const DnsPanel = memo(function DnsPanel() {
 
         {showMihomoSettings && (
           <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
-            <legend className="px-1 text-sm font-medium">Mihomo DNS</legend>
+            <legend className="px-1 text-sm font-medium">Диагностика</legend>
+            <div className="flex flex-col gap-4 pt-1">
+              <div className="grid gap-2">
+                <Label className="text-xs">Очистка кэша</Label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <AlertDialog open={confirmFlush === 'fakeip'} onOpenChange={(open) => setConfirmFlush(open ? 'fakeip' : null)}>
+                    <AlertDialogTrigger
+                      render={
+                        <Button variant="outline" disabled={flushingCache !== null}>
+                          {flushingCache === 'fakeip' ? <Spinner /> : <IconTrash data-icon="inline-start" />}
+                          Очистить кэш Fake-IP
+                        </Button>
+                      }
+                    />
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogMedia>
+                          <IconTrash />
+                        </AlertDialogMedia>
+                        <AlertDialogTitle>Очистить кэш Fake-IP?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Таблица соответствия доменов и Fake-IP будет очищена.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setConfirmFlush(null)}>Отмена</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={() => handleConfirmFlush('fakeip')}>
+                          Очистить
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <AlertDialog open={confirmFlush === 'dns'} onOpenChange={(open) => setConfirmFlush(open ? 'dns' : null)}>
+                    <AlertDialogTrigger
+                      render={
+                        <Button variant="outline" disabled={flushingCache !== null}>
+                          {flushingCache === 'dns' ? <Spinner /> : <IconTrash data-icon="inline-start" />}
+                          Очистить кэш DNS
+                        </Button>
+                      }
+                    />
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogMedia>
+                          <IconTrash />
+                        </AlertDialogMedia>
+                        <AlertDialogTitle>Очистить кэш DNS?</AlertDialogTitle>
+                        <AlertDialogDescription>Все закэшированные DNS-ответы будут удалены.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setConfirmFlush(null)}>Отмена</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={() => handleConfirmFlush('dns')}>
+                          Очистить
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="grid gap-2">
+                <Label htmlFor="dns-query-name" className="text-xs">
+                  DNS запрос
+                </Label>
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void handleDnsQuery()
+                  }}
+                >
+                  <InputGroup className="min-w-0 flex-1">
+                    <InputGroupInput
+                      id="dns-query-name"
+                      value={dnsQueryName}
+                      onChange={(e) => setDnsQueryName(e.target.value)}
+                      placeholder="example.com"
+                      className="tracking-wide"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        type="submit"
+                        variant="default"
+                        className="rounded-sm"
+                        aria-label="Выполнить DNS запрос"
+                        disabled={!dnsQueryName.trim() || isQueryingDns}
+                      >
+                        <span className="text-xs">Искать</span>
+                        {isQueryingDns ? <Spinner /> : <IconSearch />}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  <Select value={dnsQueryType} items={DNS_QUERY_TYPE_ITEMS} onValueChange={(v) => setDnsQueryType(v)}>
+                    <SelectTrigger popper className="w-32 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                      <SelectGroup>
+                        {DNS_QUERY_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </form>
+
+                {dnsQueryError && <p className="text-destructive text-xs break-all">{dnsQueryError}</p>}
+
+                {dnsQueryResult && (
+                  <div className="border-border overflow-hidden rounded-md border">
+                    <div className="bg-muted/40 flex items-center justify-between gap-2 px-2.5 py-2">
+                      <span className="text-xs font-medium">Ответ</span>
+                      <Badge variant={dnsQueryResult.Status === 0 ? 'emerald' : 'rose'}>
+                        {dnsQueryResult.Status === 0 ? 'NOERROR' : `Rcode ${dnsQueryResult.Status ?? '—'}`}
+                      </Badge>
+                    </div>
+                    {dnsQueryResult.Answer?.length ? (
+                      <Table className="text-sm">
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="h-8 w-14 px-2.5">Тип</TableHead>
+                            <TableHead className="h-8 w-full px-2.5">Данные</TableHead>
+                            <TableHead className="h-8 w-14 px-2.5 text-right">TTL</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dnsQueryResult.Answer.map((record, index) => (
+                            <TableRow key={`${record.name ?? ''}-${record.type ?? ''}-${index}`} className="hover:bg-transparent">
+                              <TableCell className="px-2.5 py-1.5">
+                                <Badge variant="outline" className="h-4.5 rounded-full px-1.5 text-xs font-normal tracking-wider">
+                                  {formatDnsRecordType(record.type)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="w-full px-2.5 py-1.5 whitespace-normal">
+                                <span className="break-all">{record.data ?? '—'}</span>
+                                {record.name && <span className="text-muted-foreground mt-0.5 block truncate text-xs">{record.name}</span>}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground px-2.5 py-1.5 text-right tabular-nums">
+                                {record.TTL ?? '—'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-muted-foreground px-2.5 py-2 text-xs">В ответе нет записей</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </fieldset>
+        )}
+
+        {showMihomoSettings && (
+          <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
+            <legend className="px-1 text-sm font-medium">Настройки</legend>
             <div className="flex flex-col gap-4 pt-1">
               {showFakeIpWarning && (
                 <Alert className="border-amber-500/20 bg-amber-100 p-2.75 text-yellow-600 dark:bg-[#2a1f0d] dark:text-amber-400">
