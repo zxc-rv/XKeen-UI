@@ -258,7 +258,7 @@ export function ConfigHistoryView({ file, currentContent, onClose, onRollback, o
           <Button variant="outline" size="icon" aria-label="Выйти из истории изменений" onClick={closeHistory}>
             <IconArrowLeft />
           </Button>
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
             <h2 className="flex shrink-0 items-center gap-2.5 text-lg font-semibold">
               <IconHistory className="size-6 shrink-0 text-chart-2" /> История изменений
             </h2>
