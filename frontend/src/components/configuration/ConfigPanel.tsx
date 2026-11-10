@@ -228,7 +228,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
           </Tooltip>
         </ContextMenuTrigger>
         <ContextMenuContent
-          className="min-w-46"
+          className="min-w-48"
           onCloseAutoFocus={(e) => {
             if (pendingInputFocusRef.current) {
               e.preventDefault()
