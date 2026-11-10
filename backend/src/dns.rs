@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn batch_payload_enable_with_filter_shape() {
         let br0_ip = "192.168.1.1";
-        let payload = vec![
+        let payload = [
             json!({"dns-proxy": {"https": {"upstream": [{"no": true}]}}}),
             json!({"dns-proxy": {"tls": {"upstream": [{"no": true}]}}}),
             json!({"ip": {"name-server": [{"no": true}]}}),
