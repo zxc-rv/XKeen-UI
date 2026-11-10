@@ -290,10 +290,10 @@ const ConfigHistorySnapshotsField = memo(function ConfigHistorySnapshotsField({
   return (
     <Field orientation="horizontal" className="px-0 py-3">
       <FieldContent>
-        <FieldLabel htmlFor="config-history-max-snapshots">Количество снимков</FieldLabel>
+        <FieldLabel htmlFor="config-history-max-snapshots">Лимит снапшотов</FieldLabel>
         <FieldDescription className="text-[13px]">
-          Количество записываемых снимков в журнале изменений (1–100)
-          <br />0 — выкл
+          Лимит снапшотов для каждого файла в истории изменений (1–100)
+          <br />0 — отключает функционал записи
         </FieldDescription>
       </FieldContent>
       <InputGroup className="w-15 shrink-0">
