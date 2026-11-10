@@ -489,12 +489,12 @@ async fn main() {
                 .patch(configs::patch_config),
         )
         .route(
-            "/api/configs/changes",
+            "/api/configs/history",
             get(config_history::get_config_history)
                 .put(config_history::put_config_history)
                 .delete(config_history::delete_config_history),
         )
-        .route("/api/configs/changes/diff", post(config_history::post_config_history_diff))
+        .route("/api/configs/history/diff", post(config_history::post_config_history_diff))
         .route(
             "/api/backup",
             get(backuper::get_backups)

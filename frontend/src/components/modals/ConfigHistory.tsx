@@ -179,7 +179,7 @@ export function ConfigHistoryView({ file, currentContent, onClose, onRollback, o
     setIsLoading(true)
     setError('')
     try {
-      const response = await apiCall<SnapshotsResponse>('GET', `configs/changes?file=${encodeURIComponent(file)}`)
+      const response = await apiCall<SnapshotsResponse>('GET', `configs/history?file=${encodeURIComponent(file)}`)
       if (!response.success) throw new Error(response.error || 'Не удалось загрузить историю')
       setSnapshots(response.history ?? [])
       setExpandedIds([])
@@ -210,7 +210,7 @@ export function ConfigHistoryView({ file, currentContent, onClose, onRollback, o
     if (loadingId) return
     setLoadingId(openedId)
     try {
-      const response = await apiCall<DiffResponse>('POST', 'configs/changes/diff', { file, id: openedId, current_content: currentContent })
+      const response = await apiCall<DiffResponse>('POST', 'configs/history/diff', { file, id: openedId, current_content: currentContent })
       if (!response.success || !response.rows || response.content === undefined) throw new Error(response.error || 'Не удалось построить diff')
       const preview: DiffPreview = { rows: response.rows, content: response.content }
       setPreviews((previous) => ({ ...previous, [openedId]: preview }))
@@ -312,7 +312,7 @@ export function ConfigHistoryView({ file, currentContent, onClose, onRollback, o
                       className="overflow-hidden rounded-xl border bg-background/40"
                     >
                       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center">
-                        <AccordionTrigger className="min-w-0 items-center gap-3 rounded-none border-0 px-3 py-3 hover:bg-accent/40 hover:no-underline focus-visible:ring-0 sm:px-4">
+                        <AccordionTrigger className="min-w-0 items-center gap-3 rounded-none border-0 px-3 py-3 hover:bg-input-background-hover hover:no-underline focus-visible:ring-0 sm:px-4">
                           <span className="flex min-w-0 flex-1 items-center gap-3">
                             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted font-mono text-xs font-semibold">#{number}</span>
                             <span className="min-w-0">

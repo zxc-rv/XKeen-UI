@@ -6,10 +6,10 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
 use similar::{ChangeTag, DiffTag, TextDiff};
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::io::AsyncWriteExt;
 
 const HISTORY_DIR: &str = "/opt/etc/xkeen/config-history";
 static HISTORY_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -129,11 +129,14 @@ pub async fn post_config_history_diff(
         Ok(history) => history.history,
         Err(status) => return error("Could not read config history", status).into_response(),
     };
-    let Some(index) = history.iter().position(|revision| revision.id == request.id) else {
+    let Some(mut revision) = history.into_iter().find(|revision| revision.id == request.id) else {
         return error("History entry not found", StatusCode::NOT_FOUND).into_response();
     };
+    if let Err(status) = load_content(&request.file, &mut revision).await {
+        return error("Could not read config history", status).into_response();
+    }
 
-    let snapshot = &history[index].content;
+    let snapshot = &revision.content;
 
     Json(serde_json::json!({
         "success": true,
@@ -168,6 +171,11 @@ pub async fn put_config_history(
         Ok(history) => history,
         Err(status) => return error("Could not read config history", status).into_response(),
     };
+    if let Some(newest) = history.history.last_mut()
+        && let Err(status) = load_content(&request.file, newest).await
+    {
+        return error("Could not read config history", status).into_response();
+    }
 
     let date = valid_date(&request.date);
     if !append_snapshot(
@@ -278,16 +286,26 @@ fn new_revision(content: String, date: String) -> ConfigRevision {
     }
 }
 
-async fn write_history(path: &PathBuf, history: &ConfigHistory) -> std::io::Result<()> {
-    tokio::fs::create_dir_all(path).await?;
-    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).await?;
+fn snapshot_file(directory: &Path, revision: &ConfigRevision) -> PathBuf {
+    let date_millis = DateTime::parse_from_rfc3339(&revision.date)
+        .map(|date| date.timestamp_millis())
+        .unwrap_or_else(|_| Utc::now().timestamp_millis());
+    directory.join(format!("{}__{}.snapshot", revision.id, date_millis))
+}
+
+async fn load_content(file: &str, revision: &mut ConfigRevision) -> Result<(), StatusCode> {
+    revision.content = tokio::fs::read_to_string(snapshot_file(&history_dir(file), revision))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(())
+}
+
+async fn write_history(path: &Path, history: &ConfigHistory) -> std::io::Result<()> {
+    tokio::fs::DirBuilder::new().recursive(true).mode(0o700).create(path).await?;
 
     let mut keep = Vec::with_capacity(history.history.len());
     for revision in &history.history {
-        let date_ms = DateTime::parse_from_rfc3339(&revision.date)
-            .map(|date| date.timestamp_millis())
-            .unwrap_or_else(|_| Utc::now().timestamp_millis());
-        let snapshot_path = path.join(format!("{}__{}.snapshot", revision.id, date_ms));
+        let snapshot_path = snapshot_file(path, revision);
         keep.push(snapshot_path.clone());
         if tokio::fs::try_exists(&snapshot_path).await.unwrap_or(false) {
             continue;
@@ -298,8 +316,14 @@ async fn write_history(path: &PathBuf, history: &ConfigHistory) -> std::io::Resu
             .unwrap_or_default()
             .as_nanos();
         let temp = path.join(format!(".tmp-{}-{nonce}", std::process::id()));
-        tokio::fs::write(&temp, revision.content.as_bytes()).await?;
-        tokio::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o600)).await?;
+        let mut file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temp)
+            .await?;
+        file.write_all(revision.content.as_bytes()).await?;
+        file.flush().await?;
         if let Err(e) = tokio::fs::rename(&temp, &snapshot_path).await {
             let _ = tokio::fs::remove_file(&temp).await;
             return Err(e);
@@ -341,16 +365,13 @@ async fn read_history(file: &str) -> Result<ConfigHistory, StatusCode> {
                 let Ok(timestamp) = timestamp.parse::<i64>() else {
                     continue;
                 };
-                let content = tokio::fs::read_to_string(&path)
-                    .await
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
                 let date = DateTime::<Utc>::from_timestamp_millis(timestamp)
                     .unwrap_or_else(Utc::now)
                     .to_rfc3339();
                 history.history.push(ConfigRevision {
                     id: id.to_string(),
                     date,
-                    content,
+                    content: String::new(),
                 });
             }
         }

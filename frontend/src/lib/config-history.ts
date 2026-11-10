@@ -10,7 +10,7 @@ export async function deleteConfigHistory(file: string, id?: string): Promise<st
   try {
     const params = new URLSearchParams({ file })
     if (id) params.set('id', id)
-    const result = await apiCall<ApiResult>('DELETE', `configs/changes?${params.toString()}`)
+    const result = await apiCall<ApiResult>('DELETE', `configs/history?${params.toString()}`)
     return result.success ? null : result.error || 'Не удалось удалить историю'
   } catch (error) {
     return error instanceof Error ? error.message : String(error)
@@ -28,7 +28,7 @@ export async function saveConfigRevision(
   try {
     const result = await apiCall<ApiResult>(
       'PUT',
-      'configs/changes',
+      'configs/history',
       { file, content, previous_content: previousContent, date: new Date().toISOString() },
       { baseUrl }
     )
