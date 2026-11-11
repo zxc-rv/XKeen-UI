@@ -629,9 +629,7 @@ export const DnsPanel = memo(function DnsPanel() {
                           <IconTrash />
                         </AlertDialogMedia>
                         <AlertDialogTitle>Очистить кэш Fake-IP?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Таблица соответствия доменов и Fake-IP будет очищена.
-                        </AlertDialogDescription>
+                        <AlertDialogDescription>Таблица соответствия доменов и Fake-IP будет очищена.</AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setConfirmFlush(null)}>Отмена</AlertDialogCancel>
@@ -725,11 +723,22 @@ export const DnsPanel = memo(function DnsPanel() {
 
                 {dnsQueryResult && (
                   <div className="border-border overflow-hidden rounded-md border">
-                    <div className="bg-muted/40 flex items-center justify-between gap-2 px-2.5 py-2">
+                    <div className="bg-muted/40 flex items-center justify-between gap-2 py-1.5 pr-1 pl-2.5">
                       <span className="text-xs font-medium">Ответ</span>
-                      <Badge variant={dnsQueryResult.Status === 0 ? 'emerald' : 'rose'}>
-                        {dnsQueryResult.Status === 0 ? 'NOERROR' : `Rcode ${dnsQueryResult.Status ?? '—'}`}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge variant={dnsQueryResult.Status === 0 ? 'emerald' : 'rose'}>
+                          {dnsQueryResult.Status === 0 ? 'NOERROR' : `Rcode ${dnsQueryResult.Status ?? '—'}`}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-muted-foreground hover:text-foreground hover:bg-transparent!"
+                          aria-label="Закрыть ответ"
+                          onClick={() => setDnsQueryResult(null)}
+                        >
+                          <IconX />
+                        </Button>
+                      </div>
                     </div>
                     {dnsQueryResult.Answer?.length ? (
                       <Table className="text-sm">
