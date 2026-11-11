@@ -190,9 +190,9 @@ function FlagPicker({ value, onAdd }: { value: string; onAdd: (next: string) => 
 }
 
 const X25519_OPTIONS: { value: 'inherit' | 'enable' | 'disable'; label: string }[] = [
-  { value: 'inherit', label: 'Наследовать от провайдера' },
   { value: 'enable', label: 'Включить принудительно' },
   { value: 'disable', label: 'Выключить принудительно' },
+  { value: 'inherit', label: 'Наследовать от провайдера' },
 ]
 
 function randomHwid(): string {
@@ -375,7 +375,7 @@ function createDefaultForm(url: string, existingConfig: string): SubscriptionFor
     excludeFilter: '',
     excludeType: '',
     fingerprint: '',
-    x25519: 'inherit',
+    x25519: 'enable',
   }
 }
 

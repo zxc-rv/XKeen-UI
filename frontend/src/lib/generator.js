@@ -434,7 +434,12 @@ function generateConfigForCore(uri, core = 'xray', existingConfig = '') {
               'User-Agent': '["ClashMeta/1.19.24; mihomo/1.19.24"]',
               'x-hwid': `["${randomHwid()}"]`,
             },
-            override: { udp: true },
+            override: {
+              udp: true,
+              'override-expr': [
+                `'(select(.type == "vless" and .["reality-opts"] != null) | .["reality-opts"]["support-x25519mlkem768"]) = true'`,
+              ],
+            },
           },
         },
         2
