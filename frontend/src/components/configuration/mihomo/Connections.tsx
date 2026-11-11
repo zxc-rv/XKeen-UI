@@ -1255,45 +1255,47 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
 }) {
   return (
     <div className="border-border flex shrink-0 flex-col gap-2.5 border-b p-3">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         <ConnectionsTabs activeTab={activeTab} onTabChange={onTabChange} />
 
         <SourceDeviceCombobox
           labels={sourceLabels}
           selectedLabels={selectedSourceLabels}
           onChange={onSourceFilterChange}
-          className="h-9 w-44 shrink-0"
+          className="h-9 w-44 shrink-0 max-md:min-w-0 max-md:basis-0 max-md:grow"
         />
 
-        <InputGroup className="min-w-0 flex-1">
-          <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
-          <InputGroupAddon>
-            <IconFilter />
-          </InputGroupAddon>
-          <InputGroupAddon align="inline-end" className="gap-0">
-            {filter && (
-              <InputGroupButton
-                size="icon-xs"
-                className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
-                onClick={onClearFilter}
-              >
-                <ClearIcon className="size-3.25" />
-              </InputGroupButton>
-            )}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
-                    <IconLetterCase size={16} />
-                  </InputGroupButton>
-                }
-              />
-              <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
-            </Tooltip>
-          </InputGroupAddon>
-        </InputGroup>
+        <div className="flex min-w-0 basis-full items-center gap-2 md:contents">
+          <InputGroup className="min-w-0 flex-1">
+            <InputGroupInput value={filter} onChange={(e) => onFilterChange(e.target.value)} placeholder="Фильтр" />
+            <InputGroupAddon>
+              <IconFilter />
+            </InputGroupAddon>
+            <InputGroupAddon align="inline-end" className="gap-0">
+              {filter && (
+                <InputGroupButton
+                  size="icon-xs"
+                  className="text-muted-foreground hover:text-destructive hover:bg-transparent!"
+                  onClick={onClearFilter}
+                >
+                  <ClearIcon className="size-3.25" />
+                </InputGroupButton>
+              )}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
+                      <IconLetterCase size={16} />
+                    </InputGroupButton>
+                  }
+                />
+                <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
+              </Tooltip>
+            </InputGroupAddon>
+          </InputGroup>
 
-        {activeTab === 'active' && <CloseAllBtn onCloseAll={onCloseAll} />}
+          {activeTab === 'active' && <CloseAllBtn onCloseAll={onCloseAll} />}
+        </div>
       </div>
     </div>
   )
