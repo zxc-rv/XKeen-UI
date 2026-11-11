@@ -34,7 +34,7 @@ const initialSettings: AppSettings = {
   guiLog: false,
   autoCheckUI: 2,
   autoCheckCore: 2,
-  backupCore: true,
+  backupCore: false,
   githubProxies: [],
   xrayRepo: DEFAULT_XRAY_REPO,
   mihomoRepo: DEFAULT_MIHOMO_REPO,
@@ -52,7 +52,7 @@ const initialSettings: AppSettings = {
   authEnabled: false,
   multiRouter: false,
   hiddenConfigFiles: [],
-  configHistoryMaxSnapshots: 10,
+  configHistoryMaxSnapshots: 0,
   emojiFont: getStoredEmojiFont(),
 }
 

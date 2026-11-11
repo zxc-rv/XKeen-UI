@@ -320,7 +320,7 @@ impl Default for UpdaterSettings {
             github_proxy: vec!["https://gh-proxy.com".into(), "https://ghfast.top".into()],
             xray_repo: "https://github.com/XTLS/Xray-core".into(),
             mihomo_repo: "https://github.com/MetaCubeX/mihomo".into(),
-            backup_core: true,
+            backup_core: false,
             auto_check_ui: DEFAULT_CHECK_INTERVAL_HOURS,
             auto_check_core: DEFAULT_CHECK_INTERVAL_HOURS,
         }
@@ -408,7 +408,7 @@ pub struct UiSettings {
     pub hidden_files: Vec<String>,
 }
 
-pub const DEFAULT_CONFIG_HISTORY_MAX_SNAPSHOTS: usize = 10;
+pub const DEFAULT_CONFIG_HISTORY_MAX_SNAPSHOTS: usize = 0;
 pub const MAX_CONFIG_HISTORY_SNAPSHOTS: usize = 100;
 
 #[derive(Clone, Serialize, Deserialize)]

@@ -261,7 +261,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             guiLog: data.gui.log,
             autoCheckUI: data.updater.auto_check_ui ?? 2,
             autoCheckCore: data.updater.auto_check_core ?? 2,
-            configHistoryMaxSnapshots: data.config_history?.max_snapshots ?? 10,
+            configHistoryMaxSnapshots: data.config_history?.max_snapshots ?? 0,
             backupCore: data.updater.backup_core,
             githubProxies: data.updater.github_proxy || [],
             xrayRepo: data.updater.xray_repo ?? DEFAULT_XRAY_REPO,
