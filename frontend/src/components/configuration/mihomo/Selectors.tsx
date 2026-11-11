@@ -957,10 +957,7 @@ const SelectorRow = memo(function SelectorRow({
         aria-label={`Открыть селектор ${selectorName}`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className={cn(
-          'border-border bg-input-background hover:bg-input-background-hover! flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors hover:border-[#60a5fa]/60 sm:px-3 sm:pt-2.5 sm:pb-3',
-          isOpen && 'border-[#60a5fa]!'
-        )}
+        className='border-border bg-input-background hover:bg-input-background-hover! flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors sm:px-3 sm:pt-2.5 sm:pb-3'
       >
         <span className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-[15px] font-medium">{selectorName}</span>
