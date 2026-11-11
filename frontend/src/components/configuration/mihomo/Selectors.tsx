@@ -33,6 +33,7 @@ import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL } from '../../../lib/t
 
 const ACTIVE_CARD_CLASSES = 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
 const HOVER_CARD_CLASSES = 'hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
+const TILE_HOVER_CARD_CLASSES = '[@media(hover:hover)]:hover:border-[#60a5fa] [@media(hover:hover)]:hover:bg-linear-to-b [@media(hover:hover)]:hover:from-blue-500/15 [@media(hover:hover)]:hover:to-blue-500/5'
 
 interface ProxyHistory {
   time: string
@@ -266,6 +267,7 @@ function blurActiveElement() {
 const ProxyCard = memo(function ProxyCard({
   proxyName,
   selectorName,
+  display,
   autoPolicy,
   lockSelection,
   onSelect,
@@ -273,6 +275,7 @@ const ProxyCard = memo(function ProxyCard({
 }: {
   proxyName: string
   selectorName: string
+  display: 'standard' | 'columns' | 'tiles' | 'popup'
   autoPolicy: boolean
   lockSelection?: boolean
   onSelect: (selectorName: string, proxyName: string) => void
@@ -311,7 +314,7 @@ const ProxyCard = memo(function ProxyCard({
             ? ACTIVE_CARD_CLASSES
             : selectionDisabled
               ? 'border-ring/35 bg-[linear-gradient(135deg,rgba(148,163,184,0.08)_0%,transparent_55%)]'
-              : cn('border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)]', HOVER_CARD_CLASSES)
+              : cn('border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)]', display === 'tiles' ? TILE_HOVER_CARD_CLASSES : HOVER_CARD_CLASSES)
       )}
       onClick={() => !selectionDisabled && onSelect(selectorName, proxyName)}
       onContextMenu={(e) => {
@@ -909,6 +912,7 @@ const SelectorRow = memo(function SelectorRow({
           key={proxyName}
           proxyName={proxyName}
           selectorName={selectorName}
+          display={display}
           autoPolicy={autoPolicy}
           lockSelection={lockSelection}
           onSelect={onSelect}
@@ -1013,6 +1017,7 @@ const SelectorRow = memo(function SelectorRow({
         <ProxyCard
           proxyName={proxyName}
           selectorName={selectorName}
+          display={display}
           autoPolicy={autoPolicy}
           lockSelection={lockSelection}
           onSelect={(groupName, selectedProxyName) => {
@@ -1420,6 +1425,7 @@ const SelectorRow = memo(function SelectorRow({
                     key={proxyName}
                     proxyName={proxyName}
                     selectorName={selectorName}
+                    display={display}
                     autoPolicy={autoPolicy}
                     lockSelection={lockSelection}
                     onSelect={onSelect}
