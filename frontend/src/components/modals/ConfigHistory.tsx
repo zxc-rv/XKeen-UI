@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitl
 import { apiCall } from '@/lib/api'
 import { deleteConfigHistory } from '@/lib/config-history'
 import { cn } from '@/lib/utils'
-import { IconAlertCircle, IconArrowLeft, IconHistory, IconLoader2, IconRestore, IconTrash } from '@tabler/icons-react'
+import { IconAlertCircle, IconArrowLeft, IconCamera, IconHistory, IconLoader2, IconRestore, IconTrash } from '@tabler/icons-react'
 import { motion } from 'framer-motion'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 
@@ -314,7 +314,9 @@ export function ConfigHistoryView({ file, currentContent, onClose, onRollback, o
                       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center">
                         <AccordionTrigger className="min-w-0 items-center gap-3 rounded-none border-0 px-3 py-3 hover:bg-input-background-hover hover:no-underline focus-visible:ring-0 sm:px-4">
                           <span className="flex min-w-0 flex-1 items-center gap-3">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted font-mono text-xs font-semibold">#{number}</span>
+                            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                              <IconCamera className="size-5" />
+                            </span>
                             <span className="min-w-0">
                               <span className="block text-sm font-semibold">Снапшот {number}</span>
                               <time className="block text-xs text-muted-foreground">{formatTime(snapshot.date)}</time>
