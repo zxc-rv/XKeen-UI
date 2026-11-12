@@ -4,15 +4,7 @@ import { Empty, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  IconChevronDown,
-  IconFile,
-  IconFilter,
-  IconMaximize,
-  IconMinimize,
-  IconPlus,
-  IconTrash,
-} from '@tabler/icons-react'
+import { IconChevronDown, IconFile, IconFilter, IconMaximize, IconMinimize, IconPlus, IconTrash } from '@tabler/icons-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { LOCAL_ROUTER_ID, isRouterSelectable, routerId } from '../../lib/multi-routers/model'
@@ -29,7 +21,7 @@ import { ClearIcon } from '../ui/clear-icon'
 const LOG_FILES = ['error.log', 'access.log']
 const MAX_LINES = 1000
 
-export function LogPanel() {
+export function LogPanel({ embedded = false }: { embedded?: boolean }) {
   const timezone = useSettings((s) => s.timezone)
   const multiRouter = useSettings((s) => s.multiRouter)
   const routers = useRoutersStore((s) => s.routers)
@@ -321,7 +313,7 @@ export function LogPanel() {
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="relative h-70 w-full pb-3 md:shrink-0">
+      <div className={cn('relative w-full', embedded ? 'h-full' : 'h-70 pb-3 md:shrink-0')}>
         <div
           ref={backdropRef}
           className="fixed inset-0 z-40 bg-black/50 opacity-0"
@@ -334,8 +326,9 @@ export function LogPanel() {
         <div
           ref={containerRef}
           className={cn(
-            'border-border bg-card flex flex-col overflow-hidden rounded-xl border',
-            isFullscreen ? 'fixed inset-x-3 bottom-3 z-50 shadow-2xl sm:inset-x-4 sm:mx-auto sm:max-w-400' : 'absolute inset-0 z-10 w-full'
+            'flex flex-col overflow-hidden',
+            (!embedded || isFullscreen) && 'border-border bg-card rounded-xl border',
+            isFullscreen ? 'fixed inset-x-0 bottom-3 z-50 shadow-2xl sm:inset-x-4 sm:mx-auto sm:max-w-400' : 'absolute inset-0 z-10 w-full'
           )}
           style={{
             height: isFullscreen ? 'calc(100dvh - 1.25rem)' : '100%',
@@ -346,7 +339,7 @@ export function LogPanel() {
             onValueChange={(v) => setPanelTab(v as 'journal' | 'routers')}
             className="flex min-h-0 flex-1 flex-col gap-0"
           >
-            <div className="flex shrink-0 flex-col justify-between gap-3 px-4 pt-4 sm:flex-row sm:items-center">
+            <div className="flex shrink-0 flex-col justify-between gap-3 px-2.5 pt-2.5 sm:flex-row sm:items-center md:px-4 md:pt-4">
               {multiRouter ? (
                 <TabsList variant="line" className="h-auto gap-3 bg-transparent p-0">
                   <TabsTrigger value="journal" className="p-0 text-lg font-semibold">
@@ -357,7 +350,7 @@ export function LogPanel() {
                   </TabsTrigger>
                 </TabsList>
               ) : (
-                <h2 className="text-lg font-semibold select-none">Журнал</h2>
+                !embedded && <h2 className="text-lg font-semibold select-none">Журнал</h2>
               )}
               {panelTab === 'journal' && (
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -461,7 +454,7 @@ export function LogPanel() {
               forceMount={multiRouter || undefined}
               className="relative mt-0 min-h-0 flex-1 data-[state=inactive]:hidden"
             >
-              <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
+              <div className="bg-input-background absolute inset-x-2.5 top-2.5 bottom-4 overflow-hidden rounded-md border md:inset-4">
                 {isEmpty && (
                   <Empty className="h-full gap-0">
                     <EmptyMedia variant="icon" className="size-8.5">
@@ -496,7 +489,7 @@ export function LogPanel() {
 
             <TabsContent value="routers" className="relative mt-0 min-h-0 flex-1">
               {multiRouter && (
-                <div className="bg-input-background absolute inset-4 overflow-hidden rounded-md border">
+                <div className="bg-input-background absolute inset-x-2.5 inset-y-4 overflow-hidden rounded-md border md:inset-4">
                   <RoutersListPanel />
                 </div>
               )}

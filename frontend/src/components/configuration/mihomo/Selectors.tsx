@@ -990,7 +990,7 @@ const SelectorRow = memo(function SelectorRow({
     )
     const pickerHeading = (
       <div className="text-foreground flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
-        <span className="truncate">{selectorName}</span>
+        <span className="truncate text-[15px]">{selectorName}</span>
         <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />
         {selectedProxy?.icon && (
           <img
@@ -1182,8 +1182,7 @@ const SelectorRow = memo(function SelectorRow({
                                     render={
                                       <Button
                                         variant="outline"
-                                        size="icon-xs"
-                                        className="!size-7"
+                                        size="icon-sm"
                                         aria-label="Сбросить smart-веса"
                                         disabled={isFlushingSmart}
                                       >
@@ -1215,16 +1214,15 @@ const SelectorRow = memo(function SelectorRow({
                             render={
                               <Button
                                 variant="outline"
-                                size={selectedDigits === 0 ? 'icon-xs' : 'sm'}
+                                size={selectedDigits === 0 ? 'icon-sm' : 'sm'}
                                 aria-label="Проверить все серверы селектора"
                                 className={cn(
-                                  '!h-7',
                                   selectedDigits > 0 && [
-                                    '!min-w-7 justify-center !px-1 text-xs font-medium tabular-nums',
+                                    'min-w-8 justify-center px-0 text-xs font-medium tabular-nums',
                                     delayColor(selectedDelay),
                                   ]
                                 )}
-                                style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 0.75rem)` } : undefined}
+                                style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 1rem)` } : undefined}
                                 disabled={isTesting}
                                 onClick={() => onTestAll(selectorName)}
                               >
@@ -1267,7 +1265,7 @@ const SelectorRow = memo(function SelectorRow({
                   )}
                 </DialogHeader>
                 <m.div
-                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1"
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: pickerAnimationReady && !pickerClosing ? 1 : 0 }}
                   transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
@@ -1757,7 +1755,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   if (loading) {
     return (
-      <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
+      <div className="text-muted-foreground absolute inset-x-2.5 inset-y-4 flex items-center justify-center text-sm md:inset-4">
         <Spinner className="mr-2 size-5" /> Загрузка...
       </div>
     )
@@ -1765,7 +1763,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   if (error || selectorNames.length === 0) {
     return (
-      <div className="absolute inset-4">
+      <div className="absolute inset-x-2.5 inset-y-4 md:inset-4">
         <Empty className="text-muted-foreground border-border absolute inset-0 gap-3 rounded-xl border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -1791,7 +1789,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-4 scrollbar-thin overflow-y-auto">
+      <div className="absolute inset-x-2.5 inset-y-4 scrollbar-thin overflow-y-auto pb-20 md:inset-4 md:pb-0">
         {display === 'columns' || display === 'tiles' ? (
           <div className="flex items-start gap-4">
             {selectorColumns.map((column, index) => (

@@ -76,12 +76,14 @@ export function StatusBar({
   onRefreshStatus,
   onOpenUpdate,
   onLogout,
+  className,
 }: {
   onOpenCoreManage: () => void
   onOpenSettings: () => void
   onRefreshStatus: () => void
   onOpenUpdate: (core: string) => void
   onLogout: () => void
+  className?: string
 }) {
   const { state, dispatch, showToast } = useAppContext({ includeSettings: true })
   const { serviceStatus, pendingText, currentCore, coreVersions, isConfigsLoading, version, isOutdatedUI, isOutdatedCore, settings } = state
@@ -249,21 +251,20 @@ export function StatusBar({
         <div
           data-slot="status-bar"
           data-style={settings.statusBarStyle}
-          className="border-border bg-card relative z-40 flex shrink-0 flex-col justify-between gap-2 rounded-xl border px-3 py-3 sm:px-4 md:flex-row md:items-center"
+          className={cn(
+            'border-border bg-card relative z-40 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border-0 px-3 pt-1.5 pb-3 sm:px-4 md:flex-row md:flex-nowrap md:border md:py-3',
+            className
+          )}
         >
           {/* Статус */}
-          <div className="order-2 flex w-full items-center justify-center md:order-1 md:w-auto md:justify-start">
+          <div className="order-1 flex max-w-full min-w-0 items-center justify-start md:order-1 md:ml-0 md:w-auto md:justify-start">
             <div
               data-slot="service-status"
               data-style={settings.statusBarStyle}
               className={cn(
-                'bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-1.5',
+                'bg-muted/40 flex min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1.5 sm:gap-2 sm:px-3',
                 settings.statusBarStyle === 'accent' &&
-                  cn(
-                    'status-accent via-card bg-linear-to-br',
-                    statusAccentGradient,
-                    statusAccentBorder
-                  )
+                  cn('status-accent via-card bg-linear-to-br', statusAccentGradient, statusAccentBorder)
               )}
             >
               <div className="flex flex-col">
@@ -279,7 +280,7 @@ export function StatusBar({
                       )}
                     />
                   </div>
-                  <span className="text-foreground/80 text-xs font-medium">{statusText}</span>
+                  <span className="text-foreground/80 text-[11px] font-medium whitespace-nowrap sm:text-xs">{statusText}</span>
                 </div>
                 <span className="text-muted-foreground flex items-center gap-1.5 text-[11px] tracking-tight whitespace-nowrap">
                   <span className="flex items-center gap-1">
@@ -373,14 +374,14 @@ export function StatusBar({
           </div>
 
           {/* Логотип */}
-          <div className="order-1 flex items-center justify-center md:absolute md:left-1/2 md:order-2 md:-translate-x-1/2">
+          <div className="order-2 ml-auto flex shrink-0 items-center justify-end md:absolute md:left-1/2 md:order-2 md:ml-0 md:-translate-x-1/2">
             <a
               href="https://github.com/zxc-rv/XKeen-UI"
               target="_blank"
               rel="noreferrer"
               className="rounded-md transition-opacity hover:opacity-85"
             >
-              <span className="bg-linear-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-[28px] font-semibold text-transparent">
+              <span className="bg-linear-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-[22px] font-semibold text-transparent sm:text-2xl md:text-[28px]">
                 XKeen UI
               </span>
             </a>

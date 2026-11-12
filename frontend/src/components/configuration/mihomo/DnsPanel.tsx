@@ -565,7 +565,7 @@ export const DnsPanel = memo(function DnsPanel() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
+      <div className="absolute inset-x-2.5 top-2.5 bottom-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto pb-20 md:inset-4 md:pb-0">
         <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
           <legend className="px-1 text-sm font-medium">Статус</legend>
           <div className="flex flex-col gap-3 pt-1">
@@ -698,7 +698,7 @@ export const DnsPanel = memo(function DnsPanel() {
                         aria-label="Выполнить DNS запрос"
                         disabled={!dnsQueryName.trim() || isQueryingDns}
                       >
-                        <span className="text-xs">Искать</span>
+                        <span className="text-xs max-md:hidden">Искать</span>
                         {isQueryingDns ? <Spinner /> : <IconSearch />}
                       </InputGroupButton>
                     </InputGroupAddon>
