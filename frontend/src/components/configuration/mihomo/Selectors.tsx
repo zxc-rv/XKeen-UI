@@ -31,13 +31,23 @@ import {
   IconX,
   IconPin,
 } from '@tabler/icons-react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DISPLAY_EVENT, readSelectorDisplay } from './SelectorDisplaySettings'
 
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
-import { fetchClashProxies, getConnections, showToast, useProxiesStore, useSettings } from '../../../lib/store'
+import {
+  canCommitMeasurement,
+  getSelectedPathSignature,
+  isPassMeasurementCurrent,
+  isSelectedPassPath,
+  resolvePassBootstrapPlan,
+  type ClashRuleInfo,
+  type PassBootstrapPlan,
+  type PassMeasurement,
+} from '../../../lib/passMeasurement'
+import { fetchClashProxies, getConnections, showToast, useNowStore, useProxiesStore, useSettings } from '../../../lib/store'
 import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL } from '../../../lib/types'
 
 const ACTIVE_CARD_CLASSES = 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
@@ -118,13 +128,85 @@ interface SelectorsStore {
   testingAll: Record<string, boolean>
   testingSingle: Record<string, boolean>
   smartNodes: Record<string, Record<string, SmartNodeWeight>>
+  measurements: Record<string, PassMeasurement>
+  rules: ClashRuleInfo[] | null
+  rulesContextKey: string | null
 }
 
 const useSelectorsStore = create<SelectorsStore>(() => ({
   testingAll: {},
   testingSingle: {},
   smartNodes: {},
+  measurements: {},
+  rules: null,
+  rulesContextKey: null,
 }))
+
+interface PassRoutingSnapshot {
+  proxies: Record<string, ProxyInfo | undefined>
+  rules: ClashRuleInfo[]
+}
+
+interface MeasurementAttempt {
+  name: string
+  requestId: number
+  contextKey: string
+  selectionSignature: string
+  delay: number
+  testUrl: string
+  timeoutMs: number
+  kind: 'normal' | 'pass'
+  plan?: PassBootstrapPlan
+}
+
+const passSnapshotRequests = new Map<string, Promise<PassRoutingSnapshot | null>>()
+
+function passMeasurementTooltip(measurement: PassMeasurement): string {
+  const result = measurement.delay > 0 ? `${measurement.delay} мс` : 'нет ответа'
+  return `Начальный выход Auto: «${measurement.initialMatchTarget}» → «${measurement.actualProxyName}» — ${result}. Маршруты отдельных сайтов могут отличаться.`
+}
+
+function usePassMeasurement(
+  proxyName: string,
+  proxies: Record<string, ProxyInfo | undefined>,
+  contextKey: string,
+  testUrl: string,
+  timeoutMs: number
+): PassMeasurement | null {
+  const measurement = useSelectorsStore((s) => s.measurements[proxyName])
+  const rules = useSelectorsStore((s) => (s.rulesContextKey === contextKey ? s.rules : null))
+  const tick = useNowStore((s) => s.tick)
+  const current =
+    measurement && rules && isPassMeasurementCurrent(measurement, proxyName, proxies, rules, contextKey, testUrl, timeoutMs)
+      ? measurement
+      : null
+
+  useEffect(() => {
+    if (!measurement || current) return
+    useSelectorsStore.setState((state) => {
+      if (state.measurements[proxyName] !== measurement) return state
+      const measurements = { ...state.measurements }
+      delete measurements[proxyName]
+      return { measurements }
+    })
+  }, [current, measurement, proxyName, tick])
+
+  return current
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex++
+        results[index] = await task(items[index])
+      }
+    })
+  )
+  return results
+}
 
 function isSmartType(type?: string): boolean {
   return type?.toLowerCase() === 'smart'
@@ -279,6 +361,9 @@ const ProxyCard = memo(function ProxyCard({
   lockSelection,
   onSelect,
   onTestSingle,
+  measurementContextKey,
+  pingTestUrl,
+  pingTestTimeout,
 }: {
   proxyName: string
   selectorName: string
@@ -286,13 +371,19 @@ const ProxyCard = memo(function ProxyCard({
   lockSelection?: boolean
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
+  measurementContextKey: string
+  pingTestUrl: string
+  pingTestTimeout: number
 }) {
   const labelStyle = useSettings((s) => s.proxyLabelStyle)
   const proxy = useProxiesStore((s) => s.proxies[proxyName] as ProxyInfo | undefined)
+  const allProxiesMap = useProxiesStore((s) => s.proxies as Record<string, ProxyInfo | undefined>)
   const isActive = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.now === proxyName)
   const isFixed = useProxiesStore((s) => (s.proxies[selectorName] as ProxyInfo | undefined)?.fixed === proxyName)
   const isTestingSingle = useSelectorsStore((s) => !!s.testingSingle[proxyName])
   const smartInfo = useSelectorsStore((s) => s.smartNodes[selectorName]?.[proxyName])
+  const passPath = isSelectedPassPath(proxyName, allProxiesMap)
+  const passMeasurement = usePassMeasurement(proxyName, allProxiesMap, measurementContextKey, pingTestUrl, pingTestTimeout)
 
   const chainStr = useProxiesStore((s): string => {
     const p = s.proxies[proxyName] as ProxyInfo | undefined
@@ -302,10 +393,10 @@ const ProxyCard = memo(function ProxyCard({
 
   if (!proxy) return null
 
-  const delay = getLastDelay(proxy)
-  const hasHistory = hasDelayHistory(proxy)
+  const delay = passPath ? (passMeasurement?.delay ?? null) : getLastDelay(proxy)
+  const hasHistory = !passPath && hasDelayHistory(proxy)
   const history = getProxyHistory(proxy)
-  const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
+  const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase()) || passPath
   const selectionDisabled = lockSelection || isSelectionDisabled(autoPolicy, proxy)
   const smartLabel = smartInfo ? (SMART_RANK_LABELS[smartInfo.rank] ?? smartInfo.rank) : null
   const showTcpOnly = proxy.udp === false
@@ -462,6 +553,8 @@ const ProxyCard = memo(function ProxyCard({
                 >
                   {isTestingSingle ? (
                     <Spinner />
+                  ) : passMeasurement ? (
+                    passMeasurement.delay
                   ) : hasHistory ? (
                     delay || <GraveIcon size={14} />
                   ) : (
@@ -470,7 +563,11 @@ const ProxyCard = memo(function ProxyCard({
                 </span>
               }
             />
-            {history.length > 0 ? (
+            {passPath ? (
+              <TooltipContent side="top" className="p-2">
+                {passMeasurement ? passMeasurementTooltip(passMeasurement) : 'Замерить начальный выход Auto по последнему MATCH.'}
+              </TooltipContent>
+            ) : history.length > 0 ? (
               <TooltipContent side="top" className="p-2">
                 <div className="flex min-w-35 flex-col gap-1">
                   {history.map((entry, i) => (
@@ -571,17 +668,26 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
   proxyName,
   disabled,
   onTestSingle,
+  measurementContextKey,
+  pingTestUrl,
+  pingTestTimeout,
 }: {
   proxyName: string
   disabled: boolean
   onTestSingle: (proxyName: string) => Promise<void>
+  measurementContextKey: string
+  pingTestUrl: string
+  pingTestTimeout: number
 }) {
   const proxy = useProxiesStore((s) => s.proxies[proxyName] as ProxyInfo | undefined)
+  const allProxiesMap = useProxiesStore((s) => s.proxies as Record<string, ProxyInfo | undefined>)
   const isTestingSingle = useSelectorsStore((s) => !!s.testingSingle[proxyName])
-  const delay = proxy ? getLastDelay(proxy) : null
-  const hasHistory = hasDelayHistory(proxy)
-  const showDelay = shouldShowDelay(proxy, isTestingSingle)
-  const canTest = !!proxy && !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
+  const passPath = isSelectedPassPath(proxyName, allProxiesMap)
+  const passMeasurement = usePassMeasurement(proxyName, allProxiesMap, measurementContextKey, pingTestUrl, pingTestTimeout)
+  const delay = passPath ? (passMeasurement?.delay ?? null) : proxy ? getLastDelay(proxy) : null
+  const hasHistory = !passPath && hasDelayHistory(proxy)
+  const showDelay = passPath ? !!passMeasurement : shouldShowDelay(proxy, isTestingSingle)
+  const canTest = !!proxy && (!NO_DELAY_TYPES.has(proxy.type.toLowerCase()) || passPath)
 
   return (
     <div className={cn('flex w-full min-w-0 items-center gap-2', disabled && 'opacity-70')}>
@@ -617,11 +723,25 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
                   if (!isTestingSingle) void onTestSingle(proxyName)
                 }}
               >
-                {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBolt className="size-3.5" />}
+                {isTestingSingle ? (
+                  <Spinner />
+                ) : passMeasurement ? (
+                  delay
+                ) : hasHistory ? (
+                  delay || <GraveIcon size={14} />
+                ) : (
+                  <IconBolt className="size-3.5" />
+                )}
               </button>
             }
           />
-          <TooltipContent>Замерить отклик</TooltipContent>
+          <TooltipContent>
+            {passMeasurement
+              ? passMeasurementTooltip(passMeasurement)
+              : passPath
+                ? 'Замерить начальный выход Auto по последнему MATCH.'
+                : 'Замерить отклик'}
+          </TooltipContent>
         </Tooltip>
       )}
     </div>
@@ -636,6 +756,9 @@ const SelectorCombobox = memo(function SelectorCombobox({
   onSelect,
   onTestSingle,
   visible,
+  measurementContextKey,
+  pingTestUrl,
+  pingTestTimeout,
 }: {
   selectorName: string
   options: string[]
@@ -644,6 +767,9 @@ const SelectorCombobox = memo(function SelectorCombobox({
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
   visible: boolean
+  measurementContextKey: string
+  pingTestUrl: string
+  pingTestTimeout: number
 }) {
   const selector = useProxiesStore((s) => s.proxies[selectorName] as ProxyInfo | undefined)
   const rawValue = selector?.now ?? null
@@ -686,8 +812,8 @@ const SelectorCombobox = memo(function SelectorCombobox({
           'w-full cursor-pointer! justify-between font-normal',
           isFixed ? 'border-emerald-400 dark:border-emerald-400' : 'border-blue-500/40 dark:border-blue-500/40',
           isFixed
-            ? 'hover:border-emerald-400 dark:hover:border-emerald-400 hover:bg-emerald-500/10! dark:hover:bg-emerald-500/10!'
-            : 'hover:border-blue-500/40 dark:hover:border-blue-500/40 hover:bg-blue-500/10! dark:hover:bg-blue-500/10!',
+            ? 'hover:border-emerald-400 hover:bg-emerald-500/10! dark:hover:border-emerald-400 dark:hover:bg-emerald-500/10!'
+            : 'hover:border-blue-500/40 hover:bg-blue-500/10! dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10!',
           isOpen &&
             (isFixed
               ? 'border-[#34d399]! shadow-[0_0_0_3px_rgba(52,211,153,0.2)]!'
@@ -697,19 +823,26 @@ const SelectorCombobox = memo(function SelectorCombobox({
         <span className="flex min-w-0 items-center gap-2">
           {selectedProxy?.icon && (
             <img
-              src={selectedProxy.icon}
+              src={selectedProxy?.icon}
               alt=""
               className="size-4 shrink-0 object-contain"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
           )}
           <span className={cn('truncate', !value && 'text-muted-foreground')}>
-            <ComboboxValue>{(proxyName: string | null) => proxyName ?? (lockSelection || isSmart ? 'Автовыбор' : 'Выберите прокси')}</ComboboxValue>
+            <ComboboxValue>
+              {(proxyName: string | null) => proxyName ?? (lockSelection || isSmart ? 'Автовыбор' : 'Выберите прокси')}
+            </ComboboxValue>
           </span>
         </span>
       </ComboboxTrigger>
       <ComboboxContent className={isFixed ? 'border-emerald-400/40' : 'border-blue-500/40'}>
-        <ComboboxInput fullWidth showTrigger={false} placeholder="Поиск" className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! has-[[data-slot=input-group-control]:focus-visible]:shadow-none! has-[[data-slot=input-group-control]:focus-visible]:ring-0! m-1 h-8 w-auto shadow-none">
+        <ComboboxInput
+          fullWidth
+          showTrigger={false}
+          placeholder="Поиск"
+          className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:shadow-none! has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
+        >
           <InputGroupAddon align="inline-start">
             <IconSearch />
           </InputGroupAddon>
@@ -726,7 +859,14 @@ const SelectorCombobox = memo(function SelectorCombobox({
                   'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
               )}
             >
-              <CollapsedProxyOption proxyName={proxyName} disabled={!!disabledOptions[proxyName]} onTestSingle={onTestSingle} />
+              <CollapsedProxyOption
+                proxyName={proxyName}
+                disabled={!!disabledOptions[proxyName]}
+                onTestSingle={onTestSingle}
+                measurementContextKey={measurementContextKey}
+                pingTestUrl={pingTestUrl}
+                pingTestTimeout={pingTestTimeout}
+              />
             </ComboboxItem>
           )}
         </ComboboxList>
@@ -748,6 +888,9 @@ const SelectorRow = memo(function SelectorRow({
   onPickerChange,
   collapsed,
   onToggleCollapse,
+  measurementContextKey,
+  pingTestUrl,
+  pingTestTimeout,
 }: {
   selectorName: string
   display: 'standard' | 'columns' | 'tiles' | 'popup'
@@ -760,9 +903,16 @@ const SelectorRow = memo(function SelectorRow({
   onPickerChange: (selectorName: string | null) => void
   collapsed: boolean
   onToggleCollapse: (name: string) => void
+  measurementContextKey: string
+  pingTestUrl: string
+  pingTestTimeout: number
 }) {
   const selector = useProxiesStore((s) => s.proxies[selectorName] as ProxyInfo | undefined)
   const isTesting = useSelectorsStore((s) => !!s.testingAll[selectorName])
+  const allProxiesMap = useProxiesStore((s) => s.proxies as Record<string, ProxyInfo | undefined>)
+  const selectedName = selector?.now ?? ''
+  const selectedPassPath = selectedName ? isSelectedPassPath(selectedName, allProxiesMap) : false
+  const selectedPassMeasurement = usePassMeasurement(selectedName, allProxiesMap, measurementContextKey, pingTestUrl, pingTestTimeout)
   const selectedProxy = useProxiesStore((s) => {
     const currentName = (s.proxies[selectorName] as ProxyInfo | undefined)?.now
     return currentName ? (s.proxies[currentName] as ProxyInfo | undefined) : undefined
@@ -849,7 +999,6 @@ const SelectorRow = memo(function SelectorRow({
   const hideUnavailable = useSettings((s) => s.hideUnavailableProxies)
   const hideCounter = useSettings((s) => s.hideUnavailableProxiesCounter)
   const sortOrder = useSettings((s) => s.proxySortOrder)
-  const allProxiesMap = useProxiesStore((s) => s.proxies as Record<string, ProxyInfo | undefined>)
 
   const filteredSortedProxies = useMemo(() => {
     let result = allProxies
@@ -877,11 +1026,13 @@ const SelectorRow = memo(function SelectorRow({
         })
         .filter((delay): delay is number => delay !== null)
     : []
-  const selectedDelay = selectedProxy
-    ? getLastDelay(selectedProxy)
-    : isSmart
-      ? (getLastDelay(selector) ?? (smartNodeDelays.length ? Math.min(...smartNodeDelays) : null))
-      : null
+  const selectedDelay = selectedPassPath
+    ? (selectedPassMeasurement?.delay ?? null)
+    : selectedProxy
+      ? getLastDelay(selectedProxy)
+      : isSmart
+        ? (getLastDelay(selector) ?? (smartNodeDelays.length ? Math.min(...smartNodeDelays) : null))
+        : null
   const showSelectedDelay = selectedDelay !== null && selectedDelay > 0
   const selectedDigits = showSelectedDelay && selectedDelay ? String(selectedDelay).length : 0
 
@@ -929,6 +1080,9 @@ const SelectorRow = memo(function SelectorRow({
           lockSelection={lockSelection}
           onSelect={onSelect}
           onTestSingle={onTestSingle}
+          measurementContextKey={measurementContextKey}
+          pingTestUrl={pingTestUrl}
+          pingTestTimeout={pingTestTimeout}
         />
       ))}
     </div>
@@ -957,7 +1111,7 @@ const SelectorRow = memo(function SelectorRow({
         aria-label={`Открыть селектор ${selectorName}`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className='border-border bg-input-background hover:bg-input-background-hover! flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors sm:px-3 sm:pt-2.5 sm:pb-3'
+        className="border-border bg-input-background hover:bg-input-background-hover! flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors sm:px-3 sm:pt-2.5 sm:pb-3"
       >
         <span className="flex min-w-0 items-center justify-between gap-2">
           <span className="truncate text-[15px] font-medium">{selectorName}</span>
@@ -978,7 +1132,7 @@ const SelectorRow = memo(function SelectorRow({
           <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />
           {selectedProxy?.icon && (
             <img
-              src={selectedProxy.icon}
+              src={selectedProxy?.icon}
               alt=""
               className="size-4 shrink-0 rounded-sm object-contain"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
@@ -994,7 +1148,7 @@ const SelectorRow = memo(function SelectorRow({
         <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />
         {selectedProxy?.icon && (
           <img
-            src={selectedProxy.icon}
+            src={selectedProxy?.icon}
             alt=""
             className="size-4 shrink-0 rounded-sm object-contain"
             onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
@@ -1033,6 +1187,9 @@ const SelectorRow = memo(function SelectorRow({
             if (!isMobileViewport) onPickerChange(null)
           }}
           onTestSingle={onTestSingle}
+          measurementContextKey={measurementContextKey}
+          pingTestUrl={pingTestUrl}
+          pingTestTimeout={pingTestTimeout}
         />
       </div>
     ))
@@ -1370,7 +1527,13 @@ const SelectorRow = memo(function SelectorRow({
                   </Button>
                 }
               />
-              <TooltipContent>Замерить отклик</TooltipContent>
+              <TooltipContent>
+                {selectedPassPath && selectedPassMeasurement
+                  ? passMeasurementTooltip(selectedPassMeasurement)
+                  : selectedPassPath
+                    ? 'Замерить начальный выход Auto по последнему MATCH.'
+                    : 'Замерить отклик'}
+              </TooltipContent>
             </Tooltip>
           </div>
         </div>
@@ -1409,6 +1572,9 @@ const SelectorRow = memo(function SelectorRow({
                 onSelect={onSelect}
                 onTestSingle={onTestSingle}
                 visible={collapsed}
+                measurementContextKey={measurementContextKey}
+                pingTestUrl={pingTestUrl}
+                pingTestTimeout={pingTestTimeout}
               />
             </div>
           </div>
@@ -1437,6 +1603,9 @@ const SelectorRow = memo(function SelectorRow({
                     lockSelection={lockSelection}
                     onSelect={onSelect}
                     onTestSingle={onTestSingle}
+                    measurementContextKey={measurementContextKey}
+                    pingTestUrl={pingTestUrl}
+                    pingTestTimeout={pingTestTimeout}
                   />
                 ))}
               </div>
@@ -1459,6 +1628,9 @@ const SelectorRow = memo(function SelectorRow({
                 onSelect={onSelect}
                 onTestSingle={onTestSingle}
                 visible={collapsed}
+                measurementContextKey={measurementContextKey}
+                pingTestUrl={pingTestUrl}
+                pingTestTimeout={pingTestTimeout}
               />
             </div>
           </div>
@@ -1482,7 +1654,6 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       window.removeEventListener('resize', update)
     }
   }, [])
-
   const loading = useProxiesStore((s) => s.loading)
   const error = useProxiesStore((s) => s.error)
   const pingTestUrl = useSettings((s) => s.pingTestUrl)
@@ -1490,11 +1661,31 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
   const [collapsedSelectors, setCollapsedSelectors] = useState<Record<string, boolean>>(() => readCollapsedSelectors())
   const [activePickerSelector, setActivePickerSelector] = useState<string | null>(null)
 
+  const benchmarkUrl = pingTestUrl.trim() || DEFAULT_PING_TEST_URL
+  const benchmarkTimeout = Number.isFinite(pingTestTimeout) && pingTestTimeout > 0 ? Math.trunc(pingTestTimeout) : DEFAULT_PING_TEST_TIMEOUT
+  const measurementContextKey = useMemo(
+    () => JSON.stringify([clashApiPort, clashApiSecret, clashApiUnix ?? null, mode, benchmarkUrl, benchmarkTimeout]),
+    [benchmarkTimeout, benchmarkUrl, clashApiPort, clashApiSecret, clashApiUnix, mode]
+  )
+  const measurementContextRef = useRef(measurementContextKey)
+  const latestRequestIds = useRef(new Map<string, number>())
+  const latestGroupRequestIds = useRef(new Map<string, number>())
+  if (measurementContextRef.current !== measurementContextKey) {
+    latestRequestIds.current.clear()
+    latestGroupRequestIds.current.clear()
+    measurementContextRef.current = measurementContextKey
+  }
+  const previousMeasurementContextRef = useRef(measurementContextKey)
+
+  useEffect(() => {
+    if (previousMeasurementContextRef.current === measurementContextKey) return
+    previousMeasurementContextRef.current = measurementContextKey
+    useSelectorsStore.setState({ measurements: {}, rules: null, rulesContextKey: null })
+  }, [measurementContextKey])
+
   const pingTestQuery = useMemo(() => {
-    const url = pingTestUrl.trim() || DEFAULT_PING_TEST_URL
-    const timeout = Number.isFinite(pingTestTimeout) && pingTestTimeout > 0 ? Math.trunc(pingTestTimeout) : DEFAULT_PING_TEST_TIMEOUT
-    return `url=${encodeURIComponent(url)}&timeout=${timeout}`
-  }, [pingTestTimeout, pingTestUrl])
+    return `url=${encodeURIComponent(benchmarkUrl)}&timeout=${benchmarkTimeout}`
+  }, [benchmarkTimeout, benchmarkUrl])
 
   const clearFixedSelection = useCallback(
     async (selectorName: string) => {
@@ -1560,9 +1751,9 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
   )
 
   const requestProxyDelay = useCallback(
-    async (proxyName: string) => {
+    async (proxyName: string, snapshot = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>) => {
       try {
-        const providerName = (useProxiesStore.getState().proxies[proxyName] as ProxyInfo | undefined)?.['provider-name']
+        const providerName = (snapshot[proxyName] as ProxyInfo | undefined)?.['provider-name']
         const endpoint = providerName
           ? `providers/proxies/${encodeURIComponent(providerName)}/${encodeURIComponent(proxyName)}/healthcheck?${pingTestQuery}`
           : `proxies/${encodeURIComponent(proxyName)}/delay?${pingTestQuery}`
@@ -1577,6 +1768,177 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       }
     },
     [clashApiPort, clashApiSecret, clashApiUnix, pingTestQuery]
+  )
+
+  const fetchPassRoutingSnapshot = useCallback(
+    async (fresh = false): Promise<PassRoutingSnapshot | null> => {
+      const existing = passSnapshotRequests.get(measurementContextKey)
+      if (existing && !fresh) return existing
+
+      const options = {
+        secret: clashApiSecret,
+        unix: clashApiUnix ?? null,
+        retry: false,
+      }
+      const request = Promise.all([
+        clashFetch<{ proxies?: Record<string, unknown> }>(clashApiPort, 'proxies', options),
+        clashFetch<{ rules?: ClashRuleInfo[] }>(clashApiPort, 'rules', options),
+      ])
+        .then(([proxyData, rulesData]) => {
+          if (!proxyData.proxies || !Array.isArray(rulesData.rules)) return null
+          return {
+            proxies: proxyData.proxies as Record<string, ProxyInfo | undefined>,
+            rules: rulesData.rules,
+          }
+        })
+        .catch(() => null)
+
+      if (!fresh) passSnapshotRequests.set(measurementContextKey, request)
+      void request.then(() => {
+        if (passSnapshotRequests.get(measurementContextKey) === request) passSnapshotRequests.delete(measurementContextKey)
+      })
+      return request
+    },
+    [clashApiPort, clashApiSecret, clashApiUnix, measurementContextKey]
+  )
+
+  const requestSequence = useRef(0)
+  const beginRequest = useCallback((proxyName: string) => {
+    const requestId = ++requestSequence.current
+    latestRequestIds.current.set(proxyName, requestId)
+    return requestId
+  }, [])
+
+  useLayoutEffect(() => {
+    measurementContextRef.current = measurementContextKey
+    const invalidate = () => {
+      latestRequestIds.current.clear()
+      latestGroupRequestIds.current.clear()
+      useSelectorsStore.setState({ testingSingle: {}, testingAll: {} })
+    }
+    invalidate()
+    // Observe every transition, including A -> B -> A between async responses.
+    // Delay/history refreshes alone do not invalidate pending tests.
+    const unsubscribe = useProxiesStore.subscribe((state, previous) => {
+      const names = new Set([...Object.keys(state.proxies), ...Object.keys(previous.proxies)])
+      for (const name of names) {
+        const a = state.proxies[name] as ProxyInfo | undefined
+        const b = previous.proxies[name] as ProxyInfo | undefined
+        if (a?.now !== b?.now || a?.type !== b?.type) {
+          invalidate()
+          break
+        }
+      }
+    })
+    return () => {
+      unsubscribe()
+      invalidate()
+      measurementContextRef.current = ''
+    }
+  }, [measurementContextKey])
+
+  const runMeasurement = useCallback(
+    async (
+      proxyName: string,
+      requestId: number,
+      contextKey: string,
+      testUrl: string,
+      timeoutMs: number
+    ): Promise<MeasurementAttempt | null> => {
+      const initialProxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
+      const initialSignature = getSelectedPathSignature(proxyName, initialProxies)
+      if (!initialSignature || measurementContextRef.current !== contextKey) return null
+
+      if (isSelectedPassPath(proxyName, initialProxies)) {
+        if (mode !== 'rule') return null
+
+        const snapshot = await fetchPassRoutingSnapshot()
+        if (!snapshot || measurementContextRef.current !== contextKey || latestRequestIds.current.get(proxyName) !== requestId) {
+          return null
+        }
+
+        const plan = resolvePassBootstrapPlan(proxyName, snapshot.proxies, snapshot.rules)
+        if (!plan) return null
+
+        useSelectorsStore.setState({ rules: snapshot.rules, rulesContextKey: contextKey })
+        const currentProxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
+        const currentPlan = resolvePassBootstrapPlan(proxyName, currentProxies, snapshot.rules)
+        if (!currentPlan || currentPlan.signature !== plan.signature) return null
+
+        const delay = await requestProxyDelay(plan.actualProxyName, snapshot.proxies)
+        const after = await fetchPassRoutingSnapshot(true)
+        if (!after || measurementContextRef.current !== contextKey || latestRequestIds.current.get(proxyName) !== requestId) return null
+        useSelectorsStore.setState({ rules: after.rules, rulesContextKey: contextKey })
+        const afterPlan = resolvePassBootstrapPlan(proxyName, after.proxies, after.rules)
+        if (!afterPlan || afterPlan.signature !== plan.signature) return null
+        return {
+          name: proxyName,
+          requestId,
+          contextKey,
+          selectionSignature: plan.signature,
+          delay,
+          testUrl,
+          timeoutMs,
+          kind: 'pass',
+          plan,
+        }
+      }
+
+      return {
+        name: proxyName,
+        requestId,
+        contextKey,
+        selectionSignature: initialSignature,
+        delay: await requestProxyDelay(proxyName, initialProxies),
+        testUrl,
+        timeoutMs,
+        kind: 'normal',
+      }
+    },
+    [fetchPassRoutingSnapshot, mode, requestProxyDelay]
+  )
+
+  const isCurrentAttempt = useCallback((attempt: MeasurementAttempt): boolean => {
+    if (measurementContextRef.current !== attempt.contextKey) return false
+    const proxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
+    const signature =
+      attempt.kind === 'pass'
+        ? (resolvePassBootstrapPlan(
+            attempt.name,
+            proxies,
+            useSelectorsStore.getState().rulesContextKey === attempt.contextKey ? (useSelectorsStore.getState().rules ?? []) : []
+          )?.signature ?? null)
+        : getSelectedPathSignature(attempt.name, proxies)
+    if (!signature) return false
+    return canCommitMeasurement(
+      { contextKey: attempt.contextKey, requestId: attempt.requestId, selectionSignature: attempt.selectionSignature },
+      {
+        contextKey: measurementContextRef.current,
+        requestId: latestRequestIds.current.get(attempt.name) ?? -1,
+        selectionSignature: signature,
+      }
+    )
+  }, [])
+
+  const commitPassMeasurement = useCallback(
+    (attempt: MeasurementAttempt): boolean => {
+      if (attempt.kind !== 'pass' || !attempt.plan || !isCurrentAttempt(attempt)) return false
+      const measurement: PassMeasurement = {
+        delay: attempt.delay,
+        measuredAt: Date.now(),
+        contextKey: attempt.contextKey,
+        selectionSignature: attempt.selectionSignature,
+        initialMatchTarget: attempt.plan.initialMatchTarget,
+        actualProxyName: attempt.plan.actualProxyName,
+        testUrl: attempt.testUrl,
+        timeoutMs: attempt.timeoutMs,
+      }
+      useSelectorsStore.setState((state) => ({
+        measurements: { ...state.measurements, [attempt.name]: measurement },
+      }))
+      return true
+    },
+    [isCurrentAttempt]
   )
 
   const applyDelayResults = useCallback((results: ReadonlyArray<readonly [string, number]>) => {
@@ -1632,6 +1994,9 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       onPickerChange={setActivePickerSelector}
       collapsed={!!collapsedSelectors[name]}
       onToggleCollapse={toggleCollapse}
+      measurementContextKey={measurementContextKey}
+      pingTestUrl={benchmarkUrl}
+      pingTestTimeout={benchmarkTimeout}
     />
   )
 
@@ -1676,17 +2041,46 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   const testSingle = useCallback(
     async (proxyName: string) => {
+      const contextKey = measurementContextKey
+      const testUrl = benchmarkUrl
+      const timeoutMs = benchmarkTimeout
+      const requestId = beginRequest(proxyName)
+      const initialProxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
+      if (isSelectedPassPath(proxyName, initialProxies)) {
+        useSelectorsStore.setState((state) => {
+          const measurements = { ...state.measurements }
+          delete measurements[proxyName]
+          return { measurements }
+        })
+      }
       useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: true } }))
       try {
-        applyDelayResults([[proxyName, await requestProxyDelay(proxyName)]])
-        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
+        const attempt = await runMeasurement(proxyName, requestId, contextKey, testUrl, timeoutMs)
+        if (!attempt || !isCurrentAttempt(attempt)) return
+        if (attempt.kind === 'pass') commitPassMeasurement(attempt)
+        else applyDelayResults([[proxyName, attempt.delay]])
+        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null, () => isCurrentAttempt(attempt))
       } catch {
         /* */
       } finally {
-        useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
+        if (latestRequestIds.current.get(proxyName) === requestId) {
+          useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
+        }
       }
     },
-    [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
+    [
+      applyDelayResults,
+      beginRequest,
+      benchmarkTimeout,
+      benchmarkUrl,
+      clashApiPort,
+      clashApiSecret,
+      clashApiUnix,
+      commitPassMeasurement,
+      isCurrentAttempt,
+      measurementContextKey,
+      runMeasurement,
+    ]
   )
 
   const selectProxy = useCallback(
@@ -1726,28 +2120,71 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
     async (selectorName: string) => {
       const selector = useProxiesStore.getState().proxies[selectorName] as ProxyInfo | undefined
       if (!selector?.all) return
-
+      const groupRequestId = ++requestSequence.current
+      latestGroupRequestIds.current.set(selectorName, groupRequestId)
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: true } }))
 
       try {
         const proxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
-        const results = await Promise.all(
-          selector.all
-            .filter((name) => {
-              const type = proxies[name]?.type?.toLowerCase()
-              return !!type && !NO_DELAY_TYPES.has(type)
+        const targets = selector.all.filter((name) => {
+          const type = proxies[name]?.type?.toLowerCase()
+          return !!type && (!NO_DELAY_TYPES.has(type) || isSelectedPassPath(name, proxies))
+        })
+        const contextKey = measurementContextKey
+        const testUrl = benchmarkUrl
+        const timeoutMs = benchmarkTimeout
+        const requests = targets.map((name) => ({ name, requestId: beginRequest(name) }))
+
+        for (const { name } of requests) {
+          if (isSelectedPassPath(name, proxies)) {
+            useSelectorsStore.setState((state) => {
+              const measurements = { ...state.measurements }
+              delete measurements[name]
+              return { measurements }
             })
-            .map(async (name) => [name, await requestProxyDelay(name)] as const)
+          }
+        }
+
+        const attempts = await mapWithConcurrency(requests, 3, ({ name, requestId }) =>
+          runMeasurement(name, requestId, contextKey, testUrl, timeoutMs)
         )
-        applyDelayResults(results)
-        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
+        const currentAttempts = attempts.filter((attempt): attempt is MeasurementAttempt => !!attempt && isCurrentAttempt(attempt))
+        const ordinaryResults = currentAttempts
+          .filter((attempt) => attempt.kind === 'normal')
+          .map((attempt) => [attempt.name, attempt.delay] as const)
+        applyDelayResults(ordinaryResults)
+        for (const attempt of currentAttempts) {
+          if (attempt.kind === 'pass') commitPassMeasurement(attempt)
+        }
+
+        await fetchClashProxies(
+          clashApiPort,
+          clashApiSecret,
+          true,
+          clashApiUnix ?? null,
+          () => measurementContextRef.current === contextKey && currentAttempts.every((attempt) => isCurrentAttempt(attempt))
+        )
       } catch {
         /* */
       } finally {
-        useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
+        if (latestGroupRequestIds.current.get(selectorName) === groupRequestId) {
+          useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
+        }
       }
     },
-    [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
+    [
+      applyDelayResults,
+      benchmarkTimeout,
+      benchmarkUrl,
+      beginRequest,
+      clashApiPort,
+      clashApiSecret,
+      clashApiUnix,
+      commitPassMeasurement,
+      isCurrentAttempt,
+      measurementContextKey,
+      runMeasurement,
+    ]
   )
 
   const toggleCollapse = useCallback((selectorName: string) => {

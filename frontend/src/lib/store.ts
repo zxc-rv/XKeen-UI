@@ -488,7 +488,13 @@ async function preloadIcons(urls: string[]) {
   }
 }
 
-export async function fetchClashProxies(port: string, secret?: string | null, silent = false, unix?: string | null): Promise<void> {
+export async function fetchClashProxies(
+  port: string,
+  secret?: string | null,
+  silent = false,
+  unix?: string | null,
+  shouldApply?: () => boolean
+): Promise<void> {
   if (!silent) useProxiesStore.setState({ loading: true, error: false })
   try {
     const fetchPair = () =>
@@ -505,6 +511,7 @@ export async function fetchClashProxies(port: string, secret?: string | null, si
       ;[proxiesData, providersData] = await fetchPair()
     }
 
+    if (shouldApply && !shouldApply()) return
     if (proxiesData.proxies) {
       const proxies = { ...proxiesData.proxies }
       const previousProxies = useProxiesStore.getState().proxies
@@ -542,10 +549,10 @@ export async function fetchClashProxies(port: string, secret?: string | null, si
       })
       if (urlsToFetch.size > 0) preloadIcons(Array.from(urlsToFetch))
     } else if (!silent) {
-      useProxiesStore.setState({ loading: false, error: true })
+      if (!shouldApply || shouldApply()) useProxiesStore.setState({ loading: false, error: true })
     }
   } catch {
-    if (!silent) useProxiesStore.setState({ loading: false, error: true })
+    if (!silent && (!shouldApply || shouldApply())) useProxiesStore.setState({ loading: false, error: true })
   }
 }
 
