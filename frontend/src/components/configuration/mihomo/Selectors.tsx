@@ -1161,6 +1161,19 @@ const SelectorRow = memo(function SelectorRow({
                         >
                           {searchOpen ? <IconX size={14} /> : <IconSearch size={14} />}
                         </Button>
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Свернуть окно выбора серверов"
+                          onClick={() => onPickerOpenChange(false)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              onPickerOpenChange(false)
+                            }
+                          }}
+                          className="min-h-6 min-w-8 flex-1 cursor-pointer touch-manipulation rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+                        />
                       </div>
                     </div>
                     <div className="-mt-1 flex shrink-0 flex-col items-center gap-1">
