@@ -3,8 +3,8 @@ import { startCompletion } from '@codemirror/autocomplete'
 import { foldedRanges, foldEffect, syntaxHighlighting, unfoldEffect } from '@codemirror/language'
 import { setDiagnostics } from '@codemirror/lint'
 import { selectSelectionMatches } from '@codemirror/search'
-import { Compartment, EditorSelection, EditorState, Prec, type Extension } from '@codemirror/state'
-import { EditorView, keymap, lineNumbers } from '@codemirror/view'
+import { Compartment, EditorSelection, EditorState, Prec, StateEffect, StateField, type Extension } from '@codemirror/state'
+import { Decoration, EditorView, keymap, lineNumbers, type DecorationSet } from '@codemirror/view'
 import { indentationMarkers } from '@replit/codemirror-indentation-markers'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -28,6 +28,28 @@ interface SavedViewState {
   folds: { from: number; to: number }[]
   history?: unknown
 }
+
+const sectionNavigationHighlightEffect = StateEffect.define<{ line: number; fading: boolean } | null>()
+const sectionNavigationHighlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update: (decorations, transaction) => {
+    let next = decorations.map(transaction.changes)
+    for (const effect of transaction.effects) {
+      if (!effect.is(sectionNavigationHighlightEffect)) continue
+      if (effect.value === null) {
+        next = Decoration.none
+      } else {
+        const line = transaction.state.doc.line(clamp(effect.value.line, 1, transaction.state.doc.lines))
+        const className = effect.value.fading
+          ? 'cm-section-navigation-target cm-section-navigation-target-fading'
+          : 'cm-section-navigation-target'
+        next = Decoration.set([Decoration.line({ class: className }).range(line.from)])
+      }
+    }
+    return next
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
 
 export interface CodeMirrorRef {
   getValue: () => string
@@ -87,6 +109,8 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   const lastValidationRef = useRef<{ isValid: boolean; error?: string } | null>(null)
   const extensionsRef = useRef<Extension[]>([])
   const { searchPanel, bridge: searchBridge } = useEditorSearch(viewRef)
+  const sectionHighlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sectionHighlightFadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useLayoutEffect(() => {
     onContentChangeRef.current = onContentChange
@@ -108,6 +132,19 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
   const createExtensions = useCallback(
     (darkTheme: boolean): Extension[] => [
       ...baseSetup,
+      sectionNavigationHighlightField,
+      EditorView.baseTheme({
+        '.cm-line.cm-section-navigation-target': {
+          backgroundColor: 'color-mix(in srgb, var(--primary) 16%, transparent)',
+          boxShadow: 'inset 2px 0 var(--primary)',
+          borderRadius: '2px',
+          transition: 'background-color 220ms ease-out, box-shadow 220ms ease-out',
+        },
+        '.cm-line.cm-section-navigation-target-fading': {
+          backgroundColor: 'transparent',
+          boxShadow: 'inset 2px 0 transparent',
+        },
+      }),
       configAutocompletion(() => ({ file: filenameRef.current, language: languageRef.current })),
       createSearchExtension(searchBridge),
       Prec.highest(
@@ -384,16 +421,23 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorRef, Props>(({ onContentCha
         if (!view) return
         const safeLine = clamp(line, 1, view.state.doc.lines)
         const lineOffset = view.state.doc.line(safeLine).from
+        const block = view.lineBlockAt(lineOffset)
+        const targetTop = Math.max(0, block.top - Math.max(0, (view.scrollDOM.clientHeight - block.height) / 2))
+        view.scrollDOM.scrollTo({ top: targetTop, behavior: 'smooth' })
+        view.dispatch({ effects: sectionNavigationHighlightEffect.of({ line: safeLine, fading: false }) })
 
-        view.scrollDOM.style.scrollBehavior = 'smooth'
-
-        view.dispatch({
-          effects: EditorView.scrollIntoView(lineOffset, { y: 'center' }),
-        })
-
-        setTimeout(() => {
-          if (view.scrollDOM) view.scrollDOM.style.scrollBehavior = 'auto'
-        }, 500)
+        if (sectionHighlightTimeoutRef.current) clearTimeout(sectionHighlightTimeoutRef.current)
+        if (sectionHighlightFadeTimeoutRef.current) clearTimeout(sectionHighlightFadeTimeoutRef.current)
+        sectionHighlightTimeoutRef.current = setTimeout(() => {
+          if (viewRef.current === view) {
+            view.dispatch({ effects: sectionNavigationHighlightEffect.of({ line: safeLine, fading: true }) })
+            sectionHighlightFadeTimeoutRef.current = setTimeout(() => {
+              if (viewRef.current === view) view.dispatch({ effects: sectionNavigationHighlightEffect.of(null) })
+              sectionHighlightFadeTimeoutRef.current = null
+            }, 220)
+          }
+          sectionHighlightTimeoutRef.current = null
+        }, 1400)
       },
     }),
     [createExtensions, format, runValidation]

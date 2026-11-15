@@ -64,7 +64,7 @@ import { ConfigHistoryView } from '../modals/ConfigHistory'
 import { ProvidersModal } from '../modals/Providers'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Popover, PopoverContent } from '../ui/popover'
 import type { CodeMirrorRef } from './CodeMirror'
 
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
@@ -74,6 +74,7 @@ const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'Connect
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
 import { SelectorDisplaySettings } from './mihomo/SelectorDisplaySettings'
+import { getMihomoSectionHeaderLine, getMihomoSections, type MihomoSectionKey } from './mihomo/sectionNavigation'
 import { Kbd } from '../ui/kbd'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
 
@@ -131,6 +132,7 @@ interface ConfigTabProps {
   withContextMenu?: boolean
   onHideFile?: (file: string) => void
   onOpenHistory: (file: string) => void
+  onNavigateToSection: (file: string, section: MihomoSectionKey) => void
 }
 
 type DialogState =
@@ -139,9 +141,20 @@ type DialogState =
   | { type: 'delete'; file: string }
   | null
 
-function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFile, onOpenHistory, withContextMenu = false }: ConfigTabProps) {
+function ConfigTab({
+  config,
+  currentCore,
+  showToast,
+  onRefreshConfigs,
+  onHideFile,
+  onOpenHistory,
+  onNavigateToSection,
+  withContextMenu = false,
+}: ConfigTabProps) {
   const [dialogData, setDialogData] = useState<DialogState>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const [sectionMenuOpen, setSectionMenuOpen] = useState(false)
+  const sectionMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingInputFocusRef = useRef(false)
@@ -149,6 +162,65 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const isCoreMihomo = currentCore === 'mihomo'
+  const availableSections = isCoreMihomo && config.file.toLowerCase().endsWith('.yaml') && !isXkeenFile(config.file)
+    ? getMihomoSections(config.content)
+    : []
+  const tabsTrigger = (
+    <TabsTrigger value={config.file} className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!">
+      {config.file
+        .split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '')}
+      {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
+    </TabsTrigger>
+  )
+
+  const closeSectionMenuSoon = () => {
+    if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
+    sectionMenuCloseTimerRef.current = setTimeout(() => setSectionMenuOpen(false), 240)
+  }
+  const keepSectionMenuOpen = () => {
+    if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
+    sectionMenuCloseTimerRef.current = null
+    setSectionMenuOpen(true)
+  }
+  useEffect(() => () => {
+    if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
+  }, [])
+
+  const sectionNavigation = availableSections.length > 0 ? (
+    <DropdownMenu open={sectionMenuOpen} onOpenChange={setSectionMenuOpen}>
+      <DropdownMenuTrigger
+        render={
+          <TooltipTrigger
+            render={<span className="inline-flex" onPointerEnter={keepSectionMenuOpen} onPointerLeave={closeSectionMenuSoon}>{tabsTrigger}</span>}
+          />
+        }
+      />
+      <DropdownMenuContent
+        align="start"
+        side="bottom"
+        sideOffset={5}
+        className="w-52 min-w-52"
+        onPointerEnter={keepSectionMenuOpen}
+        onPointerLeave={closeSectionMenuSoon}
+      >
+        {availableSections.map((section) => (
+          <DropdownMenuItem
+            key={section}
+            onSelect={() => {
+              setSectionMenuOpen(false)
+              onNavigateToSection(config.file, section)
+            }}
+          >
+            {section}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : (
+    <TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />
+  )
 
   const openDialog = (value: NonNullable<DialogState>) => {
     pendingInputFocusRef.current = value.type !== 'delete'
@@ -195,20 +267,10 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
 
   const isProtected = config.file.endsWith('/config.yaml') || config.file === 'config.yaml'
 
-  const tabsTrigger = (
-    <TabsTrigger value={config.file} className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!">
-      {config.file
-        .split('/')
-        .pop()
-        ?.replace(/\.[^.]+$/, '')}
-      {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
-    </TabsTrigger>
-  )
-
   if (!withContextMenu)
     return (
       <Tooltip>
-        <TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />
+        {sectionNavigation}
         <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
       </Tooltip>
     )
@@ -223,7 +285,7 @@ function ConfigTab({ config, currentCore, showToast, onRefreshConfigs, onHideFil
       <ContextMenu>
         <ContextMenuTrigger className="contents">
           <Tooltip>
-            <PopoverTrigger render={<TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />} />
+            {sectionNavigation}
             <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
           </Tooltip>
         </ContextMenuTrigger>
@@ -367,6 +429,7 @@ export function ConfigPanel({
     return firstVisible >= 0 ? firstVisible : 0
   }, [configs, activeConfigFile, hiddenConfigFiles])
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
+  const [pendingSectionJump, setPendingSectionJump] = useState<{ file: string; section: MihomoSectionKey } | null>(null)
 
   const [isEditorMounted, setIsEditorMounted] = useState(false)
 
@@ -590,6 +653,25 @@ export function ConfigPanel({
     },
     [saveViewState]
   )
+
+  const navigateToSection = useCallback(
+    (file: string, section: MihomoSectionKey) => {
+      const index = configsRef.current.findIndex((config) => config.file === file)
+      if (index < 0) return
+      setPendingSectionJump({ file, section })
+      if (index !== activeIndexRef.current) switchTab(index)
+      setActivePanel('config')
+      setMountedPanels((previous) => (previous.has('config') ? previous : new Set([...previous, 'config'])))
+    },
+    [switchTab]
+  )
+
+  useEffect(() => {
+    if (!pendingSectionJump || !isEditorMounted || currentPanel !== 'config' || activeConfig?.file !== pendingSectionJump.file) return
+    const line = getMihomoSectionHeaderLine(activeConfig.content, pendingSectionJump.section)
+    setPendingSectionJump(null)
+    if (line !== null) requestAnimationFrame(() => editorRef.current?.revealLine(line))
+  }, [activeConfig?.content, activeConfig?.file, currentPanel, editorRef, isEditorMounted, pendingSectionJump])
 
   useEffect(() => {
     configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
@@ -1129,6 +1211,7 @@ export function ConfigPanel({
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
                             onOpenHistory={openConfigHistory}
+                            onNavigateToSection={navigateToSection}
                             onHideFile={(file) => void hideConfigFile(file)}
                             withContextMenu
                           />
@@ -1145,6 +1228,7 @@ export function ConfigPanel({
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
                             onOpenHistory={openConfigHistory}
+                            onNavigateToSection={navigateToSection}
                           />
                         ))}
                       </TabsList>
