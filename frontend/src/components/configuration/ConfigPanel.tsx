@@ -127,6 +127,7 @@ interface Props {
 interface ConfigTabProps {
   config: Config
   currentCore: string
+  isActive: boolean
   showToast: (msg: string, type?: 'success' | 'error') => void
   onRefreshConfigs: () => Promise<Config[]>
   withContextMenu?: boolean
@@ -144,6 +145,7 @@ type DialogState =
 function ConfigTab({
   config,
   currentCore,
+  isActive,
   showToast,
   onRefreshConfigs,
   onHideFile,
@@ -154,19 +156,52 @@ function ConfigTab({
   const [dialogData, setDialogData] = useState<DialogState>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [sectionMenuOpen, setSectionMenuOpen] = useState(false)
+  const contextMenuOpenRef = useRef(false)
   const sectionMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sectionHoverSessionRef = useRef(false)
+  const touchStartedOnActiveConfigRef = useRef(false)
+  const sectionTabRef = useRef<HTMLButtonElement>(null)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingInputFocusRef = useRef(false)
   const [inputValue, setInputValue] = useState('')
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
   const isCoreMihomo = currentCore === 'mihomo'
-  const availableSections = isCoreMihomo && config.file.toLowerCase().endsWith('.yaml') && !isXkeenFile(config.file)
+  const isMainMihomoConfig = config.file.split('/').pop()?.toLowerCase() === 'config.yaml'
+  const availableSections = isCoreMihomo && isMainMihomoConfig && !isXkeenFile(config.file)
     ? getMihomoSections(config.content)
     : []
   const tabsTrigger = (
-    <TabsTrigger value={config.file} className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!">
+    <TabsTrigger
+      ref={availableSections.length > 0 ? sectionTabRef : undefined}
+      value={config.file}
+      className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!"
+      onPointerEnter={(event) => {
+        if (event.pointerType === 'mouse' && isActive) {
+          sectionHoverSessionRef.current = true
+          keepSectionMenuOpen()
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === 'mouse' && isActive) closeSectionMenuSoon()
+      }}
+      onPointerDown={(event) => {
+        touchStartedOnActiveConfigRef.current = event.pointerType !== 'mouse' && isActive
+      }}
+      onClick={(event) => {
+        const openFromSecondTouchTap = isTouchDevice && event.detail > 0 && touchStartedOnActiveConfigRef.current
+        touchStartedOnActiveConfigRef.current = false
+        if (openFromSecondTouchTap && !contextMenuOpenRef.current) setSectionMenuOpen(true)
+      }}
+      onKeyDown={(event) => {
+        if (isActive && !contextMenuOpenRef.current && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+          event.preventDefault()
+          setSectionMenuOpen(true)
+        }
+      }}
+    >
       {config.file
         .split('/')
         .pop()
@@ -177,7 +212,10 @@ function ConfigTab({
 
   const closeSectionMenuSoon = () => {
     if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
-    sectionMenuCloseTimerRef.current = setTimeout(() => setSectionMenuOpen(false), 240)
+    sectionMenuCloseTimerRef.current = setTimeout(() => {
+      sectionHoverSessionRef.current = false
+      setSectionMenuOpen(false)
+    }, 500)
   }
   const keepSectionMenuOpen = () => {
     if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
@@ -189,21 +227,30 @@ function ConfigTab({
   }, [])
 
   const sectionNavigation = availableSections.length > 0 ? (
-    <DropdownMenu open={sectionMenuOpen} onOpenChange={setSectionMenuOpen}>
-      <DropdownMenuTrigger
-        render={
-          <TooltipTrigger
-            render={<span className="inline-flex" onPointerEnter={keepSectionMenuOpen} onPointerLeave={closeSectionMenuSoon}>{tabsTrigger}</span>}
-          />
-        }
-      />
+    <DropdownMenu
+      open={sectionMenuOpen}
+      modal={false}
+      onOpenChange={(open, details) => {
+        if (!open && details.reason === 'focus-out' && sectionHoverSessionRef.current) return
+        setSectionMenuOpen(open)
+      }}
+    >
+      {tabsTrigger}
       <DropdownMenuContent
+        anchor={sectionTabRef}
         align="start"
         side="bottom"
         sideOffset={5}
         className="w-52 min-w-52"
-        onPointerEnter={keepSectionMenuOpen}
-        onPointerLeave={closeSectionMenuSoon}
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') {
+            sectionHoverSessionRef.current = true
+            keepSectionMenuOpen()
+          }
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') closeSectionMenuSoon()
+        }}
       >
         {availableSections.map((section) => (
           <DropdownMenuItem
@@ -269,10 +316,14 @@ function ConfigTab({
 
   if (!withContextMenu)
     return (
-      <Tooltip>
-        {sectionNavigation}
-        <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
-      </Tooltip>
+      availableSections.length > 0 ? (
+        sectionNavigation
+      ) : (
+        <Tooltip>
+          {sectionNavigation}
+          <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
+        </Tooltip>
+      )
     )
 
   return (
@@ -282,12 +333,21 @@ function ConfigTab({
         if (!open) setPopoverOpen(false)
       }}
     >
-      <ContextMenu>
+      <ContextMenu
+        onOpenChange={(open) => {
+          contextMenuOpenRef.current = open
+          if (open) setSectionMenuOpen(false)
+        }}
+      >
         <ContextMenuTrigger className="contents">
-          <Tooltip>
-            {sectionNavigation}
-            <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
-          </Tooltip>
+          {availableSections.length > 0 ? (
+            sectionNavigation
+          ) : (
+            <Tooltip>
+              {sectionNavigation}
+              <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
+            </Tooltip>
+          )}
         </ContextMenuTrigger>
         <ContextMenuContent
           className="min-w-48"
@@ -1208,6 +1268,7 @@ export function ConfigPanel({
                             key={config.file}
                             config={config}
                             currentCore={currentCore}
+                            isActive={config.file === activeConfigFile}
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
                             onOpenHistory={openConfigHistory}
@@ -1225,6 +1286,7 @@ export function ConfigPanel({
                             key={config.file}
                             config={config}
                             currentCore={currentCore}
+                            isActive={config.file === activeConfigFile}
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
                             onOpenHistory={openConfigHistory}
