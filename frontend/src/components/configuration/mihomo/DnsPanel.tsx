@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle, IconSearch, IconTrash, IconX } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
-import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
+import { isMap, isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { apiCall, clashFetch } from '../../../lib/api'
 import { useAppContext, useDnsStatusStore, fetchDnsStatus } from '../../../lib/store'
@@ -237,7 +237,12 @@ export function patchDnsConfig(content: string, config: DnsConfig): string {
   setOrDeleteList(doc, ['dns', 'proxy-server-nameserver'], parseList(config.proxyServerNameserver))
   setOrDeleteList(doc, ['dns', 'fallback'], parseList(config.fallback))
 
-  if (!doc.hasIn(['dns', 'fallback-filter'])) doc.setIn(['dns', 'fallback-filter'], { geoip: false })
+  const fallbackFilter = doc.getIn(['dns', 'fallback-filter'], true)
+  if (isMap(fallbackFilter)) {
+    if (!fallbackFilter.has('fallback-lazy-query')) fallbackFilter.set('fallback-lazy-query', true)
+  } else {
+    doc.setIn(['dns', 'fallback-filter'], { geoip: false, 'fallback-lazy-query': true })
+  }
 
   return trimFlowSeqPadding(doc.toString({ lineWidth: YAML_LINE_WIDTH }))
 }
