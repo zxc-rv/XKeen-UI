@@ -1730,7 +1730,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   const sortItems = Object.fromEntries(sortOptions.map(([column, direction, label]) => [`${column}:${direction}`, label]))
 
   return (
-    <div className="absolute inset-x-0 top-2.5 bottom-0 flex min-h-0 flex-col gap-2 md:hidden">
+    <div className="absolute inset-x-0 top-1.5 bottom-0 flex min-h-0 flex-col gap-2 md:hidden">
       <div className="border-border bg-input-background mx-2.5 flex shrink-0 flex-col gap-2 rounded-xl border p-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <Tabs value={activeTab === 'all' ? 'active' : activeTab} onValueChange={(v) => onTabChange(v as 'active' | 'closed')}>
@@ -1815,7 +1815,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
           </Select>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-[4.5rem]">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-20">
         {connections.length ? (
           <div className="flex flex-col gap-2">
             {connections.slice(0, visibleLimit).map(({ conn, closed }) => (

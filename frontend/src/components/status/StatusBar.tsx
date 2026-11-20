@@ -252,7 +252,7 @@ export function StatusBar({
           data-slot="status-bar"
           data-style={settings.statusBarStyle}
           className={cn(
-            'border-border bg-card relative z-40 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border-0 px-3 pt-1.5 pb-3 sm:px-4 md:flex-row md:flex-nowrap md:border md:py-3',
+            'border-border bg-card relative z-40 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border-0 px-2.5 pt-1.5 pb-3 sm:px-4 md:flex-row md:flex-nowrap md:border md:py-3',
             className
           )}
         >
@@ -388,7 +388,7 @@ export function StatusBar({
           </div>
 
           {/* Правая сторона */}
-          <div className="order-3 ml-auto flex w-full items-center justify-center gap-1.5 md:w-auto md:justify-end">
+          <div className="order-3 ml-auto flex w-full items-center justify-start gap-1.5 md:w-auto md:justify-end">
             {isConfigsLoading || !version ? (
               <Skeleton className="h-9 w-35.75" />
             ) : (

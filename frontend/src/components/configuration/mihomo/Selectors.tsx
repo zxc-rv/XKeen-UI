@@ -1055,20 +1055,20 @@ const SelectorRow = memo(function SelectorRow({
         aria-label={`Открыть селектор ${selectorName}`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className='border-border bg-input-background hover:bg-input-background-hover! flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors sm:px-3 sm:pt-2.5 sm:pb-3'
+        className="border-border bg-input-background hover:bg-input-background-hover! relative flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors sm:px-3 sm:pt-2.5 sm:pb-3"
       >
-        <span className="flex min-w-0 items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center justify-between gap-2 pr-10">
           <span className="truncate text-[15px] font-medium">{selectorName}</span>
           {selector.icon && (
             <img
               src={selector.icon}
               alt=""
-              className="size-8 shrink-0 rounded-sm object-contain"
+              className="absolute top-2 right-2.5 size-8 shrink-0 rounded-sm object-contain sm:top-2.5 sm:right-3"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
           )}
         </span>
-        <span className="text-muted-foreground truncate text-[10px] tracking-wide uppercase">
+        <span className="text-muted-foreground truncate pr-10 text-[10px] tracking-wide uppercase">
           {selector.type} ({filteredSortedProxies.length}
           {allProxies.length !== filteredSortedProxies.length ? `/${allProxies.length}` : ''})
         </span>
@@ -1915,7 +1915,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-x-2.5 inset-y-4 scrollbar-thin overflow-y-auto pb-20 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] md:inset-4 md:pb-0">
+      <div className="absolute inset-x-2.5 top-2.5 bottom-4 scrollbar-thin overflow-y-auto pb-16 md:inset-4 md:pb-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]">
         {display === 'columns' || display === 'tiles' ? (
           <div className="flex items-start gap-4">
             {selectorColumns.map((column, index) => (
@@ -1928,7 +1928,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
           <div
             className={cn(
               'min-w-0',
-              display === 'popup' ? 'grid grid-cols-2 content-start items-start gap-2 sm:gap-4 xl:grid-cols-3' : 'flex flex-col gap-4'
+              display === 'popup' ? 'grid grid-cols-2 content-start items-start gap-2.5 xl:grid-cols-3' : 'flex flex-col gap-4'
             )}
           >
             {selectorColumns[0].map(renderSelector)}

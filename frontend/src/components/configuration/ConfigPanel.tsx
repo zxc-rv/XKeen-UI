@@ -1282,7 +1282,7 @@ export function ConfigPanel({
           )}
 
           {!isLogPanel && (!isMihomo || currentPanel === 'config') && (
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-2.5 pb-[4.5rem] md:px-4 md:pb-4">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-1.5 px-2.5 pb-20 md:px-4 md:pb-4">
               <div className="min-w-0 text-xs">
                 {isConfigsLoading ? (
                   <Skeleton className="h-4 w-30" />

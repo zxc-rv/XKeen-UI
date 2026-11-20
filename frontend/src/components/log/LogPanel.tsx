@@ -354,7 +354,7 @@ export function LogPanel({ embedded = false }: { embedded?: boolean }) {
               )}
               {panelTab === 'journal' && (
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <div className="relative flex min-w-30 flex-1 items-center sm:flex-none">
+                  <div className="relative flex min-w-30 items-center">
                     <InputGroup className="w-40">
                       <InputGroupInput
                         placeholder="Фильтр"
@@ -384,7 +384,7 @@ export function LogPanel({ embedded = false }: { embedded?: boolean }) {
                     </InputGroup>
                   </div>
                   <Select value={currentFile} onValueChange={switchFile}>
-                    <SelectTrigger className="md:w-33">
+                    <SelectTrigger className="min-w-0 flex-1 md:flex-none md:w-33">
                       <SelectValue />
                     </SelectTrigger>
 
@@ -454,7 +454,7 @@ export function LogPanel({ embedded = false }: { embedded?: boolean }) {
               forceMount={multiRouter || undefined}
               className="relative mt-0 min-h-0 flex-1 data-[state=inactive]:hidden"
             >
-              <div className="bg-input-background absolute inset-x-2.5 top-2.5 bottom-4 overflow-hidden rounded-md border md:inset-4">
+              <div className="bg-input-background absolute inset-x-2.5 top-2.5 bottom-2 overflow-hidden rounded-md border md:inset-4">
                 {isEmpty && (
                   <Empty className="h-full gap-0">
                     <EmptyMedia variant="icon" className="size-8.5">
