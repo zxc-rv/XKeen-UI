@@ -30,15 +30,16 @@ function DropdownMenuContent({
   alignOffset,
   side,
   sideOffset = 4,
+  anchor,
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Popup> &
-  Pick<DropdownMenuPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset'> & {
+  Pick<DropdownMenuPrimitive.Positioner.Props, 'align' | 'alignOffset' | 'side' | 'sideOffset' | 'anchor'> & {
     onCloseAutoFocus?: (event: Event) => void
   }) {
   return (
     <DropdownMenuPrimitive.Portal>
-      <DropdownMenuPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} alignOffset={alignOffset} className="isolate z-50 outline-none">
+      <DropdownMenuPrimitive.Positioner anchor={anchor} sideOffset={sideOffset} side={side} align={align} alignOffset={alignOffset} className="isolate z-50 outline-none">
         <DropdownMenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           finalFocus={onCloseAutoFocus ? () => null : undefined}

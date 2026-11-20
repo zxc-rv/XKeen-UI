@@ -69,7 +69,7 @@ import { ConfigHistoryView } from '../modals/ConfigHistory'
 import { ProvidersModal } from '../modals/Providers'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { Popover, PopoverContent } from '../ui/popover'
 import type { CodeMirrorRef } from './CodeMirror'
 
 const GuiRouting = lazyLoad(() => import('./xray/GuiRouting'), 'GuiRouting')
@@ -78,6 +78,7 @@ const GuiOutbounds = lazyLoad(() => import('./xray/GuiOutbounds'), 'GuiOutbounds
 const ConnectionsPanel = lazyLoad(() => import('./mihomo/Connections'), 'ConnectionsPanel')
 const SelectorsPanel = lazyLoad(() => import('./mihomo/Selectors'), 'SelectorsPanel')
 import { DnsPanel } from './mihomo/DnsPanel'
+import { getMihomoSectionHeaderLine, getMihomoSections, type MihomoSectionKey } from './mihomo/sectionNavigation'
 import { DISPLAY_EVENT, readSelectorDisplay, SelectorDisplaySettings } from './mihomo/SelectorDisplaySettings'
 import { Kbd } from '../ui/kbd'
 const CodeMirrorEditorLazy = lazyLoad(() => import('./CodeMirror'), 'CodeMirrorEditor')
@@ -133,11 +134,13 @@ interface Props {
 interface ConfigTabProps {
   config: Config
   currentCore: string
+  isActive: boolean
   showToast: (msg: string, type?: 'success' | 'error') => void
   onRefreshConfigs: () => Promise<Config[]>
   withContextMenu?: boolean
   onHideFile?: (file: string) => void
   onOpenHistory: (file: string) => void
+  onNavigateToSection: (file: string, section: MihomoSectionKey) => void
 }
 
 type DialogState =
@@ -149,21 +152,129 @@ type DialogState =
 function ConfigTab({
   config,
   currentCore,
+  isActive,
   showToast,
   onRefreshConfigs,
   onHideFile,
   onOpenHistory,
+  onNavigateToSection,
   withContextMenu = false,
 }: ConfigTabProps) {
   const [dialogData, setDialogData] = useState<DialogState>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const [sectionMenuOpen, setSectionMenuOpen] = useState(false)
+  const contextMenuOpenRef = useRef(false)
+  const sectionMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sectionHoverSessionRef = useRef(false)
+  const touchStartedOnActiveConfigRef = useRef(false)
+  const sectionTabRef = useRef<HTMLButtonElement>(null)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingInputFocusRef = useRef(false)
   const [inputValue, setInputValue] = useState('')
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
   const isCoreMihomo = currentCore === 'mihomo'
+  const isMainMihomoConfig = config.file.split('/').pop()?.toLowerCase() === 'config.yaml'
+  const availableSections = isCoreMihomo && isMainMihomoConfig && !isXkeenFile(config.file)
+    ? getMihomoSections(config.content)
+    : []
+  const tabsTrigger = (
+    <TabsTrigger
+      ref={availableSections.length > 0 ? sectionTabRef : undefined}
+      value={config.file}
+      className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!"
+      onPointerEnter={(event) => {
+        if (event.pointerType === 'mouse' && isActive) {
+          sectionHoverSessionRef.current = true
+          keepSectionMenuOpen()
+        }
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType === 'mouse' && isActive) closeSectionMenuSoon()
+      }}
+      onPointerDown={(event) => {
+        touchStartedOnActiveConfigRef.current = event.pointerType !== 'mouse' && isActive
+      }}
+      onClick={(event) => {
+        const openFromSecondTouchTap = isTouchDevice && event.detail > 0 && touchStartedOnActiveConfigRef.current
+        touchStartedOnActiveConfigRef.current = false
+        if (openFromSecondTouchTap && !contextMenuOpenRef.current) setSectionMenuOpen(true)
+      }}
+      onKeyDown={(event) => {
+        if (isActive && !contextMenuOpenRef.current && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+          event.preventDefault()
+          setSectionMenuOpen(true)
+        }
+      }}
+    >
+      {config.file
+        .split('/')
+        .pop()
+        ?.replace(/\.[^.]+$/, '')}
+      {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
+    </TabsTrigger>
+  )
+
+  const closeSectionMenuSoon = () => {
+    if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
+    sectionMenuCloseTimerRef.current = setTimeout(() => {
+      sectionHoverSessionRef.current = false
+      setSectionMenuOpen(false)
+    }, 500)
+  }
+  const keepSectionMenuOpen = () => {
+    if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
+    sectionMenuCloseTimerRef.current = null
+    setSectionMenuOpen(true)
+  }
+  useEffect(() => () => {
+    if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
+  }, [])
+
+  const sectionNavigation = availableSections.length > 0 ? (
+    <DropdownMenu
+      open={sectionMenuOpen}
+      modal={false}
+      onOpenChange={(open, details) => {
+        if (!open && details.reason === 'focus-out' && sectionHoverSessionRef.current) return
+        setSectionMenuOpen(open)
+      }}
+    >
+      {tabsTrigger}
+      <DropdownMenuContent
+        anchor={sectionTabRef}
+        align="start"
+        side="bottom"
+        sideOffset={5}
+        className="w-52 min-w-52"
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') {
+            sectionHoverSessionRef.current = true
+            keepSectionMenuOpen()
+          }
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') closeSectionMenuSoon()
+        }}
+      >
+        {availableSections.map((section) => (
+          <DropdownMenuItem
+            key={section}
+            onSelect={() => {
+              setSectionMenuOpen(false)
+              onNavigateToSection(config.file, section)
+            }}
+          >
+            {section}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : (
+    <TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />
+  )
 
   const openDialog = (value: NonNullable<DialogState>) => {
     pendingInputFocusRef.current = value.type !== 'delete'
@@ -210,22 +321,16 @@ function ConfigTab({
 
   const isProtected = config.file.endsWith('/config.yaml') || config.file === 'config.yaml'
 
-  const tabsTrigger = (
-    <TabsTrigger value={config.file} className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!">
-      {config.file
-        .split('/')
-        .pop()
-        ?.replace(/\.[^.]+$/, '')}
-      {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
-    </TabsTrigger>
-  )
-
   if (!withContextMenu)
     return (
-      <Tooltip>
-        <TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />
-        <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
-      </Tooltip>
+      availableSections.length > 0 ? (
+        sectionNavigation
+      ) : (
+        <Tooltip>
+          {sectionNavigation}
+          <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
+        </Tooltip>
+      )
     )
 
   return (
@@ -235,12 +340,21 @@ function ConfigTab({
         if (!open) setPopoverOpen(false)
       }}
     >
-      <ContextMenu>
+      <ContextMenu
+        onOpenChange={(open) => {
+          contextMenuOpenRef.current = open
+          if (open) setSectionMenuOpen(false)
+        }}
+      >
         <ContextMenuTrigger className="contents">
-          <Tooltip>
-            <PopoverTrigger render={<TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />} />
-            <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
-          </Tooltip>
+          {availableSections.length > 0 ? (
+            sectionNavigation
+          ) : (
+            <Tooltip>
+              {sectionNavigation}
+              <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
+            </Tooltip>
+          )}
         </ContextMenuTrigger>
         <ContextMenuContent
           className="min-w-48"
@@ -391,6 +505,7 @@ export function ConfigPanel({
     return firstVisible >= 0 ? firstVisible : 0
   }, [configs, activeConfigFile, hiddenConfigFiles])
   const [validationState, setValidationState] = useState<{ isValid: boolean; error?: string } | null>(null)
+  const [pendingSectionJump, setPendingSectionJump] = useState<{ file: string; section: MihomoSectionKey } | null>(null)
 
   const [isEditorMounted, setIsEditorMounted] = useState(false)
 
@@ -643,6 +758,25 @@ export function ConfigPanel({
     },
     [saveViewState]
   )
+
+  const navigateToSection = useCallback(
+    (file: string, section: MihomoSectionKey) => {
+      const index = configsRef.current.findIndex((config) => config.file === file)
+      if (index < 0) return
+      setPendingSectionJump({ file, section })
+      if (index !== activeIndexRef.current) switchTab(index)
+      setActivePanel('config')
+      setMountedPanels((previous) => (previous.has('config') ? previous : new Set([...previous, 'config'])))
+    },
+    [switchTab]
+  )
+
+  useEffect(() => {
+    if (!pendingSectionJump || !isEditorMounted || currentPanel !== 'config' || activeConfig?.file !== pendingSectionJump.file) return
+    const line = getMihomoSectionHeaderLine(activeConfig.content, pendingSectionJump.section)
+    setPendingSectionJump(null)
+    if (line !== null) requestAnimationFrame(() => editorRef.current?.revealLine(line))
+  }, [activeConfig?.content, activeConfig?.file, currentPanel, editorRef, isEditorMounted, pendingSectionJump])
 
   useEffect(() => {
     configActionsRef.current = { switchTab, getActiveIndex: () => activeIndexRef.current }
@@ -1189,9 +1323,11 @@ export function ConfigPanel({
                             key={config.file}
                             config={config}
                             currentCore={currentCore}
+                            isActive={config.file === activeConfigFile}
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
                             onOpenHistory={openConfigHistory}
+                            onNavigateToSection={navigateToSection}
                             onHideFile={(file) => void hideConfigFile(file)}
                             withContextMenu
                           />
@@ -1205,9 +1341,11 @@ export function ConfigPanel({
                             key={config.file}
                             config={config}
                             currentCore={currentCore}
+                            isActive={config.file === activeConfigFile}
                             showToast={showToast}
                             onRefreshConfigs={refreshConfigsAndEditor}
                             onOpenHistory={openConfigHistory}
+                            onNavigateToSection={navigateToSection}
                           />
                         ))}
                       </TabsList>
