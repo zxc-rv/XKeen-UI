@@ -2041,7 +2041,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   return (
     <TooltipProvider delayDuration={500} skipDelayDuration={0}>
       <div
-        className={`border-border bg-input-background absolute inset-4 flex flex-col overflow-hidden rounded-xl border ${showMobileLayout ? 'hidden md:flex' : ''}`}
+        className={`border-border bg-input-background absolute inset-x-2.5 top-1.5 bottom-20 flex flex-col overflow-hidden rounded-xl border md:inset-4 ${showMobileLayout ? 'hidden md:flex' : ''}`}
       >
         <ConnectionsHeader
           filter={filter}
@@ -2056,7 +2056,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           selectedSourceLabels={sourceFilter}
           onSourceFilterChange={setSourceFilter}
         />
-        <div className="flex min-h-0 flex-1 flex-col scrollbar-thin overflow-auto [&>[data-slot=table-container]]:shrink-0">
+        <div className="flex min-h-0 flex-1 flex-col scrollbar-thin overflow-auto [&>[data-slot=table-container]]:shrink-0 [&>[data-slot=table-container]]:overflow-visible!">
           <Table className="min-w-240 md:min-w-190">
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
             {activeTab === 'active' ? (
