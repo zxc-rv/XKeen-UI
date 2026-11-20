@@ -1356,93 +1356,94 @@ export function ConfigPanel({
             )}
           </div>
 
-          {isLogPanel ? (
+          {/* Keep panels mounted while the log tab is open so switching back doesn't remount them */}
+          <div className={cn('relative min-h-0 flex-1 md:min-h-175!', isLogPanel && 'hidden')}>
+            {isEditorMounted && activeConfig && isRoutingGui && (
+              <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            )}
+            {isEditorMounted && activeConfig && isLogGui && (
+              <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            )}
+            {isEditorMounted && activeConfig && isOutboundsGui && (
+              <GuiOutbounds editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
+            )}
+
+            {isMihomo && (
+              <>
+                {mountedPanels.has('selectors') && (
+                  <div
+                    ref={(el) => {
+                      panelScrollRefs.current.selectors = el
+                    }}
+                    className={cn(currentPanel !== 'selectors' && 'hidden')}
+                  >
+                    <LazyBoundary>
+                      <SelectorsPanel
+                        clashApiPort={(activeClashApiPort ?? '') as string}
+                        mode={mode}
+                        clashApiSecret={clashApiSecret ?? null}
+                        clashApiUnix={activeClashApiUnix ?? null}
+                        showHiddenSelectors={showHiddenSelectors}
+                        onCollapsedStateChange={setAllSelectorsCollapsed}
+                      />
+                    </LazyBoundary>
+                  </div>
+                )}
+                {mountedPanels.has('connections') && (
+                  <div
+                    ref={(el) => {
+                      panelScrollRefs.current.connections = el
+                    }}
+                    className={cn(currentPanel !== 'connections' && 'hidden')}
+                  >
+                    <LazyBoundary>
+                      <ConnectionsPanel
+                        clashApiPort={(activeClashApiPort ?? '') as string}
+                        clashApiSecret={clashApiSecret ?? null}
+                        clashApiUnix={activeClashApiUnix ?? null}
+                      />
+                    </LazyBoundary>
+                  </div>
+                )}
+                {mountedPanels.has('dns') && (
+                  <div
+                    ref={(el) => {
+                      panelScrollRefs.current.dns = el
+                    }}
+                    className={cn(currentPanel !== 'dns' && 'hidden')}
+                  >
+                    <LazyBoundary>
+                      <DnsPanel />
+                    </LazyBoundary>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!isConfigsLoading && (!isMihomo || mountedPanels.has('config')) && (
+              <div
+                className={cn(
+                  'absolute inset-0',
+                  isAnyGui && 'pointer-events-none invisible opacity-0',
+                  isMihomo && currentPanel !== 'config' && 'hidden'
+                )}
+              >
+                <CodeMirrorEditorLazy
+                  ref={editorRef}
+                  onContentChange={handleContentChange}
+                  onValidationChange={handleValidationChange}
+                  onReady={handleEditorReady}
+                  onSave={() => saveCurrentConfig()}
+                />
+              </div>
+            )}
+          </div>
+
+          {isLogPanel && (
             <div className="relative min-h-0 flex-1">
               <div className="absolute inset-x-0 top-0 bottom-[4.5rem] md:bottom-0">
                 <LogPanel embedded />
               </div>
-            </div>
-          ) : (
-            <div className="relative min-h-0 flex-1 md:min-h-175!">
-              {isEditorMounted && activeConfig && isRoutingGui && (
-                <GuiRouting editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
-              )}
-              {isEditorMounted && activeConfig && isLogGui && (
-                <GuiLog editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
-              )}
-              {isEditorMounted && activeConfig && isOutboundsGui && (
-                <GuiOutbounds editorRef={editorRef} configs={configs} activeConfigIndex={activeConfigIndex} />
-              )}
-
-              {isMihomo && (
-                <>
-                  {mountedPanels.has('selectors') && (
-                    <div
-                      ref={(el) => {
-                        panelScrollRefs.current.selectors = el
-                      }}
-                      className={cn(currentPanel !== 'selectors' && 'hidden')}
-                    >
-                      <LazyBoundary>
-                        <SelectorsPanel
-                          clashApiPort={(activeClashApiPort ?? '') as string}
-                          mode={mode}
-                          clashApiSecret={clashApiSecret ?? null}
-                          clashApiUnix={activeClashApiUnix ?? null}
-                          showHiddenSelectors={showHiddenSelectors}
-                          onCollapsedStateChange={setAllSelectorsCollapsed}
-                        />
-                      </LazyBoundary>
-                    </div>
-                  )}
-                  {mountedPanels.has('connections') && (
-                    <div
-                      ref={(el) => {
-                        panelScrollRefs.current.connections = el
-                      }}
-                      className={cn(currentPanel !== 'connections' && 'hidden')}
-                    >
-                      <LazyBoundary>
-                        <ConnectionsPanel
-                          clashApiPort={(activeClashApiPort ?? '') as string}
-                          clashApiSecret={clashApiSecret ?? null}
-                          clashApiUnix={activeClashApiUnix ?? null}
-                        />
-                      </LazyBoundary>
-                    </div>
-                  )}
-                  {mountedPanels.has('dns') && (
-                    <div
-                      ref={(el) => {
-                        panelScrollRefs.current.dns = el
-                      }}
-                      className={cn(currentPanel !== 'dns' && 'hidden')}
-                    >
-                      <LazyBoundary>
-                        <DnsPanel />
-                      </LazyBoundary>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {!isConfigsLoading && (!isMihomo || mountedPanels.has('config')) && (
-                <div
-                  className={cn(
-                    'absolute inset-0',
-                    isAnyGui && 'pointer-events-none invisible opacity-0',
-                    isMihomo && currentPanel !== 'config' && 'hidden'
-                  )}
-                >
-                  <CodeMirrorEditorLazy
-                    ref={editorRef}
-                    onContentChange={handleContentChange}
-                    onValidationChange={handleValidationChange}
-                    onReady={handleEditorReady}
-                    onSave={() => saveCurrentConfig()}
-                  />
-                </div>
-              )}
             </div>
           )}
 
