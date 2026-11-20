@@ -396,6 +396,11 @@ export function ConfigPanel({
 
   const [activePanel, setActivePanel] = useState<PanelTab>('selectors')
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['selectors']))
+  const panelScrollRefs = useRef<Partial<Record<PanelTab, HTMLDivElement | null>>>({})
+  const panelPointerDownRef = useRef<PanelTab | null>(null)
+  const scrollPanelToTop = useCallback((panel: PanelTab) => {
+    panelScrollRefs.current[panel]?.querySelector<HTMLElement>('[data-panel-scroll]')?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
   const changePanel = useCallback((panel: PanelTab) => {
     setActivePanel(panel)
     if (panel !== 'config') setConfigHistoryFile(null)
@@ -1035,6 +1040,13 @@ export function ConfigPanel({
                 key={value}
                 value={value}
                 disabled={disabled}
+                onPointerDown={() => {
+                  panelPointerDownRef.current = currentPanel
+                }}
+                onClick={() => {
+                  if (panelPointerDownRef.current === value) scrollPanelToTop(value)
+                  panelPointerDownRef.current = null
+                }}
                 className="text-muted-foreground h-auto! flex-1 flex-col gap-0.5 rounded-full px-1 py-2 text-[10px] font-medium after:hidden data-active:border-transparent! data-active:bg-blue-500/15! data-active:text-blue-400! dark:data-active:text-blue-400!"
               >
                 <NavIcon className="size-4.5" stroke={currentPanel === value ? 2.2 : 1.8} />
@@ -1227,7 +1239,12 @@ export function ConfigPanel({
               {isMihomo && (
                 <>
                   {mountedPanels.has('selectors') && (
-                    <div className={cn(currentPanel !== 'selectors' && 'hidden')}>
+                    <div
+                      ref={(el) => {
+                        panelScrollRefs.current.selectors = el
+                      }}
+                      className={cn(currentPanel !== 'selectors' && 'hidden')}
+                    >
                       <LazyBoundary>
                         <SelectorsPanel
                           clashApiPort={(activeClashApiPort ?? '') as string}
@@ -1241,7 +1258,12 @@ export function ConfigPanel({
                     </div>
                   )}
                   {mountedPanels.has('connections') && (
-                    <div className={cn(currentPanel !== 'connections' && 'hidden')}>
+                    <div
+                      ref={(el) => {
+                        panelScrollRefs.current.connections = el
+                      }}
+                      className={cn(currentPanel !== 'connections' && 'hidden')}
+                    >
                       <LazyBoundary>
                         <ConnectionsPanel
                           clashApiPort={(activeClashApiPort ?? '') as string}
@@ -1252,7 +1274,12 @@ export function ConfigPanel({
                     </div>
                   )}
                   {mountedPanels.has('dns') && (
-                    <div className={cn(currentPanel !== 'dns' && 'hidden')}>
+                    <div
+                      ref={(el) => {
+                        panelScrollRefs.current.dns = el
+                      }}
+                      className={cn(currentPanel !== 'dns' && 'hidden')}
+                    >
                       <LazyBoundary>
                         <DnsPanel />
                       </LazyBoundary>

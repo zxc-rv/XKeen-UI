@@ -1915,7 +1915,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-x-2.5 top-2.5 bottom-4 scrollbar-thin overflow-y-auto pb-16 md:inset-4 md:pb-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]">
+      <div data-panel-scroll className="absolute inset-x-2.5 top-2.5 bottom-4 scrollbar-thin overflow-y-auto pb-16 md:inset-4 md:pb-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]">
         {display === 'columns' || display === 'tiles' ? (
           <div className="flex items-start gap-4">
             {selectorColumns.map((column, index) => (

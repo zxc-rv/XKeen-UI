@@ -1815,7 +1815,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
           </Select>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-20">
+      <div data-panel-scroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-20">
         {connections.length ? (
           <div className="flex flex-col gap-2">
             {connections.slice(0, visibleLimit).map(({ conn, closed }) => (
