@@ -311,9 +311,19 @@
 
 /* Lock document scrolling while the app shell is mounted (iOS Safari still bounces otherwise). */
 @media (max-width: 767px) {
-  html.app-shell,
+  /*
+   * Do not use `height: 100%` here. In iOS standalone the percentage resolves
+   * against the initial containing block, which keeps the pre-rotation height
+   * after an orientation change and clips the shell, leaving a status-bar sized
+   * band at the bottom. Size only from viewport units (same as zashboard).
+   */
+  html.app-shell {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   html.app-shell body {
-    height: 100%;
+    height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
   }
