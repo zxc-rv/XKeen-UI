@@ -5,6 +5,12 @@ import { Button } from '@/components/ui/button'
 import { cn, copyText } from '@/lib/utils'
 import { IconCheck, IconCopy } from '@tabler/icons-react'
 
+const MOBILE_MEDIA_QUERY = '(max-width: 767px)'
+
+function isMobileViewport() {
+  return typeof window !== 'undefined' && window.matchMedia(MOBILE_MEDIA_QUERY).matches
+}
+
 function TooltipProvider({
   delayDuration = 0,
   skipDelayDuration,
@@ -16,8 +22,32 @@ function TooltipProvider({
   return <TooltipPrimitive.Provider data-slot="tooltip-provider" delay={delayDuration} {...props} />
 }
 
-function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+type TooltipRootProps = React.ComponentProps<typeof TooltipPrimitive.Root>
+type TooltipActions = NonNullable<TooltipRootProps['actionsRef']> extends React.RefObject<infer T> ? T : never
+
+const TooltipCloseContext = React.createContext<(() => void) | null>(null)
+
+function Tooltip({ children, actionsRef, ...props }: TooltipRootProps) {
+  const fallbackActionsRef = React.useRef<TooltipActions | null>(null)
+  const resolvedActionsRef = actionsRef ?? fallbackActionsRef
+  const close = React.useCallback(() => resolvedActionsRef.current?.close(), [resolvedActionsRef])
+
+  const content =
+    typeof children === 'function' ? (
+      (payload: unknown) => (
+        <TooltipCloseContext.Provider value={close}>
+          {(children as (payload: unknown) => React.ReactNode)(payload)}
+        </TooltipCloseContext.Provider>
+      )
+    ) : (
+      <TooltipCloseContext.Provider value={close}>{children}</TooltipCloseContext.Provider>
+    )
+
+  return (
+    <TooltipPrimitive.Root data-slot="tooltip" actionsRef={resolvedActionsRef} {...props}>
+      {content as TooltipRootProps['children']}
+    </TooltipPrimitive.Root>
+  )
 }
 
 function TooltipTrigger({ children, render, ...props }: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
@@ -33,8 +63,20 @@ type TooltipContentProps = React.ComponentProps<typeof TooltipPrimitive.Popup> &
     copyTextValue?: string
   }
 
-function TooltipContent({ className, sideOffset = 0, side, align, alignOffset, children, copyTextValue, ...props }: TooltipContentProps) {
+function TooltipContent({
+  className,
+  sideOffset = 0,
+  side,
+  align,
+  alignOffset,
+  children,
+  copyTextValue,
+  onClick,
+  onPointerDown,
+  ...props
+}: TooltipContentProps) {
   const [copied, setCopied] = React.useState(false)
+  const closeTooltip = React.useContext(TooltipCloseContext)
 
   async function handleCopy(e: React.MouseEvent<HTMLButtonElement>) {
     e.stopPropagation()
@@ -49,9 +91,20 @@ function TooltipContent({ className, sideOffset = 0, side, align, alignOffset, c
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
           className={cn(
-            'bg-foreground text-background data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-50 w-fit origin-(--transform-origin) rounded-md px-3 py-1.5 text-xs',
+            'bg-foreground text-background data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 z-50 w-fit origin-(--transform-origin) rounded-md px-3 py-1.5 text-xs pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]',
             className
           )}
+          onClick={(event) => {
+            onClick?.(event)
+            event.stopPropagation()
+            if (!isMobileViewport()) return
+            event.preventDefault()
+            closeTooltip?.()
+          }}
+          onPointerDown={(event) => {
+            onPointerDown?.(event)
+            event.stopPropagation()
+          }}
           {...props}
         >
           {copyTextValue ? (
