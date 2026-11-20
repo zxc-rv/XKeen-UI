@@ -309,6 +309,59 @@
   }
 }
 
+/* Lock document scrolling while the app shell is mounted (iOS Safari still bounces otherwise). */
+@media (max-width: 767px) {
+  /*
+   * Do not use `height: 100%` here. In iOS standalone the percentage resolves
+   * against the initial containing block, which keeps the pre-rotation height
+   * after an orientation change and clips the shell, leaving a status-bar sized
+   * band at the bottom. Size only from viewport units (same as zashboard).
+   */
+  html.app-shell {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  html.app-shell body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Blend the page surface with the cards on mobile. */
+  html.app-shell,
+  html.app-shell body,
+  html.app-shell .app-viewport {
+    background-color: var(--card);
+  }
+}
+
+/*
+ * iOS 27 paints a system blur over the top edge of installed PWA windows unless
+ * a real (not pseudo-element) opaque fixed element is placed at the very top.
+ * Keep the status-bar area solid and move the app content below the notch and
+ * the system blur band. Only applies to iOS standalone web apps.
+ */
+.status-bar-tint {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  html.app-standalone .app-viewport {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  html.app-standalone .status-bar-tint {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 100;
+    display: block;
+    height: max(6px, env(safe-area-inset-top));
+    background: var(--card);
+    pointer-events: none;
+  }
+}
+
 /* ─── Log badges (shadcn Badge style) ─── */
 .log-line {
   display: block;

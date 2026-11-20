@@ -2,8 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { LoginForm } from './components/auth/Login'
 import type { CodeMirrorRef } from './components/configuration/CodeMirror'
-import { ConfigPanel } from './components/configuration/ConfigPanel'
-import { LogPanel } from './components/log/LogPanel'
+import { ConfigPanel, type PanelTab } from './components/configuration/ConfigPanel'
 import { ImportModal } from './components/modals/AddOutbound'
 import { CommentsWarningModal } from './components/modals/CommentsWarning'
 import { CoreManageModal } from './components/modals/CoreManagement'
@@ -123,11 +122,18 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   const multiRouter = useSettings((s) => s.multiRouter)
   const guiOutbounds = useSettings((s) => s.guiOutbounds)
   const activeCore = useCurrentCore()
+  const [activePanel, setActivePanel] = useState<PanelTab>('selectors')
   const editorRef = useRef<CodeMirrorRef | null>(null)
   const configActionsRef = useRef<{ switchTab: (index: number) => void; getActiveIndex: () => number }>({
     switchTab: () => {},
     getActiveIndex: () => 0,
   })
+
+  useEffect(() => {
+    document.documentElement.classList.add('app-shell')
+    if (window.matchMedia('(max-width: 767px)').matches) window.scrollTo(0, 0)
+    return () => document.documentElement.classList.remove('app-shell')
+  }, [])
 
   const checkStatus = useCallback(async () => {
     const data = await apiCall<any>('GET', 'control')
@@ -542,9 +548,10 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
   )
 
   return (
-    <div className="bg-muted dark:bg-background flex min-h-dvh flex-col">
-      <main className="flex flex-1 flex-col">
-        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-3">
+    <div className="app-viewport bg-muted dark:bg-background flex h-dvh flex-col overflow-hidden md:h-auto md:min-h-dvh md:overflow-visible">
+      <div aria-hidden="true" className="status-bar-tint" />
+      <main className="flex min-h-0 flex-1 flex-col md:min-h-[auto]">
+        <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-2 pt-0 pb-1 md:min-h-[auto] md:gap-3 md:py-3 md:pr-[max(0.75rem,env(safe-area-inset-right))] md:pl-[max(0.75rem,env(safe-area-inset-left))]">
           <StatusBar
             onOpenCoreManage={() => openModal('showCoreManageModal')}
             onOpenSettings={() => openModal('showSettingsModal')}
@@ -554,10 +561,12 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
               openModal('showUpdateModal')
             }}
             onLogout={logout}
+            className={activePanel === 'log' ? undefined : 'max-md:hidden'}
           />
           <ConfigPanel
             editorRef={editorRef}
             configActionsRef={configActionsRef}
+            onPanelChange={setActivePanel}
             onOpenImport={() => openModal('showImportModal')}
             onOpenImportAmnezia={() => openModal('showImportAmneziaModal')}
             onOpenTemplate={() => openModal('showTemplateModal')}
@@ -566,7 +575,6 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
             onOpenBackups={() => openModal('showBackupsModal')}
             onRefreshConfigs={() => loadConfigs(undefined, false, true)}
           />
-          <LogPanel />
         </div>
       </main>
       <Toast />

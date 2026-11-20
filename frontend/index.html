@@ -4,13 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/src/assets/favicon.png" />
     <link rel="apple-touch-icon" href="/src/assets/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
     <script>
       (() => {
         const theme = localStorage.getItem('theme')
         const resolvedTheme = theme === 'light' || theme === 'dark' || theme === 'auto' ? theme : 'auto'
         const isDark = resolvedTheme === 'dark' || (resolvedTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)
         document.documentElement.classList.toggle('dark', isDark)
+        const isStandalone =
+          window.matchMedia('(display-mode: standalone)').matches ||
+          window.matchMedia('(display-mode: fullscreen)').matches ||
+          window.navigator.standalone === true
+        document.documentElement.classList.toggle('app-standalone', isStandalone)
       })()
     </script>
     <title>XKeen UI</title>

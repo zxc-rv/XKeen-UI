@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge'
 import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle, IconSearch, IconTrash, IconX } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
-import { isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
+import { isMap, isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { apiCall, clashFetch } from '../../../lib/api'
 import { useAppContext, useDnsStatusStore, fetchDnsStatus } from '../../../lib/store'
@@ -237,7 +237,12 @@ export function patchDnsConfig(content: string, config: DnsConfig): string {
   setOrDeleteList(doc, ['dns', 'proxy-server-nameserver'], parseList(config.proxyServerNameserver))
   setOrDeleteList(doc, ['dns', 'fallback'], parseList(config.fallback))
 
-  if (!doc.hasIn(['dns', 'fallback-filter'])) doc.setIn(['dns', 'fallback-filter'], { geoip: false })
+  const fallbackFilter = doc.getIn(['dns', 'fallback-filter'], true)
+  if (isMap(fallbackFilter)) {
+    if (!fallbackFilter.has('fallback-lazy-query')) fallbackFilter.set('fallback-lazy-query', true)
+  } else {
+    doc.setIn(['dns', 'fallback-filter'], { geoip: false, 'fallback-lazy-query': true })
+  }
 
   return trimFlowSeqPadding(doc.toString({ lineWidth: YAML_LINE_WIDTH }))
 }
@@ -565,7 +570,10 @@ export const DnsPanel = memo(function DnsPanel() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="absolute inset-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto">
+      <div
+        data-panel-scroll
+        className="absolute inset-x-2.5 top-1.5 bottom-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto pb-16 md:inset-4 md:pb-0"
+      >
         <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
           <legend className="px-1 text-sm font-medium">Статус</legend>
           <div className="flex flex-col gap-3 pt-1">
@@ -698,7 +706,7 @@ export const DnsPanel = memo(function DnsPanel() {
                         aria-label="Выполнить DNS запрос"
                         disabled={!dnsQueryName.trim() || isQueryingDns}
                       >
-                        <span className="text-xs">Искать</span>
+                        <span className="text-xs max-md:hidden">Искать</span>
                         {isQueryingDns ? <Spinner /> : <IconSearch />}
                       </InputGroupButton>
                     </InputGroupAddon>

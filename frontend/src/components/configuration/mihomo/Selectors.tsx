@@ -108,6 +108,8 @@ const NO_SORT_TYPES = new Set([
 ])
 const TOGGLE_ALL_SELECTORS_EVENT = 'mihomo:toggle-all-selectors'
 const SMART_NOW_PLACEHOLDER = 'Smart - Select'
+const LONG_PRESS_DELAY_MS = 450
+const LONG_PRESS_MOVE_TOLERANCE = 10
 const SMART_RANK_LABELS: Record<string, string> = {
   MostUsed: 'часто',
   OccasionalUsed: 'иногда',
@@ -144,6 +146,19 @@ function GraveIcon({ className, size = 16 }: { className?: string; size?: number
       <rect x="46.913" y="424.382" width="418.175" height="87.618" />
       <path d="M263.957 0h-15.916C160.059 0 88.737 71.322 88.737 159.305v238.941h334.525V159.305C423.262 71.322 351.941 0 263.957 0m75.009 225.189h-61.389v95.91h-43.155v-95.91h-61.389v-43.304h61.389v-59.918h43.155v59.918h61.389z" />
     </svg>
+  )
+}
+
+function DelayHistoryList({ history }: { history: ProxyHistory[] }) {
+  return (
+    <div className="flex min-w-35 flex-col gap-1">
+      {history.map((entry, i) => (
+        <div key={i} className="flex items-center justify-between gap-3 text-[13px]">
+          <span className="tabular-nums">{new Date(entry.time).toLocaleString('sv-SE', { hour12: false }).replace('T', ' ')}</span>
+          <span className={cn('font-medium tabular-nums', delayColor(entry.delay))}>{entry.delay ? `${entry.delay}ms` : '—'}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -271,6 +286,86 @@ function blurActiveElement() {
   if (activeElement instanceof HTMLElement) activeElement.blur()
 }
 
+function useLongPressTooltip(enabled = true) {
+  const [open, setOpen] = useState(false)
+  const timerRef = useRef<number | null>(null)
+  const startRef = useRef<{ x: number; y: number } | null>(null)
+  const triggeredRef = useRef(false)
+  const touchInteractionRef = useRef(false)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  function cancel() {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    startRef.current = null
+  }
+
+  function clearSelection() {
+    window.getSelection()?.removeAllRanges()
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
+    touchInteractionRef.current = event.pointerType !== 'mouse'
+    if (event.pointerType === 'mouse') return
+    clearSelection()
+    if (!enabled) return
+    cancel()
+    triggeredRef.current = false
+    startRef.current = { x: event.clientX, y: event.clientY }
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null
+      startRef.current = null
+      triggeredRef.current = true
+      clearSelection()
+      setOpen(true)
+    }, LONG_PRESS_DELAY_MS)
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLElement>) {
+    const start = startRef.current
+    if (!start) return
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > LONG_PRESS_MOVE_TOLERANCE) cancel()
+  }
+
+  function handleContextMenu(event: React.MouseEvent<HTMLElement>) {
+    if (!touchInteractionRef.current) return
+    event.preventDefault()
+    event.stopPropagation()
+    cancel()
+    clearSelection()
+    if (!enabled) return
+    triggeredRef.current = true
+    setOpen(true)
+  }
+
+  function consumeClick() {
+    if (!triggeredRef.current) return false
+    triggeredRef.current = false
+    return true
+  }
+
+  return {
+    open,
+    setOpen,
+    consumeClick,
+    triggerProps: {
+      onPointerDown: handlePointerDown,
+      onPointerMove: handlePointerMove,
+      onPointerUp: cancel,
+      onPointerCancel: cancel,
+      onPointerLeave: cancel,
+      onContextMenu: handleContextMenu,
+    },
+  }
+}
+
 /* ====================== ОДИНОЧНАЯ КАРТОЧКА ====================== */
 const ProxyCard = memo(function ProxyCard({
   proxyName,
@@ -299,6 +394,8 @@ const ProxyCard = memo(function ProxyCard({
     return !p || !SELECTOR_TYPES.has(p.type) || !p.now ? '' : getChainData(s.proxies as Record<string, ProxyInfo | undefined>, proxyName)
   })
   const chain = useMemo(() => parseChain(chainStr), [chainStr])
+
+  const delayTooltip = useLongPressTooltip(!isTestingSingle)
 
   if (!proxy) return null
 
@@ -446,17 +543,20 @@ const ProxyCard = memo(function ProxyCard({
         )}
 
         {canTest && (
-          <Tooltip>
+          <Tooltip open={delayTooltip.open} onOpenChange={delayTooltip.setOpen}>
             <TooltipTrigger
+              closeOnClick={false}
               render={
                 <span
                   className={cn(
-                    'shrink-0 cursor-pointer text-xs font-medium tabular-nums transition-opacity',
+                    'shrink-0 cursor-pointer touch-manipulation text-xs font-medium tabular-nums transition-opacity select-none [-webkit-touch-callout:none]',
                     delayColor(delay),
                     isTestingSingle && 'opacity-40'
                   )}
-                  onClick={(e) => {
-                    e.stopPropagation()
+                  {...delayTooltip.triggerProps}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (delayTooltip.consumeClick()) return
                     if (!isTestingSingle) onTestSingle(proxyName)
                   }}
                 >
@@ -472,18 +572,7 @@ const ProxyCard = memo(function ProxyCard({
             />
             {history.length > 0 ? (
               <TooltipContent side="top" className="p-2">
-                <div className="flex min-w-35 flex-col gap-1">
-                  {history.map((entry, i) => (
-                    <div key={i} className="flex items-center justify-between gap-3 text-[13px]">
-                      <span className="tabular-nums">
-                        {new Date(entry.time).toLocaleString('sv-SE', { hour12: false }).replace('T', ' ')}
-                      </span>
-                      <span className={cn('font-medium tabular-nums', delayColor(entry.delay))}>
-                        {entry.delay ? `${entry.delay}ms` : '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <DelayHistoryList history={history} />
               </TooltipContent>
             ) : (
               <TooltipContent>Замерить отклик</TooltipContent>
@@ -763,6 +852,9 @@ const SelectorRow = memo(function SelectorRow({
 }) {
   const selector = useProxiesStore((s) => s.proxies[selectorName] as ProxyInfo | undefined)
   const isTesting = useSelectorsStore((s) => !!s.testingAll[selectorName])
+  const groupPingTooltip = useLongPressTooltip(!isTesting)
+  const pickerTriggerPingTooltip = useLongPressTooltip()
+  const pickerHeaderPingTooltip = useLongPressTooltip(!isTesting)
   const selectedProxy = useProxiesStore((s) => {
     const currentName = (s.proxies[selectorName] as ProxyInfo | undefined)?.now
     return currentName ? (s.proxies[currentName] as ProxyInfo | undefined) : undefined
@@ -884,6 +976,12 @@ const SelectorRow = memo(function SelectorRow({
       : null
   const showSelectedDelay = selectedDelay !== null && selectedDelay > 0
   const selectedDigits = showSelectedDelay && selectedDelay ? String(selectedDelay).length : 0
+  const groupPingHistory = selectedProxy ? getProxyHistory(selectedProxy) : isSmart ? getProxyHistory(selector) : []
+
+  function handleGroupPingClick() {
+    if (groupPingTooltip.consumeClick()) return
+    onTestAll(selectorName)
+  }
 
   const pickerProxies = useMemo(() => {
     const query = searchQuery.trim()
@@ -957,20 +1055,20 @@ const SelectorRow = memo(function SelectorRow({
         aria-label={`Открыть селектор ${selectorName}`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className='border-border bg-input-background hover:bg-input-background-hover! flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors sm:px-3 sm:pt-2.5 sm:pb-3'
+        className="border-border bg-input-background hover:bg-input-background-hover! relative flex w-full min-w-0 flex-col gap-2 rounded-xl border px-2.5 pt-2 pb-2.5 text-left transition-colors sm:px-3 sm:pt-2.5 sm:pb-3"
       >
-        <span className="flex min-w-0 items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center justify-between gap-2 pr-10">
           <span className="truncate text-[15px] font-medium">{selectorName}</span>
           {selector.icon && (
             <img
               src={selector.icon}
               alt=""
-              className="size-8 shrink-0 rounded-sm object-contain"
+              className="absolute top-2 right-2.5 size-8 shrink-0 rounded-sm object-contain sm:top-2.5 sm:right-3"
               onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
             />
           )}
         </span>
-        <span className="text-muted-foreground truncate text-[10px] tracking-wide uppercase">
+        <span className="text-muted-foreground truncate pr-10 text-[10px] tracking-wide uppercase">
           {selector.type} ({filteredSortedProxies.length}
           {allProxies.length !== filteredSortedProxies.length ? `/${allProxies.length}` : ''})
         </span>
@@ -990,7 +1088,7 @@ const SelectorRow = memo(function SelectorRow({
     )
     const pickerHeading = (
       <div className="text-foreground flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
-        <span className="truncate">{selectorName}</span>
+        <span className="truncate text-[15px]">{selectorName}</span>
         <IconCircleArrowRightFilled size={12} className="text-muted-foreground shrink-0" />
         {selectedProxy?.icon && (
           <img
@@ -1045,21 +1143,24 @@ const SelectorRow = memo(function SelectorRow({
               <DialogTrigger render={trigger} />
               <div className="absolute right-2.5 bottom-2.5 z-10 flex items-center">
                 {(selectedProxy && !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase())) || isSmart ? (
-                  <Tooltip>
+                  <Tooltip open={pickerTriggerPingTooltip.open} onOpenChange={pickerTriggerPingTooltip.setOpen}>
                     <TooltipTrigger
+                      closeOnClick={false}
                       render={
                         <button
                           type="button"
                           aria-label={selectedProxy ? `Проверить сервер ${selector.now}` : `Проверить серверы ${selectorName}`}
                           className={cn(
-                            'flex min-w-7 items-center justify-end bg-transparent text-xs font-medium tabular-nums',
+                            'flex min-w-7 touch-manipulation items-center justify-end bg-transparent text-xs font-medium tabular-nums select-none [-webkit-touch-callout:none]',
                             delayColor(selectedDelay)
                           )}
                           disabled={
                             selectedProxy && !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase()) ? isTestingSelected : isTestingSmart
                           }
+                          {...pickerTriggerPingTooltip.triggerProps}
                           onClick={(event) => {
                             event.stopPropagation()
+                            if (pickerTriggerPingTooltip.consumeClick()) return
                             if (
                               selectedProxy &&
                               !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase()) &&
@@ -1084,7 +1185,13 @@ const SelectorRow = memo(function SelectorRow({
                         </button>
                       }
                     />
-                    <TooltipContent>{selectedProxy ? 'Проверить выбранный сервер' : 'Проверить серверы селектора'}</TooltipContent>
+                    {groupPingHistory.length > 0 ? (
+                      <TooltipContent side="top" className="p-2">
+                        <DelayHistoryList history={groupPingHistory} />
+                      </TooltipContent>
+                    ) : (
+                      <TooltipContent>{selectedProxy ? 'Проверить выбранный сервер' : 'Проверить серверы селектора'}</TooltipContent>
+                    )}
                   </Tooltip>
                 ) : null}
               </div>
@@ -1136,7 +1243,7 @@ const SelectorRow = memo(function SelectorRow({
                   setSearchOpen(false)
                   setSearchQuery('')
                 }}
-                className="bg-input-background border-border text-foreground flex max-h-[calc(100dvh-1.5rem)] min-w-0 flex-col gap-2.5 overflow-hidden rounded-xl border p-3 font-sans shadow-xl"
+                className="bg-input-background border-border text-foreground flex max-h-[calc(100dvh-1.5rem)] min-w-0 flex-col gap-2.5 overflow-hidden rounded-xl border p-3 font-sans shadow-xl pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
               >
                 <DialogHeader ref={pickerHeaderRef} className="gap-2">
                   <DialogTitle className="sr-only">Выбор сервера для {selectorName}</DialogTitle>
@@ -1182,8 +1289,7 @@ const SelectorRow = memo(function SelectorRow({
                                     render={
                                       <Button
                                         variant="outline"
-                                        size="icon-xs"
-                                        className="!size-7"
+                                        size="icon-sm"
                                         aria-label="Сбросить smart-веса"
                                         disabled={isFlushingSmart}
                                       >
@@ -1210,23 +1316,27 @@ const SelectorRow = memo(function SelectorRow({
                             </PopoverContent>
                           </Popover>
                         )}
-                        <Tooltip>
+                        <Tooltip open={pickerHeaderPingTooltip.open} onOpenChange={pickerHeaderPingTooltip.setOpen}>
                           <TooltipTrigger
+                            closeOnClick={false}
                             render={
                               <Button
                                 variant="outline"
-                                size={selectedDigits === 0 ? 'icon-xs' : 'sm'}
+                                size={selectedDigits === 0 ? 'icon-sm' : 'sm'}
                                 aria-label="Проверить все серверы селектора"
                                 className={cn(
-                                  '!h-7',
                                   selectedDigits > 0 && [
-                                    '!min-w-7 justify-center !px-1 text-xs font-medium tabular-nums',
+                                    'min-w-8 justify-center px-0 text-xs font-medium tabular-nums',
                                     delayColor(selectedDelay),
                                   ]
                                 )}
-                                style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 0.75rem)` } : undefined}
+                                style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 1rem)` } : undefined}
+                                {...pickerHeaderPingTooltip.triggerProps}
                                 disabled={isTesting}
-                                onClick={() => onTestAll(selectorName)}
+                                onClick={() => {
+                                  if (pickerHeaderPingTooltip.consumeClick()) return
+                                  onTestAll(selectorName)
+                                }}
                               >
                                 {isTesting ? (
                                   <IconLoader2 size={13} className="animate-spin" />
@@ -1238,7 +1348,13 @@ const SelectorRow = memo(function SelectorRow({
                               </Button>
                             }
                           />
-                          <TooltipContent>Проверить все серверы</TooltipContent>
+                          {groupPingHistory.length > 0 ? (
+                            <TooltipContent side="top" className="p-2">
+                              <DelayHistoryList history={groupPingHistory} />
+                            </TooltipContent>
+                          ) : (
+                            <TooltipContent>Проверить все серверы</TooltipContent>
+                          )}
                         </Tooltip>
                       </div>
                     </div>
@@ -1251,7 +1367,7 @@ const SelectorRow = memo(function SelectorRow({
                         onChange={(event) => setSearchQuery(event.target.value)}
                         placeholder="Поиск серверов"
                         aria-label="Поиск серверов"
-                        className="text-foreground placeholder:text-muted-foreground h-8 pr-8 font-sans"
+                        className="text-foreground placeholder:text-muted-foreground h-8 pr-8 font-sans select-text"
                       />
                       {searchQuery && (
                         <button
@@ -1267,7 +1383,7 @@ const SelectorRow = memo(function SelectorRow({
                   )}
                 </DialogHeader>
                 <m.div
-                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1"
+                  className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: pickerAnimationReady && !pickerClosing ? 1 : 0 }}
                   transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
@@ -1347,8 +1463,9 @@ const SelectorRow = memo(function SelectorRow({
             >
               {collapsed ? <IconChevronDown size={13} /> : <IconChevronUp size={13} />}
             </Button>
-            <Tooltip>
+            <Tooltip open={groupPingTooltip.open} onOpenChange={groupPingTooltip.setOpen}>
               <TooltipTrigger
+                closeOnClick={false}
                 render={
                   <Button
                     variant="outline"
@@ -1357,7 +1474,8 @@ const SelectorRow = memo(function SelectorRow({
                       selectedDigits > 0 && ['min-w-8 justify-center px-0 text-xs font-medium tabular-nums', delayColor(selectedDelay)]
                     )}
                     style={selectedDigits > 0 ? { width: `calc(${selectedDigits}ch + 1rem)` } : undefined}
-                    onClick={() => onTestAll(selectorName)}
+                    {...groupPingTooltip.triggerProps}
+                    onClick={handleGroupPingClick}
                     disabled={isTesting}
                   >
                     {isTesting ? (
@@ -1370,7 +1488,13 @@ const SelectorRow = memo(function SelectorRow({
                   </Button>
                 }
               />
-              <TooltipContent>Замерить отклик</TooltipContent>
+              {groupPingHistory.length > 0 ? (
+                <TooltipContent side="top" className="p-2">
+                  <DelayHistoryList history={groupPingHistory} />
+                </TooltipContent>
+              ) : (
+                <TooltipContent>Замерить отклик</TooltipContent>
+              )}
             </Tooltip>
           </div>
         </div>
@@ -1757,7 +1881,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   if (loading) {
     return (
-      <div className="text-muted-foreground absolute inset-4 flex items-center justify-center text-sm">
+      <div className="text-muted-foreground absolute inset-x-2.5 inset-y-4 flex items-center justify-center text-sm md:inset-4">
         <Spinner className="mr-2 size-5" /> Загрузка...
       </div>
     )
@@ -1765,7 +1889,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   if (error || selectorNames.length === 0) {
     return (
-      <div className="absolute inset-4">
+      <div className="absolute inset-x-2.5 inset-y-4 md:inset-4">
         <Empty className="text-muted-foreground border-border absolute inset-0 gap-3 rounded-xl border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -1791,7 +1915,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-4 scrollbar-thin overflow-y-auto">
+      <div data-panel-scroll className="absolute inset-x-2.5 top-2.5 bottom-4 scrollbar-thin overflow-y-auto pb-16 md:inset-4 md:pb-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]">
         {display === 'columns' || display === 'tiles' ? (
           <div className="flex items-start gap-4">
             {selectorColumns.map((column, index) => (
@@ -1804,7 +1928,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
           <div
             className={cn(
               'min-w-0',
-              display === 'popup' ? 'grid grid-cols-2 content-start items-start gap-2 sm:gap-4 xl:grid-cols-3' : 'flex flex-col gap-4'
+              display === 'popup' ? 'grid grid-cols-2 content-start items-start gap-2.5 xl:grid-cols-3' : 'flex flex-col gap-4'
             )}
           >
             {selectorColumns[0].map(renderSelector)}

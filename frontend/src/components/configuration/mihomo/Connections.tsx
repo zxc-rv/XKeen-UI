@@ -1555,7 +1555,7 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-muted-foreground size-6 hover:bg-transparent! hover:text-amber-400"
+                    className="text-muted-foreground -my-0.5 size-6 hover:bg-transparent! hover:text-amber-400"
                     aria-label="Smart: заблокировать узел для этого хоста"
                     onClick={(e) => onBlock(conn.id, e)}
                   >
@@ -1570,7 +1570,7 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive size-7"
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive -my-1 size-7"
               aria-label="Закрыть соединение"
               onClick={(e) => onClose(conn.id, e)}
             >
@@ -1730,8 +1730,8 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   const sortItems = Object.fromEntries(sortOptions.map(([column, direction, label]) => [`${column}:${direction}`, label]))
 
   return (
-    <div className="border-border bg-input-background absolute inset-4 flex min-h-0 flex-col overflow-hidden rounded-xl border md:hidden">
-      <div className="border-border bg-input-background flex shrink-0 flex-col gap-2 border-b p-2.5">
+    <div className="absolute inset-x-0 top-1.5 bottom-0 flex min-h-0 flex-col gap-2 md:hidden">
+      <div className="border-border bg-input-background mx-2.5 flex shrink-0 flex-col gap-2 rounded-xl border p-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <Tabs value={activeTab === 'all' ? 'active' : activeTab} onValueChange={(v) => onTabChange(v as 'active' | 'closed')}>
             <TabsList className="h-9 shrink-0">
@@ -1815,7 +1815,7 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
           </Select>
         </div>
       </div>
-      <div className="bg-input-background min-h-0 flex-1 overflow-y-auto p-2.5">
+      <div data-panel-scroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-20">
         {connections.length ? (
           <div className="flex flex-col gap-2">
             {connections.slice(0, visibleLimit).map(({ conn, closed }) => (
