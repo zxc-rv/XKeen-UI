@@ -213,6 +213,12 @@ function ConfigTab({
         .split('/')
         .pop()
         ?.replace(/\.[^.]+$/, '')}
+      {availableSections.length > 0 && (
+        <IconChevronDown
+          aria-hidden
+          className={cn('size-3.5 shrink-0 opacity-70 transition-transform duration-200', sectionMenuOpen && 'rotate-180')}
+        />
+      )}
       {config.isDirty && <span className="absolute top-0.75 right-0.75 h-1.5 w-1.5 rounded-full bg-amber-400" />}
     </TabsTrigger>
   )
