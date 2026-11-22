@@ -574,7 +574,7 @@ export const DnsPanel = memo(function DnsPanel() {
         data-panel-scroll
         className="absolute inset-x-2.5 top-1.5 bottom-4 flex scrollbar-thin flex-col gap-4 overflow-y-auto pb-16 md:inset-4 md:pb-0"
       >
-        <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
+        <fieldset className="border-border rounded-lg border px-2.5 pt-1.5 pb-4 md:px-4">
           <legend className="px-1 text-sm font-medium">Статус</legend>
           <div className="flex flex-col gap-3 pt-1">
             {dnsStatus && dnsStatus.hasProviderNameservers && (
@@ -616,67 +616,9 @@ export const DnsPanel = memo(function DnsPanel() {
         </fieldset>
 
         {showMihomoSettings && (
-          <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
+          <fieldset className="border-border rounded-lg border px-2.5 pt-1.5 pb-4 md:px-4">
             <legend className="px-1 text-sm font-medium">Диагностика</legend>
             <div className="flex flex-col gap-4 pt-1">
-              <div className="grid gap-2">
-                <Label className="text-xs">Очистка кэша</Label>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <AlertDialog open={confirmFlush === 'fakeip'} onOpenChange={(open) => setConfirmFlush(open ? 'fakeip' : null)}>
-                    <AlertDialogTrigger
-                      render={
-                        <Button variant="outline" disabled={flushingCache !== null}>
-                          {flushingCache === 'fakeip' ? <Spinner /> : <IconTrash data-icon="inline-start" />}
-                          Очистить кэш Fake-IP
-                        </Button>
-                      }
-                    />
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogMedia>
-                          <IconTrash />
-                        </AlertDialogMedia>
-                        <AlertDialogTitle>Очистить кэш Fake-IP?</AlertDialogTitle>
-                        <AlertDialogDescription>Таблица соответствия доменов и Fake-IP будет очищена.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setConfirmFlush(null)}>Отмена</AlertDialogCancel>
-                        <AlertDialogAction variant="destructive" onClick={() => handleConfirmFlush('fakeip')}>
-                          Очистить
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                  <AlertDialog open={confirmFlush === 'dns'} onOpenChange={(open) => setConfirmFlush(open ? 'dns' : null)}>
-                    <AlertDialogTrigger
-                      render={
-                        <Button variant="outline" disabled={flushingCache !== null}>
-                          {flushingCache === 'dns' ? <Spinner /> : <IconTrash data-icon="inline-start" />}
-                          Очистить кэш DNS
-                        </Button>
-                      }
-                    />
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogMedia>
-                          <IconTrash />
-                        </AlertDialogMedia>
-                        <AlertDialogTitle>Очистить кэш DNS?</AlertDialogTitle>
-                        <AlertDialogDescription>Все закэшированные DNS-ответы будут удалены.</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setConfirmFlush(null)}>Отмена</AlertDialogCancel>
-                        <AlertDialogAction variant="destructive" onClick={() => handleConfirmFlush('dns')}>
-                          Очистить
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-
-              <Separator />
-
               <div className="grid gap-2">
                 <Label htmlFor="dns-query-name" className="text-xs">
                   DNS запрос
@@ -782,12 +724,68 @@ export const DnsPanel = memo(function DnsPanel() {
                   </div>
                 )}
               </div>
+
+              <div className="grid gap-2">
+                <Label className="text-xs">Очистка кэша</Label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <AlertDialog open={confirmFlush === 'fakeip'} onOpenChange={(open) => setConfirmFlush(open ? 'fakeip' : null)}>
+                    <AlertDialogTrigger
+                      render={
+                        <Button variant="outline" disabled={flushingCache !== null}>
+                          {flushingCache === 'fakeip' ? <Spinner /> : <IconTrash data-icon="inline-start" />}
+                          Очистить кэш Fake-IP
+                        </Button>
+                      }
+                    />
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogMedia>
+                          <IconTrash />
+                        </AlertDialogMedia>
+                        <AlertDialogTitle>Очистить кэш Fake-IP?</AlertDialogTitle>
+                        <AlertDialogDescription>Таблица соответствия доменов и Fake-IP будет очищена.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setConfirmFlush(null)}>Отмена</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={() => handleConfirmFlush('fakeip')}>
+                          Очистить
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <AlertDialog open={confirmFlush === 'dns'} onOpenChange={(open) => setConfirmFlush(open ? 'dns' : null)}>
+                    <AlertDialogTrigger
+                      render={
+                        <Button variant="outline" disabled={flushingCache !== null}>
+                          {flushingCache === 'dns' ? <Spinner /> : <IconTrash data-icon="inline-start" />}
+                          Очистить кэш DNS
+                        </Button>
+                      }
+                    />
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogMedia>
+                          <IconTrash />
+                        </AlertDialogMedia>
+                        <AlertDialogTitle>Очистить кэш DNS?</AlertDialogTitle>
+                        <AlertDialogDescription>Все закэшированные DNS-ответы будут удалены.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setConfirmFlush(null)}>Отмена</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" onClick={() => handleConfirmFlush('dns')}>
+                          Очистить
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
             </div>
           </fieldset>
         )}
 
         {showMihomoSettings && (
-          <fieldset className="border-border rounded-lg border px-4 pt-1.5 pb-4">
+          <fieldset className="border-border rounded-lg border px-2.5 pt-1.5 pb-4 md:px-4">
             <legend className="px-1 text-sm font-medium">Настройки</legend>
             <div className="flex flex-col gap-4 pt-1">
               {showFakeIpWarning && (
