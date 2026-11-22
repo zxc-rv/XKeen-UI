@@ -355,8 +355,11 @@ function getConnectionSortValue(conn: Connection, column: SortColumn, showSource
   switch (column) {
     case 'host':
       return getConnectionHost(conn) || ''
-    case 'protocol':
-      return conn.metadata.network || ''
+    case 'protocol': {
+      const protocol = getConnectionProtocol(conn)
+      const port = conn.metadata.destinationPort
+      return port ? `${protocol}/${String(port).padStart(5, '0')}` : protocol
+    }
     case 'chains':
       return conn.chains?.[0] ?? ''
     case 'source':
