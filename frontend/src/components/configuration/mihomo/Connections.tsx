@@ -363,7 +363,7 @@ function getConnectionSortValue(conn: Connection, column: SortColumn, showSource
       return port ? `${protocol}/${String(port).padStart(5, '0')}` : protocol
     }
     case 'chains':
-      return conn.chains?.[0] ?? ''
+      return conn.chains?.at(-1) ?? ''
     case 'source':
       return getConnectionSourceLabel(conn, showSourceName ? getCachedSourceName(conn.metadata.sourceIP) : null)
     case 'start':
