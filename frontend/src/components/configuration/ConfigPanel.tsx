@@ -561,7 +561,8 @@ export function ConfigPanel({
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
-  const currentPanel = activePanel === 'log' ? (isMobile ? 'log' : 'config') : isRunning ? activePanel : 'config'
+  const currentPanel =
+    activePanel === 'log' ? (isMobile ? 'log' : 'config') : isCoreMihomo && isRunning ? activePanel : 'config'
   const isLogPanel = currentPanel === 'log'
   useEffect(() => {
     if (!isMobile && activePanel === 'log') setActivePanel('config')
