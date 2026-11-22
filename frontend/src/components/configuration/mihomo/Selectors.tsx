@@ -17,7 +17,7 @@ import { InputGroupAddon } from '@/components/ui/input-group'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn, normalizeVehicleType } from '@/lib/utils'
 import { LazyMotion, domAnimation, m } from 'framer-motion'
 import {
   IconBolt,
@@ -31,14 +31,14 @@ import {
   IconX,
   IconPin,
 } from '@tabler/icons-react'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DISPLAY_EVENT, readSelectorDisplay } from './SelectorDisplaySettings'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DISPLAY_EVENT, GROUP_BY_SUBSCRIPTIONS_EVENT, readGroupBySubscriptions, readSelectorDisplay } from './SelectorDisplaySettings'
 
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { clashFetch } from '../../../lib/api'
 import { fetchClashProxies, getConnections, showToast, useProxiesStore, useSettings } from '../../../lib/store'
-import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL } from '../../../lib/types'
+import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type ProxyProvider } from '../../../lib/types'
 
 const ACTIVE_CARD_CLASSES = 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
 const HOVER_CARD_CLASSES = 'hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
@@ -234,6 +234,81 @@ function sortProxyNames(proxyNames: string[], order: string, proxies: Record<str
     }
   }
   return result
+}
+
+interface ProxyGroup {
+  key: string
+  label: string
+  proxies: string[]
+  total: number
+}
+
+function groupProxiesBySubscription(
+  proxyNames: string[],
+  allProxyNames: string[],
+  providers: ProxyProvider[],
+  proxies: Record<string, ProxyInfo | undefined>
+): ProxyGroup[] {
+  if (allProxyNames.length === 0) return []
+  if (providers.length === 0) return [{ key: 'all', label: '', proxies: proxyNames, total: allProxyNames.length }]
+
+  const providerNames = new Set(providers.map((provider) => provider.name))
+  const providerByProxy = new Map<string, string>()
+  for (const provider of providers) {
+    for (const item of provider.proxies ?? []) {
+      const name = (item as { name?: unknown })?.name
+      if (typeof name === 'string') providerByProxy.set(name, provider.name)
+    }
+  }
+
+  const providerOf = (proxyName: string): string | null => {
+    const ownProvider = proxies[proxyName]?.['provider-name']
+    if (ownProvider && providerNames.has(ownProvider)) return ownProvider
+    return providerByProxy.get(proxyName) ?? null
+  }
+
+  const allGroups = new Map<string, string[]>()
+  const allRest: string[] = []
+  for (const proxyName of allProxyNames) {
+    const providerName = providerOf(proxyName)
+    if (!providerName) {
+      allRest.push(proxyName)
+      continue
+    }
+    const list = allGroups.get(providerName)
+    if (list) list.push(proxyName)
+    else allGroups.set(providerName, [proxyName])
+  }
+
+  if (allGroups.size === 0) return [{ key: 'all', label: '', proxies: proxyNames, total: allProxyNames.length }]
+
+  const visible = new Set(proxyNames)
+  const result: ProxyGroup[] = []
+  for (const provider of providers) {
+    const providerProxies = allGroups.get(provider.name)
+    if (!providerProxies?.length) continue
+    const visibleProxies = providerProxies.filter((proxyName) => visible.has(proxyName))
+    if (!visibleProxies.length) continue
+    result.push({ key: provider.name, label: provider.name, proxies: visibleProxies, total: providerProxies.length })
+  }
+  const restProxies = allRest.filter((proxyName) => visible.has(proxyName))
+  if (restProxies.length > 0) result.push({ key: '__rest__', label: 'Остальное', proxies: restProxies, total: allRest.length })
+  return result
+}
+
+function ProxyGroupHeading({ label, visible, total, pickerNode }: { label: string; visible: number; total: number; pickerNode?: boolean }) {
+  return (
+    <div
+      data-picker-node={pickerNode || undefined}
+      className="text-muted-foreground col-span-full flex min-w-0 items-center gap-1 py-0.5 text-xs"
+    >
+      <span className="truncate tracking-wider">{label}</span>
+      <span className="shrink-0 tabular-nums">
+        ({visible}
+        {total > visible ? `/${total}` : ''})
+      </span>
+    </div>
+  )
 }
 
 function getChainData(proxies: Record<string, ProxyInfo | undefined>, startName?: string): string {
@@ -775,8 +850,8 @@ const SelectorCombobox = memo(function SelectorCombobox({
           'w-full cursor-pointer! justify-between font-normal',
           isFixed ? 'border-emerald-400 dark:border-emerald-400' : 'border-blue-500/40 dark:border-blue-500/40',
           isFixed
-            ? 'hover:border-emerald-400 dark:hover:border-emerald-400 hover:bg-emerald-500/10! dark:hover:bg-emerald-500/10!'
-            : 'hover:border-blue-500/40 dark:hover:border-blue-500/40 hover:bg-blue-500/10! dark:hover:bg-blue-500/10!',
+            ? 'hover:border-emerald-400 hover:bg-emerald-500/10! dark:hover:border-emerald-400 dark:hover:bg-emerald-500/10!'
+            : 'hover:border-blue-500/40 hover:bg-blue-500/10! dark:hover:border-blue-500/40 dark:hover:bg-blue-500/10!',
           isOpen &&
             (isFixed
               ? 'border-[#34d399]! shadow-[0_0_0_3px_rgba(52,211,153,0.2)]!'
@@ -793,12 +868,19 @@ const SelectorCombobox = memo(function SelectorCombobox({
             />
           )}
           <span className={cn('truncate', !value && 'text-muted-foreground')}>
-            <ComboboxValue>{(proxyName: string | null) => proxyName ?? (lockSelection || isSmart ? 'Автовыбор' : 'Выберите прокси')}</ComboboxValue>
+            <ComboboxValue>
+              {(proxyName: string | null) => proxyName ?? (lockSelection || isSmart ? 'Автовыбор' : 'Выберите прокси')}
+            </ComboboxValue>
           </span>
         </span>
       </ComboboxTrigger>
       <ComboboxContent className={isFixed ? 'border-emerald-400/40' : 'border-blue-500/40'}>
-        <ComboboxInput fullWidth showTrigger={false} placeholder="Поиск" className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! has-[[data-slot=input-group-control]:focus-visible]:shadow-none! has-[[data-slot=input-group-control]:focus-visible]:ring-0! m-1 h-8 w-auto shadow-none">
+        <ComboboxInput
+          fullWidth
+          showTrigger={false}
+          placeholder="Поиск"
+          className="border-input/20! has-[[data-slot=input-group-control]:focus-visible]:border-input! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:shadow-none! has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
+        >
           <InputGroupAddon align="inline-start">
             <IconSearch />
           </InputGroupAddon>
@@ -828,6 +910,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
 const SelectorRow = memo(function SelectorRow({
   selectorName,
   display,
+  groupBySubscriptions,
   onTestAll,
   onSelect,
   onTestSingle,
@@ -840,6 +923,7 @@ const SelectorRow = memo(function SelectorRow({
 }: {
   selectorName: string
   display: 'standard' | 'columns' | 'tiles' | 'popup'
+  groupBySubscriptions: boolean
   onTestAll: (name: string) => void
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
@@ -942,6 +1026,14 @@ const SelectorRow = memo(function SelectorRow({
   const hideCounter = useSettings((s) => s.hideUnavailableProxiesCounter)
   const sortOrder = useSettings((s) => s.proxySortOrder)
   const allProxiesMap = useProxiesStore((s) => s.proxies as Record<string, ProxyInfo | undefined>)
+  const subscriptionProviders = useProxiesStore(
+    useShallow((s) =>
+      s.proxyProviders.filter((provider) => {
+        const vehicleType = normalizeVehicleType(provider.vehicleType)
+        return vehicleType === 'HTTP' || vehicleType === 'FILE'
+      })
+    )
+  )
 
   const filteredSortedProxies = useMemo(() => {
     let result = allProxies
@@ -959,6 +1051,11 @@ const SelectorRow = memo(function SelectorRow({
     }
     return result
   }, [allProxies, hideUnavailable, hideCounter, sortOrder, allProxiesMap, isSmart, smartNodesForGroup])
+
+  const groupedProxies = useMemo(
+    () => (groupBySubscriptions ? groupProxiesBySubscription(filteredSortedProxies, allProxies, subscriptionProviders, allProxiesMap) : []),
+    [groupBySubscriptions, filteredSortedProxies, allProxies, subscriptionProviders, allProxiesMap]
+  )
 
   const smartNodeDelays = isSmart
     ? filteredSortedProxies
@@ -990,6 +1087,11 @@ const SelectorRow = memo(function SelectorRow({
     return filteredSortedProxies.filter((name) => name.toLocaleLowerCase().includes(normalized))
   }, [filteredSortedProxies, searchQuery])
 
+  const groupedPickerProxies = useMemo(
+    () => (groupBySubscriptions ? groupProxiesBySubscription(pickerProxies, allProxies, subscriptionProviders, allProxiesMap) : []),
+    [groupBySubscriptions, pickerProxies, allProxies, subscriptionProviders, allProxiesMap]
+  )
+
   async function handleFlushSmartConfirm() {
     setFlushConfirmOpen(false)
     if (isFlushingSmart) return
@@ -1016,19 +1118,31 @@ const SelectorRow = memo(function SelectorRow({
   }
 
   const useMultiColumnCollapse = display === 'columns' || display === 'tiles'
+  const proxyCardGridClassName = cn(
+    'grid gap-2',
+    display === 'columns' ? 'grid-cols-3' : display === 'tiles' ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+  )
+  const renderProxyCard = (proxyName: string) => (
+    <ProxyCard
+      key={proxyName}
+      proxyName={proxyName}
+      selectorName={selectorName}
+      autoPolicy={autoPolicy}
+      lockSelection={lockSelection}
+      onSelect={onSelect}
+      onTestSingle={onTestSingle}
+    />
+  )
   const proxyCardGrid = (
-    <div className={cn('grid gap-2', display === 'columns' ? 'grid-cols-3' : 'grid-cols-2')}>
-      {filteredSortedProxies.map((proxyName) => (
-        <ProxyCard
-          key={proxyName}
-          proxyName={proxyName}
-          selectorName={selectorName}
-          autoPolicy={autoPolicy}
-          lockSelection={lockSelection}
-          onSelect={onSelect}
-          onTestSingle={onTestSingle}
-        />
-      ))}
+    <div className={proxyCardGridClassName}>
+      {groupBySubscriptions
+        ? groupedProxies.map((group) => (
+            <Fragment key={group.key}>
+              {group.label && <ProxyGroupHeading label={group.label} visible={group.proxies.length} total={group.total} />}
+              {group.proxies.map(renderProxyCard)}
+            </Fragment>
+          ))
+        : filteredSortedProxies.map(renderProxyCard)}
     </div>
   )
 
@@ -1119,7 +1233,7 @@ const SelectorRow = memo(function SelectorRow({
         <span className="truncate">{selectedName}</span>
       </div>
     )
-    const proxyCards = pickerProxies.map((proxyName) => (
+    const renderPickerCard = (proxyName: string) => (
       <div key={proxyName} data-picker-node>
         <ProxyCard
           proxyName={proxyName}
@@ -1133,7 +1247,15 @@ const SelectorRow = memo(function SelectorRow({
           onTestSingle={onTestSingle}
         />
       </div>
-    ))
+    )
+    const proxyCards = groupBySubscriptions
+      ? groupedPickerProxies.map((group) => (
+          <Fragment key={group.key}>
+            {group.label && <ProxyGroupHeading label={group.label} visible={group.proxies.length} total={group.total} pickerNode />}
+            {group.proxies.map(renderPickerCard)}
+          </Fragment>
+        ))
+      : pickerProxies.map(renderPickerCard)
 
     if (isMobileViewport) {
       return (
@@ -1287,12 +1409,7 @@ const SelectorRow = memo(function SelectorRow({
                                 render={
                                   <PopoverTrigger
                                     render={
-                                      <Button
-                                        variant="outline"
-                                        size="icon-sm"
-                                        aria-label="Сбросить smart-веса"
-                                        disabled={isFlushingSmart}
-                                      >
+                                      <Button variant="outline" size="icon-sm" aria-label="Сбросить smart-веса" disabled={isFlushingSmart}>
                                         {isFlushingSmart ? <IconLoader2 size={13} className="animate-spin" /> : <IconScaleOff size={13} />}
                                       </Button>
                                     }
@@ -1389,7 +1506,7 @@ const SelectorRow = memo(function SelectorRow({
                   transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
                 >
                   <div ref={pickerGridRef} className="text-foreground grid grid-cols-2 content-start gap-2 font-sans">
-                    {proxyCards.length > 0 ? (
+                    {pickerProxies.length > 0 ? (
                       proxyCards
                     ) : (
                       <div className="text-muted-foreground col-span-full py-6 text-center text-sm">Ничего не найдено</div>
@@ -1545,26 +1662,7 @@ const SelectorRow = memo(function SelectorRow({
               collapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'
             )}
           >
-            <div className="min-h-0 overflow-hidden">
-              <div
-                className={cn(
-                  'grid gap-2',
-                  display === 'standard' ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5' : 'grid-cols-2'
-                )}
-              >
-                {filteredSortedProxies.map((proxyName) => (
-                  <ProxyCard
-                    key={proxyName}
-                    proxyName={proxyName}
-                    selectorName={selectorName}
-                    autoPolicy={autoPolicy}
-                    lockSelection={lockSelection}
-                    onSelect={onSelect}
-                    onTestSingle={onTestSingle}
-                  />
-                ))}
-              </div>
-            </div>
+            <div className="min-h-0 overflow-hidden">{proxyCardGrid}</div>
           </div>
 
           <div
@@ -1595,6 +1693,7 @@ const SelectorRow = memo(function SelectorRow({
 /* ====================== ОСНОВНОЙ КОМПОНЕНТ ====================== */
 export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUnix, showHiddenSelectors, onCollapsedStateChange }: Props) {
   const [display, setDisplay] = useState(readSelectorDisplay)
+  const [groupBySubscriptions, setGroupBySubscriptions] = useState(readGroupBySubscriptions)
   useEffect(() => {
     const update = () => setDisplay(readSelectorDisplay())
     window.addEventListener(DISPLAY_EVENT, update)
@@ -1604,6 +1703,16 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       window.removeEventListener(DISPLAY_EVENT, update)
       window.removeEventListener('storage', update)
       window.removeEventListener('resize', update)
+    }
+  }, [])
+
+  useEffect(() => {
+    const update = () => setGroupBySubscriptions(readGroupBySubscriptions())
+    window.addEventListener(GROUP_BY_SUBSCRIPTIONS_EVENT, update)
+    window.addEventListener('storage', update)
+    return () => {
+      window.removeEventListener(GROUP_BY_SUBSCRIPTIONS_EVENT, update)
+      window.removeEventListener('storage', update)
     }
   }, [])
 
@@ -1747,6 +1856,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       key={name}
       selectorName={name}
       display={display}
+      groupBySubscriptions={groupBySubscriptions}
       onTestAll={testAll}
       onSelect={selectProxy}
       onTestSingle={testSingle}
@@ -1915,7 +2025,10 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div data-panel-scroll className="absolute inset-x-2.5 top-2.5 bottom-4 scrollbar-thin overflow-y-auto pb-16 md:inset-4 md:pb-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]">
+      <div
+        data-panel-scroll
+        className="absolute inset-x-2.5 top-2.5 bottom-4 scrollbar-thin overflow-y-auto pb-16 md:inset-4 md:pb-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
+      >
         {display === 'columns' || display === 'tiles' ? (
           <div className="flex items-start gap-4">
             {selectorColumns.map((column, index) => (

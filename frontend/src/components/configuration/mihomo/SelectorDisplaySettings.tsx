@@ -4,11 +4,14 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 
 export type SelectorDisplay = 'standard' | 'columns' | 'tiles' | 'popup'
 export type RoutingMode = 'rule' | 'direct' | 'global'
 const KEY = 'mihomo-selector-display'
+const GROUP_BY_SUBSCRIPTIONS_KEY = 'mihomo-selector-group-by-subscriptions'
 export const DISPLAY_EVENT = 'mihomo:selector-display'
+export const GROUP_BY_SUBSCRIPTIONS_EVENT = 'mihomo:selector-group-by-subscriptions'
 
 const LAYOUT_OPTIONS: { value: SelectorDisplay; label: string; mobileOnly?: boolean; desktopOnly?: boolean }[] = [
   { value: 'standard', label: 'Стандартный' },
@@ -30,6 +33,10 @@ export function readSelectorDisplay(): SelectorDisplay {
   return value === 'columns' || value === 'tiles' || value === 'popup' ? value : 'standard'
 }
 
+export function readGroupBySubscriptions(): boolean {
+  return localStorage.getItem(GROUP_BY_SUBSCRIPTIONS_KEY) === '1'
+}
+
 interface SelectorDisplaySettingsProps {
   mode: RoutingMode
   onModeChange: (mode: RoutingMode) => void
@@ -37,6 +44,7 @@ interface SelectorDisplaySettingsProps {
 
 export function SelectorDisplaySettings({ mode, onModeChange }: SelectorDisplaySettingsProps) {
   const [display, setDisplay] = useState(readSelectorDisplay)
+  const [groupBySubscriptions, setGroupBySubscriptions] = useState(readGroupBySubscriptions)
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
 
   useEffect(() => {
@@ -54,6 +62,12 @@ export function SelectorDisplaySettings({ mode, onModeChange }: SelectorDisplayS
     setDisplay(next)
     localStorage.setItem(KEY, next)
     window.dispatchEvent(new Event(DISPLAY_EVENT))
+  }
+
+  const changeGroupBySubscriptions = (checked: boolean) => {
+    setGroupBySubscriptions(checked)
+    localStorage.setItem(GROUP_BY_SUBSCRIPTIONS_KEY, checked ? '1' : '0')
+    window.dispatchEvent(new Event(GROUP_BY_SUBSCRIPTIONS_EVENT))
   }
 
   const layoutOptions = LAYOUT_OPTIONS.filter((option) => (isMobile ? !option.desktopOnly : !option.mobileOnly))
@@ -87,6 +101,22 @@ export function SelectorDisplaySettings({ mode, onModeChange }: SelectorDisplayS
               </label>
             ))}
           </RadioGroup>
+        </div>
+        <Separator className="-mx-1 my-1 data-horizontal:w-auto" />
+        <div className="flex flex-col">
+          <span className="text-muted-foreground px-2 py-1.5 text-xs font-medium">Список подключений</span>
+          <label
+            htmlFor="selector-group-by-subscriptions"
+            className="flex cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1.25 text-sm hover:bg-(--menu-active-bg)"
+          >
+            <Switch
+              id="selector-group-by-subscriptions"
+              checked={groupBySubscriptions}
+              onCheckedChange={changeGroupBySubscriptions}
+              aria-label="Группировать по подпискам"
+            />
+            По подпискам
+          </label>
         </div>
         <Separator className="-mx-1 my-1 data-horizontal:w-auto" />
         <div className="flex flex-col">
