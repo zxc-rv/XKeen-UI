@@ -469,7 +469,17 @@ export function ConfigPanel({
   configActionsRef,
 }: Props) {
   const { state, dispatch, showToast } = useAppContext({ includeConfigs: true })
-  const { configs, isConfigsLoading, currentCore, serviceStatus, clashApiPort, clashApiSecret, clashApiUnix } = state
+  const {
+    configs,
+    isConfigsLoading,
+    currentCore,
+    serviceStatus,
+    isOutdatedCore,
+    isOutdatedUI,
+    clashApiPort,
+    clashApiSecret,
+    clashApiUnix,
+  } = state
   const configHistoryMaxSnapshots = useSettings((s) => s.configHistoryMaxSnapshots)
   const isLocalHistoryEnabled = configHistoryMaxSnapshots > 0
   const guiRouting = useSettings((s) => s.guiRouting)
@@ -1157,11 +1167,11 @@ export function ConfigPanel({
         { value: 'connections', label: 'Соединения', icon: IconArrowsExchange, disabled: !isRunning },
         { value: 'dns', label: 'DNS', icon: IconWorld },
         { value: 'config', label: 'Конфиг', icon: IconFileCode },
-        { value: 'log', label: 'Журнал', icon: IconTerminal2 },
+        { value: 'log', label: 'Статус', icon: IconTerminal2 },
       ]
     : [
         { value: 'config', label: 'Конфиг', icon: IconFileCode },
-        { value: 'log', label: 'Журнал', icon: IconTerminal2 },
+        { value: 'log', label: 'Статус', icon: IconTerminal2 },
       ]
   const usefulLinks = [
     { title: 'Инструкция XKeen', url: 'https://github.com/Corvus-Malus/XKeen/' },
@@ -1170,29 +1180,53 @@ export function ConfigPanel({
     { title: 'Документация Mihomo', url: 'https://wiki.metacubex.one/ru/config/general' },
   ]
 
+  const isServicePending = serviceStatus === 'pending' || serviceStatus === 'loading'
+  const hasUpdate = isOutdatedCore || isOutdatedUI
+  const statusTabTone = isRunning
+    ? 'text-emerald-500! dark:text-emerald-400! data-active:bg-emerald-500/15! data-active:text-emerald-400!'
+    : isServicePending
+      ? 'text-amber-500! dark:text-amber-400! data-active:bg-amber-500/15! data-active:text-amber-400!'
+      : 'text-red-500! dark:text-red-400! data-active:bg-red-500/15! data-active:text-red-400!'
+
   const mobilePanelNav = (
     <div className="absolute inset-x-3 bottom-3 z-20 md:hidden">
       <div className="border-border/70 bg-card/70 rounded-full border p-1 shadow-lg backdrop-blur-xl backdrop-saturate-150">
         <Tabs value={currentPanel} onValueChange={(value) => changePanel(value as PanelTab)} className="w-full gap-0">
           <TabsList variant="line" className="h-auto! w-full gap-0 rounded-full bg-transparent p-0">
-            {panelNavItems.map(({ value, label, icon: NavIcon, disabled }) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                disabled={disabled}
-                onPointerDown={() => {
-                  panelPointerDownRef.current = currentPanel
-                }}
-                onClick={() => {
-                  if (panelPointerDownRef.current === value) scrollPanelToTop(value)
-                  panelPointerDownRef.current = null
-                }}
-                className="text-muted-foreground h-auto! flex-1 flex-col gap-0.5 rounded-full px-1 py-2 text-[10px] font-medium after:hidden data-active:border-transparent! data-active:bg-blue-500/15! data-active:text-blue-400! dark:data-active:text-blue-400!"
-              >
-                <NavIcon className="size-4.5" stroke={currentPanel === value ? 2.2 : 1.8} />
-                <span className="max-w-full truncate leading-none">{label}</span>
-              </TabsTrigger>
-            ))}
+            {panelNavItems.map(({ value, label, icon: NavIcon, disabled }) => {
+              const isStatus = value === 'log'
+              return (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  disabled={disabled}
+                  onPointerDown={() => {
+                    panelPointerDownRef.current = currentPanel
+                  }}
+                  onClick={() => {
+                    if (panelPointerDownRef.current === value) scrollPanelToTop(value)
+                    panelPointerDownRef.current = null
+                  }}
+                  className={cn(
+                    'text-muted-foreground h-auto! flex-1 flex-col gap-0.5 rounded-full px-1 py-2 text-[10px] font-medium after:hidden data-active:border-transparent!',
+                    isStatus
+                      ? statusTabTone
+                      : 'data-active:bg-blue-500/15! data-active:text-blue-400! dark:data-active:text-blue-400!'
+                  )}
+                >
+                  <span className="relative">
+                    <NavIcon className="size-4.5" stroke={currentPanel === value ? 2.2 : 1.8} />
+                    {isStatus && hasUpdate && (
+                      <span className="absolute -top-0.5 -right-0.5 flex">
+                        <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex size-1.75 rounded-full bg-blue-500" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="max-w-full truncate leading-none">{label}</span>
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
         </Tabs>
       </div>
