@@ -1086,12 +1086,30 @@ const ConnectionDialog = memo(function ConnectionDialog({
 const ConnectionsTabs = memo(function ConnectionsTabs({
   activeTab,
   onTabChange,
+  sourceFilter,
+  showSourceName,
 }: {
   activeTab: 'active' | 'closed'
   onTabChange: (tab: 'active' | 'closed') => void
+  sourceFilter: string[]
+  showSourceName: boolean
 }) {
-  const activeCount = useConnectionsStore((s) => s.map.size)
-  const closedCount = useConnectionsStore((s) => s.closedMap.size)
+  useSourceNameStore((s) => (showSourceName ? s.version : 0))
+  const { activeCount, closedCount } = useConnectionsStore(
+    useShallow((s) => {
+      if (!sourceFilter.length) return { activeCount: s.map.size, closedCount: s.closedMap.size }
+      const selectedLabels = new Set(sourceFilter)
+      let activeCount = 0
+      let closedCount = 0
+      for (const conn of s.map.values()) {
+        if (selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName))) activeCount++
+      }
+      for (const conn of s.closedMap.values()) {
+        if (selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName))) closedCount++
+      }
+      return { activeCount, closedCount }
+    })
+  )
   const triggerStyles = 'data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!'
 
   return (
@@ -1242,6 +1260,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   sourceLabels,
   selectedSourceLabels,
   onSourceFilterChange,
+  showSourceName,
 }: {
   filter: string
   activeTab: 'active' | 'closed'
@@ -1254,11 +1273,17 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   sourceLabels: string[]
   selectedSourceLabels: string[]
   onSourceFilterChange: (labels: string[]) => void
+  showSourceName: boolean
 }) {
   return (
     <div className="border-border flex shrink-0 flex-col gap-2.5 border-b p-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <ConnectionsTabs activeTab={activeTab} onTabChange={onTabChange} />
+        <ConnectionsTabs
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+          sourceFilter={selectedSourceLabels}
+          showSourceName={showSourceName}
+        />
 
         <SourceDeviceCombobox
           labels={sourceLabels}
@@ -1704,8 +1729,13 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
     }
     return result
   }, [sourceSets, activeTab, sourceFilter, filter, searchHiddenColumns, showSourceName, sortColumn, sortDirection, sourceNameVersion])
-  const activeCount = sourceSets.active.length
-  const closedCount = sourceSets.closed.filter((conn) => !sourceSets.active.some((active) => active.id === conn.id)).length
+  const selectedSourceLabels = useMemo(() => new Set(sourceFilter), [sourceFilter])
+  const matchesSourceFilter = (conn: Connection) =>
+    !selectedSourceLabels.size || selectedSourceLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName))
+  const activeCount = sourceSets.active.filter(matchesSourceFilter).length
+  const closedCount = sourceSets.closed.filter(
+    (conn) => !sourceSets.active.some((active) => active.id === conn.id) && matchesSourceFilter(conn)
+  ).length
   const triggerStyles = 'data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!'
   const sortOptions = [
     ['start', 'desc', 'Время ↓'],
@@ -2051,6 +2081,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           sourceLabels={sourceLabels}
           selectedSourceLabels={sourceFilter}
           onSourceFilterChange={setSourceFilter}
+          showSourceName={showSourceName}
         />
         <div className="flex min-h-0 flex-1 scrollbar-thin flex-col overflow-auto [&>[data-slot=table-container]]:shrink-0 [&>[data-slot=table-container]]:overflow-visible!">
           <Table className="min-w-240 md:min-w-190">
