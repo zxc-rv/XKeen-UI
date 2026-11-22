@@ -1383,7 +1383,7 @@ const SelectorRow = memo(function SelectorRow({
                           variant="ghost"
                           size="icon-sm"
                           className="size-6 shrink-0"
-                          aria-label={searchOpen ? 'Закрыть поиск серверов' : 'Поиск серверов'}
+                          aria-label={searchOpen ? 'Закрыть поиск подключений' : 'Поиск подключений'}
                           aria-expanded={searchOpen}
                           onClick={() => {
                             if (searchOpen) setSearchQuery('')
@@ -1484,8 +1484,8 @@ const SelectorRow = memo(function SelectorRow({
                         ref={searchInputRef}
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
-                        placeholder="Поиск серверов"
-                        aria-label="Поиск серверов"
+                        placeholder="Поиск подключений"
+                        aria-label="Поиск подключений"
                         className="text-foreground placeholder:text-muted-foreground h-8 pr-8 font-sans select-text"
                       />
                       {searchQuery && (
