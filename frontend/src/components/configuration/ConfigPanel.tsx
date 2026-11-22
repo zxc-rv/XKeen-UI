@@ -1250,7 +1250,7 @@ export function ConfigPanel({
           )}
           <div
             className={cn(
-              'flex shrink-0 flex-col gap-2 px-2.5 pt-1.5 sm:pt-4 md:flex-row md:items-start md:px-4',
+              'flex shrink-0 flex-col gap-2 px-2.5 pt-2.5 md:flex-row md:items-start md:px-4 md:pt-4',
               (isLogPanel || currentPanel === 'dns' || currentPanel === 'connections') && 'max-md:hidden'
             )}
           >
