@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput, InputGroupText } from '@/components/ui/input-group'
+import { Popover, PopoverContent, PopoverHeader, PopoverTitle } from '@/components/ui/popover'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -21,6 +22,7 @@ import {
   IconActivity,
   IconBan,
   IconCircleArrowRightFilled,
+  IconEyeOff,
   IconFilter,
   IconFilter2,
   IconLetterCase,
@@ -1248,6 +1250,146 @@ const SourceDeviceCombobox = memo(function SourceDeviceCombobox({
   )
 })
 
+const HIDE_REGEX_KEY = 'conn_hide_regex'
+const HIDE_REGEX_ENABLED_KEY = 'conn_hide_regex_enabled'
+const DEFAULT_HIDE_REGEX = 'DIRECT|dns'
+
+function readHideRegex(): string {
+  try {
+    return localStorage.getItem(HIDE_REGEX_KEY) ?? DEFAULT_HIDE_REGEX
+  } catch {
+    return DEFAULT_HIDE_REGEX
+  }
+}
+
+function readHideRegexEnabled(): boolean {
+  try {
+    return localStorage.getItem(HIDE_REGEX_ENABLED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function writeHideRegex(pattern: string) {
+  try {
+    localStorage.setItem(HIDE_REGEX_KEY, pattern)
+  } catch {
+    /* */
+  }
+}
+
+function writeHideRegexEnabled(enabled: boolean) {
+  try {
+    localStorage.setItem(HIDE_REGEX_ENABLED_KEY, String(enabled))
+  } catch {
+    /* */
+  }
+}
+
+function compileHideRegex(pattern: string): RegExp | null {
+  const trimmed = pattern.trim()
+  if (!trimmed) return null
+  try {
+    return new RegExp(trimmed)
+  } catch {
+    return null
+  }
+}
+
+const HideRegexButton = memo(function HideRegexButton({
+  value,
+  enabled,
+  onChange,
+  onEnabledChange,
+}: {
+  value: string
+  enabled: boolean
+  onChange: (value: string) => void
+  onEnabledChange: (enabled: boolean) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressClickRef = useRef(false)
+  const lastPointerTypeRef = useRef('mouse')
+
+  const cancelLongPress = () => {
+    if (!longPressTimerRef.current) return
+    clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = null
+  }
+
+  useEffect(() => cancelLongPress, [])
+
+  return (
+    <>
+      <InputGroupButton
+        ref={buttonRef}
+        size="icon-xs"
+        aria-label="Скрывать соединения"
+        aria-pressed={enabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={cn('text-muted-foreground hover:bg-transparent! active:translate-y-0', enabled && 'text-blue-400 hover:text-blue-400')}
+        onClick={() => {
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false
+            return
+          }
+          onEnabledChange(!enabled)
+        }}
+        onPointerDown={(e) => {
+          lastPointerTypeRef.current = e.pointerType
+          suppressClickRef.current = false
+          if (e.pointerType !== 'touch') return
+          cancelLongPress()
+          longPressTimerRef.current = setTimeout(() => {
+            longPressTimerRef.current = null
+            suppressClickRef.current = true
+            setOpen(true)
+          }, 500)
+        }}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+        onPointerLeave={cancelLongPress}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          cancelLongPress()
+          if (lastPointerTypeRef.current === 'touch') suppressClickRef.current = true
+          setOpen(true)
+        }}
+      >
+        <IconEyeOff />
+      </InputGroupButton>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverContent anchor={buttonRef} align="end" sideOffset={6} className="w-64 gap-2">
+          <PopoverHeader>
+            <PopoverTitle>Скрывать соединения</PopoverTitle>
+          </PopoverHeader>
+          <InputGroup className="h-8">
+            <InputGroupInput
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  setOpen(false)
+                }
+              }}
+              placeholder={DEFAULT_HIDE_REGEX}
+              aria-label="Регулярное выражение для скрытия соединений"
+              className="text-xs"
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupText className="text-xs">REGEX</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+        </PopoverContent>
+      </Popover>
+    </>
+  )
+})
+
 const ConnectionsHeader = memo(function ConnectionsHeader({
   filter,
   activeTab,
@@ -1261,6 +1403,10 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   selectedSourceLabels,
   onSourceFilterChange,
   showSourceName,
+  hideRegexPattern,
+  hideRegexEnabled,
+  onHideRegexChange,
+  onHideRegexEnabledChange,
 }: {
   filter: string
   activeTab: 'active' | 'closed'
@@ -1274,6 +1420,10 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
   selectedSourceLabels: string[]
   onSourceFilterChange: (labels: string[]) => void
   showSourceName: boolean
+  hideRegexPattern: string
+  hideRegexEnabled: boolean
+  onHideRegexChange: (value: string) => void
+  onHideRegexEnabledChange: (enabled: boolean) => void
 }) {
   return (
     <div className="border-border flex shrink-0 flex-col gap-2.5 border-b p-3">
@@ -1311,13 +1461,22 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <InputGroupButton className={caseSensitive ? 'bg-accent' : ''} onClick={onToggleCaseSensitive}>
+                    <InputGroupButton
+                      className={cn('hover:bg-transparent! active:translate-y-0', caseSensitive && 'text-blue-400 hover:text-blue-400')}
+                      onClick={onToggleCaseSensitive}
+                    >
                       <IconLetterCase size={16} />
                     </InputGroupButton>
                   }
                 />
                 <TooltipContent side="bottom">Учитывать регистр</TooltipContent>
               </Tooltip>
+              <HideRegexButton
+                value={hideRegexPattern}
+                enabled={hideRegexEnabled}
+                onChange={onHideRegexChange}
+                onEnabledChange={onHideRegexEnabledChange}
+              />
             </InputGroupAddon>
           </InputGroup>
 
@@ -1388,6 +1547,8 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onApplyFilter,
   showSourceName,
   caseSensitive,
+  hideRegexPattern,
+  hideRegexEnabled,
   onEmptyChange,
 }: {
   filter: string
@@ -1400,6 +1561,8 @@ const ConnectionsBody = memo(function ConnectionsBody({
   onApplyFilter: (value: string) => void
   showSourceName: boolean
   caseSensitive: boolean
+  hideRegexPattern: string
+  hideRegexEnabled: boolean
   onEmptyChange: (empty: boolean) => void
 }) {
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
@@ -1408,7 +1571,9 @@ const ConnectionsBody = memo(function ConnectionsBody({
     useShallow((s) => {
       const connections = Array.from(s.map.values())
       const query = filter.trim()
+      const hideRegex = hideRegexEnabled ? compileHideRegex(hideRegexPattern) : null
       let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
+      if (hideRegex) result = result.filter((conn) => !conn.chains.some((chain) => hideRegex.test(chain)))
       if (sourceFilter.length) {
         const selectedLabels = new Set(sourceFilter)
         result = result.filter((conn) => selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName)))
@@ -1475,6 +1640,8 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   onSelect,
   showSourceName,
   caseSensitive,
+  hideRegexPattern,
+  hideRegexEnabled,
   onEmptyChange,
 }: {
   filter: string
@@ -1484,6 +1651,8 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
   onSelect: (conn: Connection) => void
   showSourceName: boolean
   caseSensitive: boolean
+  hideRegexPattern: string
+  hideRegexEnabled: boolean
   onEmptyChange: (empty: boolean) => void
 }) {
   useSourceNameStore((s) => (showSourceName ? s.version : 0))
@@ -1491,7 +1660,9 @@ const ClosedConnectionsBody = memo(function ClosedConnectionsBody({
     useShallow((s) => {
       const connections = Array.from(s.closedMap.values())
       const query = filter.trim()
+      const hideRegex = hideRegexEnabled ? compileHideRegex(hideRegexPattern) : null
       let result = connections.filter((conn) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
+      if (hideRegex) result = result.filter((conn) => !conn.chains.some((chain) => hideRegex.test(chain)))
       if (sourceFilter.length) {
         const selectedLabels = new Set(sourceFilter)
         result = result.filter((conn) => selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName)))
@@ -1666,6 +1837,10 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   onToggleSearchHiddenColumns,
   onCloseVisible,
   showSourceName,
+  hideRegexPattern,
+  hideRegexEnabled,
+  onHideRegexChange,
+  onHideRegexEnabledChange,
 }: {
   filter: string
   activeTab: 'active' | 'closed' | 'all'
@@ -1683,6 +1858,10 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   searchHiddenColumns: boolean
   onToggleSearchHiddenColumns: () => void
   showSourceName: boolean
+  hideRegexPattern: string
+  hideRegexEnabled: boolean
+  onHideRegexChange: (value: string) => void
+  onHideRegexEnabledChange: (enabled: boolean) => void
 }) {
   const sourceNameVersion = useSourceNameStore((s) => (showSourceName ? s.version : 0))
   const [visibleLimit, setVisibleLimit] = useState(50)
@@ -1691,7 +1870,10 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
     () => ({ active: Array.from(liveMaps.active.values()), closed: Array.from(liveMaps.closed.values()) }),
     [liveMaps.active, liveMaps.closed]
   )
-  useEffect(() => setVisibleLimit(50), [filter, activeTab, sortColumn, sortDirection, sourceFilter, searchHiddenColumns])
+  useEffect(
+    () => setVisibleLimit(50),
+    [filter, activeTab, sortColumn, sortDirection, sourceFilter, searchHiddenColumns, hideRegexPattern, hideRegexEnabled]
+  )
   const sourceSets = liveSets
   const sourceIPs = useMemo(
     () =>
@@ -1711,6 +1893,10 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
           .map((conn) => ({ conn, closed: true }))
       )
     result = result.filter(({ conn }) => !conn.chains.some((c) => c.toLowerCase() === 'dns-out'))
+    if (hideRegexEnabled) {
+      const hideRegex = compileHideRegex(hideRegexPattern)
+      if (hideRegex) result = result.filter(({ conn }) => !conn.chains.some((chain) => hideRegex.test(chain)))
+    }
     if (sourceFilter.length) {
       const selectedLabels = new Set(sourceFilter)
       result = result.filter(({ conn }) => selectedLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName)))
@@ -1728,7 +1914,19 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
       })
     }
     return result
-  }, [sourceSets, activeTab, sourceFilter, filter, searchHiddenColumns, showSourceName, sortColumn, sortDirection, sourceNameVersion])
+  }, [
+    sourceSets,
+    activeTab,
+    sourceFilter,
+    filter,
+    searchHiddenColumns,
+    showSourceName,
+    sortColumn,
+    sortDirection,
+    sourceNameVersion,
+    hideRegexPattern,
+    hideRegexEnabled,
+  ])
   const selectedSourceLabels = useMemo(() => new Set(sourceFilter), [sourceFilter])
   const matchesSourceFilter = (conn: Connection) =>
     !selectedSourceLabels.size || selectedSourceLabels.has(getSourceLabel(conn.metadata.sourceIP, showSourceName))
@@ -1789,13 +1987,19 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
               )}
               <InputGroupButton
                 aria-pressed={searchHiddenColumns}
-                className={searchHiddenColumns ? 'bg-accent' : ''}
+                className={cn('hover:bg-transparent! active:translate-y-0', searchHiddenColumns && 'text-blue-400 hover:text-blue-400')}
                 aria-label="Искать по скрытым полям"
                 title={searchHiddenColumns ? 'Поиск по всем полям' : 'Искать по скрытым полям'}
                 onClick={onToggleSearchHiddenColumns}
               >
                 <IconLetterCase size={16} />
               </InputGroupButton>
+              <HideRegexButton
+                value={hideRegexPattern}
+                enabled={hideRegexEnabled}
+                onChange={onHideRegexChange}
+                onEnabledChange={onHideRegexEnabledChange}
+              />
             </InputGroupAddon>
           </InputGroup>
           {activeTab !== 'closed' && (
@@ -1908,6 +2112,8 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
   const dialogCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [caseSensitive, setCaseSensitive] = useState(() => localStorage.getItem('conn_filter_cs') === 'true')
+  const [hideRegexPattern, setHideRegexPattern] = useState(readHideRegex)
+  const [hideRegexEnabled, setHideRegexEnabled] = useState(readHideRegexEnabled)
   const [desktopEmpty, setDesktopEmpty] = useState(false)
   const toggleCaseSensitive = useCallback(() => {
     setCaseSensitive((prev) => {
@@ -1934,6 +2140,12 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
   useEffect(() => {
     writeSourceFilter(mobileSourceFilter)
   }, [mobileSourceFilter])
+  useEffect(() => {
+    writeHideRegex(hideRegexPattern)
+  }, [hideRegexPattern])
+  useEffect(() => {
+    writeHideRegexEnabled(hideRegexEnabled)
+  }, [hideRegexEnabled])
 
   const clearDialogCloseTimer = useCallback(() => {
     if (!dialogCloseTimerRef.current) return
@@ -2082,6 +2294,10 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           selectedSourceLabels={sourceFilter}
           onSourceFilterChange={setSourceFilter}
           showSourceName={showSourceName}
+          hideRegexPattern={hideRegexPattern}
+          hideRegexEnabled={hideRegexEnabled}
+          onHideRegexChange={setHideRegexPattern}
+          onHideRegexEnabledChange={setHideRegexEnabled}
         />
         <div className="flex min-h-0 flex-1 scrollbar-thin flex-col overflow-auto [&>[data-slot=table-container]]:shrink-0 [&>[data-slot=table-container]]:overflow-visible!">
           <Table className="min-w-240 md:min-w-190">
@@ -2098,6 +2314,8 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onApplyFilter={handleApplyFilter}
                 showSourceName={showSourceName}
                 caseSensitive={caseSensitive}
+                hideRegexPattern={hideRegexPattern}
+                hideRegexEnabled={hideRegexEnabled}
                 onEmptyChange={setDesktopEmpty}
               />
             ) : (
@@ -2109,6 +2327,8 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
                 onSelect={handleSelectConnection}
                 showSourceName={showSourceName}
                 caseSensitive={caseSensitive}
+                hideRegexPattern={hideRegexPattern}
+                hideRegexEnabled={hideRegexEnabled}
                 onEmptyChange={setDesktopEmpty}
               />
             )}
@@ -2138,6 +2358,10 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           onToggleSearchHiddenColumns={toggleMobileSearchHiddenColumns}
           onCloseVisible={closeVisibleConnections}
           showSourceName={showSourceName}
+          hideRegexPattern={hideRegexPattern}
+          hideRegexEnabled={hideRegexEnabled}
+          onHideRegexChange={setHideRegexPattern}
+          onHideRegexEnabledChange={setHideRegexEnabled}
         />
       )}
       <ConnectionDialog
