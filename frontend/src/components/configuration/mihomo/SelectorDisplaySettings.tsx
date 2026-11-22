@@ -72,15 +72,15 @@ export function SelectorDisplaySettings({ mode, onModeChange }: SelectorDisplayS
           </Button>
         }
       />
-      <PopoverContent align="end" className="border-border bg-input-background w-56 gap-3 rounded-md border ring-0">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-muted-foreground text-xs font-medium">Лейаут</span>
-          <RadioGroup value={display} onValueChange={changeDisplay} className="gap-1">
+      <PopoverContent align="end" className="border-border bg-input-background w-56 gap-0 rounded-md border p-1 ring-0">
+        <div className="flex flex-col">
+          <span className="text-muted-foreground px-2 py-1.5 text-xs font-medium">Лейаут</span>
+          <RadioGroup value={display} onValueChange={changeDisplay} className="gap-0">
             {layoutOptions.map((option) => (
               <label
                 key={option.value}
                 htmlFor={`selector-layout-${option.value}`}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-(--menu-active-bg)"
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1.25 text-sm hover:bg-(--menu-active-bg)"
               >
                 <RadioGroupItem value={option.value} id={`selector-layout-${option.value}`} />
                 {option.label}
@@ -88,15 +88,15 @@ export function SelectorDisplaySettings({ mode, onModeChange }: SelectorDisplayS
             ))}
           </RadioGroup>
         </div>
-        <Separator />
-        <div className="flex flex-col gap-1.5">
-          <span className="text-muted-foreground text-xs font-medium">Режим маршрутизации</span>
-          <RadioGroup value={mode} onValueChange={(value) => onModeChange(value as RoutingMode)} className="gap-1">
+        <Separator className="-mx-1 my-1 data-horizontal:w-auto" />
+        <div className="flex flex-col">
+          <span className="text-muted-foreground px-2 py-1.5 text-xs font-medium">Режим маршрутизации</span>
+          <RadioGroup value={mode} onValueChange={(value) => onModeChange(value as RoutingMode)} className="gap-0">
             {MODE_OPTIONS.map((option) => (
               <label
                 key={option.value}
                 htmlFor={`selector-mode-${option.value}`}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 text-sm hover:bg-(--menu-active-bg)"
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1.25 text-sm hover:bg-(--menu-active-bg)"
               >
                 <RadioGroupItem value={option.value} id={`selector-mode-${option.value}`} />
                 {option.label}
