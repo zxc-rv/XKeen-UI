@@ -181,9 +181,7 @@ function ConfigTab({
   const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
   const isCoreMihomo = currentCore === 'mihomo'
   const isMainMihomoConfig = config.file.split('/').pop()?.toLowerCase() === 'config.yaml'
-  const availableSections = isCoreMihomo && isMainMihomoConfig && !isXkeenFile(config.file)
-    ? getMihomoSections(config.content)
-    : []
+  const availableSections = isCoreMihomo && isMainMihomoConfig && !isXkeenFile(config.file) ? getMihomoSections(config.content) : []
   const tabsTrigger = (
     <TabsTrigger
       ref={setTabTriggerRef}
@@ -239,52 +237,56 @@ function ConfigTab({
     sectionMenuCloseTimerRef.current = null
     setSectionMenuOpen(true)
   }
-  useEffect(() => () => {
-    if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (sectionMenuCloseTimerRef.current) clearTimeout(sectionMenuCloseTimerRef.current)
+    },
+    []
+  )
 
-  const sectionNavigation = availableSections.length > 0 ? (
-    <DropdownMenu
-      open={sectionMenuOpen}
-      modal={false}
-      onOpenChange={(open, details) => {
-        if (!open && details.reason === 'focus-out' && sectionHoverSessionRef.current) return
-        setSectionMenuOpen(open)
-      }}
-    >
-      {tabsTrigger}
-      <DropdownMenuContent
-        anchor={sectionTabRef}
-        align="start"
-        side="bottom"
-        sideOffset={5}
-        className="w-52 min-w-52"
-        onPointerEnter={(event) => {
-          if (event.pointerType === 'mouse') {
-            sectionHoverSessionRef.current = true
-            keepSectionMenuOpen()
-          }
-        }}
-        onPointerLeave={(event) => {
-          if (event.pointerType === 'mouse') closeSectionMenuSoon()
+  const sectionNavigation =
+    availableSections.length > 0 ? (
+      <DropdownMenu
+        open={sectionMenuOpen}
+        modal={false}
+        onOpenChange={(open, details) => {
+          if (!open && details.reason === 'focus-out' && sectionHoverSessionRef.current) return
+          setSectionMenuOpen(open)
         }}
       >
-        {availableSections.map((section) => (
-          <DropdownMenuItem
-            key={section}
-            onSelect={() => {
-              setSectionMenuOpen(false)
-              onNavigateToSection(config.file, section)
-            }}
-          >
-            {section}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  ) : (
-    <TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />
-  )
+        {tabsTrigger}
+        <DropdownMenuContent
+          anchor={sectionTabRef}
+          align="start"
+          side="bottom"
+          sideOffset={5}
+          className="w-52 min-w-52"
+          onPointerEnter={(event) => {
+            if (event.pointerType === 'mouse') {
+              sectionHoverSessionRef.current = true
+              keepSectionMenuOpen()
+            }
+          }}
+          onPointerLeave={(event) => {
+            if (event.pointerType === 'mouse') closeSectionMenuSoon()
+          }}
+        >
+          {availableSections.map((section) => (
+            <DropdownMenuItem
+              key={section}
+              onSelect={() => {
+                setSectionMenuOpen(false)
+                onNavigateToSection(config.file, section)
+              }}
+            >
+              {section}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : (
+      <TooltipTrigger render={<span className="inline-flex">{tabsTrigger}</span>} />
+    )
 
   const openDialog = (value: NonNullable<DialogState>) => {
     setDialogData(value)
@@ -331,15 +333,13 @@ function ConfigTab({
   const isProtected = config.file.endsWith('/config.yaml') || config.file === 'config.yaml'
 
   if (!withContextMenu)
-    return (
-      availableSections.length > 0 ? (
-        sectionNavigation
-      ) : (
-        <Tooltip>
-          {sectionNavigation}
-          <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
-        </Tooltip>
-      )
+    return availableSections.length > 0 ? (
+      sectionNavigation
+    ) : (
+      <Tooltip>
+        {sectionNavigation}
+        <TooltipContent className="text-[13px]">{config.file}</TooltipContent>
+      </Tooltip>
     )
 
   return (
@@ -561,8 +561,7 @@ export function ConfigPanel({
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
-  const currentPanel =
-    activePanel === 'log' ? (isMobile ? 'log' : 'config') : isCoreMihomo && isRunning ? activePanel : 'config'
+  const currentPanel = activePanel === 'log' ? (isMobile ? 'log' : 'config') : isCoreMihomo && isRunning ? activePanel : 'config'
   const isLogPanel = currentPanel === 'log'
   useEffect(() => {
     if (!isMobile && activePanel === 'log') setActivePanel('config')
@@ -1210,9 +1209,7 @@ export function ConfigPanel({
                   }}
                   className={cn(
                     'text-muted-foreground h-auto! flex-1 flex-col gap-0.5 rounded-full px-1 py-2 text-[10px] font-medium after:hidden data-active:border-transparent!',
-                    isStatus
-                      ? statusTabTone
-                      : 'data-active:bg-blue-500/15! data-active:text-blue-400! dark:data-active:text-blue-400!'
+                    isStatus ? statusTabTone : 'data-active:bg-blue-500/15! data-active:text-blue-400! dark:data-active:text-blue-400!'
                   )}
                 >
                   <span className="relative">
@@ -1328,7 +1325,7 @@ export function ConfigPanel({
                       <Button
                         variant="outline"
                         size="icon"
-                        className={cn(selectorDisplay === 'popup' && 'max-md:hidden')}
+                        className={cn(selectorDisplay === 'tiles' && 'max-md:hidden')}
                         aria-label={allSelectorsCollapsed ? 'Развернуть все селекторы' : 'Свернуть все селекторы'}
                         onClick={() =>
                           window.dispatchEvent(

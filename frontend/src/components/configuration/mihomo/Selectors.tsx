@@ -969,7 +969,7 @@ const SelectorRow = memo(function SelectorRow({
   onToggleCollapse,
 }: {
   selectorName: string
-  display: 'standard' | 'columns' | 'tiles' | 'popup'
+  display: 'single_column' | 'double_column' | 'triple_column' | 'tiles'
   groupBySubscriptions: boolean
   onTestAll: (name: string) => void
   onSelect: (selectorName: string, proxyName: string) => void
@@ -1160,10 +1160,14 @@ const SelectorRow = memo(function SelectorRow({
     }
   }
 
-  const useMultiColumnCollapse = display === 'columns' || display === 'tiles'
+  const useMultiColumnCollapse = display === 'double_column' || display === 'triple_column'
   const proxyCardGridClassName = cn(
     'grid gap-2',
-    display === 'columns' ? 'grid-cols-3' : display === 'tiles' ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+    display === 'double_column'
+      ? 'grid-cols-3'
+      : display === 'triple_column'
+        ? 'grid-cols-2'
+        : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
   )
   const renderProxyCard = (proxyName: string) => (
     <ProxyCard
@@ -1189,7 +1193,7 @@ const SelectorRow = memo(function SelectorRow({
     </div>
   )
 
-  if (display === 'popup') {
+  if (display === 'tiles') {
     const selectedName = selectedProxy ? selector.now : isSmart ? 'Автовыбор' : 'Не выбрано'
     const isOpen = activePickerSelector === selectorName
     const onPickerOpenChange = (open: boolean) => {
@@ -1889,7 +1893,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
     })
   )
 
-  const selectorColumnCount = display === 'columns' ? 2 : display === 'tiles' ? 3 : 1
+  const selectorColumnCount = display === 'double_column' ? 2 : display === 'triple_column' ? 3 : 1
   const selectorColumns = useMemo(() => {
     const columns = Array.from({ length: selectorColumnCount }, () => [] as string[])
     selectorNames.forEach((name, index) => columns[index % selectorColumnCount].push(name))
@@ -2074,7 +2078,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
         data-panel-scroll
         className="absolute inset-x-2.5 top-2.5 bottom-4 scrollbar-thin overflow-y-auto pb-16 md:inset-4 md:pb-0 pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       >
-        {display === 'columns' || display === 'tiles' ? (
+        {display === 'double_column' || display === 'triple_column' ? (
           <div className="flex items-start gap-4">
             {selectorColumns.map((column, index) => (
               <div key={index} className="flex min-w-0 flex-1 basis-0 flex-col gap-4">
@@ -2086,7 +2090,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
           <div
             className={cn(
               'min-w-0',
-              display === 'popup' ? 'grid grid-cols-2 content-start items-start gap-2.5 xl:grid-cols-3' : 'flex flex-col gap-4'
+              display === 'tiles' ? 'grid grid-cols-2 content-start items-start gap-2.5 xl:grid-cols-3' : 'flex flex-col gap-4'
             )}
           >
             {selectorColumns[0].map(renderSelector)}

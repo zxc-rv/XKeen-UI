@@ -5,20 +5,29 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
+import { cn } from '@/lib/utils'
 
-export type SelectorDisplay = 'standard' | 'columns' | 'tiles' | 'popup'
+export type SelectorDisplay = 'single_column' | 'double_column' | 'triple_column' | 'tiles'
 export type RoutingMode = 'rule' | 'direct' | 'global'
-const KEY = 'mihomo-selector-display'
+const KEY = 'mihomo-selector-layout'
+const LEGACY_KEY = 'mihomo-selector-display'
 const GROUP_BY_SUBSCRIPTIONS_KEY = 'mihomo-selector-group-by-subscriptions'
 export const DISPLAY_EVENT = 'mihomo:selector-display'
 export const GROUP_BY_SUBSCRIPTIONS_EVENT = 'mihomo:selector-group-by-subscriptions'
 
 const LAYOUT_OPTIONS: { value: SelectorDisplay; label: string; mobileOnly?: boolean; desktopOnly?: boolean }[] = [
-  { value: 'standard', label: 'Стандартный' },
-  { value: 'columns', label: 'Две колонки', desktopOnly: true },
-  { value: 'tiles', label: 'Три колонки', desktopOnly: true },
-  { value: 'popup', label: 'Плитка', mobileOnly: true },
+  { value: 'single_column', label: 'Одна колонка' },
+  { value: 'double_column', label: 'Две колонки', desktopOnly: true },
+  { value: 'triple_column', label: 'Три колонки', desktopOnly: true },
+  { value: 'tiles', label: 'Плитка', mobileOnly: true },
 ]
+
+const LEGACY_DISPLAY_MAP: Record<string, SelectorDisplay> = {
+  standard: 'single_column',
+  columns: 'double_column',
+  tiles: 'triple_column',
+  popup: 'tiles',
+}
 
 const MODE_OPTIONS: { value: RoutingMode; label: string }[] = [
   { value: 'rule', label: 'RULE' },
@@ -26,11 +35,30 @@ const MODE_OPTIONS: { value: RoutingMode; label: string }[] = [
   { value: 'global', label: 'GLOBAL' },
 ]
 
+function isSelectorDisplay(value: string | null): value is SelectorDisplay {
+  return value === 'single_column' || value === 'double_column' || value === 'triple_column' || value === 'tiles'
+}
+
+function readStoredDisplay(): SelectorDisplay | null {
+  const current = localStorage.getItem(KEY)
+  if (isSelectorDisplay(current)) return current
+
+  const legacy = localStorage.getItem(LEGACY_KEY)
+  const migrated = legacy ? LEGACY_DISPLAY_MAP[legacy] : undefined
+  if (migrated) {
+    localStorage.setItem(KEY, migrated)
+    localStorage.removeItem(LEGACY_KEY)
+    return migrated
+  }
+
+  return null
+}
+
 export function readSelectorDisplay(): SelectorDisplay {
-  const value = localStorage.getItem(KEY)
-  if (window.matchMedia('(max-width: 767px)').matches) return value === 'standard' ? 'standard' : 'popup'
-  if (value === 'popup' && !window.matchMedia('(max-width: 767px)').matches) return 'standard'
-  return value === 'columns' || value === 'tiles' || value === 'popup' ? value : 'standard'
+  const value = readStoredDisplay()
+  if (window.matchMedia('(max-width: 767px)').matches) return value === 'single_column' ? 'single_column' : 'tiles'
+  if (value === 'double_column' || value === 'triple_column') return value
+  return 'single_column'
 }
 
 export function readGroupBySubscriptions(): boolean {
@@ -70,7 +98,7 @@ export function SelectorDisplaySettings({ mode, onModeChange }: SelectorDisplayS
     window.dispatchEvent(new Event(GROUP_BY_SUBSCRIPTIONS_EVENT))
   }
 
-  const layoutOptions = LAYOUT_OPTIONS.filter((option) => (isMobile ? !option.desktopOnly : !option.mobileOnly))
+  const isLayoutDisabled = (option: (typeof LAYOUT_OPTIONS)[number]) => (isMobile ? !!option.desktopOnly : !!option.mobileOnly)
 
   return (
     <Popover>
@@ -90,16 +118,22 @@ export function SelectorDisplaySettings({ mode, onModeChange }: SelectorDisplayS
         <div className="flex flex-col">
           <span className="text-muted-foreground px-2 py-1.5 text-xs font-medium">Лейаут</span>
           <RadioGroup value={display} onValueChange={changeDisplay} className="gap-0">
-            {layoutOptions.map((option) => (
-              <label
-                key={option.value}
-                htmlFor={`selector-layout-${option.value}`}
-                className="flex cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1.25 text-sm hover:bg-(--menu-active-bg)"
-              >
-                <RadioGroupItem value={option.value} id={`selector-layout-${option.value}`} />
-                {option.label}
-              </label>
-            ))}
+            {LAYOUT_OPTIONS.map((option) => {
+              const disabled = isLayoutDisabled(option)
+              return (
+                <label
+                  key={option.value}
+                  htmlFor={`selector-layout-${option.value}`}
+                  className={cn(
+                    'flex items-center gap-2 rounded-sm px-1.5 py-1.25 text-sm',
+                    disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-(--menu-active-bg)'
+                  )}
+                >
+                  <RadioGroupItem value={option.value} id={`selector-layout-${option.value}`} disabled={disabled} />
+                  {option.label}
+                </label>
+              )
+            })}
           </RadioGroup>
         </div>
         <Separator className="-mx-1 my-1 data-horizontal:w-auto" />
