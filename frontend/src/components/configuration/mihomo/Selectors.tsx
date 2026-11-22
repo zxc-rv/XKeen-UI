@@ -893,6 +893,8 @@ const SelectorCombobox = memo(function SelectorCombobox({
               value={proxyName}
               aria-disabled={disabledOptions[proxyName] || undefined}
               className={cn(
+                isFixed &&
+                  'focus:bg-emerald-500/10 focus:text-emerald-400 data-highlighted:bg-emerald-500/10 data-highlighted:text-emerald-400',
                 disabledOptions[proxyName] &&
                   'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
               )}
