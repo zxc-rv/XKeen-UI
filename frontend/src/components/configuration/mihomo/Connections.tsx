@@ -564,8 +564,8 @@ function TrafficCell({ connId }: { connId: string }) {
   const download = useConnectionsStore((s) => s.map.get(connId)?.download ?? 0)
   return (
     <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
-      <span>↑ {formatBytes(upload)}</span>
-      <span>↓ {formatBytes(download)}</span>
+      <span className="text-emerald-400">↓ {formatBytes(download)}</span>
+      <span className="text-sky-400">↑ {formatBytes(upload)}</span>
     </span>
   )
 }
@@ -829,8 +829,8 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
       </TableCell>
       <TableCell className="text-muted-foreground text-[13px]">
         <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
-          <span>↑ {formatBytes(conn.upload)}</span>
-          <span>↓ {formatBytes(conn.download)}</span>
+          <span className="text-emerald-400">↓ {formatBytes(conn.download)}</span>
+          <span className="text-sky-400">↑ {formatBytes(conn.upload)}</span>
         </span>
       </TableCell>
       <TableCell className="text-muted-foreground text-[13px] tabular-nums">
@@ -2185,6 +2185,10 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
 
   const toggleSort = useCallback((column: SortColumn) => {
     setSortColumn((prev) => {
+      if (column === 'upload' && prev !== 'upload' && prev !== 'download') {
+        setSortDirection('desc')
+        return 'download'
+      }
       if (column === 'upload' && prev === 'upload') {
         setSortDirection('desc')
         return 'download'
