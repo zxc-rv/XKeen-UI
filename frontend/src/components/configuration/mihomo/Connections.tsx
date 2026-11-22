@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { ClearIcon } from '@/components/ui/clear-icon'
 import {
   Combobox,
@@ -24,11 +25,12 @@ import {
   IconCircleArrowRightFilled,
   IconEyeOff,
   IconFilter,
-  IconFilter2,
   IconLetterCase,
   IconLoader2,
   IconPlugX,
   IconSearch,
+  IconSortAscending,
+  IconSortDescending,
   IconX,
 } from '@tabler/icons-react'
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -495,10 +497,18 @@ function timeAgo(isoString: string): string {
   return `${diffDay} ${pluralize(diffDay, 'день', 'дня', 'дней')} назад`
 }
 
+function getSortIconDirection(column: SortColumn, direction: SortDirection): SortDirection {
+  // Время сортируется по ISO-строке: убывание — это самые новые сверху, поэтому иконка инвертируется.
+  return column === 'start' ? (direction === 'desc' ? 'asc' : 'desc') : direction
+}
+
 function SortIcon({ column, sortColumn, sortDirection }: { column: SortColumn; sortColumn: SortColumn; sortDirection: SortDirection }) {
   if (sortColumn !== column) return null
-  const flipped = column === 'start' ? sortDirection === 'desc' : sortDirection === 'asc'
-  return <IconFilter2 size={15} className={cn('text-foreground', flipped && 'rotate-180')} />
+  return getSortIconDirection(column, sortDirection) === 'asc' ? (
+    <IconSortAscending size={15} className="text-foreground" />
+  ) : (
+    <IconSortDescending size={15} className="text-foreground" />
+  )
 }
 
 function MetaRow({ label, value, force }: { label: string; value: ReactNode; force?: boolean }) {
@@ -1514,7 +1524,7 @@ const ConnectionsTableHead = memo(function ConnectionsTableHead({
           const isTraffic = col.key === 'upload'
           const trafficActive = isTraffic && (sortColumn === 'upload' || sortColumn === 'download')
           const effectiveKey = isTraffic ? (sortColumn === 'download' ? 'download' : 'upload') : col.key
-          const label = isTraffic ? (trafficActive ? (sortColumn === 'upload' ? '↑ Отдано' : '↓ Скачано') : 'Трафик') : col.label
+          const label = isTraffic ? (trafficActive ? (sortColumn === 'upload' ? '↑ Отправлено' : '↓ Скачано') : 'Трафик') : col.label
           return (
             <TableHead
               key={col.label}
@@ -1936,22 +1946,17 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
   ).length
   const triggerStyles = 'data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!'
   const sortOptions = [
-    ['start', 'desc', 'Время ↓'],
-    ['start', 'asc', 'Время ↑'],
-    ['host', 'desc', 'Хост ↓'],
-    ['host', 'asc', 'Хост ↑'],
-    ['protocol', 'desc', 'Тип ↓'],
-    ['protocol', 'asc', 'Тип ↑'],
-    ['chains', 'desc', 'Цепочка ↓'],
-    ['chains', 'asc', 'Цепочка ↑'],
-    ['source', 'desc', 'Источник ↓'],
-    ['source', 'asc', 'Источник ↑'],
-    ['upload', 'desc', 'Отправлено ↓'],
-    ['upload', 'asc', 'Отправлено ↑'],
-    ['download', 'desc', 'Получено ↓'],
-    ['download', 'asc', 'Получено ↑'],
-  ] as const satisfies readonly [Exclude<SortColumn, null>, SortDirection, string][]
-  const sortItems = Object.fromEntries(sortOptions.map(([column, direction, label]) => [`${column}:${direction}`, label]))
+    ['chains', 'Цепочка'],
+    ['host', 'Хост'],
+    ['protocol', 'Тип'],
+    ['source', 'Источник'],
+    ['start', 'Время'],
+    ['download', 'Скачано'],
+    ['upload', 'Отправлено'],
+  ] as const satisfies readonly [Exclude<SortColumn, null>, string][]
+  const sortItems = Object.fromEntries(sortOptions.map(([column, label]) => [column, label]))
+  const selectedSortColumn = sortColumn ?? 'host'
+  const sortIconDirection = getSortIconDirection(selectedSortColumn, sortDirection)
 
   return (
     <div className="absolute inset-x-0 top-1.5 bottom-0 flex min-h-0 flex-col gap-2 md:hidden">
@@ -2022,27 +2027,36 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
             onChange={onSourceFilterChange}
             className="h-9 min-w-0 flex-[1.2]"
           />
-          <Select
-            value={`${sortColumn ?? 'host'}:${sortDirection}`}
-            items={sortItems}
-            onValueChange={(value) => {
-              const [column, direction] = value.split(':')
-              onSortChange(column as SortColumn, direction as SortDirection)
-            }}
-          >
-            <SelectTrigger className="h-9 min-w-0 flex-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="start" sideOffset={4}>
-              <SelectGroup>
-                {sortOptions.map(([column, direction, label]) => (
-                  <SelectItem key={`${column}:${direction}`} value={`${column}:${direction}`}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <ButtonGroup className="min-w-0 flex-1">
+            <Select
+              value={selectedSortColumn}
+              items={sortItems}
+              onValueChange={(value) => onSortChange(value as SortColumn, sortDirection)}
+            >
+              <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Сортировка">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start" sideOffset={4}>
+                <SelectGroup>
+                  {sortOptions.map(([column, label]) => (
+                    <SelectItem key={column} value={column}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              className="shrink-0"
+              aria-label={sortDirection === 'asc' ? 'По возрастанию' : 'По убыванию'}
+              title={sortDirection === 'asc' ? 'По возрастанию' : 'По убыванию'}
+              onClick={() => onSortChange(selectedSortColumn, sortDirection === 'asc' ? 'desc' : 'asc')}
+            >
+              {sortIconDirection === 'asc' ? <IconSortAscending /> : <IconSortDescending />}
+            </Button>
+          </ButtonGroup>
         </div>
       </div>
       <div data-panel-scroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-20">
