@@ -168,9 +168,13 @@ function ConfigTab({
   const sectionHoverSessionRef = useRef(false)
   const touchStartedOnActiveConfigRef = useRef(false)
   const sectionTabRef = useRef<HTMLButtonElement>(null)
+  const tabTriggerRef = useRef<HTMLButtonElement>(null)
+  const setTabTriggerRef = useCallback((node: HTMLButtonElement | null) => {
+    tabTriggerRef.current = node
+    sectionTabRef.current = node
+  }, [])
 
   const inputRef = useRef<HTMLInputElement>(null)
-  const pendingInputFocusRef = useRef(false)
   const [inputValue, setInputValue] = useState('')
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
@@ -182,7 +186,7 @@ function ConfigTab({
     : []
   const tabsTrigger = (
     <TabsTrigger
-      ref={availableSections.length > 0 ? sectionTabRef : undefined}
+      ref={setTabTriggerRef}
       value={config.file}
       className="dark:data-[state=active]:bg-input-background! relative data-[state=active]:bg-white!"
       onPointerEnter={(event) => {
@@ -283,7 +287,6 @@ function ConfigTab({
   )
 
   const openDialog = (value: NonNullable<DialogState>) => {
-    pendingInputFocusRef.current = value.type !== 'delete'
     setDialogData(value)
     setPopoverOpen(true)
   }
@@ -362,16 +365,7 @@ function ConfigTab({
             </Tooltip>
           )}
         </ContextMenuTrigger>
-        <ContextMenuContent
-          className="min-w-48"
-          onCloseAutoFocus={(e) => {
-            if (pendingInputFocusRef.current) {
-              e.preventDefault()
-              pendingInputFocusRef.current = false
-              requestAnimationFrame(() => inputRef.current?.focus())
-            }
-          }}
-        >
+        <ContextMenuContent className="min-w-48" finalFocus={false}>
           <ContextMenuItem
             onSelect={() => {
               const dir = config.file.substring(0, config.file.lastIndexOf('/'))
@@ -411,7 +405,13 @@ function ConfigTab({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <PopoverContent align="start" className="w-auto min-w-64" avoidCollisions={!isMobile}>
+      <PopoverContent
+        anchor={tabTriggerRef}
+        align="start"
+        className="w-auto min-w-64"
+        avoidCollisions={!isMobile}
+        initialFocus={dialogData?.type === 'delete' ? true : inputRef}
+      >
         {dialogData?.type === 'delete' ? (
           <>
             <p className="text-sm font-medium">Удалить «{config.file.split('/').pop()}»?</p>
