@@ -19,12 +19,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils'
 import {
   IconActivity,
-  IconArrowDown,
-  IconArrowsSort,
-  IconArrowUp,
   IconBan,
   IconCircleArrowRightFilled,
   IconFilter,
+  IconFilter2,
   IconLetterCase,
   IconLoader2,
   IconPlugX,
@@ -493,8 +491,9 @@ function timeAgo(isoString: string): string {
 }
 
 function SortIcon({ column, sortColumn, sortDirection }: { column: SortColumn; sortColumn: SortColumn; sortDirection: SortDirection }) {
-  if (sortColumn !== column) return <IconArrowsSort size={13} className="opacity-30" />
-  return sortDirection === 'asc' ? <IconArrowUp size={13} className="text-primary" /> : <IconArrowDown size={13} className="text-primary" />
+  if (sortColumn !== column) return null
+  const flipped = column === 'start' ? sortDirection === 'desc' : sortDirection === 'asc'
+  return <IconFilter2 size={15} className={cn('text-foreground', flipped && 'rotate-180')} />
 }
 
 function MetaRow({ label, value, force }: { label: string; value: ReactNode; force?: boolean }) {
@@ -804,9 +803,7 @@ const ClosedConnectionRow = memo(function ClosedConnectionRow({
           </TooltipContent>
         </Tooltip>
       </TableCell>
-      <TableCell className="text-muted-foreground text-[13px]">
-        {getConnectionProtocolLabel(conn)}
-      </TableCell>
+      <TableCell className="text-muted-foreground text-[13px]">{getConnectionProtocolLabel(conn)}</TableCell>
       <TableCell className="text-muted-foreground max-w-64 text-[13px] md:max-w-47.5">
         <Tooltip>
           <TooltipTrigger render={<span className="block w-fit max-w-full truncate">{source}</span>} />
@@ -973,7 +970,7 @@ function ConnectionDialogTraffic({ conn }: { conn: Connection }) {
 
 const ConnectionDialogTitle = memo(function ConnectionDialogTitle({ conn }: { conn: Connection }) {
   const title = getConnectionHost(conn) || 'Соединение'
-  return <DialogTitle className="min-w-0 text-base truncate">{title}</DialogTitle>
+  return <DialogTitle className="min-w-0 truncate text-base">{title}</DialogTitle>
 })
 
 const ConnectionDialog = memo(function ConnectionDialog({
@@ -1027,10 +1024,16 @@ const ConnectionDialog = memo(function ConnectionDialog({
               <div className="flex min-w-0 items-center gap-3 pr-13">
                 <ConnectionDialogTitle conn={renderedConn} />
                 <TabsList className="shrink-0">
-                  <TabsTrigger value="ui" className="data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!">
+                  <TabsTrigger
+                    value="ui"
+                    className="data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!"
+                  >
                     UI
                   </TabsTrigger>
-                  <TabsTrigger value="json" className="data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!">
+                  <TabsTrigger
+                    value="json"
+                    className="data-[state=active]:bg-background! data-[state=active]:text-foreground! data-[state=active]:shadow-sm!"
+                  >
                     JSON
                   </TabsTrigger>
                 </TabsList>
@@ -1038,17 +1041,13 @@ const ConnectionDialog = memo(function ConnectionDialog({
             )}
           </DialogHeader>
 
-          <TabsContent ref={detailsBodyRef} value="ui" className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
+          <TabsContent ref={detailsBodyRef} value="ui" className="min-h-0 flex-1 scrollbar-thin overflow-y-auto">
             {renderedConn && <ConnectionDialogMeta conn={renderedConn} showSourceName={showSourceName} showExtended={tileMode} />}
           </TabsContent>
           <TabsContent
             value="json"
-            className="scrollbar-thin min-h-0 overflow-y-auto"
-            style={
-              bodyHeight != null
-                ? { flex: `0 0 ${bodyHeight}px`, height: bodyHeight }
-                : { maxHeight: '50dvh' }
-            }
+            className="min-h-0 scrollbar-thin overflow-y-auto"
+            style={bodyHeight != null ? { flex: `0 0 ${bodyHeight}px`, height: bodyHeight } : { maxHeight: '50dvh' }}
           >
             {renderedConn && (
               <pre className="text-muted-foreground rounded-lg border p-3 font-mono text-xs break-all whitespace-pre-wrap">
@@ -1200,7 +1199,7 @@ const SourceDeviceCombobox = memo(function SourceDeviceCombobox({
           fullWidth
           showTrigger={false}
           placeholder="Поиск устройства"
-          className="border-input! has-[[data-slot=input-group-control]:focus-visible]:border-input! has-[[data-slot=input-group-control]:focus-visible]:shadow-none! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
+          className="border-input! has-[[data-slot=input-group-control]:focus-visible]:border-input! m-1 h-8 w-auto shadow-none has-[[data-slot=input-group-control]:focus-visible]:shadow-none! has-[[data-slot=input-group-control]:focus-visible]:ring-0!"
         >
           <InputGroupAddon align="inline-start">
             <IconSearch />
@@ -1262,7 +1261,7 @@ const ConnectionsHeader = memo(function ConnectionsHeader({
           labels={sourceLabels}
           selectedLabels={selectedSourceLabels}
           onChange={onSourceFilterChange}
-          className="h-9 w-44 shrink-0 max-md:min-w-0 max-md:basis-0 max-md:grow"
+          className="h-9 w-44 shrink-0 max-md:min-w-0 max-md:grow max-md:basis-0"
         />
 
         <div className="flex min-w-0 basis-full items-center gap-2 md:contents">
@@ -1580,9 +1579,7 @@ const MobileConnectionCard = memo(function MobileConnectionCard({
         </div>
       </div>
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="text-muted-foreground min-w-0 truncate text-xs">
-          {getConnectionProtocolLabel(conn)}
-        </span>
+        <span className="text-muted-foreground min-w-0 truncate text-xs">{getConnectionProtocolLabel(conn)}</span>
         <span className="text-muted-foreground flex shrink-0 items-center gap-2 text-xs tabular-nums">
           <span className="text-emerald-400">↓ {formatBytes(conn.download)}</span>
           <span className="text-sky-400">↑ {formatBytes(conn.upload)}</span>
@@ -1722,10 +1719,6 @@ const MobileConnectionsView = memo(function MobileConnectionsView({
     ['upload', 'asc', 'Отправлено ↑'],
     ['download', 'desc', 'Получено ↓'],
     ['download', 'asc', 'Получено ↑'],
-    ['uploadSpeed', 'desc', 'Скорость отдачи ↓'],
-    ['uploadSpeed', 'asc', 'Скорость отдачи ↑'],
-    ['downloadSpeed', 'desc', 'Скорость загрузки ↓'],
-    ['downloadSpeed', 'asc', 'Скорость загрузки ↑'],
   ] as const satisfies readonly [Exclude<SortColumn, null>, SortDirection, string][]
   const sortItems = Object.fromEntries(sortOptions.map(([column, direction, label]) => [`${column}:${direction}`, label]))
 
@@ -2056,7 +2049,7 @@ export function ConnectionsPanel({ clashApiPort, clashApiSecret, clashApiUnix }:
           selectedSourceLabels={sourceFilter}
           onSourceFilterChange={setSourceFilter}
         />
-        <div className="flex min-h-0 flex-1 flex-col scrollbar-thin overflow-auto [&>[data-slot=table-container]]:shrink-0 [&>[data-slot=table-container]]:overflow-visible!">
+        <div className="flex min-h-0 flex-1 scrollbar-thin flex-col overflow-auto [&>[data-slot=table-container]]:shrink-0 [&>[data-slot=table-container]]:overflow-visible!">
           <Table className="min-w-240 md:min-w-190">
             <ConnectionsTableHead sortColumn={sortColumn} sortDirection={sortDirection} onSort={toggleSort} />
             {activeTab === 'active' ? (
