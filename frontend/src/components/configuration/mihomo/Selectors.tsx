@@ -45,6 +45,8 @@ import { DEFAULT_PING_TEST_TIMEOUT, DEFAULT_PING_TEST_URL, type ProxyProvider } 
 
 const ACTIVE_CARD_CLASSES = 'border-[#60a5fa] bg-linear-to-b from-blue-500/25 to-blue-500/15'
 const HOVER_CARD_CLASSES = 'hover:border-[#60a5fa] hover:bg-linear-to-b hover:from-blue-500/15 hover:to-blue-500/5'
+const DEAD_CARD_CLASSES = 'border-ring/40 bg-[linear-gradient(135deg,rgba(239,68,68,0.06)_0%,transparent_50%)]'
+const DEAD_HOVER_CARD_CLASSES = 'hover:bg-linear-to-b hover:from-red-500/10 hover:to-red-500/5'
 
 interface ProxyHistory {
   time: string
@@ -489,6 +491,7 @@ const ProxyCard = memo(function ProxyCard({
   const history = getProxyHistory(proxy)
   const canTest = !NO_DELAY_TYPES.has(proxy.type.toLowerCase())
   const selectionDisabled = lockSelection || isSelectionDisabled(autoPolicy, proxy)
+  const isDead = isTimedOutProxy(proxy)
   const smartLabel = smartInfo ? (SMART_RANK_LABELS[smartInfo.rank] ?? smartInfo.rank) : null
   const showTcpOnly = proxy.udp === false
   return (
@@ -500,9 +503,11 @@ const ProxyCard = memo(function ProxyCard({
           ? 'border-emerald-400 bg-linear-to-b from-emerald-500/25 to-emerald-500/15'
           : isActive
             ? ACTIVE_CARD_CLASSES
-            : selectionDisabled
-              ? 'border-ring/35 bg-[linear-gradient(135deg,rgba(148,163,184,0.08)_0%,transparent_55%)]'
-              : cn('border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)]', HOVER_CARD_CLASSES)
+            : isDead
+              ? cn(DEAD_CARD_CLASSES, !selectionDisabled && DEAD_HOVER_CARD_CLASSES)
+              : selectionDisabled
+                ? 'border-ring/35 bg-[linear-gradient(135deg,rgba(148,163,184,0.08)_0%,transparent_55%)]'
+                : cn('border-ring/40 bg-[linear-gradient(135deg,rgba(59,130,246,0.05)_0%,transparent_50%)]', HOVER_CARD_CLASSES)
       )}
       onClick={() => !selectionDisabled && onSelect(selectorName, proxyName)}
       onContextMenu={(e) => {
