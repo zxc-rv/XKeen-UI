@@ -145,7 +145,7 @@ export function GuiLog({ editorRef, configs, activeConfigIndex }: Props) {
   const color = LEVEL_COLOR[cfg.loglevel]
 
   return (
-    <div className="absolute inset-0 flex flex-col gap-6 overflow-y-auto p-4 sm:gap-8 sm:p-6">
+    <div className="absolute inset-0 flex flex-col gap-6 overflow-y-auto p-2.5 sm:gap-8 sm:p-6">
       <section className="flex flex-col gap-3">
         <h3 className="text-base font-semibold">Access Log</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

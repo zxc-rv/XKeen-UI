@@ -467,7 +467,7 @@ export function GuiRouting({ editorRef, configs, activeConfigIndex }: Props) {
   )
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="absolute inset-4 flex-col">
+    <Tabs value={tab} onValueChange={setTab} className="absolute inset-2.5 flex-col sm:inset-4">
       <div className="flex shrink-0 items-center gap-2">
         <TabsList>
           <TabsTrigger value="rules" className="dark:data-[state=active]:bg-input-background! data-[state=active]:bg-white!">

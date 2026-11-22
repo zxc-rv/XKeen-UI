@@ -391,7 +391,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
 
   return (
     <TooltipProvider delayDuration={500}>
-      <div className="absolute inset-4 -mb-2 flex flex-col">
+      <div className="absolute inset-2.5 -mb-2 flex flex-col sm:inset-4">
         <div ref={scrollRef} className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-2 overflow-y-auto pb-2">
           {outbounds.length === 0 ? (
             <Empty>
