@@ -1032,7 +1032,8 @@ const SelectorRow = memo(function SelectorRow({
         card.getBoundingClientRect()
       }
 
-      const heightLimit = Math.max(240, Math.min(window.innerHeight - 24, window.innerHeight * 0.82))
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+      const heightLimit = Math.max(0, Math.min(viewportHeight - 24, viewportHeight * 0.7))
       const headerHeight = pickerHeaderRef.current?.getBoundingClientRect().height ?? 72
       const grid = pickerGridRef.current
       const pickerNodes = grid?.querySelectorAll<HTMLElement>(':scope > [data-picker-node]')
@@ -1047,7 +1048,7 @@ const SelectorRow = memo(function SelectorRow({
         current
           ? {
               ...current,
-              to: { left: 12, top: Math.max(12, (window.innerHeight - height) / 2), width, height },
+              to: { left: 12, top: Math.max(12, (viewportHeight - height) / 2), width, height },
             }
           : current
       )
@@ -1402,7 +1403,7 @@ const SelectorRow = memo(function SelectorRow({
                   setSearchOpen(false)
                   setSearchQuery('')
                 }}
-                className="bg-input-background border-border text-foreground flex max-h-[calc(100dvh-1.5rem)] min-w-0 flex-col gap-2.5 overflow-hidden rounded-xl border p-3 font-sans shadow-xl pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
+                className="bg-input-background border-border text-foreground flex max-h-[70dvh] min-w-0 flex-col gap-2.5 overflow-hidden rounded-xl border p-3 font-sans shadow-xl pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
               >
                 <DialogHeader ref={pickerHeaderRef} className="gap-2">
                   <DialogTitle className="sr-only">Выбор сервера для {selectorName}</DialogTitle>
