@@ -45,6 +45,10 @@ function usageColorClass(percent: number) {
   return 'text-muted-foreground'
 }
 
+function truncateCoreVersion(version: string) {
+  return version.length > 9 ? `${version.slice(0, 8)}…` : version
+}
+
 async function applyAutoDns(setupFilter: boolean) {
   const configsResult = await apiCall<{ success: boolean; configs?: { file: string; content: string }[] }>('GET', 'configs')
   const yamlConfig = configsResult.success ? configsResult.configs?.find((c) => c.file.endsWith('/config.yaml')) : undefined
@@ -94,6 +98,14 @@ export function StatusBar({
 
   const [dnsWarningOpen, setDnsWarningOpen] = useState(false)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const updateViewport = () => setIsMobile(media.matches)
+    media.addEventListener('change', updateViewport)
+    return () => media.removeEventListener('change', updateViewport)
+  }, [])
 
   useEffect(() => {
     if (currentCore === 'mihomo') fetchDnsStatus().catch(() => {})
@@ -245,229 +257,239 @@ export function StatusBar({
           : 'from-red-500/15 via-card to-rose-500/10 shadow-[inset_0_1px_0_0_rgba(248,113,113,0.15)]'
       : 'from-blue-500/15 via-card to-cyan-500/10 shadow-[inset_0_1px_0_0_rgba(96,165,250,0.15)]'
 
+  const coreVersion = coreVersions[currentCore]
+
   return (
     <>
       <TooltipProvider delayDuration={500}>
-        <div
+        <fieldset
           data-slot="status-bar"
           data-style={settings.statusBarStyle}
           className={cn(
-            'border-border bg-card relative z-40 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border-0 px-2.5 pt-1.5 pb-3 sm:px-4 md:flex-row md:flex-nowrap md:border md:py-3',
+            'border-border bg-card relative z-40 min-w-0 shrink-0 rounded-xl border px-2.5 pt-1.5 pb-3 max-md:mx-2.5 max-md:mt-1.5 sm:px-4 md:py-3',
             className
           )}
         >
-          {/* Статус */}
-          <div className="order-1 flex max-w-full min-w-0 items-center justify-start md:order-1 md:ml-0 md:w-auto md:justify-start">
-            <div
-              data-slot="service-status"
-              data-style={settings.statusBarStyle}
-              className={cn(
-                'bg-muted/40 flex min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1.5 sm:gap-2 sm:px-3',
-                settings.statusBarStyle === 'accent' &&
-                  cn('status-accent via-card bg-linear-to-br', statusAccentGradient, statusAccentBorder)
-              )}
-            >
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.75 pb-0.5">
-                  <div className="relative size-2.5 shrink-0">
-                    {isRunning && (
-                      <span className="absolute top-1/2 left-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-emerald-400 opacity-60" />
-                    )}
-                    <span
-                      className={cn(
-                        'absolute top-1/2 left-1/2 size-1.75 -translate-x-1/2 -translate-y-1/2 rounded-full',
-                        isRunning ? 'bg-emerald-500' : isPending ? 'animate-pulse bg-amber-500' : 'bg-red-500'
-                      )}
-                    />
-                  </div>
-                  <span className="text-foreground/80 text-[11px] font-medium whitespace-nowrap sm:text-xs">{statusText}</span>
-                </div>
-                <span className="text-muted-foreground flex items-center gap-1.5 text-[11px] tracking-tight whitespace-nowrap">
-                  <span className="flex items-center gap-1">
-                    <IconMemory
-                      className={cn('size-3.25', usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100))}
-                    />
-                    <span className={usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100)}>
-                      {formatMemoryMB(systemStats?.memoryUsed ?? 0)}/{formatMemoryMB(systemStats?.memoryTotal ?? 0)} МБ
-                    </span>
-                  </span>
-                  <span className="bg-border h-3 w-px" />
-                  <span className="flex items-center gap-1">
-                    <IconCpu className={cn('size-3.25', systemStats ? usageColorClass(systemStats.cpuUsage) : '')} />
-                    <span className={systemStats ? usageColorClass(systemStats.cpuUsage) : ''}>
-                      {systemStats ? `${systemStats.cpuUsage.toFixed(0)}%` : '—'}
-                    </span>
-                  </span>
-                </span>
-              </div>
-
-              <span className="bg-border h-6 w-px" />
-
-              <div className="flex shrink-0 items-center gap-1">
-                {isConfigsLoading ? (
-                  <>
-                    <Skeleton className="size-7 rounded-md" />
-                    <Skeleton className="size-7 rounded-md" />
-                  </>
-                ) : (
-                  <>
-                    {isRunning && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button variant="outline" size="icon-sm" onClick={restartService} disabled={isPending}>
-                              {isPending ? <Spinner className="text-muted-foreground size-3.5" /> : <IconRefresh className="size-4" />}
-                            </Button>
-                          }
-                        />
-                        <TooltipContent>Перезапустить</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {!isRunning && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              variant="outline"
-                              size="icon-sm"
-                              className="text-emerald-500 hover:border-emerald-500/50 hover:text-emerald-400"
-                              onClick={startService}
-                              disabled={isPending}
-                            >
-                              {isPending ? (
-                                <Spinner className="text-muted-foreground size-3.5" />
-                              ) : (
-                                <IconPlayerPlayFilled className="size-4" />
-                              )}
-                            </Button>
-                          }
-                        />
-                        <TooltipContent>Запустить</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {isRunning && (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              variant="outline"
-                              size="icon-sm"
-                              className="text-destructive hover:text-destructive/80"
-                              onClick={stopService}
-                              disabled={isPending}
-                            >
-                              {isPending ? (
-                                <Spinner className="text-muted-foreground size-3.5" />
-                              ) : (
-                                <IconPlayerStopFilled className="size-4" />
-                              )}
-                            </Button>
-                          }
-                        />
-                        <TooltipContent>Остановить</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </>
+          <legend className="ml-2.5 px-1 text-sm font-medium md:hidden">Статус</legend>
+          <div className="flex flex-wrap items-center justify-between gap-2 max-md:pt-1 md:flex-row md:flex-nowrap">
+            {/* Статус */}
+            <div className="order-1 flex max-w-full min-w-0 items-center justify-start md:order-1 md:ml-0 md:w-auto md:justify-start">
+              <div
+                data-slot="service-status"
+                data-style={settings.statusBarStyle}
+                className={cn(
+                  'bg-muted/40 flex min-w-0 items-center gap-1.5 rounded-lg border px-2 py-1.5 sm:gap-2 sm:px-3',
+                  settings.statusBarStyle === 'accent' &&
+                    cn('status-accent via-card bg-linear-to-br', statusAccentGradient, statusAccentBorder)
                 )}
+              >
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.75 pb-0.5">
+                    <div className="relative size-2.5 shrink-0">
+                      {isRunning && (
+                        <span className="absolute top-1/2 left-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-emerald-400 opacity-60" />
+                      )}
+                      <span
+                        className={cn(
+                          'absolute top-1/2 left-1/2 size-1.75 -translate-x-1/2 -translate-y-1/2 rounded-full',
+                          isRunning ? 'bg-emerald-500' : isPending ? 'animate-pulse bg-amber-500' : 'bg-red-500'
+                        )}
+                      />
+                    </div>
+                    <span className="text-foreground/80 text-[11px] font-medium whitespace-nowrap sm:text-xs">{statusText}</span>
+                  </div>
+                  <span className="text-muted-foreground flex items-center gap-1.5 text-[11px] tracking-tight whitespace-nowrap">
+                    <span className="flex items-center gap-1">
+                      <IconMemory
+                        className={cn(
+                          'size-3.25',
+                          usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100)
+                        )}
+                      />
+                      <span className={usageColorClass(((systemStats?.memoryUsed ?? 0) / (systemStats?.memoryTotal || 1)) * 100)}>
+                        {formatMemoryMB(systemStats?.memoryUsed ?? 0)}/{formatMemoryMB(systemStats?.memoryTotal ?? 0)} МБ
+                      </span>
+                    </span>
+                    <span className="bg-border h-3 w-px" />
+                    <span className="flex items-center gap-1">
+                      <IconCpu className={cn('size-3.25', systemStats ? usageColorClass(systemStats.cpuUsage) : '')} />
+                      <span className={systemStats ? usageColorClass(systemStats.cpuUsage) : ''}>
+                        {systemStats ? `${systemStats.cpuUsage.toFixed(0)}%` : '—'}
+                      </span>
+                    </span>
+                  </span>
+                </div>
+
+                <span className="bg-border h-6 w-px" />
+
+                <div className="flex shrink-0 items-center gap-1">
+                  {isConfigsLoading ? (
+                    <>
+                      <Skeleton className="size-7 rounded-md" />
+                      <Skeleton className="size-7 rounded-md" />
+                    </>
+                  ) : (
+                    <>
+                      {isRunning && (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button variant="outline" size="icon-sm" onClick={restartService} disabled={isPending}>
+                                {isPending ? <Spinner className="text-muted-foreground size-3.5" /> : <IconRefresh className="size-4" />}
+                              </Button>
+                            }
+                          />
+                          <TooltipContent>Перезапустить</TooltipContent>
+                        </Tooltip>
+                      )}
+                      {!isRunning && (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="outline"
+                                size="icon-sm"
+                                className="text-emerald-500 hover:border-emerald-500/50 hover:text-emerald-400"
+                                onClick={startService}
+                                disabled={isPending}
+                              >
+                                {isPending ? (
+                                  <Spinner className="text-muted-foreground size-3.5" />
+                                ) : (
+                                  <IconPlayerPlayFilled className="size-4" />
+                                )}
+                              </Button>
+                            }
+                          />
+                          <TooltipContent>Запустить</TooltipContent>
+                        </Tooltip>
+                      )}
+                      {isRunning && (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="outline"
+                                size="icon-sm"
+                                className="text-destructive hover:text-destructive/80"
+                                onClick={stopService}
+                                disabled={isPending}
+                              >
+                                {isPending ? (
+                                  <Spinner className="text-muted-foreground size-3.5" />
+                                ) : (
+                                  <IconPlayerStopFilled className="size-4" />
+                                )}
+                              </Button>
+                            }
+                          />
+                          <TooltipContent>Остановить</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Логотип */}
-          <div className="order-2 ml-auto flex shrink-0 items-center justify-end md:absolute md:left-1/2 md:order-2 md:ml-0 md:-translate-x-1/2">
-            <a
-              href="https://github.com/zxc-rv/XKeen-UI"
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-md transition-opacity hover:opacity-85"
-            >
-              <span className="bg-linear-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-[22px] font-semibold text-transparent sm:text-2xl md:text-[28px]">
-                XKeen UI
-              </span>
-            </a>
-          </div>
+            {/* Логотип */}
+            <div className="order-2 mx-auto flex shrink-0 items-center justify-center md:absolute md:left-1/2 md:order-2 md:mx-0 md:ml-0 md:-translate-x-1/2">
+              <a
+                href="https://github.com/zxc-rv/XKeen-UI"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md transition-opacity hover:opacity-85"
+              >
+                <span className="bg-linear-to-r from-[#00D3F2] via-[#2B7FFF] to-[#155DFC] bg-clip-text text-[22px] font-semibold text-transparent sm:text-2xl md:text-[28px]">
+                  XKeen UI
+                </span>
+              </a>
+            </div>
 
-          {/* Правая сторона */}
-          <div className="order-3 ml-auto flex w-full items-center justify-start gap-1.5 md:w-auto md:justify-end">
-            {isConfigsLoading || !version ? (
-              <Skeleton className="h-9 w-35.75" />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button variant="outline" onClick={onOpenCoreManage} disabled={isPending}>
-                      <CoreLogo core={currentCore} data-icon="inline-start" />
-                      <span className="text-[13px]">{capitalize(currentCore)}</span>
-                      {coreVersions[currentCore] && (
-                        <span className="text-muted-foreground/60 mt-0.5 text-xs">{coreVersions[currentCore]}</span>
-                      )}
-                      {isOutdatedCore && (
-                        <span className="relative mb-3 -ml-0.75 flex">
-                          <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
-                          <span className="relative inline-flex size-1.75 rounded-full bg-blue-500" />
-                        </span>
-                      )}
-                    </Button>
-                  }
-                />
-                <TooltipContent>Управление ядром</TooltipContent>
-              </Tooltip>
-            )}
-            {isConfigsLoading || !version ? (
-              <Skeleton className="h-9 w-18.75" />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      onClick={() => onOpenUpdate('self')}
-                      disabled={isPending}
-                      className={cn(
-                        'relative overflow-hidden text-xs tracking-wider',
-                        isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
-                      )}
-                    >
-                      {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}
-                      <IconBox data-icon="inline-start" className="size-4.5" />
-                      {version}
-                    </Button>
-                  }
-                />
-                <TooltipContent>{isOutdatedUI ? 'Доступно обновление' : 'Версия XKeen UI'}</TooltipContent>
-              </Tooltip>
-            )}
-            {isConfigsLoading || !version ? (
-              <Skeleton className="size-9" />
-            ) : (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button variant="outline" size="icon" onClick={onOpenSettings}>
-                      <IconSettings className="size-4.5" />
-                    </Button>
-                  }
-                />
-                <TooltipContent>Настройки</TooltipContent>
-              </Tooltip>
-            )}
-            {authEnabled &&
-              (isConfigsLoading || !version ? (
+            {/* Правая сторона */}
+            <div className="order-3 ml-auto flex w-full items-center justify-start gap-1.5 md:w-auto md:justify-end">
+              {isConfigsLoading || !version ? (
+                <Skeleton className="h-9 w-35.75" />
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button variant="outline" onClick={onOpenCoreManage} disabled={isPending}>
+                        <CoreLogo core={currentCore} data-icon="inline-start" />
+                        <span className="text-[13px]">{capitalize(currentCore)}</span>
+                        {coreVersion && (
+                          <span className="text-muted-foreground/60 mt-0.5 text-xs" title={coreVersion}>
+                            {isMobile ? truncateCoreVersion(coreVersion) : coreVersion}
+                          </span>
+                        )}
+                        {isOutdatedCore && (
+                          <span className="relative mb-3 -ml-0.75 flex">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                            <span className="relative inline-flex size-1.75 rounded-full bg-blue-500" />
+                          </span>
+                        )}
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>Управление ядром</TooltipContent>
+                </Tooltip>
+              )}
+              {isConfigsLoading || !version ? (
+                <Skeleton className="h-9 w-18.75" />
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        onClick={() => onOpenUpdate('self')}
+                        disabled={isPending}
+                        className={cn(
+                          'relative overflow-hidden text-xs tracking-wider',
+                          isOutdatedUI ? 'border-none! text-cyan-300 hover:text-cyan-300' : ''
+                        )}
+                      >
+                        {isOutdatedUI && <ShineBorder duration={7} borderWidth={2} shineColor={['#00D3F2', '#2B7FFF', '#155DFC']} />}
+                        <IconBox data-icon="inline-start" className="size-4.5" />
+                        {version}
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>{isOutdatedUI ? 'Доступно обновление' : 'Версия XKeen UI'}</TooltipContent>
+                </Tooltip>
+              )}
+              {isConfigsLoading || !version ? (
                 <Skeleton className="size-9" />
               ) : (
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <Button variant="outline" size="icon" onClick={onLogout}>
-                        <IconLogout className="size-4.5" />
+                      <Button variant="outline" size="icon" onClick={onOpenSettings}>
+                        <IconSettings className="size-4.5" />
                       </Button>
                     }
                   />
-                  <TooltipContent>Выйти</TooltipContent>
+                  <TooltipContent>Настройки</TooltipContent>
                 </Tooltip>
-              ))}
+              )}
+              {authEnabled &&
+                (isConfigsLoading || !version ? (
+                  <Skeleton className="size-9" />
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button variant="outline" size="icon" onClick={onLogout}>
+                          <IconLogout className="size-4.5" />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent>Выйти</TooltipContent>
+                  </Tooltip>
+                ))}
+            </div>
           </div>
-        </div>
+        </fieldset>
       </TooltipProvider>
 
       <AlertDialog open={dnsWarningOpen} onOpenChange={setDnsWarningOpen}>

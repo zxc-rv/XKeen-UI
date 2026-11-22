@@ -1236,7 +1236,12 @@ export function ConfigPanel({
   return (
     <TooltipProvider delayDuration={700} timeout={0}>
       <>
-        <div className="border-border bg-card relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-0 md:border">
+        <div
+          className={cn(
+            'border-border bg-card relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border-0 md:border',
+            isLogPanel && 'max-md:overflow-visible'
+          )}
+        >
           {configHistoryFile && (
             <div className="absolute inset-0 z-30 flex min-h-0 flex-col">
               <ConfigHistoryView
@@ -1481,9 +1486,12 @@ export function ConfigPanel({
 
           {isLogPanel && (
             <div className="relative min-h-0 flex-1">
-              <div className="absolute inset-x-0 top-0 bottom-[4.5rem] md:bottom-0">
-                <LogPanel embedded />
-              </div>
+              <fieldset className="border-border absolute inset-x-2.5 top-1.5 bottom-20 rounded-xl border px-4">
+                {!multiRouter && <legend className="px-1 text-sm font-medium">Журнал</legend>}
+                <div className="absolute inset-0">
+                  <LogPanel embedded />
+                </div>
+              </fieldset>
             </div>
           )}
 
