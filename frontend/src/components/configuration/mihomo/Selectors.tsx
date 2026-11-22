@@ -2,10 +2,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Combobox,
+  ComboboxCollection,
   ComboboxContent,
   ComboboxEmpty,
+  ComboboxGroup,
   ComboboxInput,
   ComboboxItem,
+  ComboboxLabel,
   ComboboxList,
   ComboboxTrigger,
   ComboboxValue,
@@ -17,7 +20,7 @@ import { InputGroupAddon } from '@/components/ui/input-group'
 import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn, normalizeVehicleType } from '@/lib/utils'
+import { ALLOWED_PROXY_VEHICLE_TYPES, cn, normalizeVehicleType } from '@/lib/utils'
 import { LazyMotion, domAnimation, m } from 'framer-motion'
 import {
   IconBolt,
@@ -241,6 +244,13 @@ interface ProxyGroup {
   label: string
   proxies: string[]
   total: number
+}
+
+interface ComboboxGroupOption {
+  key: string
+  label: string
+  total: number
+  items: string[]
 }
 
 function groupProxiesBySubscription(
@@ -795,6 +805,7 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
 const SelectorCombobox = memo(function SelectorCombobox({
   selectorName,
   options,
+  groups,
   autoPolicy,
   lockSelection,
   onSelect,
@@ -803,6 +814,7 @@ const SelectorCombobox = memo(function SelectorCombobox({
 }: {
   selectorName: string
   options: string[]
+  groups: ProxyGroup[]
   autoPolicy: boolean
   lockSelection?: boolean
   onSelect: (selectorName: string, proxyName: string) => void
@@ -826,7 +838,13 @@ const SelectorCombobox = memo(function SelectorCombobox({
     )
   )
   const [open, setOpen] = useState(false)
+  const [inputQuery, setInputQuery] = useState('')
   const isOpen = visible && open
+  const groupedOptions = useMemo<ComboboxGroupOption[]>(
+    () => groups.map((group) => ({ key: group.key, label: group.label, total: group.total, items: group.proxies })),
+    [groups]
+  )
+  const isGrouped = groupedOptions.length > 0
 
   useEffect(() => {
     if (!visible) {
@@ -835,12 +853,41 @@ const SelectorCombobox = memo(function SelectorCombobox({
     }
   }, [visible])
 
+  const renderProxyOption = (proxyName: string) => (
+    <ComboboxItem
+      key={proxyName}
+      value={proxyName}
+      aria-disabled={disabledOptions[proxyName] || undefined}
+      className={cn(
+        isFixed && 'focus:bg-emerald-500/10 focus:text-emerald-400 data-highlighted:bg-emerald-500/10 data-highlighted:text-emerald-400',
+        disabledOptions[proxyName] &&
+          'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
+      )}
+    >
+      <CollapsedProxyOption proxyName={proxyName} disabled={!!disabledOptions[proxyName]} onTestSingle={onTestSingle} />
+    </ComboboxItem>
+  )
+
+  const renderGroupLabel = (group: ComboboxGroupOption) => {
+    const showTotal = !inputQuery.trim() && group.total > group.items.length
+    return (
+      <ComboboxLabel className="flex min-w-0 items-center gap-1 px-2 py-1">
+        <span className="truncate tracking-wider">{group.label}</span>
+        <span className="shrink-0 tabular-nums">
+          ({group.items.length}
+          {showTotal ? `/${group.total}` : ''})
+        </span>
+      </ComboboxLabel>
+    )
+  }
+
   return (
     <Combobox
-      items={options}
+      items={isGrouped ? groupedOptions : options}
       value={value}
       open={isOpen}
       onOpenChange={setOpen}
+      onInputValueChange={setInputQuery}
       onValueChange={(proxyName) => proxyName && !disabledOptions[proxyName] && onSelect(selectorName, proxyName)}
       autoHighlight
     >
@@ -887,21 +934,14 @@ const SelectorCombobox = memo(function SelectorCombobox({
         </ComboboxInput>
         <ComboboxEmpty>Ничего не найдено</ComboboxEmpty>
         <ComboboxList>
-          {(proxyName: string) => (
-            <ComboboxItem
-              key={proxyName}
-              value={proxyName}
-              aria-disabled={disabledOptions[proxyName] || undefined}
-              className={cn(
-                isFixed &&
-                  'focus:bg-emerald-500/10 focus:text-emerald-400 data-highlighted:bg-emerald-500/10 data-highlighted:text-emerald-400',
-                disabledOptions[proxyName] &&
-                  'pointer-events-none cursor-not-allowed opacity-70 [&_[data-slot=proxy-delay-test]]:pointer-events-auto'
-              )}
-            >
-              <CollapsedProxyOption proxyName={proxyName} disabled={!!disabledOptions[proxyName]} onTestSingle={onTestSingle} />
-            </ComboboxItem>
-          )}
+          {isGrouped
+            ? (group: ComboboxGroupOption) => (
+                <ComboboxGroup key={group.key} items={group.items} className="p-0">
+                  {group.label && renderGroupLabel(group)}
+                  <ComboboxCollection>{(proxyName: string) => renderProxyOption(proxyName)}</ComboboxCollection>
+                </ComboboxGroup>
+              )
+            : (proxyName: string) => renderProxyOption(proxyName)}
         </ComboboxList>
       </ComboboxContent>
     </Combobox>
@@ -1029,12 +1069,7 @@ const SelectorRow = memo(function SelectorRow({
   const sortOrder = useSettings((s) => s.proxySortOrder)
   const allProxiesMap = useProxiesStore((s) => s.proxies as Record<string, ProxyInfo | undefined>)
   const subscriptionProviders = useProxiesStore(
-    useShallow((s) =>
-      s.proxyProviders.filter((provider) => {
-        const vehicleType = normalizeVehicleType(provider.vehicleType)
-        return vehicleType === 'HTTP' || vehicleType === 'FILE'
-      })
-    )
+    useShallow((s) => s.proxyProviders.filter((provider) => ALLOWED_PROXY_VEHICLE_TYPES.has(normalizeVehicleType(provider.vehicleType))))
   )
 
   const filteredSortedProxies = useMemo(() => {
@@ -1647,6 +1682,7 @@ const SelectorRow = memo(function SelectorRow({
                 key={selectorName}
                 selectorName={selectorName}
                 options={filteredSortedProxies}
+                groups={groupedProxies}
                 autoPolicy={autoPolicy}
                 lockSelection={lockSelection}
                 onSelect={onSelect}
@@ -1678,6 +1714,7 @@ const SelectorRow = memo(function SelectorRow({
                 key={selectorName}
                 selectorName={selectorName}
                 options={filteredSortedProxies}
+                groups={groupedProxies}
                 autoPolicy={autoPolicy}
                 lockSelection={lockSelection}
                 onSelect={onSelect}
