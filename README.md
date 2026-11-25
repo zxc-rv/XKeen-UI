@@ -4,7 +4,7 @@
 <h1>XKeen UI</h1>
 
 <p>
-  Легковесная панель управления сервисом <b>XKeen</b> для роутеров Keenetic/Netzraze
+  Легковесная панель управления сервисом <b>XKeen</b> для роутеров Keenetic/Netcraze
   <br>
     <a href="https://github.com/zxc-rv/XKeen-UI/wiki">Wiki (WIP)</a>
     ·
