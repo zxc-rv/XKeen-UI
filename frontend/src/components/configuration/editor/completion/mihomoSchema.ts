@@ -536,8 +536,8 @@ const DNS: SchemaNode = obj({
     geosite: arr(str()),
     ipcidr: arr(str()),
     domain: arr(str()),
-    'fallback-lazy-query': bool(),
   }),
+  'fallback-lazy-query': bool(),
 })
 
 // sniff/

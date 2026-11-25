@@ -239,10 +239,12 @@ export function patchDnsConfig(content: string, config: DnsConfig): string {
 
   const fallbackFilter = doc.getIn(['dns', 'fallback-filter'], true)
   if (isMap(fallbackFilter)) {
-    if (!fallbackFilter.has('fallback-lazy-query')) fallbackFilter.set('fallback-lazy-query', true)
+    fallbackFilter.delete('fallback-lazy-query')
   } else {
-    doc.setIn(['dns', 'fallback-filter'], { geoip: false, 'fallback-lazy-query': true })
+    doc.setIn(['dns', 'fallback-filter'], { geoip: false })
   }
+
+  if (!doc.hasIn(['dns', 'fallback-lazy-query'])) doc.setIn(['dns', 'fallback-lazy-query'], true)
 
   return trimFlowSeqPadding(doc.toString({ lineWidth: YAML_LINE_WIDTH }))
 }
