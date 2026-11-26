@@ -199,10 +199,10 @@ function ConfigTab({
       onPointerDown={(event) => {
         touchStartedOnActiveConfigRef.current = event.pointerType !== 'mouse' && isActive
       }}
-      onClick={(event) => {
-        const openFromSecondTouchTap = isTouchDevice && event.detail > 0 && touchStartedOnActiveConfigRef.current
+      onClick={() => {
+        const openFromSecondTouchTap = isTouchDevice && touchStartedOnActiveConfigRef.current
         touchStartedOnActiveConfigRef.current = false
-        if (openFromSecondTouchTap && !contextMenuOpenRef.current) setSectionMenuOpen(true)
+        if (openFromSecondTouchTap && !contextMenuOpenRef.current) setSectionMenuOpen((open) => !open)
       }}
       onKeyDown={(event) => {
         if (isActive && !contextMenuOpenRef.current && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
@@ -250,6 +250,16 @@ function ConfigTab({
         open={sectionMenuOpen}
         modal={false}
         onOpenChange={(open, details) => {
+          if (
+            !open &&
+            isTouchDevice &&
+            details.reason === 'outside-press' &&
+            details.event.target instanceof Node &&
+            sectionTabRef.current?.contains(details.event.target)
+          ) {
+            details.cancel()
+            return
+          }
           if (!open && details.reason === 'focus-out' && sectionHoverSessionRef.current) return
           setSectionMenuOpen(open)
         }}
