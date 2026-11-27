@@ -11,10 +11,12 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { CodeBlock, CodeBlockContent } from '@/components/ui/code-block'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useHighlightedCode } from '@/hooks/use-highlighted-code'
 import { cn } from '@/lib/utils'
 import {
   IconActivity,
@@ -97,81 +99,43 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
-function AnsiText({ text }: { text: string }) {
-  const classes: string[] = []
-  const safeText = text.replace(/\u001b\[[0-9;]*([A-Za-z])/g, (sequence, end: string) => (end === 'm' ? sequence : ''))
-  const parts = safeText.split(/(\u001b\[[0-9;]*m)/g)
+function formatTerminalText(text: string, level?: string) {
+  // A terminal uses SGR colors for plain diagnostics, so let the ANSI
+  // highlighter style them instead of coloring the whole line with CSS.
+  const color = level === 'error' ? '\u001b[31m' : level === 'warn' ? '\u001b[33m' : ''
 
-  return parts.map((part, index) => {
-    const sgr = /^\u001b\[([0-9;]*)m$/.exec(part)
-    if (sgr) {
-      const codes = sgr[1] ? sgr[1].split(';').map(Number) : [0]
-      for (const code of codes) {
-        if (code === 0) classes.length = 0
-        else if (code === 1) {
-          if (!classes.includes('font-semibold')) classes.push('font-semibold')
-        } else if (code === 2) {
-          if (!classes.includes('opacity-70')) classes.push('opacity-70')
-        } else if (code === 4) {
-          if (!classes.includes('underline')) classes.push('underline')
-        } else if (code === 22) {
-          const i = classes.indexOf('font-semibold')
-          if (i >= 0) classes.splice(i, 1)
-        } else if (code === 24) {
-          const i = classes.indexOf('underline')
-          if (i >= 0) classes.splice(i, 1)
-        } else if (code === 39) {
-          for (let i = classes.length - 1; i >= 0; i--) if (classes[i].startsWith('text-')) classes.splice(i, 1)
-        } else {
-          const colors: Record<number, string> = {
-            30: 'text-muted-foreground',
-            31: 'text-red-400',
-            32: 'text-emerald-400',
-            33: 'text-amber-300',
-            34: 'text-blue-400',
-            35: 'text-fuchsia-400',
-            36: 'text-cyan-300',
-            37: 'text-foreground',
-            90: 'text-muted-foreground',
-            91: 'text-red-300',
-            92: 'text-emerald-300',
-            93: 'text-amber-200',
-            94: 'text-blue-300',
-            95: 'text-fuchsia-300',
-            96: 'text-cyan-200',
-            97: 'text-foreground',
-          }
-          const color = colors[code]
-          if (color) {
-            for (let i = classes.length - 1; i >= 0; i--) if (classes[i].startsWith('text-')) classes.splice(i, 1)
-            classes.push(color)
-          }
-        }
-      }
-      return null
-    }
-
-    return classes.length ? (
-      <span key={index} className={classes.join(' ')}>
-        {part}
-      </span>
-    ) : (
-      <Fragment key={index}>{part}</Fragment>
-    )
-  })
-}
-
-function formatTerminalText(text: string) {
   return text
     .split('\n')
-    .map((line) => line.replace(/^[\t ]*[#$][\t ]?/, '').trimStart())
+    .map((line) => `${color}${line.replace(/^[\t ]*[#$][\t ]?/, '').trimStart()}${color ? '\u001b[0m' : ''}`)
     .join('\n')
 }
 
+function TerminalLogLine({ entry, timezone }: { entry: LogEntry; timezone: number }) {
+  const lines = useHighlightedCode(formatTerminalText(entry.text, entry.level), 'ansi')
+
+  return (
+    <div className="flex min-w-0 gap-2">
+      {(entry.tsUtc !== undefined || entry.ts) && (
+        <span className="text-muted-foreground/60 shrink-0">{formatEventTime(entry.tsUtc, timezone, entry.ts)}</span>
+      )}
+      <span className="min-w-0 whitespace-pre-wrap wrap-anywhere">
+        {lines.map((line, index) => (
+          <Fragment key={index}>
+            {index > 0 && '\n'}
+            {line}
+          </Fragment>
+        ))}
+      </span>
+    </div>
+  )
+}
+
 function formatEventTime(tsUtc: number | undefined, timezone: number, fallback?: string) {
-  if (tsUtc === undefined || !Number.isFinite(tsUtc)) return fallback?.slice(0, 5) ?? ''
+  if (tsUtc === undefined || !Number.isFinite(tsUtc)) return fallback ?? ''
   const date = new Date((tsUtc + timezone * 60 * 60) * 1000)
-  return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`
+  return [date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':')
 }
 
 export function XkeenCommandsModal({ open, onOpenChange }: Props) {
@@ -190,7 +154,7 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
   const [requestError, setRequestError] = useState('')
   const lastSeqRef = useRef(0)
   const nextIdRef = useRef(0)
-  const logRef = useRef<HTMLDivElement>(null)
+  const logRef = useRef<HTMLPreElement>(null)
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
@@ -342,8 +306,8 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
         <DialogContent
           showCloseButton={!running}
           className={cn(
-            'flex h-[88dvh] max-h-[48rem] min-h-0 w-full flex-col gap-6 overflow-hidden sm:max-w-md md:max-h-[90dvh] md:max-w-[95vw]! md:w-187.5',
-            selected ? 'md:h-[min(80dvh,48rem)]' : 'md:h-auto'
+            'flex min-h-0 w-full flex-col gap-6 overflow-hidden sm:max-w-md md:w-187.5 md:max-w-[95vw]!',
+            selected ? 'max-h-[90dvh]' : 'h-[88dvh] max-h-[48rem] md:h-auto md:max-h-[90dvh]'
           )}
         >
           <DialogHeader>
@@ -452,33 +416,14 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
                   </Badge>
                 ) : null}
               </div>
-              <div
-                ref={logRef}
-                className="bg-input-background border-border min-h-0 flex-1 scrollbar-thin overflow-auto rounded-lg border p-3"
-              >
-                <div className="flex w-max min-w-full flex-col gap-0 font-mono text-xs leading-relaxed">
-                  {requestError && <div className="text-destructive">{requestError}</div>}
+              <CodeBlock size="sm" className="bg-input-background! h-72 min-h-0 md:h-80">
+                <CodeBlockContent ref={logRef} wrap className="flex-1 scrollbar-thin">
+                  {requestError && <div className="text-destructive wrap-anywhere">{requestError}</div>}
                   {entries.map((entry) => (
-                    <div key={entry.id} className="flex w-max min-w-max gap-2 whitespace-pre">
-                      {(entry.tsUtc !== undefined || entry.ts) && (
-                        <span className="text-muted-foreground/60 shrink-0">{formatEventTime(entry.tsUtc, timezone, entry.ts)}</span>
-                      )}
-                      <span
-                        className={
-                          entry.level === 'error'
-                            ? 'text-destructive whitespace-pre'
-                            : entry.level === 'warn'
-                              ? 'whitespace-pre text-amber-400'
-                              : 'text-foreground/85 whitespace-pre'
-                        }
-                      >
-                        <AnsiText text={formatTerminalText(entry.text)} />
-                      </span>
-                    </div>
+                    <TerminalLogLine key={entry.id} entry={entry} timezone={timezone} />
                   ))}
-                  {running && <div className="text-muted-foreground">Ожидание вывода…</div>}
-                </div>
-              </div>
+                </CodeBlockContent>
+              </CodeBlock>
               {running && (selected?.id === 'custom' || selected?.id === 'update_channel') && (
                 <Field>
                   <FieldLabel htmlFor="xkeen-command-input">
