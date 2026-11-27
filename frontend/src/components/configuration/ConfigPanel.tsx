@@ -67,6 +67,7 @@ import { MassConfirmDialog } from '../log/multi-routers/MassConfirmDialog'
 import { BackupsModal } from '../modals/Backups'
 import { ConfigHistoryView } from '../modals/ConfigHistory'
 import { ProvidersModal } from '../modals/Providers'
+import { XkeenCommandsModal } from '../modals/XkeenCommands'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '../ui/context-menu'
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '../ui/input-group'
 import { Popover, PopoverContent } from '../ui/popover'
@@ -570,6 +571,7 @@ export function ConfigPanel({
   })
   const [providersModalKind, setProvidersModalKind] = useState<ProvidersModalKind | null>(null)
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState(false)
+  const [xkeenCommandsOpen, setXkeenCommandsOpen] = useState(false)
   const mountProvidersModal = useLazyMount(isProvidersModalOpen)
   const currentPanel = activePanel === 'log' ? (isMobile ? 'log' : 'config') : isCoreMihomo && isRunning ? activePanel : 'config'
   const isLogPanel = currentPanel === 'log'
@@ -1618,6 +1620,9 @@ export function ConfigPanel({
                           <DropdownMenuItem onClick={onOpenRouteTest}>
                             <IconRoute /> Проверка маршрута
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setXkeenCommandsOpen(true)}>
+                            <IconTerminal2 /> Команды XKeen
+                          </DropdownMenuItem>
                         </DropdownMenuGroup>
                         <DropdownMenuSeparator />
                         {isMobile ? (
@@ -1664,6 +1669,7 @@ export function ConfigPanel({
           />
         )}
         <BackupsModalContainer onRefreshConfigs={refreshConfigsAndEditor} />
+        <XkeenCommandsModal open={xkeenCommandsOpen} onOpenChange={setXkeenCommandsOpen} />
         {massConfirm && (
           <MassConfirmDialog
             open={!!massConfirm}

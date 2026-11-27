@@ -23,6 +23,8 @@ export interface UpdateEvent {
   seq?: number
   stage?: string
   ts?: string
+  ts_utc?: number
+  append?: boolean
   level?: string
   message?: string
   downloaded?: number
@@ -138,4 +140,8 @@ export function useWebSocket(onMessage: WsMessageHandler) {
 
 export function useUpdateWebSocket(onMessage: WsMessageHandler, enabled: boolean) {
   useReconnectingSocket(() => '/ws/updater', onMessage, enabled)
+}
+
+export function useExecWebSocket(onMessage: WsMessageHandler, enabled: boolean) {
+  useReconnectingSocket(() => '/ws/exec', onMessage, enabled)
 }

@@ -107,6 +107,7 @@ pub struct AppState {
     pub update_client: reqwest::Client,
     pub update_checker: UpdateChecker,
     pub update_session: UpdateSession,
+    pub exec_session: UpdateSession,
     pub geo_cache: Arc<RwLock<GeoCache>>,
     pub log_tx: Arc<broadcast::Sender<String>>,
     pub log_watcher: Arc<Mutex<Option<AbortHandle>>>,
@@ -143,7 +144,14 @@ pub struct UpdateEvent {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UpdateEventData {
     Stage { stage: String },
-    Log { ts: String, level: String, message: String },
+    Log {
+        ts: String,
+        ts_utc: i64,
+        level: String,
+        message: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        append: Option<bool>,
+    },
     Progress { downloaded: u64, total: u64, speed: f64 },
     Done { success: bool, error: Option<String> },
 }
@@ -174,6 +182,14 @@ impl Default for UpdateSession {
 
 impl UpdateSession {
     pub fn new() -> Self {
+        Self::with_running(Arc::new(AtomicBool::new(false)))
+    }
+
+    pub fn with_shared_running(running: Arc<AtomicBool>) -> Self {
+        Self::with_running(running)
+    }
+
+    fn with_running(running: Arc<AtomicBool>) -> Self {
         let (events, _) = broadcast::channel(512);
         let (control, ctl_rx) = watch::channel(UpdateCtl::Run);
         Self {
@@ -181,7 +197,7 @@ impl UpdateSession {
             history: Arc::new(RwLock::new(Vec::new())),
             control: Arc::new(control),
             ctl_rx,
-            running: Arc::new(AtomicBool::new(false)),
+            running,
             seq: Arc::new(std::sync::Mutex::new(0)),
         }
     }
@@ -220,8 +236,20 @@ impl UpdateSession {
     pub fn log(&self, level: &str, message: impl Into<String>) {
         self.emit(UpdateEventData::Log {
             ts: chrono::Local::now().format("%H:%M:%S").to_string(),
+            ts_utc: chrono::Utc::now().timestamp(),
             level: level.into(),
             message: message.into(),
+            append: None,
+        });
+    }
+
+    pub fn log_append(&self, level: &str, message: impl Into<String>) {
+        self.emit(UpdateEventData::Log {
+            ts: chrono::Local::now().format("%H:%M:%S").to_string(),
+            ts_utc: chrono::Utc::now().timestamp(),
+            level: level.into(),
+            message: message.into(),
+            append: Some(true),
         });
     }
 
