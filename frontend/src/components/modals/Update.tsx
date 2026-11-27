@@ -20,6 +20,7 @@ import { IconAlertCircle, IconCancel, IconCircleCheck, IconDownload, IconLogs, I
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { toast } from '@/components/ui/toast'
 import { apiCall, capitalize } from '../../lib/api'
 import { useAppContext, useModalContext, useSettings } from '../../lib/store'
 import type { Release } from '../../lib/types'
@@ -517,7 +518,7 @@ export function UpdateModal({ onInstalled }: { onInstalled: () => void }) {
   function startInstall() {
     if (!selectedVersion) return
     const release = releases.find((r) => r.version === selectedVersion)
-    if (updateModalCore !== 'self') dispatch({ type: 'REMOVE_TOAST', id: 'update-core' })
+    if (updateModalCore !== 'self') toast.close('update-core')
     dispatch({ type: 'SET_SERVICE_STATUS', status: 'pending', pendingText: 'Обновление...' })
     setPending({ version: selectedVersion, assets: release?.assets ?? [] })
     setStep('process')

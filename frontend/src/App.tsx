@@ -13,7 +13,7 @@ import { SettingsModal } from './components/modals/Settings'
 import { TemplateModal } from './components/modals/Templates'
 import { UpdateModal } from './components/modals/Update'
 import { StatusBar } from './components/status/StatusBar'
-import { Toast } from './components/ui/toast'
+import { Toaster } from './components/ui/toast'
 import { apiCall, capitalize } from './lib/api'
 import { useLazyMount } from './lib/loader'
 import { ONLINE_PING_INTERVAL_MS, LOCAL_ROUTER_ID, routerId } from './lib/multi-routers/model'
@@ -577,7 +577,7 @@ function AppContent({ onLogout }: { onLogout: () => void }) {
           />
         </div>
       </main>
-      <Toast />
+      <Toaster />
       <ModalManager
         onSwitchCore={switchCore}
         onInstalled={onInstalled}
@@ -624,7 +624,7 @@ export default function App() {
       {authState === 'login' || authState === 'setup' ? (
         <motion.div key="login" initial={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
           <LoginForm mode={authState} onAuth={() => setAuthState('authenticated')} />
-          <Toast />
+          <Toaster />
         </motion.div>
       ) : (
         <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>

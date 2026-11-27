@@ -90,19 +90,6 @@ export interface Release {
   assets: string[]
 }
 
-export interface ToastAction {
-  url: string
-}
-
-export interface ToastMessage {
-  id: string
-  title: string
-  body: string
-  type: 'success' | 'error' | 'warning'
-  persistent?: boolean
-  action?: ToastAction
-}
-
 export interface ConnectionMetadata {
   network: string
   type: string
@@ -163,7 +150,6 @@ export interface AppState {
   showRouteTestModal: boolean
   showBackupsModal: boolean
   updateModalCore: string
-  toasts: ToastMessage[]
   pendingSaveAction: (() => void) | null
 }
 
@@ -203,6 +189,4 @@ export type AppAction =
       show: boolean
     }
   | { type: 'SET_UPDATE_MODAL_CORE'; core: string }
-  | { type: 'ADD_TOAST'; toast: ToastMessage }
-  | { type: 'REMOVE_TOAST'; id: string }
   | { type: 'SET_PENDING_SAVE_ACTION'; action: (() => void) | null }

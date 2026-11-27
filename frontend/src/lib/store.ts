@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
+import { toast } from '../components/ui/toast'
 import { apiCall, clashFetch } from './api'
 import { getStoredStatusBarAccentColor, getStoredStatusBarStyle } from './status-bar-style'
 import { getStoredEmojiFont, getStoredTheme } from './theme'
@@ -16,7 +17,6 @@ import {
   type Connection,
   type ProxyProvider,
   type RuleProvider,
-  type ToastMessage,
 } from './types'
 import { ALLOWED_PROXY_VEHICLE_TYPES, normalizeVehicleType, parseClashApiCredentials } from './utils'
 import { clashWsUrl } from './websocket'
@@ -85,7 +85,6 @@ const initialState: AppState = {
   showRouteTestModal: false,
   showBackupsModal: false,
   updateModalCore: '',
-  toasts: [],
   pendingSaveAction: null,
 }
 
@@ -146,10 +145,6 @@ const useStore = create<StoreState>((set) => ({
           return { [action.modal]: action.show }
         case 'SET_UPDATE_MODAL_CORE':
           return { updateModalCore: action.core }
-        case 'ADD_TOAST':
-          return { toasts: [action.toast, ...state.toasts] }
-        case 'REMOVE_TOAST':
-          return { toasts: state.toasts.filter((t) => t.id !== action.id) }
         case 'SET_PENDING_SAVE_ACTION':
           return { pendingSaveAction: action.action }
         default:
@@ -180,7 +175,6 @@ type CoreState = Omit<
   | 'showImportAmneziaModal'
   | 'updateModalCore'
   | 'pendingSaveAction'
-  | 'toasts'
   | 'connections'
   | 'wsConnected'
   | 'settings'
@@ -233,28 +227,22 @@ const selectCoreStateWithConfigsAndSettings = (s: StoreState): CoreStateWithConf
 
 // ─── Hooks & Utilities ─────────────────────────────────────────────────────────
 
+const activeToastIds = new Set<string>()
+
 export function showToast(
   message: string | { title: string; body: string; persistent?: boolean; id?: string; action?: { url: string } },
   type: 'success' | 'error' | 'warning' = 'success'
 ) {
-  const dispatch = useStore.getState().dispatch
-  const id = typeof message === 'string' ? Math.random().toString(36).slice(2) : (message.id ?? Math.random().toString(36).slice(2))
-  if (typeof message !== 'string' && message.id) dispatch({ type: 'REMOVE_TOAST', id: message.id })
   const defaultTitle = type === 'error' ? 'Ошибка' : type === 'warning' ? 'Предупреждение' : 'Успех'
-  const toast: ToastMessage =
-    typeof message === 'string'
-      ? { id, title: defaultTitle, body: message, type }
-      : {
-          id,
-          title: message.title,
-          body: message.body,
-          type,
-          ...(message.persistent && { persistent: true }),
-          ...(message.action && { action: message.action }),
-        }
+  const { title, body, persistent, id, action } = typeof message === 'string' ? { title: defaultTitle, body: message } : message
+  const options = { type, title, description: body, timeout: persistent ? 0 : 5000, data: action }
 
-  dispatch({ type: 'ADD_TOAST', toast })
-  if (!toast.persistent) setTimeout(() => dispatch({ type: 'REMOVE_TOAST', id }), 5000)
+  if (id && activeToastIds.has(id)) {
+    toast.update(id, options)
+    return
+  }
+  if (id) activeToastIds.add(id)
+  toast.add({ ...options, id, onRemove: () => id && activeToastIds.delete(id) })
 }
 
 export function useAppContext(): { state: CoreState; dispatch: (action: AppAction) => void; showToast: ShowToastFn }
@@ -322,7 +310,6 @@ export function useSettings<T>(selector: (settings: AppSettings) => T): T {
 
 // ─── Connections hook — WS sync ────────────────────────────────────────────────
 
-export const useToasts = () => useStore((s) => s.toasts)
 export const useCurrentCore = () => useStore((s) => s.currentCore)
 export const useWsConnected = () => useStore((s) => s.wsConnected)
 export const getConnections = (): Connection[] => useStore.getState().connections
@@ -618,7 +605,7 @@ export async function fetchDnsStatus(): Promise<void> {
           'warning'
         )
       } else {
-        useStore.getState().dispatch({ type: 'REMOVE_TOAST', id: 'dns-port-listener-warning' })
+        toast.close('dns-port-listener-warning')
       }
     }
   } finally {
