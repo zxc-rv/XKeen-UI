@@ -5,6 +5,7 @@ mod config_history;
 mod configs;
 mod controller;
 mod dns;
+mod executor;
 mod frontend_embedder;
 mod geo;
 mod healthchecker;
@@ -425,6 +426,7 @@ async fn main() {
         .and_then(|json| json.get("xkeen")?.get("rci_token")?.as_str().map(String::from));
 
     let update_session = UpdateSession::new();
+    let exec_session = UpdateSession::with_shared_running(update_session.running.clone());
 
     let state = AppState {
         core: Arc::new(RwLock::new(detect_core(init_file.as_deref()))),
@@ -447,6 +449,7 @@ async fn main() {
             .unwrap(),
         update_checker: UpdateChecker::default(),
         update_session,
+        exec_session,
         geo_cache,
         log_tx: log_tx_arc,
         log_watcher: Arc::new(tokio::sync::Mutex::new(None)),
@@ -533,6 +536,9 @@ async fn main() {
         .route("/api/device-list", get(api_relay::get_device_list))
         .route("/api/update", post(updater::post_update))
         .route("/api/update/control", post(updater::post_update_control))
+        .route("/api/exec", post(executor::post_command))
+        .route("/api/exec/input", post(executor::post_input))
+        .route("/api/exec/control", post(executor::post_control))
         .route("/api/geo", get(geo::get_geo))
         .route("/api/geo/site", get(geo::get_geosite))
         .route("/api/geo/ip", get(geo::get_geoip))
@@ -546,6 +552,7 @@ async fn main() {
         .route("/clash-ws/{*path}", get(api_relay::proxy_ws))
         .route("/ws/log", get(websocket::log_ws_handler))
         .route("/ws/updater", get(websocket::update_ws_handler))
+        .route("/ws/exec", get(websocket::exec_ws_handler))
         .route_layer(middleware::from_fn({
             let state = state.clone();
             move |req, next| {

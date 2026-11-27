@@ -35,10 +35,12 @@ function AlertDialogOverlay({ className, ...props }: React.ComponentProps<typeof
 
 function AlertDialogContent({
   className,
+  overlayClassName,
   size = 'default',
   onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Popup> & {
+  overlayClassName?: string
   size?: 'default' | 'sm'
   onEscapeKeyDown?: (event: KeyboardEvent) => void
 }) {
@@ -46,7 +48,7 @@ function AlertDialogContent({
 
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay className={overlayClassName} />
       <AlertDialogPrimitive.Popup
         data-slot="alert-dialog-content"
         data-size={size}

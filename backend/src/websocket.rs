@@ -34,7 +34,11 @@ pub async fn log_ws_handler(
 }
 
 pub async fn update_ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_update_socket(socket, state))
+    ws.on_upgrade(|socket| handle_update_socket(socket, state.update_session))
+}
+
+pub async fn exec_ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_update_socket(socket, state.exec_session))
 }
 
 fn read_log_file(p: String, offset: u64, query: String, full: bool, tz: i32) -> (String, Vec<String>, u64) {
@@ -254,10 +258,10 @@ async fn run_log_socket(socket: WebSocket, state: AppState, file: Option<String>
     }
 }
 
-async fn handle_update_socket(socket: WebSocket, state: AppState) {
+async fn handle_update_socket(socket: WebSocket, session: UpdateSession) {
     let (mut tx, mut rx) = socket.split();
-    let mut update_rx = state.update_session.events.subscribe();
-    let history = state.update_session.history.read().unwrap().clone();
+    let mut update_rx = session.events.subscribe();
+    let history = session.history.read().unwrap().clone();
     let mut last_seq = history.last().map_or(0, |event| event.seq);
     let initial = serde_json::json!({ "type": "update", "history": history });
     if tx.send(Message::Text(initial.to_string().into())).await.is_err() {
@@ -278,7 +282,7 @@ async fn handle_update_socket(socket: WebSocket, state: AppState) {
                         serde_json::json!({ "type": "update", "event": event })
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                        let history = state.update_session.history.read().unwrap().clone();
+                        let history = session.history.read().unwrap().clone();
                         let Some(newest_seq) = history.last().map(|event| event.seq) else { continue };
                         last_seq = last_seq.max(newest_seq);
                         serde_json::json!({ "type": "update", "history": history })
