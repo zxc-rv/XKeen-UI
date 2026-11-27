@@ -308,17 +308,45 @@ function groupProxiesBySubscription(
   return result
 }
 
-function ProxyGroupHeading({ label, visible, total, pickerNode }: { label: string; visible: number; total: number; pickerNode?: boolean }) {
+function ProxyGroupHeading({
+  group,
+  onTest,
+  pickerNode,
+}: {
+  group: ProxyGroup
+  onTest: (proxyNames: string[]) => Promise<void>
+  pickerNode?: boolean
+}) {
+  const isTesting = useSelectorsStore((s) => group.proxies.some((name) => s.testingSingle[name]))
   return (
     <div
       data-picker-node={pickerNode || undefined}
       className="text-muted-foreground col-span-full flex min-w-0 items-center gap-1 py-0.5 text-xs"
     >
-      <span className="truncate tracking-wider">{label}</span>
+      <span className="truncate tracking-wider">{group.label}</span>
       <span className="shrink-0 tabular-nums">
-        ({visible}
-        {total > visible ? `/${total}` : ''})
+        ({group.proxies.length}
+        {group.total > group.proxies.length ? `/${group.total}` : ''})
       </span>
+      <span className="bg-border mx-1 h-px min-w-4 flex-1" />
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="size-5 shrink-0"
+              aria-label={`Проверить подписку ${group.label}`}
+              disabled={isTesting}
+              onClick={() => void onTest(group.proxies)}
+            >
+              {isTesting ? <Spinner /> : <IconBolt size={13} />}
+            </Button>
+          }
+        />
+        <TooltipContent>Замерить подписку</TooltipContent>
+      </Tooltip>
     </div>
   )
 }
@@ -961,6 +989,7 @@ const SelectorRow = memo(function SelectorRow({
   onTestAll,
   onSelect,
   onTestSingle,
+  onTestProxies,
   onClearFixed,
   onFlushSmart,
   activePickerSelector,
@@ -974,6 +1003,7 @@ const SelectorRow = memo(function SelectorRow({
   onTestAll: (name: string) => void
   onSelect: (selectorName: string, proxyName: string) => void
   onTestSingle: (proxyName: string) => Promise<void>
+  onTestProxies: (proxyNames: string[]) => Promise<void>
   onClearFixed: (selectorName: string) => Promise<void>
   onFlushSmart: (selectorName: string) => Promise<void>
   activePickerSelector: string | null
@@ -1185,7 +1215,7 @@ const SelectorRow = memo(function SelectorRow({
       {groupBySubscriptions
         ? groupedProxies.map((group) => (
             <Fragment key={group.key}>
-              {group.label && <ProxyGroupHeading label={group.label} visible={group.proxies.length} total={group.total} />}
+              {group.label && <ProxyGroupHeading group={group} onTest={onTestProxies} />}
               {group.proxies.map(renderProxyCard)}
             </Fragment>
           ))
@@ -1298,7 +1328,7 @@ const SelectorRow = memo(function SelectorRow({
     const proxyCards = groupBySubscriptions
       ? groupedPickerProxies.map((group) => (
           <Fragment key={group.key}>
-            {group.label && <ProxyGroupHeading label={group.label} visible={group.proxies.length} total={group.total} pickerNode />}
+            {group.label && <ProxyGroupHeading group={group} onTest={onTestProxies} pickerNode />}
             {group.proxies.map(renderPickerCard)}
           </Fragment>
         ))
@@ -1909,6 +1939,7 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       onTestAll={testAll}
       onSelect={selectProxy}
       onTestSingle={testSingle}
+      onTestProxies={testProxies}
       onClearFixed={clearFixedSelection}
       onFlushSmart={flushSmartWeights}
       activePickerSelector={activePickerSelector}
@@ -1957,20 +1988,42 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
     return () => window.removeEventListener(TOGGLE_ALL_SELECTORS_EVENT, handleToggleAll as EventListener)
   }, [selectorNames])
 
-  const testSingle = useCallback(
-    async (proxyName: string) => {
-      useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: true } }))
-      try {
-        applyDelayResults([[proxyName, await requestProxyDelay(proxyName)]])
-        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
-      } catch {
-        /* */
-      } finally {
-        useSelectorsStore.setState((s) => ({ testingSingle: { ...s.testingSingle, [proxyName]: false } }))
-      }
+  const measureProxies = useCallback(
+    async (proxyNames: string[]) => {
+      const proxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
+      const results = await Promise.all(
+        proxyNames
+          .filter((name) => {
+            const type = proxies[name]?.type?.toLowerCase()
+            return !!type && !NO_DELAY_TYPES.has(type)
+          })
+          .map(async (name) => [name, await requestProxyDelay(name)] as const)
+      )
+      applyDelayResults(results)
+      await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
     },
     [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
   )
+
+  const testProxies = useCallback(
+    async (proxyNames: string[]) => {
+      const setTesting = (value: boolean) =>
+        useSelectorsStore.setState((s) => ({
+          testingSingle: { ...s.testingSingle, ...Object.fromEntries(proxyNames.map((name) => [name, value])) },
+        }))
+      setTesting(true)
+      try {
+        await measureProxies(proxyNames)
+      } catch {
+        /* */
+      } finally {
+        setTesting(false)
+      }
+    },
+    [measureProxies]
+  )
+
+  const testSingle = useCallback((proxyName: string) => testProxies([proxyName]), [testProxies])
 
   const selectProxy = useCallback(
     (selectorName: string, proxyName: string) => {
@@ -2013,24 +2066,14 @@ export function SelectorsPanel({ clashApiPort, mode, clashApiSecret, clashApiUni
       useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: true } }))
 
       try {
-        const proxies = useProxiesStore.getState().proxies as Record<string, ProxyInfo | undefined>
-        const results = await Promise.all(
-          selector.all
-            .filter((name) => {
-              const type = proxies[name]?.type?.toLowerCase()
-              return !!type && !NO_DELAY_TYPES.has(type)
-            })
-            .map(async (name) => [name, await requestProxyDelay(name)] as const)
-        )
-        applyDelayResults(results)
-        await fetchClashProxies(clashApiPort, clashApiSecret, true, clashApiUnix ?? null)
+        await measureProxies(selector.all)
       } catch {
         /* */
       } finally {
         useSelectorsStore.setState((s) => ({ testingAll: { ...s.testingAll, [selectorName]: false } }))
       }
     },
-    [applyDelayResults, clashApiPort, clashApiSecret, clashApiUnix, requestProxyDelay]
+    [measureProxies]
   )
 
   const toggleCollapse = useCallback((selectorName: string) => {
