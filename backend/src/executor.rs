@@ -280,6 +280,8 @@ fn command_info(args: &[String]) -> (&'static str, &'static str, bool) {
         [flag] if flag == "-status" => ("Статус XKeen", "status", false),
         [flag] if flag == "-v" => ("Версия XKeen", "status", false),
         [flag] if flag == "-diag" => ("Диагностика XKeen", "diagnostics", false),
+        [flag] if flag == "-dscp" => ("Статус маршрутизации по DSCP-меткам", "status", true),
+        [flag] if flag == "-pr" => ("Проксирование трафика Entware", "status", true),
         [flag] if flag == "-channel" => ("Канал обновлений XKeen", "update", true),
         [flag, auto] if flag == "-uk" && auto == "auto" => ("Обновление XKeen", "update", false),
         [flag] if flag == "-ug" => ("Обновление GeoFile и GeoIPSET", "update", false),

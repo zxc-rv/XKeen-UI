@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { CodeBlock, CodeBlockContent } from '@/components/ui/code-block'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -34,7 +33,7 @@ import { useSettings } from '../../lib/store'
 import type { UpdateEvent, WsMessage } from '../../lib/websocket'
 import { useExecWebSocket } from '../../lib/websocket'
 
-type Action = 'status' | 'version' | 'diagnostics' | 'update_channel' | 'update_xkeen' | 'update_geo_files' | 'custom'
+type Action = 'status' | 'version' | 'diagnostics' | 'dscp' | 'pr' | 'update_channel' | 'update_xkeen' | 'update_geo_files' | 'custom'
 
 type ActionItem = {
   id: Action
@@ -92,6 +91,18 @@ const ACTIONS: ActionItem[] = [
     group: 'tools',
     description: 'Запускает встроенную диагностику XKeen.',
   },
+  {
+    id: 'dscp',
+    title: 'Статус маршрутизации по DSCP-меткам',
+    command: 'xkeen -dscp',
+    group: 'tools',
+  },
+  {
+    id: 'pr',
+    title: 'Проксирование трафика Entware через Xray/Mihomo',
+    command: 'xkeen -pr',
+    group: 'tools',
+  },
 ]
 
 interface Props {
@@ -118,7 +129,7 @@ function TerminalLogLine({ entry, timezone }: { entry: LogEntry; timezone: numbe
       {(entry.tsUtc !== undefined || entry.ts) && (
         <span className="text-muted-foreground/60 shrink-0">{formatEventTime(entry.tsUtc, timezone, entry.ts)}</span>
       )}
-      <span className="min-w-0 whitespace-pre-wrap wrap-anywhere">
+      <span className="min-w-0 wrap-anywhere whitespace-pre-wrap">
         {lines.map((line, index) => (
           <Fragment key={index}>
             {index > 0 && '\n'}
@@ -133,9 +144,7 @@ function TerminalLogLine({ entry, timezone }: { entry: LogEntry; timezone: numbe
 function formatEventTime(tsUtc: number | undefined, timezone: number, fallback?: string) {
   if (tsUtc === undefined || !Number.isFinite(tsUtc)) return fallback ?? ''
   const date = new Date((tsUtc + timezone * 60 * 60) * 1000)
-  return [date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]
-    .map((value) => String(value).padStart(2, '0'))
-    .join(':')
+  return [date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()].map((value) => String(value).padStart(2, '0')).join(':')
 }
 
 export function XkeenCommandsModal({ open, onOpenChange }: Props) {
@@ -148,7 +157,6 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [commandInput, setCommandInput] = useState('')
   const [commandResponse, setCommandResponse] = useState('')
-  const [ownCommandOpen, setOwnCommandOpen] = useState(false)
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [result, setResult] = useState<boolean | null>(null)
   const [requestError, setRequestError] = useState('')
@@ -198,7 +206,6 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
     setSelected(null)
     setConfirmAction(null)
     setConfirmOpen(false)
-    setOwnCommandOpen(false)
     setResult(null)
     setCancelling(false)
     setRequestError('')
@@ -300,6 +307,9 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
     </section>
   )
 
+  const numericAnswer = selected?.id === 'update_channel' || selected?.id === 'dscp' || selected?.id === 'pr'
+  const answerFieldVisible = selected?.id === 'custom' || numericAnswer
+
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -331,64 +341,53 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
                   <IconActivity className="text-chart-2 size-4" />
                 )}
 
-                <Accordion
-                  type="single"
-                  collapsible
-                  value={ownCommandOpen ? 'own-command' : ''}
-                  onValueChange={(value: string) => {
-                    const nextOpen = value === 'own-command'
-                    setOwnCommandOpen(nextOpen)
-                  }}
-                >
-                  <AccordionItem
-                    value="own-command"
-                    className="border-input bg-input-background dark:bg-[color-mix(in_oklab,var(--input-background)_80%,var(--muted)_20%)] rounded-lg border transition-colors hover:bg-input-background-hover"
-                  >
-                    <AccordionTrigger className="border-0 px-3 py-2.5 hover:no-underline">
-                      <span className="flex items-center gap-3">
-                        <span className="flex size-8 shrink-0 items-center justify-center">
-                          <IconTerminal2 className="text-chart-2 size-4" />
-                        </span>
-                        Своя команда
-                      </span>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-3">
-                      <Field className="gap-2">
-                        <FieldLabel htmlFor="xkeen-custom-command" className="sr-only">
-                          Команда XKeen
-                        </FieldLabel>
-                        <div className="w-full">
-                          <InputGroup>
-                            <InputGroupAddon align="inline-start" className="text-muted-foreground pr-0 font-normal">
-                              xkeen -
-                            </InputGroupAddon>
-                            <InputGroupInput
-                              className="pl-0!"
-                              id="xkeen-custom-command"
-                              value={commandInput}
-                              placeholder="uk"
-                              autoComplete="off"
-                              spellCheck={false}
-                              onChange={(event) => setCommandInput(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault()
-                                  runCustomCommand()
-                                }
-                              }}
-                            />
-                            <InputGroupAddon align="inline-end">
-                              <InputGroupButton variant="default" disabled={!commandInput.trim() || commandInput.trim() === '-'} onClick={runCustomCommand}>
-                                Выполнить
-                                <IconCornerDownLeft />
-                              </InputGroupButton>
-                            </InputGroupAddon>
-                          </InputGroup>
-                        </div>
-                      </Field>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
+                <div className="border-input bg-input-background rounded-lg border dark:bg-[color-mix(in_oklab,var(--input-background)_80%,var(--muted)_20%)]">
+                  <div className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="flex size-8 shrink-0 items-center justify-center">
+                      <IconTerminal2 className="text-chart-2 size-4" />
+                    </span>
+                    Своя команда
+                  </div>
+                  <div className="px-3 pb-3">
+                    <Field className="gap-2">
+                      <FieldLabel htmlFor="xkeen-custom-command" className="sr-only">
+                        Команда XKeen
+                      </FieldLabel>
+                      <div className="w-full">
+                        <InputGroup>
+                          <InputGroupAddon align="inline-start" className="text-muted-foreground pr-0 font-normal">
+                            xkeen -
+                          </InputGroupAddon>
+                          <InputGroupInput
+                            className="pl-0!"
+                            id="xkeen-custom-command"
+                            value={commandInput}
+                            placeholder="uk"
+                            autoComplete="off"
+                            spellCheck={false}
+                            onChange={(event) => setCommandInput(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                runCustomCommand()
+                              }
+                            }}
+                          />
+                          <InputGroupAddon align="inline-end">
+                            <InputGroupButton
+                              variant="default"
+                              disabled={!commandInput.trim() || commandInput.trim() === '-'}
+                              onClick={runCustomCommand}
+                            >
+                              Выполнить
+                              <IconCornerDownLeft />
+                            </InputGroupButton>
+                          </InputGroupAddon>
+                        </InputGroup>
+                      </div>
+                    </Field>
+                  </div>
+                </div>
               </div>
             </ScrollArea>
           )}
@@ -424,23 +423,27 @@ export function XkeenCommandsModal({ open, onOpenChange }: Props) {
                   ))}
                 </CodeBlockContent>
               </CodeBlock>
-              {running && (selected?.id === 'custom' || selected?.id === 'update_channel') && (
+              {running && answerFieldVisible && (
                 <Field>
-                  <FieldLabel htmlFor="xkeen-command-input">
-                    {selected?.id === 'update_channel' ? 'Номер канала XKeen' : 'Ответ команды'}
+                  <FieldLabel htmlFor="xkeen-command-input" className="sr-only">
+                    {selected?.id === 'update_channel'
+                      ? 'Номер канала XKeen'
+                      : selected?.id === 'dscp'
+                        ? 'Маршрутизация по DSCP-меткам'
+                        : selected?.id === 'pr'
+                          ? 'Проксирование трафика Entware'
+                          : 'Ответ команды'}
                   </FieldLabel>
                   <InputGroup>
                     <InputGroupInput
                       id="xkeen-command-input"
                       value={commandResponse}
-                      placeholder={selected?.id === 'update_channel' ? 'Введите цифру' : 'Введите ответ команды'}
-                      inputMode={selected?.id === 'update_channel' ? 'numeric' : undefined}
-                      maxLength={selected?.id === 'update_channel' ? 1 : undefined}
+                      placeholder={numericAnswer ? 'Введите цифру' : 'Введите ответ команды'}
+                      inputMode={numericAnswer ? 'numeric' : undefined}
+                      maxLength={numericAnswer ? 1 : undefined}
                       autoComplete="off"
                       onChange={(event) =>
-                        setCommandResponse(
-                          selected?.id === 'update_channel' ? event.target.value.replace(/\D/g, '').slice(0, 1) : event.target.value
-                        )
+                        setCommandResponse(numericAnswer ? event.target.value.replace(/\D/g, '').slice(0, 1) : event.target.value)
                       }
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
