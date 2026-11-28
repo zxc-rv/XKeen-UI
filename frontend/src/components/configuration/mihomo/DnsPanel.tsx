@@ -26,6 +26,7 @@ import { IconAlertCircle, IconDeviceFloppy, IconInfoCircle, IconSearch, IconTras
 import * as jsyaml from 'js-yaml'
 import { isMap, isNode, isSeq, parseDocument, YAMLMap, type Document } from 'yaml'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { fetchAsn, getCachedAsn } from '@/lib/utils'
 import { apiCall, clashFetch } from '../../../lib/api'
 import { useAppContext, useDnsStatusStore, fetchDnsStatus } from '../../../lib/store'
 import type { Config } from '../../../lib/types'
@@ -81,6 +82,34 @@ function formatPortListener(listener: string): string {
     .map((name) => name.trim())
     .join(', ')
 }
+
+const AsnLookup = memo(function AsnLookup({ ip }: { ip: string }) {
+  const [asnText, setAsnText] = useState<string | null | undefined>(() => getCachedAsn(ip))
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleRequest = useCallback(async () => {
+    setIsLoading(true)
+    setAsnText(await fetchAsn(ip))
+    setIsLoading(false)
+  }, [ip])
+
+  if (asnText !== undefined) {
+    return <span className="text-muted-foreground ml-2 text-xs">{asnText ?? 'Нет данных'}</span>
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      className="ml-1 size-4 min-h-0 p-0 align-middle"
+      title="Запросить данные"
+      aria-label="Запросить данные"
+      onClick={handleRequest}
+      disabled={isLoading}
+    >
+      {isLoading ? <Spinner /> : <IconSearch className='size-3.5' />}
+    </Button>
+  )
+})
 
 function DnsSettingLabel({ children, tooltip }: { children: string; tooltip: string }) {
   const formattedTooltip = tooltip.replaceAll('\\n', '\n')
@@ -711,6 +740,7 @@ export const DnsPanel = memo(function DnsPanel() {
                               </TableCell>
                               <TableCell className="w-full px-2.5 py-1.5 whitespace-normal">
                                 <span className="break-all">{record.data ?? '—'}</span>
+                                {(record.type === 1 || record.type === 28) && record.data && <AsnLookup key={record.data} ip={record.data} />}
                                 {record.name && <span className="text-muted-foreground mt-0.5 block truncate text-xs">{record.name}</span>}
                               </TableCell>
                               <TableCell className="text-muted-foreground px-2.5 py-1.5 text-right tabular-nums">

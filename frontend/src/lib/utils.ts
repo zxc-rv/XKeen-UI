@@ -58,3 +58,34 @@ export function parseClashApiCredentials(yamlContent: string): { port: string | 
   const secret = secretMatch ? (secretMatch[2] ?? secretMatch[3])?.trim() || null : null
   return { port, secret, unix }
 }
+
+interface IpInfoResponse {
+  org?: string
+  asn?: { asn?: string; name?: string }
+}
+
+const asnCache = new Map<string, string>()
+
+export function formatAsn({ asn: asnObject, org }: IpInfoResponse): string | null {
+  const match = org?.trim().match(/^AS(\d+)\s*(.*)$/i)
+  const asn = asnObject?.asn?.trim() || (match ? `AS${match[1]}` : '')
+  const name = asnObject?.name?.trim() || match?.[2]?.trim()
+  if (!asn) return null
+  return name ? `${asn} (${name})` : asn
+}
+
+export const getCachedAsn = (ip: string) => asnCache.get(ip)
+
+export async function fetchAsn(ip: string): Promise<string | null> {
+  const cached = asnCache.get(ip)
+  if (cached) return cached
+  try {
+    const res = await fetch(`https://ipinfo.io/${encodeURIComponent(ip)}/json`, { signal: AbortSignal.timeout(3000) })
+    if (!res.ok) return null
+    const text = formatAsn(await res.json())
+    if (text) asnCache.set(ip, text)
+    return text
+  } catch {
+    return null
+  }
+}

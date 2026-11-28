@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn, fetchAsn, getCachedAsn } from '@/lib/utils'
 import {
   IconActivity,
   IconBan,
@@ -190,8 +190,6 @@ subscribeConnections((connections) => {
   useConnectionsStore.setState({ map: newMap, closedMap: nextClosed })
 })
 
-const asnCache = new Map<string, string | null>()
-
 function cleanDeviceIp(ip: unknown): string {
   return typeof ip === 'string' ? ip.trim() : ''
 }
@@ -335,22 +333,6 @@ async function refreshSourceNames(sourceIps: string[]) {
   })
 
   await sourceNameRequest
-}
-
-function formatAsn(data: any): string | null {
-  const asnObj = data?.asn && typeof data.asn === 'object' ? data.asn : null
-  let asn = typeof asnObj?.asn === 'string' ? asnObj.asn.trim() : null
-  let name = typeof asnObj?.name === 'string' ? asnObj.name.trim() : null
-  if (!asn || !name) {
-    const org = typeof data?.org === 'string' ? data.org.trim() : ''
-    const match = org.match(/^AS(\d+)\s*(.*)?$/i)
-    if (match) {
-      if (!asn) asn = `AS${match[1]}`
-      if (!name) name = match[2]?.trim() || null
-    }
-  }
-  if (!asn) return null
-  return name ? `${asn} (${name})` : asn
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -855,42 +837,21 @@ const ConnectionDialogMeta = memo(function ConnectionDialogMeta({
   const reversedChains = [...conn.chains].reverse()
   const asnIp = conn.metadata.destinationIP?.trim() ?? ''
   const sourceName = useSourceName(conn.metadata.sourceIP, showSourceName)
-  const [asnText, setAsnText] = useState<string | null>(() => (asnIp ? (asnCache.get(asnIp) ?? null) : null))
-  const [asnLoading, setAsnLoading] = useState(() => !!asnIp && !asnCache.has(asnIp))
+  const [asnText, setAsnText] = useState<string | null>(() => (asnIp ? (getCachedAsn(asnIp) ?? null) : null))
+  const [asnLoading, setAsnLoading] = useState(() => !!asnIp && !getCachedAsn(asnIp))
 
   useEffect(() => {
-    if (!asnIp || asnCache.has(asnIp)) return
+    if (!asnIp || getCachedAsn(asnIp)) return
 
     let alive = true
-    const timeoutId = setTimeout(() => {
+    fetchAsn(asnIp).then((text) => {
       if (!alive) return
-      alive = false
+      setAsnText(text)
       setAsnLoading(false)
-      setAsnText(null)
-    }, 3000)
-
-    fetch(`https://ipinfo.io/${encodeURIComponent(asnIp)}/json`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then((data) => {
-        if (!alive) return
-        const text = formatAsn(data)
-        asnCache.set(asnIp, text)
-        setAsnText(text)
-      })
-      .catch(() => {
-        if (!alive) return
-        asnCache.set(asnIp, null)
-        setAsnText(null)
-      })
-      .finally(() => {
-        if (!alive) return
-        setAsnLoading(false)
-        clearTimeout(timeoutId)
-      })
+    })
 
     return () => {
       alive = false
-      clearTimeout(timeoutId)
     }
   }, [asnIp])
 
