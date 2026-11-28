@@ -472,7 +472,7 @@ export function GuiOutbounds({ editorRef, configs, activeConfigIndex }: Props) {
             onClick={handlePingAll}
             aria-label="Тест всех подключений"
           >
-            {isPingingAll ? <Spinner data-icon="inline-start" /> : <IconBolt data-icon="inline-start" />}{' '}
+            {isPingingAll ? <Spinner variant="dots" data-icon="inline-start" /> : <IconBolt data-icon="inline-start" />}{' '}
             <span className="hidden sm:inline">Тест всех</span>
           </Button>
         </div>
@@ -716,7 +716,7 @@ const OutboundCard = memo(function OutboundCard({
                     style={digits > 0 ? { width: `calc(${digits}ch + 1.25rem)` } : undefined}
                   >
                     {isTesting ? (
-                      <Spinner className="size-4" />
+                      <Spinner variant="dots" className="size-4" />
                     ) : entries.length === 0 ? (
                       <IconBolt />
                     ) : !last!.delay ? (
