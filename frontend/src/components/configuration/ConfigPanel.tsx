@@ -34,7 +34,6 @@ import {
   IconFileUpload,
   IconHistory,
   IconLink,
-  IconListDetails,
   IconPencil,
   IconRefresh,
   IconRoute,
@@ -43,6 +42,8 @@ import {
   IconTrash,
   IconWorld,
   IconX,
+  IconBellKey,
+  IconBlocks,
 } from '@tabler/icons-react'
 import * as jsyaml from 'js-yaml'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
@@ -1297,11 +1298,11 @@ export function ConfigPanel({
             {isMihomo && currentPanel === 'selectors' && (
               <div className="ml-auto flex items-center gap-1.5">
                 <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('proxies')}>
-                  <IconListDetails data-icon="inline-start" />
+                  <IconBellKey data-icon="inline-start" />
                   Подписки
                 </Button>
                 <Button variant="outline" className="text-[13px]" onClick={() => openProvidersModal('rules')}>
-                  <IconListDetails data-icon="inline-start" />
+                  <IconBlocks data-icon="inline-start" />
                   Рулсеты
                 </Button>
                 <Tooltip>

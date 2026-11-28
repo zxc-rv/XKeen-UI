@@ -11,14 +11,14 @@ import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  IconDatabase,
+    IconBellKey,
+  IconBlocks,
   IconDeviceFloppy,
   IconEye,
   IconFilter,
   IconLetterCase,
   IconPencil,
   IconRefresh,
-  IconStack2,
 } from '@tabler/icons-react'
 import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml'
@@ -268,7 +268,7 @@ export function ProvidersModal({ open, kind, clashApiPort, clashApiSecret, clash
   const [caseSensitive, setCaseSensitive] = useState(false)
 
   const rows: Provider[] = kind === 'proxies' ? proxyProviders : ruleProviders
-  const KindIcon = kind === 'proxies' ? IconDatabase : IconStack2
+  const KindIcon = kind === 'proxies' ? IconBellKey : IconBlocks
   const isUpdating = updatingNames.length > 0
   const updatableNames = rows.filter(isUpdatable).map((provider) => provider.name)
 
