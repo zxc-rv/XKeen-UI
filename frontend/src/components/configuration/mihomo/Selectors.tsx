@@ -318,6 +318,7 @@ function ProxyGroupHeading({
   pickerNode?: boolean
 }) {
   const isTesting = useSelectorsStore((s) => group.proxies.some((name) => s.testingSingle[name]))
+  const isRest = group.key === '__rest__'
   return (
     <div
       data-picker-node={pickerNode || undefined}
@@ -337,7 +338,7 @@ function ProxyGroupHeading({
               variant="ghost"
               size="icon-sm"
               className="size-5 shrink-0"
-              aria-label={`Проверить подписку ${group.label}`}
+              aria-label={isRest ? 'Замерить остальное' : `Замерить подписку ${group.label}`}
               disabled={isTesting}
               onClick={() => void onTest(group.proxies)}
             >
@@ -345,7 +346,7 @@ function ProxyGroupHeading({
             </Button>
           }
         />
-        <TooltipContent>Замерить подписку</TooltipContent>
+        <TooltipContent>{isRest ? 'Замерить остальное' : 'Замерить подписку'}</TooltipContent>
       </Tooltip>
     </div>
   )
@@ -1348,7 +1349,7 @@ const SelectorRow = memo(function SelectorRow({
                       render={
                         <button
                           type="button"
-                          aria-label={selectedProxy ? `Проверить сервер ${selector.now}` : `Проверить серверы ${selectorName}`}
+                          aria-label={selectedProxy ? `Замерить сервер ${selector.now}` : `Замерить серверы ${selectorName}`}
                           className={cn(
                             'flex min-w-7 touch-manipulation items-center justify-end bg-transparent text-xs font-medium tabular-nums select-none [-webkit-touch-callout:none]',
                             delayColor(selectedDelay)
@@ -1389,7 +1390,7 @@ const SelectorRow = memo(function SelectorRow({
                         <DelayHistoryList history={groupPingHistory} />
                       </TooltipContent>
                     ) : (
-                      <TooltipContent>{selectedProxy ? 'Проверить выбранный сервер' : 'Проверить серверы селектора'}</TooltipContent>
+                      <TooltipContent>{selectedProxy ? 'Замерить выбранный сервер' : 'Замерить серверы селектора'}</TooltipContent>
                     )}
                   </Tooltip>
                 ) : null}
@@ -1530,7 +1531,7 @@ const SelectorRow = memo(function SelectorRow({
                               <Button
                                 variant="outline"
                                 size={selectedDigits === 0 ? 'icon-sm' : 'sm'}
-                                aria-label="Проверить все серверы селектора"
+                                aria-label="Замерить все серверы селектора"
                                 className={cn(
                                   selectedDigits > 0 && [
                                     'min-w-8 justify-center px-0 text-xs font-medium tabular-nums',
@@ -1560,7 +1561,7 @@ const SelectorRow = memo(function SelectorRow({
                               <DelayHistoryList history={groupPingHistory} />
                             </TooltipContent>
                           ) : (
-                            <TooltipContent>Проверить все серверы</TooltipContent>
+                            <TooltipContent>Замерить все серверы</TooltipContent>
                           )}
                         </Tooltip>
                       </div>
