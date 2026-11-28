@@ -341,7 +341,7 @@ function ProxyGroupHeading({
               disabled={isTesting}
               onClick={() => void onTest(group.proxies)}
             >
-              {isTesting ? <Spinner /> : <IconBolt size={13} />}
+              {isTesting ? <Spinner className="text-muted-foreground" /> : <IconBolt size={13} />}
             </Button>
           }
         />
@@ -679,7 +679,7 @@ const ProxyCard = memo(function ProxyCard({
                   }}
                 >
                   {isTestingSingle ? (
-                    <Spinner />
+                    <Spinner className="text-muted-foreground" />
                   ) : hasHistory ? (
                     delay || <GraveIcon size={14} />
                   ) : (
@@ -824,7 +824,7 @@ const CollapsedProxyOption = memo(function CollapsedProxyOption({
                   if (!isTestingSingle) void onTestSingle(proxyName)
                 }}
               >
-                {isTestingSingle ? <Spinner /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBolt className="size-3.5" />}
+                {isTestingSingle ? <Spinner className="text-muted-foreground" /> : hasHistory ? delay || <GraveIcon size={14} /> : <IconBolt className="size-3.5" />}
               </button>
             }
           />
@@ -1373,7 +1373,7 @@ const SelectorRow = memo(function SelectorRow({
                           }}
                         >
                           {(selectedProxy && !NO_DELAY_TYPES.has(selectedProxy.type.toLowerCase()) ? isTestingSelected : isTestingSmart) ? (
-                            <IconLoader2 size={13} className="animate-spin" />
+                            <IconLoader2 size={13} className="animate-spin text-muted-foreground" />
                           ) : hasDelayHistory(selectedProxy) ? (
                             selectedDelay || <GraveIcon size={14} />
                           ) : isSmart && showSelectedDelay ? (
@@ -1546,7 +1546,7 @@ const SelectorRow = memo(function SelectorRow({
                                 }}
                               >
                                 {isTesting ? (
-                                  <IconLoader2 size={13} className="animate-spin" />
+                                  <IconLoader2 size={13} className="animate-spin text-muted-foreground" />
                                 ) : showSelectedDelay ? (
                                   selectedDelay
                                 ) : (
@@ -1686,7 +1686,7 @@ const SelectorRow = memo(function SelectorRow({
                     disabled={isTesting}
                   >
                     {isTesting ? (
-                      <IconLoader2 size={13} className="animate-spin" />
+                      <IconLoader2 size={13} className="animate-spin text-muted-foreground" />
                     ) : showSelectedDelay ? (
                       selectedDelay
                     ) : (
